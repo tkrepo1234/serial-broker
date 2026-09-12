@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { assertInvariant, assertNever } from '../../src/core/assert.js';
+import { assertNever } from '../../src/core/assert.js';
 import { toHex } from '../../src/core/bytes.js';
 import {
   createDeferred,
@@ -15,30 +15,6 @@ import { NOOP_LOGGER, ScopedLogger } from '../../src/core/logger.js';
 import type { LogFields, Logger, LogLevel } from '../../src/core/types.js';
 import { WriteQueue } from '../../src/owner/write-queue.js';
 import { FakeClock } from '../harness/fake-clock.js';
-
-describe('assertInvariant', () => {
-  it('passes a satisfied invariant through', () => {
-    expect(() => {
-      assertInvariant(true, 'always');
-    }).not.toThrow();
-  });
-
-  it('reports a violated invariant as a library bug, not a caller mistake', () => {
-    let thrown: unknown;
-    try {
-      assertInvariant(false, 'the port must be open', { status: 'idle' });
-    } catch (error) {
-      thrown = error;
-    }
-
-    {
-      const error = thrown;
-      expect((error as SerialBrokerError).code).toBe(SerialBrokerErrorCode.INTERNAL_INVARIANT);
-      expect((error as SerialBrokerError).context).toEqual({ status: 'idle' });
-      expect((error as SerialBrokerError).remediation).toContain('bug in serial-broker');
-    }
-  });
-});
 
 describe('assertNever', () => {
   it('reports an unhandled union member', () => {

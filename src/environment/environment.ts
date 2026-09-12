@@ -34,6 +34,14 @@ export interface SerialBrokerEnvironment {
   readonly newId: IdGenerator;
   /** Receives diagnostics. */
   readonly logger: ScopedLogger;
+  /**
+   * Whether `debug` records may contain payload bytes.
+   *
+   * Off unless an application asks for it: serial traffic routinely carries card numbers and
+   * PINs, and a support engineer reading a console dump must not be reading those. Byte counts
+   * are always logged; only the bytes themselves are gated.
+   */
+  readonly logPayloads: boolean;
 }
 
 /**

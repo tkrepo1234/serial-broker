@@ -65,12 +65,3 @@ export const DEFAULT_ENCODING_SETTINGS: NormalizedEncodingSettings = {
 /** Longest accepted configuration name. Long enough for any real name, short enough to bound
  * the storage key and every log record. */
 export const MAX_CONFIG_NAME_LENGTH = 128;
-
-/** How long the broker holds a write while ownership is in transit. See ADR-0013. */
-export const OWNERSHIP_TRANSFER_GRACE_MS = 3_000;
-
-/** Heartbeat interval for the BroadcastChannel transport's presence tracking. See ADR-0007. */
-export const PRESENCE_HEARTBEAT_MS = 1_000;
-
-/** Peers unheard from for this long are considered gone, in the fallback transport only. */
-export const PRESENCE_TIMEOUT_MS = 3_500;

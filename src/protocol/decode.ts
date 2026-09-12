@@ -1,3 +1,4 @@
+import { assertNever } from '../core/assert.js';
 import { isSerializedError } from '../core/errors.js';
 import { SerialBrokerStatus } from '../core/types.js';
 
@@ -261,5 +262,7 @@ export function describeDecodeFailure(failure: DecodeFailure): string {
       return `unknown message type ${String(failure.type)}`;
     case 'malformed':
       return `message "${failure.type}" has an invalid "${failure.field}" field`;
+    default:
+      return assertNever(failure, 'decode failure reason');
   }
 }

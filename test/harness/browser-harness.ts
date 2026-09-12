@@ -133,6 +133,8 @@ export interface HarnessOptions {
   readonly randomValue?: number;
   /** Receives the library's diagnostics. Useful when a scenario test misbehaves. */
   readonly logger?: Logger;
+  /** Whether `debug` records may carry payload bytes. Off, as in production. */
+  readonly logPayloads?: boolean;
 }
 
 /**
@@ -217,6 +219,7 @@ export class BrowserHarness {
       locks: this.locks.forContext(contextId),
       storage: this.storage,
       createTransport: (request) => this.bus.createTransport(contextId, request),
+      logPayloads: this.options.logPayloads ?? false,
       clock: this.clock,
       // Fixed rather than seeded: backoff delays become exactly predictable, so a test can
       // assert "the third attempt happens 1000 ms later" instead of "roughly a second".

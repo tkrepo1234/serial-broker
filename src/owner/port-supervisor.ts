@@ -1,5 +1,5 @@
 import { BackoffState, computeBackoffDelayMs } from '../core/backoff.js';
-import { chunkBytes } from '../core/bytes.js';
+import { chunkBytes, toHex } from '../core/bytes.js';
 import type { TimerHandle } from '../core/clock.js';
 import { ignoreRejection, withDeadline } from '../core/deadline.js';
 import type { NormalizedConfiguration } from '../core/defaults.js';
@@ -10,6 +10,7 @@ import { SerialBrokerStatus } from '../core/types.js';
 import type { SerialBrokerEnvironment } from '../environment/environment.js';
 
 import { findGrantedPort, matchesDevice, toRequestOptions } from './port-matcher.js';
+import { mapOpenError, mapRequestPortError } from './serial-errors.js';
 import { WriteQueue } from './write-queue.js';
 
 /** What the supervisor reports to the context that owns it. */
@@ -49,6 +50,15 @@ type ConnectionState =
  *
  * It is created when this context acquires ownership and disposed when it loses it, so it
  * never has to ask whether it is still the owner: if it is running, it is.
+ *
+ * @remarks
+ * This file is over the 400-line mark that docs/guidelines/coding-style.md flags. The
+ * justification is that what remains is one state machine: connect, read, write, lose,
+ * reconnect, close. Splitting it would put transitions of the same automaton in different
+ * files, and the question a reader arrives with - "what happens after this state" - would
+ * then need two files to answer. What could be lifted out has been: device matching
+ * (`port-matcher.ts`), the platform error table (`serial-errors.ts`), write serialisation
+ * (`write-queue.ts`) and backoff (`core/backoff.ts`).
  */
 export class PortSupervisor {
   #state: ConnectionState = { kind: 'idle' };
@@ -134,7 +144,10 @@ export class PortSupervisor {
     try {
       port = await this.environment.serial.requestPort(toRequestOptions(this.configuration));
     } catch (error) {
-      throw this.#mapRequestPortError(error);
+      throw mapRequestPortError(error, {
+        configName: this.configuration.name,
+        timestamp: this.environment.clock.now(),
+      });
     }
 
     if (!matchesDevice(port, this.configuration)) {
@@ -227,6 +240,8 @@ export class PortSupervisor {
 
         bytesWritten += chunk.byteLength;
       }
+
+      this.#traceTraffic('sent', payload);
     });
   }
 
@@ -327,7 +342,14 @@ export class PortSupervisor {
       if (this.#isStale(generation)) {
         return;
       }
-      this.#handleConnectionLoss('open-failed', this.#mapOpenError(error, attempt));
+      this.#handleConnectionLoss(
+        'open-failed',
+        mapOpenError(error, {
+          configName: this.configuration.name,
+          timestamp: this.environment.clock.now(),
+          extra: { attempt },
+        }),
+      );
       return;
     }
 
@@ -451,7 +473,25 @@ export class PortSupervisor {
     // may reuse its buffer. See docs/guidelines/defensive-programming.md.
     const data = new Uint8Array(chunk);
     const text = decoder?.decode(chunk, { stream: true });
+    this.#traceTraffic('received', data);
     this.callbacks.onData(data, text);
+  }
+
+  /**
+   * Records traffic at `debug` level.
+   *
+   * The byte count is always logged; the bytes themselves only when the application has asked
+   * for them. Serial traffic routinely carries card numbers and PINs, and a support engineer
+   * reading a console dump must not be reading those by accident. See
+   * docs/guidelines/error-handling.md.
+   */
+  #traceTraffic(direction: 'received' | 'sent', data: Uint8Array): void {
+    this.logger.debug(direction, {
+      configName: this.configuration.name,
+      event: `supervisor.${direction}`,
+      byteLength: data.byteLength,
+      ...(this.environment.logPayloads ? { hex: toHex(data) } : {}),
+    });
   }
 
   /**
@@ -588,51 +628,4 @@ export class PortSupervisor {
   #report(error: SerialBrokerError): void {
     this.callbacks.onError(error);
   }
-
-  #mapOpenError(error: unknown, attempt: number): SerialBrokerError {
-    if (error instanceof SerialBrokerError) {
-      return error;
-    }
-
-    const name = errorName(error);
-    const code =
-      name === 'NetworkError'
-        ? SerialBrokerErrorCode.DEVICE_DISCONNECTED
-        : SerialBrokerErrorCode.OPEN_FAILED;
-
-    return new SerialBrokerError(code, `Could not open the port: ${describeUnknown(error)}`, {
-      configName: this.configuration.name,
-      context: { attempt, domExceptionName: name },
-      timestamp: this.environment.clock.now(),
-      cause: error,
-    });
-  }
-
-  #mapRequestPortError(error: unknown): SerialBrokerError {
-    const name = errorName(error);
-
-    // Chromium reports both "user dismissed the picker" and "no device selected" as
-    // NotFoundError, and a call outside a user gesture as SecurityError. Mapping by name is
-    // stable; mapping by message text would break with any Chromium release.
-    const code =
-      name === 'SecurityError'
-        ? SerialBrokerErrorCode.USER_GESTURE_REQUIRED
-        : SerialBrokerErrorCode.PERMISSION_DENIED;
-
-    return new SerialBrokerError(
-      code,
-      `The port picker did not yield a device: ${describeUnknown(error)}`,
-      {
-        configName: this.configuration.name,
-        context: { domExceptionName: name },
-        timestamp: this.environment.clock.now(),
-        cause: error,
-      },
-    );
-  }
-}
-
-/** The `name` of a thrown value, which for Web Serial is always a `DOMException` name. */
-function errorName(error: unknown): string | undefined {
-  return error instanceof Error ? error.name : undefined;
 }

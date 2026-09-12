@@ -51,7 +51,7 @@ so that other tabs learn about it too.
 
 ## Never swallow, never double-report
 
-- An error crosses the `onError` channel exactly once per occurrence per tab. The master does
+- An error crosses the `onError` channel exactly once per occurrence per tab. The owner does
   not re-broadcast an error that the origin tab already received directly.
 - Errors from application event listeners are caught, wrapped with code
   `LISTENER_THREW`, and reported — but never rethrown into the library's own control flow.
@@ -70,7 +70,7 @@ Log levels and what belongs in them:
 | ------- | -------------------------------------------------------------------------------------------- |
 | `error` | Only conditions that also produced a `SerialBrokerError`.                                    |
 | `warn`  | Recovered anomalies: retry succeeded, malformed peer message dropped, stale state discarded. |
-| `info`  | Lifecycle milestones: configuration registered, port opened, master role acquired/lost.      |
+| `info`  | Lifecycle milestones: configuration registered, port opened, ownership acquired/lost.        |
 | `debug` | Protocol traffic, state transitions, timer scheduling. Verbose by design.                    |
 
 Every log record carries `{ configName, clientId, event }` so records from several tabs can be

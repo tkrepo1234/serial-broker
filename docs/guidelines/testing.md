@@ -1,18 +1,18 @@
 # Testing
 
 The hard part of this library is not the Web Serial call — it is what happens when two tabs
-race, a master dies mid-write, and a device disappears in the same 50 ms. Those are the tests
+race, the owner dies mid-write, and a device disappears in the same 50 ms. Those are the tests
 that matter, and they must be **deterministic**.
 
 ## Levels
 
-| Level             | Location                      | What it proves                                                                                                                  | Rule                                                               |
-| ----------------- | ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
-| **Unit**          | `test/unit/`                  | One module in isolation: backoff maths, validation, codecs, protocol encode/decode.                                             | No fakes beyond the module's own dependencies. Fast (< 5 ms each). |
-| **Integration**   | `test/integration/`           | Several real modules against the simulated browser harness: a single tab end-to-end, reconnect, write queueing.                 | Uses the harness, never the real DOM.                              |
-| **Multi-context** | `test/integration/multi-tab/` | The actual product claim: N simulated tabs sharing one port, master failover, broadcast fan-out, interlocking under contention. | Mandatory for every change to `master/`, `worker/` or `client/`.   |
-| **Type**          | `test/types/`                 | The public surface type-checks as documented and rejects misuse.                                                                | `expectTypeOf` assertions; failures are compile errors.            |
-| **Manual**        | `examples/demo/`              | Real Chromium, real hardware. Documented, checklisted, never a substitute for the above.                                        | Recorded in `docs/manual-test-plan.md`.                            |
+| Level             | Location                      | What it proves                                                                                                                     | Rule                                                               |
+| ----------------- | ----------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
+| **Unit**          | `test/unit/`                  | One module in isolation: backoff maths, validation, codecs, protocol encode/decode.                                                | No fakes beyond the module's own dependencies. Fast (< 5 ms each). |
+| **Integration**   | `test/integration/`           | Several real modules against the simulated browser harness: a single tab end-to-end, reconnect, write queueing.                    | Uses the harness, never the real DOM.                              |
+| **Multi-context** | `test/integration/multi-tab/` | The actual product claim: N simulated tabs sharing one port, ownership failover, broadcast fan-out, interlocking under contention. | Mandatory for every change to `owner/`, `worker/` or `client/`.    |
+| **Type**          | `test/types/`                 | The public surface type-checks as documented and rejects misuse.                                                                   | `expectTypeOf` assertions; failures are compile errors.            |
+| **Manual**        | `examples/demo/`              | Real Chromium, real hardware. Documented, checklisted, never a substitute for the above.                                           | Recorded in `docs/manual-test-plan.md`.                            |
 
 ## Determinism is mandatory
 
@@ -49,7 +49,7 @@ lies produces tests that lie.**
 ## Writing tests
 
 - Name: `describe('<unit>', ...)` / `it('<asserts the observable behaviour>', ...)`.
-  `it('works')` is rejected. `it('promotes the longest-waiting tab when the master tab is
+  `it('works')` is rejected. `it('promotes the longest-waiting tab when the owning tab is
 killed mid-write')` is the standard.
 - **Arrange / Act / Assert**, separated by blank lines, in that order.
 - Assert on **observable behaviour** — public API results, emitted events, bytes that reached
@@ -92,10 +92,12 @@ removed:
 1. Single tab: setup → permission already granted → open → send → receive.
 2. Single tab: setup with no permission → `awaiting-permission` → `requestAccess` → open.
 3. Two tabs: second tab attaches to an already-open configuration and receives broadcasts.
-4. Two tabs: non-master sends; bytes reach the device exactly once; both tabs see `onSend`.
-5. Master tab closes gracefully → the other tab becomes master and reopens the port.
-6. Master tab is killed abruptly (no unload handler) → failover still happens via lock release.
-7. Master dies **while a write is in flight** → the write either completes or fails with a
+4. Two tabs: a tab that does not own the port sends; bytes reach the device exactly once;
+   both tabs see `onSend`.
+5. The owning tab closes gracefully → another tab takes ownership and reopens the port.
+6. The owning tab is killed abruptly (no unload handler) → failover still happens, via the
+   browser releasing its lock.
+7. The owner dies **while a write is in flight** → the write either completes or fails with a
    definite, reported error. Never silently lost, never applied twice.
 8. Device unplugged → status `reconnecting` in all tabs → replugged → reopened automatically
    with the persisted settings, with no application action.

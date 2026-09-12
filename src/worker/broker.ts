@@ -1,9 +1,6 @@
 import type { ScopedLogger } from '../core/logger.js';
 import type { ClientId, ProtocolMessage } from '../protocol/messages.js';
 
-/** The broker's own identity on the bus. */
-export const BROKER_CLIENT_ID = 'broker' as ClientId;
-
 /** What the broker needs from whichever transport is hosting it. */
 export interface BrokerHost {
   /** Delivers a message to exactly one participant. Must not throw. */

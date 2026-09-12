@@ -260,6 +260,42 @@ describe('logging', () => {
     expect(visible).not.toContain('5555');
   });
 
+  it('records traffic at debug level as a byte count, with no bytes', async () => {
+    const { logger, records } = recordingLogger();
+    const harness = new BrowserHarness({ logger });
+    const device = harness.serial.addDevice(READER.vendorId, READER.productId);
+    harness.serial.grant(device);
+    const tab = harness.openTab();
+    await tab.setup('Reader', OPTIONS);
+
+    await tab.client.send('Reader', 'PIN=1234');
+    device.emit('CARD=5555');
+    await harness.settle();
+
+    const traffic = records.filter(([, message]) => message === 'sent' || message === 'received');
+    expect(traffic).toHaveLength(2);
+    for (const [level, , fields] of traffic) {
+      expect(level).toBe('debug');
+      expect(fields['byteLength']).toBeGreaterThan(0);
+      // The default: a support engineer sees that traffic happened, not what it said.
+      expect(fields).not.toHaveProperty('hex');
+    }
+  });
+
+  it('includes payload bytes only when the application asks for them', async () => {
+    const { logger, records } = recordingLogger();
+    const harness = new BrowserHarness({ logger, logPayloads: true });
+    const device = harness.serial.addDevice(READER.vendorId, READER.productId);
+    harness.serial.grant(device);
+    const tab = harness.openTab();
+    await tab.setup('Reader', OPTIONS);
+
+    await tab.client.send('Reader', 'AT');
+    await harness.settle();
+
+    const sent = records.find(([, message]) => message === 'sent');
+    expect(sent?.[2]['hex']).toBe('41 54');
+  });
   it('warns when a reconnect is scheduled, with the reason and the delay', async () => {
     const { logger, records } = recordingLogger();
     const harness = new BrowserHarness({ logger });

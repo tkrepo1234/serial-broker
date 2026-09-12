@@ -1,5 +1,4 @@
-import type { TimerHandle } from '../core/clock.js';
-import { createSignal, type Signal } from '../core/deadline.js';
+import { assertNever } from '../core/assert.js';
 import type { NormalizedConfiguration } from '../core/defaults.js';
 import { DisposalStack } from '../core/disposable.js';
 import { EventEmitter } from '../core/emitter.js';
@@ -18,31 +17,8 @@ import { PortSupervisor } from '../owner/port-supervisor.js';
 import type { ClientId, ProtocolMessage, RequestId } from '../protocol/messages.js';
 import { PROTOCOL_VERSION } from '../protocol/version.js';
 
+import { PendingWrites } from './pending-writes.js';
 import type { Transport } from './transport/transport.js';
-
-/** A write this context has issued and is still waiting on. */
-interface PendingWrite {
-  readonly requestId: RequestId;
-  readonly payload: Uint8Array;
-  readonly deferred: Signal;
-  /**
-   * Set when the owner reports it has begun writing.
-   *
-   * The line between replayable and not. Before it, the bytes demonstrably never reached the
-   * device and the request can be re-sent to a new owner. After it, whether they arrived is
-   * unknowable and the request must never be repeated. See ADR-0013.
-   */
-  started: boolean;
-  /**
-   * Set while the request sits with an owner that has not answered yet.
-   *
-   * Prevents the same command being queued twice at the owner when a status change or an
-   * ownership announcement retriggers dispatch. Cleared only when the owner it was handed to
-   * is known to be gone.
-   */
-  isDispatched: boolean;
-  timer: TimerHandle | undefined;
-}
 
 /**
  * One configuration, in one browsing context.
@@ -55,12 +31,19 @@ interface PendingWrite {
  * must behave identically either way as far as the application can tell** (ADR-0011). So
  * `send()` goes to the supervisor directly or across the bus depending on the role, and
  * nothing above this class knows which happened.
+ *
+ * @remarks
+ * Over the 400-line mark that docs/guidelines/coding-style.md flags. What remains is the
+ * wiring itself - which of four collaborators handles what, and in which order - and that is
+ * only legible in one place. The parts with rules of their own have been lifted out:
+ * the delivery guarantee (`pending-writes.ts`), ownership (`../owner/election.ts`), the port
+ * lifecycle (`../owner/port-supervisor.ts`) and event dispatch (`../core/emitter.ts`).
  */
 export class ConfigurationSession {
   readonly #emitter: EventEmitter;
   readonly #election: OwnershipElection;
   readonly #disposal = new DisposalStack();
-  readonly #pending = new Map<RequestId, PendingWrite>();
+  readonly #writes: PendingWrites;
 
   #supervisor: PortSupervisor | undefined;
   #status: SerialBrokerStatus = SerialBrokerStatus.Idle;
@@ -96,6 +79,18 @@ export class ConfigurationSession {
       },
       logger,
     );
+
+    this.#writes = new PendingWrites({
+      clock: environment.clock,
+      configName: configuration.name,
+      writeTimeoutMs: configuration.connection.writeTimeoutMs,
+      dispatch: (requestId, payload) => {
+        this.#dispatchWrite(requestId, payload);
+      },
+      // A write can only go anywhere while there is a connection to write to. Asking here
+      // rather than tracking it in two places keeps one source of truth for the answer.
+      canDispatch: () => this.#status === SerialBrokerStatus.Open,
+    });
   }
 
   /** The configuration this session serves. */
@@ -134,7 +129,7 @@ export class ConfigurationSession {
     }
     this.#isReleased = true;
 
-    this.#failAllPending(
+    this.#writes.failAll(
       new SerialBrokerError(
         SerialBrokerErrorCode.CONFIGURATION_RELEASED,
         'The configuration was released while this write was pending',
@@ -204,7 +199,8 @@ export class ConfigurationSession {
   /**
    * Writes to the device, wherever the port happens to live.
    *
-   * @returns A promise that settles when the owner reports the outcome.
+   * @returns A promise that settles when the owner reports the outcome. The delivery guarantee
+   *   is in {@link PendingWrites}.
    */
   async send(payload: Uint8Array): Promise<void> {
     if (this.#isReleased) {
@@ -215,42 +211,7 @@ export class ConfigurationSession {
       );
     }
 
-    const requestId = this.environment.newId('w') as RequestId;
-    const pending: PendingWrite = {
-      requestId,
-      payload,
-      deferred: createSignal(),
-      started: false,
-      isDispatched: false,
-      timer: undefined,
-    };
-
-    // The deadline covers the whole journey - waiting for an owner, crossing the bus, and the
-    // device accepting the bytes - because from the caller's point of view that is one wait.
-    pending.timer = this.environment.clock.setTimer(() => {
-      this.#settlePending(
-        requestId,
-        new SerialBrokerError(
-          SerialBrokerErrorCode.WRITE_TIMEOUT,
-          'The write did not complete within the configured deadline',
-          {
-            configName: this.configuration.name,
-            context: {
-              requestId,
-              byteLength: payload.byteLength,
-              started: pending.started,
-              status: this.#status,
-            },
-            timestamp: this.environment.clock.now(),
-          },
-        ),
-      );
-    }, this.configuration.connection.writeTimeoutMs);
-
-    this.#pending.set(requestId, pending);
-    this.#dispatchWrite(pending);
-
-    await pending.deferred.promise;
+    await this.#writes.add(this.environment.newId('w') as RequestId, payload);
   }
 
   /** Shows the port picker. Must be called from a user gesture. */
@@ -287,7 +248,7 @@ export class ConfigurationSession {
 
     switch (message.type) {
       case 'owner-claimed':
-        this.#handleOwnerChanged();
+        this.#writes.handleOwnerChanged();
         return;
 
       case 'owner-released':
@@ -302,34 +263,26 @@ export class ConfigurationSession {
         this.#performWriteForPeer(message.from, message.requestId, message.payload);
         return;
 
-      case 'write-started': {
-        const pending = this.#pending.get(message.requestId);
-        if (pending !== undefined) {
-          pending.started = true;
-        }
+      case 'write-started':
+        this.#writes.markStarted(message.requestId);
         return;
-      }
 
       case 'write-result': {
         const error =
           message.ok || message.error === undefined ? undefined : deserializeError(message.error);
 
         // A context that stopped owning the port between receiving a write and performing it
-        // says so rather than failing it. The write never started, so re-dispatching it to
-        // whoever owns the port now is not a repeat - and failing the caller because two tabs
-        // swapped roles mid-request would be an error about nothing.
-        const pending = this.#pending.get(message.requestId);
+        // says so rather than failing it. The write never started, so handing it to whoever
+        // owns the port now is not a repeat - and failing the caller because two tabs swapped
+        // roles mid-request would be an error about nothing.
         if (
           error?.code === SerialBrokerErrorCode.NOT_CONNECTED &&
-          pending !== undefined &&
-          !pending.started
+          this.#writes.redispatch(message.requestId)
         ) {
-          pending.isDispatched = false;
-          this.#dispatchWrite(pending);
           return;
         }
 
-        this.#settlePending(message.requestId, error);
+        this.#writes.settle(message.requestId, error);
         return;
       }
 
@@ -369,7 +322,13 @@ export class ConfigurationSession {
       case 'goodbye':
       case 'attach':
       case 'detach':
+        // Presence bookkeeping, handled by the broker or the transport. Nothing to do here.
         return;
+
+      default:
+        // Unreachable: the decoder rejects any type this switch does not name, and adding a
+        // message type without handling it here stops compiling.
+        assertNever(message, 'protocol message');
     }
   }
 
@@ -439,7 +398,7 @@ export class ConfigurationSession {
     // as an announcement from a peer would. Whoever held the port before is gone - that is what
     // freed the lock - so a write already in progress there is unknowable, and one that never
     // started can now proceed here.
-    this.#handleOwnerChanged();
+    this.#writes.handleOwnerChanged();
   }
 
   async #stopBeingOwner(): Promise<void> {
@@ -463,64 +422,19 @@ export class ConfigurationSession {
     await supervisor.stop();
   }
 
-  /**
-   * Reacts to some other context announcing itself as the owner.
-   *
-   * This doubles as the death notice for the previous owner: the Web Lock is granted to a
-   * successor only once the holder has released it or its context has gone, so a new owner
-   * announcing itself is proof that the old one is no longer writing. That is what makes it
-   * safe - and necessary - to resolve pending writes here. See ADR-0013.
-   */
-  #handleOwnerChanged(): void {
-    for (const pending of [...this.#pending.values()]) {
-      if (pending.started) {
-        this.#settlePending(
-          pending.requestId,
-          new SerialBrokerError(
-            SerialBrokerErrorCode.OWNER_LOST_DURING_WRITE,
-            'The tab that owned the port went away while this write was in progress',
-            {
-              configName: this.configuration.name,
-              context: { requestId: pending.requestId, byteLength: pending.payload.byteLength },
-              timestamp: this.environment.clock.now(),
-            },
-          ),
-        );
-      } else {
-        // Never started, so the bytes demonstrably never reached the device - and the context
-        // it was handed to is gone, so handing it to the new owner is not a duplicate.
-        pending.isDispatched = false;
-        this.#dispatchWrite(pending);
-      }
-    }
-  }
-
   // --- Writes ---------------------------------------------------------------------------------
 
   /**
-   * Sends a write to whoever can perform it, or holds it until someone can.
+   * Hands a write to whoever can perform it.
    *
-   * Holding rather than failing is what makes `send()` usable during the seconds after a page
-   * loads, while the port is still opening, and during a handover. The caller's deadline
-   * bounds the wait, so nothing waits forever.
+   * Called by {@link PendingWrites} once it has decided the request may be sent - whether that
+   * is the first attempt or a re-dispatch after ownership moved. The decision lives there;
+   * this method only knows *how* to send, not *whether* to.
    */
-  #dispatchWrite(pending: PendingWrite): void {
-    if (pending.isDispatched) {
-      // Already handed to an owner that has not answered yet. Sending it again would put the
-      // same command in that owner's queue twice.
-      return;
-    }
-
-    if (this.#status !== SerialBrokerStatus.Open) {
-      // No connection to write to. The write stays queued here and is dispatched by
-      // `#setStatus` the moment the port opens.
-      return;
-    }
-
-    pending.isDispatched = true;
-
-    if (this.#election.isOwner && this.#supervisor !== undefined) {
-      this.#writeLocally(this.#supervisor, pending);
+  #dispatchWrite(requestId: RequestId, payload: Uint8Array): void {
+    const supervisor = this.#supervisor;
+    if (this.#election.isOwner && supervisor !== undefined) {
+      this.#writeLocally(supervisor, requestId, payload);
       return;
     }
 
@@ -530,33 +444,24 @@ export class ConfigurationSession {
       from: this.transport.clientId,
       to: 'owner',
       configName: this.configuration.name,
-      requestId: pending.requestId,
-      payload: pending.payload,
+      requestId,
+      payload,
     });
   }
 
-  #dispatchWaitingWrites(): void {
-    for (const pending of [...this.#pending.values()]) {
-      this.#dispatchWrite(pending);
-    }
-  }
-
   /** The owner path: straight to the supervisor, with no round trip across the bus. */
-  #writeLocally(supervisor: PortSupervisor, pending: PendingWrite): void {
+  #writeLocally(supervisor: PortSupervisor, requestId: RequestId, payload: Uint8Array): void {
     void supervisor
-      .write(pending.payload, () => {
-        pending.started = true;
+      .write(payload, () => {
+        this.#writes.markStarted(requestId);
       })
       .then(
         () => {
-          this.#announceSent(pending.payload, this.transport.clientId);
-          this.#settlePending(pending.requestId, undefined);
+          this.#announceSent(payload, this.transport.clientId);
+          this.#writes.settle(requestId, undefined);
         },
         (error: unknown) => {
-          this.#settlePending(
-            pending.requestId,
-            toSerialBrokerError(error, this.configuration.name),
-          );
+          this.#writes.settle(requestId, toSerialBrokerError(error, this.configuration.name));
         },
       );
   }
@@ -645,30 +550,6 @@ export class ConfigurationSession {
     });
   }
 
-  #settlePending(requestId: RequestId, error: SerialBrokerError | undefined): void {
-    const pending = this.#pending.get(requestId);
-    if (pending === undefined) {
-      return;
-    }
-
-    this.#pending.delete(requestId);
-    if (pending.timer !== undefined) {
-      this.environment.clock.clearTimer(pending.timer);
-    }
-
-    if (error === undefined) {
-      pending.deferred.resolve();
-    } else {
-      pending.deferred.reject(error);
-    }
-  }
-
-  #failAllPending(error: SerialBrokerError): void {
-    for (const requestId of [...this.#pending.keys()]) {
-      this.#settlePending(requestId, error);
-    }
-  }
-
   // --- Status and errors -----------------------------------------------------------------------
 
   #setStatus(status: SerialBrokerStatus): void {
@@ -688,7 +569,7 @@ export class ConfigurationSession {
     });
 
     if (status === SerialBrokerStatus.Open) {
-      this.#dispatchWaitingWrites();
+      this.#writes.dispatchWaiting();
     }
   }
 

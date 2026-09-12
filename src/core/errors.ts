@@ -164,7 +164,7 @@ export function internalInvariantError(
 }
 
 /** Reduces an arbitrary thrown value to the fields that survive structured cloning. */
-export function serializeCause(cause: unknown): SerializedCause | undefined {
+function serializeCause(cause: unknown): SerializedCause | undefined {
   if (cause == null) {
     return undefined;
   }

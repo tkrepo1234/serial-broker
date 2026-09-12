@@ -22,7 +22,7 @@ focused browser library.
 
 1. **Correctness over convenience.** A concurrency library that is "usually right" is wrong.
    Every state transition must be explainable from the code alone.
-2. **Nothing leaks.** Internal mechanics (master election, worker protocol, reconnect state
+2. **Nothing leaks.** Internal mechanics (ownership election, worker protocol, reconnect state
    machines) are never observable through the public API. See [API Design](./api-design.md).
 3. **No silent failure.** Every error path either surfaces through the documented error
    channel or is impossible by construction. `catch {}` without a comment justifying it is a

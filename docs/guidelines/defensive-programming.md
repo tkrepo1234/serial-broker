@@ -20,21 +20,26 @@ There are exactly four, and each has a mandatory discipline:
 ### Validate at the boundary, trust inside
 
 Validation happens **once**, at the boundary, in a dedicated module (`core/validation.ts`,
-`protocol/decode.ts`, `storage/registry.ts`). Internal functions may assume their inputs are
-valid and express that assumption with `assert(...)` — which throws an
-`InternalInvariantError`, because a violated internal invariant is a library bug, not a user
-error.
+`protocol/decode.ts`, `storage/configuration-store.ts`). Everything past that boundary works
+with a normalised type and re-checks nothing.
 
 ```ts
-// Boundary: full validation, user-facing error.
-export function normalizeOptions(input: unknown): NormalizedOptions { ... }
+// Boundary: full validation, user-facing error, once.
+export function normalizeConfiguration(name: unknown, options: unknown): NormalizedConfiguration;
 
-// Interior: invariant assertion, bug-facing error.
-function write(state: OpenState, chunk: Uint8Array): Promise<void> {
-  assertInvariant(state.status === 'open', 'write() requires an open connection');
-  ...
-}
+// Interior: the type carries the guarantee, so there is nothing left to check.
+function open(configuration: NormalizedConfiguration): Promise<void>;
 ```
+
+**Prefer a type that cannot be wrong over an assertion that it is not.** An interior function
+that needs an open connection should take the open state as a parameter, not take the
+connection and assert about it — the compiler then proves at every call site what an assertion
+could only discover at runtime. This is why the library has no `assert(...)` helper: every
+place one would have gone, a discriminated union or a narrower parameter said it better.
+
+Where the compiler genuinely cannot help - a union member arriving from outside the type
+system - use `assertNever` in the `default` of the switch. It makes an unhandled case a
+compile error, and a runtime `INTERNAL_INVARIANT` for values that were never typed at all.
 
 ### Every await can hang — bound it
 
@@ -54,7 +59,7 @@ Readers, writers, locks, worker ports, timers and event listeners are acquired t
 
 ### Never trust your own past self across contexts
 
-A tab that was master 20 ms ago may not be master now. Any operation on the physical port
+A tab that owned the port 20 ms ago may not own it now. Any operation on the physical port
 re-checks ownership immediately before the effectful call, and the ownership token is
 passed explicitly rather than read from mutable module state.
 

@@ -22,6 +22,8 @@ export interface BrowserEnvironmentOptions {
   readonly transport?: TransportKind | undefined;
   /** Receives diagnostics. Nothing is logged unless one is supplied. */
   readonly logger?: Logger | undefined;
+  /** {@inheritDoc SerialBrokerGlobalOptions.logPayloads} */
+  readonly logPayloads?: boolean | undefined;
 }
 
 /** `true` if this context has everything the library needs. */
@@ -54,6 +56,7 @@ export function createBrowserEnvironment(
     random: () => Math.random(),
     newId: createIdGenerator(),
     logger,
+    logPayloads: options.logPayloads ?? false,
   };
 }
 

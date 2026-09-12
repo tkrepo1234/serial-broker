@@ -65,7 +65,7 @@ Every source file follows this order, top to bottom:
 
   ```
   public facade  ->  client  ->  protocol  ->  core
-                     master   ->  protocol  ->  core
+                     owner    ->  protocol  ->  core
                      worker   ->  protocol  ->  core
                      storage  ->  core
   ```
