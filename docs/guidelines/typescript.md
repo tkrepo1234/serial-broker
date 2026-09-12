@@ -7,17 +7,17 @@ compiler flag requires an ADR.
 
 `tsconfig.json` enables, and no file may opt out of:
 
-| Flag | Why |
-| --- | --- |
-| `strict` | All of the strict family. Non-negotiable. |
-| `noUncheckedIndexedAccess` | `array[i]` is `T \| undefined`. Prevents a whole bug class in buffer handling. |
-| `exactOptionalPropertyTypes` | `{ a?: string }` cannot be assigned `undefined` explicitly — forces intent. |
-| `noImplicitOverride` | Every override is declared. |
-| `noFallthroughCasesInSwitch` | State machines are switch-heavy; fallthrough is always a bug here. |
-| `noImplicitReturns` | Every branch of a status-computing function returns. |
-| `noPropertyAccessFromIndexSignature` | Keeps dynamic lookups visibly dynamic. |
-| `useUnknownInCatchVariables` | Caught values are `unknown` until narrowed. |
-| `isolatedModules` / `verbatimModuleSyntax` | Guarantees the source is transpilable file-by-file. |
+| Flag                                       | Why                                                                            |
+| ------------------------------------------ | ------------------------------------------------------------------------------ |
+| `strict`                                   | All of the strict family. Non-negotiable.                                      |
+| `noUncheckedIndexedAccess`                 | `array[i]` is `T \| undefined`. Prevents a whole bug class in buffer handling. |
+| `exactOptionalPropertyTypes`               | `{ a?: string }` cannot be assigned `undefined` explicitly — forces intent.    |
+| `noImplicitOverride`                       | Every override is declared.                                                    |
+| `noFallthroughCasesInSwitch`               | State machines are switch-heavy; fallthrough is always a bug here.             |
+| `noImplicitReturns`                        | Every branch of a status-computing function returns.                           |
+| `noPropertyAccessFromIndexSignature`       | Keeps dynamic lookups visibly dynamic.                                         |
+| `useUnknownInCatchVariables`               | Caught values are `unknown` until narrowed.                                    |
+| `isolatedModules` / `verbatimModuleSyntax` | Guarantees the source is transpilable file-by-file.                            |
 
 ## Bans
 
@@ -36,12 +36,12 @@ compiler flag requires an ADR.
     Idle: 'idle',
     Connecting: 'connecting',
   } as const;
-  export type SerialBrokerStatus =
-    (typeof SerialBrokerStatus)[keyof typeof SerialBrokerStatus];
+  export type SerialBrokerStatus = (typeof SerialBrokerStatus)[keyof typeof SerialBrokerStatus];
   ```
 
   This gives a runtime value object, a string-literal union type, and zero surprises when
   the value crosses a `postMessage` boundary.
+
 - **`namespace` is banned.** Modules are the unit of encapsulation.
 
 ## Type-design rules

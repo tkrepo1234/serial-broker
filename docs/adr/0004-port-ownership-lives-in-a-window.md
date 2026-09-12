@@ -46,17 +46,19 @@ non-owners are routed to the owner, which performs the actual `writer.write()`.
 ## Consequences
 
 ### Positive
+
 - Works with the platform as specified, with no native component.
 - The owner is a normal window, so it can also prompt for permission when needed.
 
 ### Negative
+
 - Ownership transfer is unavoidable and is the hardest part of the library. The port is
   necessarily closed when the owning window dies (the browser closes it with the context), so
   a transfer always includes a reopen, with a brief gap in which no read is in flight. This
   gap is reported as `reconnecting`, never hidden.
 - Data that arrives during the transfer gap can be lost — the device is talking to nobody.
   This is a property of the platform, documented in the README, and the reason
-  [ADR-0013](./0013-write-ordering-and-delivery-semantics.md) promises *at-most-once*
+  [ADR-0013](./0013-write-ordering-and-delivery-semantics.md) promises _at-most-once_
   delivery rather than exactly-once.
 
 ## Verification

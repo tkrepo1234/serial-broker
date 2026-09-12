@@ -1,0 +1,370 @@
+import type { SerialLike } from '../../src/environment/environment.js';
+
+/** How a simulated device misbehaves. Every field is a failure a real adapter produces. */
+export interface DeviceFaults {
+  /** `open()` rejects with a `DOMException` of this name. */
+  failOpenWith?: string | undefined;
+  /** `open()` never settles, as a hung driver does. */
+  hangOnOpen?: boolean | undefined;
+  /** `write()` rejects with a `DOMException` of this name. */
+  failWriteWith?: string | undefined;
+  /** `write()` never settles. */
+  hangOnWrite?: boolean | undefined;
+  /** Fail the next `open()` this many times, then succeed. */
+  failOpenTimes?: number | undefined;
+}
+
+type SerialEventListener = (event: { readonly target: EventTarget | null }) => void;
+
+/**
+ * A simulated serial device.
+ *
+ * Holds the state a real device has - present or absent, open or closed - and exposes the
+ * levers a test needs: push bytes towards the browser, watch what the browser wrote, and make
+ * any operation fail or hang. The hang cases matter as much as the failures: a yanked device
+ * leaving `write()` pending forever is the reason every call in the library has a deadline.
+ */
+export class FakeDevice {
+  /** Everything written to this device, in order, across every open. */
+  readonly written: Uint8Array[] = [];
+  /** How many times this device has been opened. */
+  openCount = 0;
+  /** `true` while a port for this device is open. */
+  isOpen = false;
+  /** `true` while the device is physically attached. */
+  isAttached = true;
+
+  readonly faults: DeviceFaults = {};
+
+  #push: ((chunk: Uint8Array) => void) | undefined;
+  #errorStream: ((reason: unknown) => void) | undefined;
+  #endStream: (() => void) | undefined;
+
+  constructor(
+    readonly vendorId: number,
+    readonly productId: number,
+  ) {}
+
+  /** Sends bytes from the device to the browser. No-op while nothing is reading. */
+  emit(chunk: Uint8Array | string): void {
+    const bytes = typeof chunk === 'string' ? new TextEncoder().encode(chunk) : chunk;
+    this.#push?.(bytes);
+  }
+
+  /** Makes the read stream error, as an unplugged device does mid-read. */
+  breakStream(reason: unknown = new Error('The device is gone')): void {
+    this.#errorStream?.(reason);
+  }
+
+  /** Ends the read stream cleanly, as a device closing the connection does. */
+  endStream(): void {
+    this.#endStream?.();
+  }
+
+  /** Everything written, concatenated. Convenient for assertions. */
+  writtenBytes(): Uint8Array {
+    const total = this.written.reduce((sum, chunk) => sum + chunk.byteLength, 0);
+    const out = new Uint8Array(total);
+    let offset = 0;
+    for (const chunk of this.written) {
+      out.set(chunk, offset);
+      offset += chunk.byteLength;
+    }
+    return out;
+  }
+
+  /** Everything written, decoded as UTF-8. */
+  writtenText(): string {
+    return new TextDecoder().decode(this.writtenBytes());
+  }
+
+  /** @internal Wires the stream controls when a port opens. */
+  attachStreamControls(controls: {
+    push: (chunk: Uint8Array) => void;
+    error: (reason: unknown) => void;
+    end: () => void;
+  }): void {
+    this.#push = controls.push;
+    this.#errorStream = controls.error;
+    this.#endStream = controls.end;
+  }
+
+  /** @internal Drops the stream controls when a port closes. */
+  detachStreamControls(): void {
+    this.#push = undefined;
+    this.#errorStream = undefined;
+    this.#endStream = undefined;
+  }
+}
+
+/**
+ * A `SerialPort` backed by a {@link FakeDevice}.
+ *
+ * One of these exists per device per simulated context, mirroring the browser: each context
+ * gets its own `SerialPort` object for the same physical device, which is precisely why two
+ * contexts opening one at the same time has to be prevented by something other than the
+ * object itself.
+ */
+export class FakeSerialPort {
+  #isOpen = false;
+  #readable: ReadableStream<Uint8Array> | null = null;
+  #writable: WritableStream<Uint8Array> | null = null;
+
+  constructor(
+    private readonly device: FakeDevice,
+    private readonly onDeviceForgotten: () => void,
+  ) {}
+
+  getInfo(): { usbVendorId: number; usbProductId: number } {
+    return { usbVendorId: this.device.vendorId, usbProductId: this.device.productId };
+  }
+
+  get readable(): ReadableStream<Uint8Array> | null {
+    return this.#readable;
+  }
+
+  get writable(): WritableStream<Uint8Array> | null {
+    return this.#writable;
+  }
+
+  async open(): Promise<void> {
+    if (this.device.faults.hangOnOpen === true) {
+      // Never settles. This is what a hung driver does, and what `openTimeoutMs` exists for.
+      await new Promise<never>(() => {
+        /* intentionally never settles */
+      });
+    }
+
+    if (!this.device.isAttached) {
+      throw domException('NetworkError', 'The device has been lost');
+    }
+
+    if (this.device.faults.failOpenTimes !== undefined && this.device.faults.failOpenTimes > 0) {
+      this.device.faults.failOpenTimes -= 1;
+      throw domException('NetworkError', 'Failed to open serial port');
+    }
+
+    if (this.device.faults.failOpenWith !== undefined) {
+      throw domException(this.device.faults.failOpenWith, 'Failed to open serial port');
+    }
+
+    if (this.device.isOpen) {
+      // Exactly what a browser does when any context already holds the device. A test that
+      // sees this has found a genuine ownership bug.
+      throw domException('InvalidStateError', 'The port is already open');
+    }
+
+    this.#isOpen = true;
+    this.device.isOpen = true;
+    this.device.openCount += 1;
+
+    this.#readable = new ReadableStream<Uint8Array>({
+      start: (controller) => {
+        this.device.attachStreamControls({
+          push: (chunk) => {
+            try {
+              controller.enqueue(chunk);
+            } catch {
+              // Enqueueing on a closed stream: the port is being torn down and the chunk is
+              // genuinely lost, which is what happens on real hardware too.
+            }
+          },
+          error: (reason) => {
+            try {
+              controller.error(reason);
+            } catch {
+              // Already errored or closed.
+            }
+          },
+          end: () => {
+            try {
+              controller.close();
+            } catch {
+              // Already closed.
+            }
+          },
+        });
+      },
+    });
+
+    this.#writable = new WritableStream<Uint8Array>({
+      write: async (chunk) => {
+        if (this.device.faults.hangOnWrite === true) {
+          await new Promise<never>(() => {
+            /* intentionally never settles */
+          });
+        }
+        if (this.device.faults.failWriteWith !== undefined) {
+          throw domException(this.device.faults.failWriteWith, 'The write failed');
+        }
+        if (!this.device.isAttached) {
+          throw domException('NetworkError', 'The device has been lost');
+        }
+        this.device.written.push(new Uint8Array(chunk));
+      },
+    });
+  }
+
+  async close(): Promise<void> {
+    this.#isOpen = false;
+    this.device.isOpen = false;
+    this.device.detachStreamControls();
+    this.#readable = null;
+    this.#writable = null;
+    await Promise.resolve();
+  }
+
+  async forget(): Promise<void> {
+    await this.close();
+    this.onDeviceForgotten();
+  }
+
+  /** `true` while this port object holds the device open. */
+  get isOpen(): boolean {
+    return this.#isOpen;
+  }
+}
+
+/**
+ * A `navigator.serial` shared by every simulated context.
+ *
+ * Permission is modelled the way the browser models it: per origin, not per context. A device
+ * granted in one tab is immediately visible to `getPorts()` in every other tab, which is what
+ * makes "remembered across tabs and reloads" testable at all (ADR-0009).
+ */
+export class FakeSerialRegistry {
+  readonly #devices: FakeDevice[] = [];
+  readonly #granted = new Set<FakeDevice>();
+  readonly #listeners = new Map<string, Set<SerialEventListener>>();
+  readonly #portsByContext = new Map<string, Map<FakeDevice, FakeSerialPort>>();
+
+  /** What the port picker will return, in order. Empty means the user dismisses it. */
+  readonly pickerQueue: FakeDevice[] = [];
+
+  /** Adds a device to the machine. Not granted, and not visible to `getPorts()` yet. */
+  addDevice(vendorId: number, productId: number): FakeDevice {
+    const device = new FakeDevice(vendorId, productId);
+    this.#devices.push(device);
+    return device;
+  }
+
+  /** Grants permission for a device, as a user choosing it in the picker would. */
+  grant(device: FakeDevice): void {
+    this.#granted.add(device);
+  }
+
+  /** Revokes permission, as a user clearing it in site settings would. */
+  revoke(device: FakeDevice): void {
+    this.#granted.delete(device);
+  }
+
+  /** Unplugs a device: `getPorts()` still lists it, but opening fails. */
+  unplug(device: FakeDevice): void {
+    device.isAttached = false;
+    device.isOpen = false;
+    device.breakStream(domException('NetworkError', 'The device has been lost'));
+    this.#dispatch('disconnect', device);
+  }
+
+  /** Plugs a device back in. */
+  plug(device: FakeDevice): void {
+    device.isAttached = true;
+    this.#dispatch('connect', device);
+  }
+
+  /** A view onto this registry scoped to one simulated context. */
+  forContext(contextId: string): SerialLike {
+    return {
+      getPorts: async () => {
+        await Promise.resolve();
+        return [...this.#granted].map(
+          (device) => this.#portFor(contextId, device) as unknown as SerialPort,
+        );
+      },
+
+      requestPort: async () => {
+        await Promise.resolve();
+        const chosen = this.pickerQueue.shift();
+        if (chosen === undefined) {
+          throw domException('NotFoundError', 'No port selected by the user');
+        }
+        this.#granted.add(chosen);
+        return this.#portFor(contextId, chosen) as unknown as SerialPort;
+      },
+
+      addEventListener: (type, listener) => {
+        const set = this.#listeners.get(`${contextId}:${type}`) ?? new Set();
+        set.add(listener);
+        this.#listeners.set(`${contextId}:${type}`, set);
+      },
+
+      removeEventListener: (type, listener) => {
+        this.#listeners.get(`${contextId}:${type}`)?.delete(listener);
+      },
+    };
+  }
+
+  /**
+   * Tears a context down, as the browser does when a tab goes away.
+   *
+   * Crucially this closes every port the context held open, whether or not it had a chance to
+   * close them itself. A killed tab runs no cleanup, but the browser still releases its
+   * devices - and a harness that left them open would make the successor's `open()` fail for a
+   * reason that never happens in a real browser.
+   */
+  removeContext(contextId: string): void {
+    for (const key of [...this.#listeners.keys()]) {
+      if (key.startsWith(`${contextId}:`)) {
+        this.#listeners.delete(key);
+      }
+    }
+
+    const ports = this.#portsByContext.get(contextId);
+    if (ports !== undefined) {
+      for (const port of ports.values()) {
+        if (port.isOpen) {
+          void port.close();
+        }
+      }
+    }
+
+    this.#portsByContext.delete(contextId);
+  }
+
+  #portFor(contextId: string, device: FakeDevice): FakeSerialPort {
+    let ports = this.#portsByContext.get(contextId);
+    if (ports === undefined) {
+      ports = new Map();
+      this.#portsByContext.set(contextId, ports);
+    }
+
+    let port = ports.get(device);
+    if (port === undefined) {
+      port = new FakeSerialPort(device, () => {
+        this.#granted.delete(device);
+      });
+      ports.set(device, port);
+    }
+    return port;
+  }
+
+  #dispatch(type: 'connect' | 'disconnect', device: FakeDevice): void {
+    for (const [key, listeners] of this.#listeners) {
+      if (!key.endsWith(`:${type}`)) {
+        continue;
+      }
+      const contextId = key.slice(0, key.length - type.length - 1);
+      const target = this.#portFor(contextId, device) as unknown as EventTarget;
+      for (const listener of [...listeners]) {
+        listener({ target });
+      }
+    }
+  }
+}
+
+/** Builds something indistinguishable from a `DOMException` for the code under test. */
+export function domException(name: string, message: string): Error {
+  const error = new Error(message);
+  error.name = name;
+  return error;
+}

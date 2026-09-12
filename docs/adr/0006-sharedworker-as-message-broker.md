@@ -49,7 +49,7 @@ there means it works identically under both transports and survives the broker i
   both cheaper and easier to reason about. It remains the fallback
   ([ADR-0007](./0007-broadcastchannel-fallback-transport.md)).
 - **`localStorage` events as the bus.** Serialises everything through strings, fires only in
-  *other* tabs, has no ordering guarantee across storage partitions, and is a well-known
+  _other_ tabs, has no ordering guarantee across storage partitions, and is a well-known
   source of subtle bugs. Rejected.
 - **A `SharedWorker` that also elects the owner by observing port disconnects.** See
   ADR-0005: presence is not mutual exclusion.
@@ -57,6 +57,7 @@ there means it works identically under both transports and survives the broker i
 ## Consequences
 
 ### Positive
+
 - One authoritative routing point: ordering and de-duplication are trivial to reason about.
 - Presence is exact: a closed message port tells the broker immediately that a participant is
   gone, with no heartbeat and no timeout to tune.
@@ -64,9 +65,10 @@ there means it works identically under both transports and survives the broker i
   themselves on their next message and nothing has to be recovered.
 
 ### Negative
+
 - A `SharedWorker` needs a script URL, which makes bundling the library harder than a
   single-file drop-in: a `Blob` URL cannot be used, because each tab would produce a
-  *different* URL and therefore a different, unshared worker. The library resolves the worker
+  _different_ URL and therefore a different, unshared worker. The library resolves the worker
   via `new URL('./serial-broker.worker.js', import.meta.url)` and allows an explicit override
   through `configure({ workerUrl })`. This is documented prominently.
 - Not available in every context (see ADR-0007), hence the fallback.

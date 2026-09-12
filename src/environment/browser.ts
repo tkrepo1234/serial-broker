@@ -1,0 +1,198 @@
+import { BroadcastChannelTransport } from '../client/transport/broadcast-channel-transport.js';
+import { SharedWorkerTransport } from '../client/transport/shared-worker-transport.js';
+import type { Transport, TransportRequest } from '../client/transport/transport.js';
+import type { Clock } from '../core/clock.js';
+import { SerialBrokerErrorCode } from '../core/error-codes.js';
+import { SerialBrokerError } from '../core/errors.js';
+import { NOOP_LOGGER, ScopedLogger } from '../core/logger.js';
+import type { Logger, TransportKind } from '../core/types.js';
+
+import type {
+  KeyValueStorage,
+  LockManagerLike,
+  SerialLike,
+  SerialBrokerEnvironment,
+} from './environment.js';
+
+/** Settings the application can influence. */
+export interface BrowserEnvironmentOptions {
+  readonly workerUrl?: string | URL | undefined;
+  readonly transport?: TransportKind | undefined;
+  readonly logger?: Logger | undefined;
+}
+
+/** `true` if this context has everything the library needs. */
+export function isSupported(): boolean {
+  return (
+    typeof navigator !== 'undefined' &&
+    'serial' in navigator &&
+    'locks' in navigator &&
+    typeof BroadcastChannel !== 'undefined'
+  );
+}
+
+/**
+ * Builds the environment from the real platform.
+ *
+ * The only place in the library that reads a global. Everything it produces is an ordinary
+ * object that a test can replace wholesale.
+ */
+export function createBrowserEnvironment(
+  options: BrowserEnvironmentOptions = {},
+): SerialBrokerEnvironment {
+  const logger = new ScopedLogger(options.logger ?? NOOP_LOGGER, {});
+
+  return {
+    serial: requireSerial(),
+    locks: requireLocks(),
+    storage: createStorage(),
+    createTransport: (request) => createTransport(request, options, logger),
+    clock: BROWSER_CLOCK,
+    random: () => Math.random(),
+    newId: createIdGenerator(),
+    logger,
+  };
+}
+
+const BROWSER_CLOCK: Clock = {
+  now: () => Date.now(),
+  setTimer: (callback, delayMs) => setTimeout(callback, delayMs),
+  clearTimer: (handle) => {
+    clearTimeout(handle as unknown as ReturnType<typeof setTimeout>);
+  },
+};
+
+function requireSerial(): SerialLike {
+  if (typeof navigator === 'undefined' || !('serial' in navigator)) {
+    throw new SerialBrokerError(
+      SerialBrokerErrorCode.WEB_SERIAL_UNAVAILABLE,
+      'This context does not expose navigator.serial',
+      { context: { hasNavigator: typeof navigator !== 'undefined' } },
+    );
+  }
+  return navigator.serial;
+}
+
+function requireLocks(): LockManagerLike {
+  if (typeof navigator === 'undefined' || !('locks' in navigator)) {
+    throw new SerialBrokerError(
+      SerialBrokerErrorCode.WEB_LOCKS_UNAVAILABLE,
+      'This context does not expose navigator.locks',
+      {},
+    );
+  }
+  return navigator.locks;
+}
+
+/**
+ * Wraps `localStorage` so that a context where it is unavailable still works.
+ *
+ * Accessing `localStorage` throws outright in a sandboxed iframe and in some privacy
+ * configurations - not on use, but on the property access itself. Everything here therefore
+ * degrades to an in-memory store, and the library reports that configurations will not
+ * survive a reload rather than failing.
+ */
+function createStorage(): KeyValueStorage {
+  try {
+    const probe = globalThis.localStorage;
+    // Reading is not enough: some configurations allow the access and refuse the write.
+    const probeKey = 'serial-broker/probe';
+    probe.setItem(probeKey, '1');
+    probe.removeItem(probeKey);
+    return probe;
+  } catch {
+    const memory = new Map<string, string>();
+    return {
+      getItem: (key) => memory.get(key) ?? null,
+      setItem: (key, value) => {
+        memory.set(key, value);
+      },
+      removeItem: (key) => {
+        memory.delete(key);
+      },
+    };
+  }
+}
+
+/**
+ * Chooses and constructs the message bus.
+ *
+ * `SharedWorker` first, because point-to-point routing is cheaper and presence is exact
+ * (ADR-0006). `BroadcastChannel` when it is unavailable or its construction throws, which is
+ * a realistic outcome of a strict CSP or an unusual bundler setup (ADR-0007).
+ */
+function createTransport(
+  request: TransportRequest,
+  options: BrowserEnvironmentOptions,
+  logger: ScopedLogger,
+): Transport {
+  const preference = options.transport ?? 'auto';
+
+  if (preference !== 'broadcastchannel' && typeof SharedWorker !== 'undefined') {
+    try {
+      const url = options.workerUrl ?? defaultWorkerUrl();
+      return new SharedWorkerTransport(
+        request,
+        // The cast is the one place where the platform's `SharedWorker` meets the narrowed
+        // interface the transport works against; the shapes match, but TypeScript has no way
+        // to know that `MessagePort` satisfies `MessagePortLike` structurally under its
+        // overloaded `addEventListener`.
+        (scriptUrl, name) => new SharedWorker(scriptUrl, { name, type: 'module' }),
+        url,
+      );
+    } catch (error) {
+      if (preference === 'sharedworker') {
+        throw new SerialBrokerError(
+          SerialBrokerErrorCode.BROKER_UNAVAILABLE,
+          'The SharedWorker transport was requested but could not be constructed',
+          { cause: error },
+        );
+      }
+      logger.warn('SharedWorker unavailable; falling back to BroadcastChannel', {
+        event: 'environment.transport-fallback',
+        reason: String(error),
+      });
+    }
+  }
+
+  if (typeof BroadcastChannel === 'undefined') {
+    throw new SerialBrokerError(
+      SerialBrokerErrorCode.TRANSPORT_UNAVAILABLE,
+      'Neither SharedWorker nor BroadcastChannel is available in this context',
+      {},
+    );
+  }
+
+  return new BroadcastChannelTransport(request, (name) => new BroadcastChannel(name));
+}
+
+/**
+ * Resolves the broker script next to this module.
+ *
+ * A `Blob` URL cannot be used here: `SharedWorker` identity is its script URL, so each tab
+ * would create a *different* worker and nothing would be shared. See ADR-0006.
+ */
+function defaultWorkerUrl(): URL {
+  return new URL('./serial-broker.worker.js', import.meta.url);
+}
+
+/**
+ * Produces identifiers that are unique within this context.
+ *
+ * `crypto.randomUUID` where available, a counter plus a random suffix otherwise - these are
+ * routing labels, not secrets, and uniqueness across a handful of tabs is all that is needed.
+ */
+function createIdGenerator(): (prefix: string) => string {
+  let counter = 0;
+
+  return (prefix) => {
+    counter += 1;
+
+    const unique =
+      typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+        ? crypto.randomUUID()
+        : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+
+    return `${prefix}-${String(counter)}-${unique}`;
+  };
+}

@@ -43,11 +43,13 @@ model is "one global environment per file" unless that environment is fully inje
 ## Consequences
 
 ### Positive
+
 - The whole suite runs in milliseconds, so the multi-tab scenario matrix can be exhaustive.
 - Injection is enforced by the absence of browser globals in the test environment: code that
   reaches for `navigator` directly fails immediately rather than silently in production.
 
 ### Negative
+
 - The fakes must be faithful to the specifications, which is real work and a real risk. This
   is why the harness has its own tests ([testing.md](../guidelines/testing.md)) and why a
   manual test plan against real hardware remains mandatory before a release.

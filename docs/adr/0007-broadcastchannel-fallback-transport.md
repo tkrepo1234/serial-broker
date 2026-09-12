@@ -54,12 +54,14 @@ recipient. At the message rates a serial port produces, neither is measurable.
 ## Consequences
 
 ### Positive
+
 - The library works wherever Web Serial works, not merely where both Web Serial and
   `SharedWorker` work.
 - The `Transport` seam is also the seam the tests inject, so the fallback is not a
   second-class code path.
 
 ### Negative
+
 - Two transports to maintain and to test. Mitigated by running the entire multi-context
   scenario matrix against **both** transports as a parameterised suite.
 - With `BroadcastChannel`, a context sees traffic addressed to others and discards it. This is

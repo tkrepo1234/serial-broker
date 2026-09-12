@@ -8,7 +8,7 @@
 Serial devices speak wildly different protocols: line-oriented ASCII terminated by `\r\n`,
 STX/ETX-framed binary with a BCC, Modbus RTU with a 3.5-character silent interval, fixed
 length records, length-prefixed frames. Any framing rule this library picked would be wrong
-for most devices, and a framing rule that is *configurable enough* to fit all of them is a
+for most devices, and a framing rule that is _configurable enough_ to fit all of them is a
 second product.
 
 Reading from a serial port yields arbitrary chunks: one logical message can arrive in five
@@ -40,11 +40,13 @@ Protocol handling belongs in a separate layer built on top of this one, consumin
 ## Consequences
 
 ### Positive
+
 - The delivery contract is trivially stated and trivially testable: bytes in, bytes out, in
   order, exactly once.
 - No release of this library can break a device by changing framing behaviour.
 
 ### Negative
+
 - Every consumer writes or imports its own framing. Mitigated by documenting the two common
   patterns in the README and shipping the demo with a line-assembler example.
 

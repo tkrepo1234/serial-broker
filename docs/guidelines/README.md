@@ -6,17 +6,17 @@ Google (TypeScript / JavaScript style guides, engineering practices, API design 
 and the W3C/WHATWG specification conventions, reduced to what actually serves a small,
 focused browser library.
 
-| Document | Scope |
-| --- | --- |
-| [Coding Style](./coding-style.md) | Formatting, naming, file layout, imports |
-| [TypeScript](./typescript.md) | Type-system rules, public type surface |
-| [Defensive Programming](./defensive-programming.md) | Validation, invariants, trust boundaries |
-| [Error Handling](./error-handling.md) | Error model, codes, reporting, logging |
-| [API Design](./api-design.md) | Rules for the public surface and its evolution |
-| [Testing](./testing.md) | Test levels, naming, coverage gates, determinism |
-| [Documentation](./documentation.md) | TSDoc, README, ADRs, changelog, terminology |
-| [Git Workflow](./git-workflow.md) | Branches, commits, versioning, releases |
-| [Review Checklist](./review-checklist.md) | What a reviewer verifies before approving |
+| Document                                            | Scope                                            |
+| --------------------------------------------------- | ------------------------------------------------ |
+| [Coding Style](./coding-style.md)                   | Formatting, naming, file layout, imports         |
+| [TypeScript](./typescript.md)                       | Type-system rules, public type surface           |
+| [Defensive Programming](./defensive-programming.md) | Validation, invariants, trust boundaries         |
+| [Error Handling](./error-handling.md)               | Error model, codes, reporting, logging           |
+| [API Design](./api-design.md)                       | Rules for the public surface and its evolution   |
+| [Testing](./testing.md)                             | Test levels, naming, coverage gates, determinism |
+| [Documentation](./documentation.md)                 | TSDoc, README, ADRs, changelog, terminology      |
+| [Git Workflow](./git-workflow.md)                   | Branches, commits, versioning, releases          |
+| [Review Checklist](./review-checklist.md)           | What a reviewer verifies before approving        |
 
 ## The three rules that outrank all others
 

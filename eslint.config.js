@@ -1,12 +1,13 @@
 import js from '@eslint/js';
-import tseslint from 'typescript-eslint';
-import importX from 'eslint-plugin-import-x';
+import { defineConfig } from 'eslint/config';
 import prettier from 'eslint-config-prettier';
+import importX from 'eslint-plugin-import-x';
+import tseslint from 'typescript-eslint';
 
 /**
  * Flat config. The rules here are the executable form of docs/guidelines/*.
  */
-export default tseslint.config(
+export default defineConfig(
   { ignores: ['dist/**', 'coverage/**', 'node_modules/**', 'docs/api/**'] },
 
   js.configs.recommended,
@@ -15,7 +16,13 @@ export default tseslint.config(
 
   {
     languageOptions: {
-      parserOptions: { projectService: true, tsconfigRootDir: import.meta.dirname },
+      parserOptions: {
+        projectService: {
+          // The flat config itself is not part of the TypeScript program, but it is still
+          // linted; without this, type-aware rules cannot resolve it.
+          allowDefaultProject: ['eslint.config.js'],
+        },
+      },
     },
     plugins: { 'import-x': importX },
     rules: {
@@ -23,6 +30,9 @@ export default tseslint.config(
       '@typescript-eslint/no-explicit-any': 'error',
       '@typescript-eslint/no-non-null-assertion': 'error',
       '@typescript-eslint/no-unnecessary-condition': 'error',
+      // A type argument of `void` is how "a promise that resolves with nothing" is spelled;
+      // the rule's real objection, `void` in unions and parameters, stays banned.
+      '@typescript-eslint/no-invalid-void-type': ['error', { allowInGenericTypeArguments: true }],
       '@typescript-eslint/consistent-type-imports': ['error', { prefer: 'type-imports' }],
       '@typescript-eslint/explicit-module-boundary-types': 'error',
       '@typescript-eslint/no-unused-vars': [
@@ -31,7 +41,10 @@ export default tseslint.config(
       ],
       'no-restricted-syntax': [
         'error',
-        { selector: 'TSEnumDeclaration', message: 'Use a const object + union type instead of enum.' },
+        {
+          selector: 'TSEnumDeclaration',
+          message: 'Use a const object + union type instead of enum.',
+        },
         { selector: 'TSModuleDeclaration[kind="namespace"]', message: 'Use ES modules.' },
       ],
 

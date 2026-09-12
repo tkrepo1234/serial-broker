@@ -1,6 +1,5 @@
 import type { ScopedLogger } from '../core/logger.js';
 import type { ClientId, ProtocolMessage } from '../protocol/messages.js';
-import { PROTOCOL_VERSION } from '../protocol/version.js';
 
 /** The broker's own identity on the bus. */
 export const BROKER_CLIENT_ID = 'broker' as ClientId;
@@ -139,20 +138,9 @@ export class Broker {
   }
 
   #attach(clientId: ClientId, configName: string): void {
-    const state = this.#stateFor(configName);
-    state.participants.add(clientId);
-
-    // A context joining an already-open configuration would otherwise sit at its initial
-    // status until the next change, which on a healthy connection could be hours away.
-    if (state.owner !== undefined && state.owner !== clientId) {
-      this.host.deliver(state.owner, {
-        type: 'status-request',
-        v: PROTOCOL_VERSION,
-        from: BROKER_CLIENT_ID,
-        to: state.owner,
-        configName,
-      });
-    }
+    // Nothing beyond bookkeeping: a joining context asks the owner for the current status
+    // itself, so that the broker and the broker-less fallback behave identically (ADR-0007).
+    this.#stateFor(configName).participants.add(clientId);
   }
 
   #detach(clientId: ClientId, configName: string): void {
@@ -185,7 +173,7 @@ export class Broker {
     const state = this.#configurations.get(configName);
     // A late release from a context that is no longer the owner must not clear the current
     // one: ownership may already have moved on by the time this message arrives.
-    if (state !== undefined && state.owner === clientId) {
+    if (state?.owner === clientId) {
       state.owner = undefined;
     }
   }

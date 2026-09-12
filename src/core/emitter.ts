@@ -35,7 +35,7 @@ export class EventEmitter {
       listeners = new Set();
       this.#listeners.set(event, listeners);
     }
-    listeners.add(listener as (event: never) => void);
+    listeners.add(listener);
   }
 
   /** Removes `listener`. Removing one that was never added is a no-op. */
@@ -43,7 +43,7 @@ export class EventEmitter {
     event: TEvent,
     listener: (payload: SerialBrokerEventMap[TEvent]) => void,
   ): void {
-    this.#listeners.get(event)?.delete(listener as (event: never) => void);
+    this.#listeners.get(event)?.delete(listener);
   }
 
   /** `true` if at least one listener is registered for `event`. */

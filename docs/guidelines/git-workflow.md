@@ -25,7 +25,7 @@ Scopes: `core`, `client`, `worker`, `owner`, `storage`, `protocol`, `api`, `docs
 Rules:
 
 - **One logical change per commit.** A commit that fixes a bug and reformats a file is split.
-- The body answers *why*. The diff already shows *what*.
+- The body answers _why_. The diff already shows _what_.
 - A commit that changes behaviour touches tests in the same commit.
 - A commit that changes the public API touches `README.md`, TSDoc and `CHANGELOG.md` in the
   same commit.

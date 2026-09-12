@@ -24,7 +24,9 @@ rejected alternatives is a note, not a decision record.
 ## Consequences
 
 ### Positive
+
 ### Negative
+
 ### Risks and mitigations
 
 ## Verification

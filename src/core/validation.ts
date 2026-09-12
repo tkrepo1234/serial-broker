@@ -63,7 +63,11 @@ export function validateName(name: unknown, argumentName = 'name'): string {
     throw invalid(argumentName, 'a non-empty string', name);
   }
   if (name.length > MAX_CONFIG_NAME_LENGTH) {
-    throw invalid(argumentName, `at most ${String(MAX_CONFIG_NAME_LENGTH)} characters`, name.length);
+    throw invalid(
+      argumentName,
+      `at most ${String(MAX_CONFIG_NAME_LENGTH)} characters`,
+      name.length,
+    );
   }
   // Control characters would corrupt the Web Lock name, the storage key and every log
   // record this name appears in. Checked by code point rather than by regular expression so
@@ -136,17 +140,16 @@ function requireObject(value: unknown, argumentName: string): Record<string, unk
  * @throws A {@link SerialBrokerError} with code `INVALID_ARGUMENT`, naming the first invalid
  *   field in `context.argumentName`.
  */
-export function normalizeConfiguration(
-  name: unknown,
-  options: unknown,
-): NormalizedConfiguration {
+export function normalizeConfiguration(name: unknown, options: unknown): NormalizedConfiguration {
   const validName = validateName(name);
   const raw = requireObject(options, 'options') as unknown as SerialBrokerOptions;
 
   const device = requireObject(raw.device, 'options.device');
   const serial = requireObject(raw.serial, 'options.serial');
-  const connection = raw.connection === undefined ? {} : requireObject(raw.connection, 'options.connection');
-  const encoding = raw.encoding === undefined ? {} : requireObject(raw.encoding, 'options.encoding');
+  const connection =
+    raw.connection === undefined ? {} : requireObject(raw.connection, 'options.connection');
+  const encoding =
+    raw.encoding === undefined ? {} : requireObject(raw.encoding, 'options.encoding');
 
   const maxAttemptsRaw = connection['maxAttempts'] ?? DEFAULT_CONNECTION_SETTINGS.maxAttempts;
 
@@ -287,7 +290,10 @@ function validateEncodingLabel(value: unknown, argumentName: string): string {
  * about reconnect timing is a local difference; disagreeing about the baud rate is a
  * conflict, because the port can only be opened one way.
  */
-export function isDeviceCompatible(a: NormalizedConfiguration, b: NormalizedConfiguration): boolean {
+export function isDeviceCompatible(
+  a: NormalizedConfiguration,
+  b: NormalizedConfiguration,
+): boolean {
   return (
     a.device.vendorId === b.device.vendorId &&
     a.device.productId === b.device.productId &&

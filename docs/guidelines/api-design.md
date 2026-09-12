@@ -8,8 +8,8 @@ behaviour of the Web platform APIs this library wraps.
 
 ## Principles
 
-1. **Expose intent, hide mechanism.** The application says *"I want a connection to this kind
-   of device, called this"*. It never learns which tab owns the port, that a `SharedWorker`
+1. **Expose intent, hide mechanism.** The application says _"I want a connection to this kind
+   of device, called this"_. It never learns which tab owns the port, that a `SharedWorker`
    exists, that a Web Lock is held, or that a reconnect is in flight beyond a coarse status.
    Anything that would let an application depend on the coordination mechanism is a design
    defect. See [ADR-0011](../adr/0011-encapsulation-boundary.md).
@@ -40,7 +40,7 @@ behaviour of the Web platform APIs this library wraps.
    derived from the existing four.
 
 8. **`subscribe` returns an unsubscribe function** in addition to `unsubscribe(name, event,
-   cb)` existing. Both are supported because the first is ergonomic and the second is
+cb)` existing. Both are supported because the first is ergonomic and the second is
    required for symmetry with code that stores callbacks.
 
 ## Compatibility rules
@@ -49,7 +49,7 @@ behaviour of the Web platform APIs this library wraps.
 - **Breaking:** removing or renaming an export, a status value, an error code, an event name
   or an option; narrowing an accepted input type; widening a returned type; changing when an
   event fires.
-- **Non-breaking:** adding an optional option, a new error code, a new status value *only if*
+- **Non-breaking:** adding an optional option, a new error code, a new status value _only if_
   the status union is documented as extensible (it is — consumers must handle unknown
   statuses defensively), a new event payload field.
 - The wire protocol between tabs is versioned independently of the package version; two
@@ -61,7 +61,7 @@ behaviour of the Web platform APIs this library wraps.
 Listed here so the boundary is defensible in review:
 
 - Frame, parse, checksum or interpret payload bytes. That belongs to a protocol layer built
-  *on top* of this one ([ADR-0002](../adr/0002-scope-transport-only.md)).
+  _on top_ of this one ([ADR-0002](../adr/0002-scope-transport-only.md)).
 - Provide request/response correlation, command queues with replies, or retry-on-payload.
 - Expose the underlying `SerialPort` object. Handing it out would let one tab close a port
   that other tabs depend on, and would break every invariant this library maintains.

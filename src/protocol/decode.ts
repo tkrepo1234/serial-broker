@@ -43,8 +43,7 @@ const isFiniteNumber = (value: unknown): value is number =>
   typeof value === 'number' && Number.isFinite(value);
 
 const isStatus = (value: unknown): value is SerialBrokerStatus =>
-  typeof value === 'string' &&
-  (Object.values(SerialBrokerStatus) as string[]).includes(value);
+  typeof value === 'string' && (Object.values(SerialBrokerStatus) as string[]).includes(value);
 
 /**
  * Payloads arrive as `Uint8Array` through structured cloning.

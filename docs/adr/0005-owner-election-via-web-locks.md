@@ -40,11 +40,11 @@ origin — the exact scope of the problem.
 ## Alternatives considered
 
 - **Heartbeats in the SharedWorker.** The worker sees a port disconnect when a tab dies, which
-  is a genuine signal, and it was the first design. Rejected as the *primary* mechanism: it
+  is a genuine signal, and it was the first design. Rejected as the _primary_ mechanism: it
   depends on the worker being alive and on choosing a timeout, and it cannot prevent a
   split-brain window between "worker thinks A is dead" and "A is actually still writing". A
   browser-enforced exclusive lock has neither problem. The worker's view of disconnects is
-  still used, but only to update *presence*, never to grant ownership.
+  still used, but only to update _presence_, never to grant ownership.
 - **`localStorage` lease with expiry timestamps.** The classic pre-Web-Locks approach.
   Requires clock agreement between tabs, has a documented race on `storage` event delivery,
   and a stalled tab can renew a lease it should have lost. Rejected.
@@ -55,12 +55,14 @@ origin — the exact scope of the problem.
 ## Consequences
 
 ### Positive
+
 - Failover is correct by construction, including for crashes, and requires no timeout tuning.
 - The invariant "at most one owner" is enforced by the browser, not by our code.
 - A frozen (bfcache) or backgrounded tab keeps its lock and its port, which is the desired
   behaviour; if the browser discards it, the lock is released and the next tab takes over.
 
 ### Negative
+
 - Web Locks are not available in insecure contexts. Neither is Web Serial, so this costs
   nothing in practice; the feature detection reports both together.
 - A long-lived pending lock request per configuration per tab. Negligible, but it means the

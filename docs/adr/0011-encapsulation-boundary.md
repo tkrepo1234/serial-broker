@@ -20,11 +20,11 @@ count, no lock state, no transport identity, no worker reference and no `SerialP
 Concretely:
 
 - `getStatus(name)` returns `{ status, vendorId, productId, serialOptions, since,
-  lastErrorCode }` - the condition of the *connection*, never of the *coordination*.
+lastErrorCode }` - the condition of the _connection_, never of the _coordination_.
 - The `status` union describes what an application can act on: `idle`, `awaiting-permission`,
   `connecting`, `open`, `reconnecting`, `failed`, `released`. Whether the local context or a
   peer is doing the connecting is not represented, because it must not matter.
-- `onSend` carries `origin: 'local' | 'remote'` - whether *this* context issued the write.
+- `onSend` carries `origin: 'local' | 'remote'` - whether _this_ context issued the write.
   That is information about the caller's own action, not about the coordination topology, and
   it is the minimum needed to satisfy the requirement that a tab can tell its own echo from a
   peer's traffic. No peer identifier is included.
@@ -46,11 +46,13 @@ Concretely:
 ## Consequences
 
 ### Positive
+
 - The election mechanism, the transport, and the broker can all be replaced without a major
   version bump. ADR-0005 and ADR-0006 are genuinely reversible decisions.
 - Applications cannot write code that is subtly wrong about a race they cannot win.
 
 ### Negative
+
 - Debugging a multi-tab deployment requires enabling the logger. Accepted, and the reason
   the logger interface carries correlating fields on every record.
 

@@ -6,13 +6,13 @@ that matter, and they must be **deterministic**.
 
 ## Levels
 
-| Level | Location | What it proves | Rule |
-| --- | --- | --- | --- |
-| **Unit** | `test/unit/` | One module in isolation: backoff maths, validation, codecs, protocol encode/decode. | No fakes beyond the module's own dependencies. Fast (< 5 ms each). |
-| **Integration** | `test/integration/` | Several real modules against the simulated browser harness: a single tab end-to-end, reconnect, write queueing. | Uses the harness, never the real DOM. |
-| **Multi-context** | `test/integration/multi-tab/` | The actual product claim: N simulated tabs sharing one port, master failover, broadcast fan-out, interlocking under contention. | Mandatory for every change to `master/`, `worker/` or `client/`. |
-| **Type** | `test/types/` | The public surface type-checks as documented and rejects misuse. | `expectTypeOf` assertions; failures are compile errors. |
-| **Manual** | `examples/demo/` | Real Chromium, real hardware. Documented, checklisted, never a substitute for the above. | Recorded in `docs/manual-test-plan.md`. |
+| Level             | Location                      | What it proves                                                                                                                  | Rule                                                               |
+| ----------------- | ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
+| **Unit**          | `test/unit/`                  | One module in isolation: backoff maths, validation, codecs, protocol encode/decode.                                             | No fakes beyond the module's own dependencies. Fast (< 5 ms each). |
+| **Integration**   | `test/integration/`           | Several real modules against the simulated browser harness: a single tab end-to-end, reconnect, write queueing.                 | Uses the harness, never the real DOM.                              |
+| **Multi-context** | `test/integration/multi-tab/` | The actual product claim: N simulated tabs sharing one port, master failover, broadcast fan-out, interlocking under contention. | Mandatory for every change to `master/`, `worker/` or `client/`.   |
+| **Type**          | `test/types/`                 | The public surface type-checks as documented and rejects misuse.                                                                | `expectTypeOf` assertions; failures are compile errors.            |
+| **Manual**        | `examples/demo/`              | Real Chromium, real hardware. Documented, checklisted, never a substitute for the above.                                        | Recorded in `docs/manual-test-plan.md`.                            |
 
 ## Determinism is mandatory
 
@@ -24,14 +24,14 @@ No test may depend on wall-clock time, real timers, real randomness or real task
   exactly.
 - **IDs** come from an injected generator, so assertions can name `client-1`, `request-3`.
 - **Task ordering** in the multi-tab harness is explicit: the harness has a message pump that
-  the test advances step-by-step, so interleavings are *chosen*, not hoped for.
+  the test advances step-by-step, so interleavings are _chosen_, not hoped for.
 
 A flaky test is treated as a failing test and is fixed or deleted within the same change.
 Never retried, never `.skip`ped with a TODO.
 
 ## The simulated browser harness
 
-`test/harness/` provides in-memory implementations with the *documented* semantics of:
+`test/harness/` provides in-memory implementations with the _documented_ semantics of:
 
 - `navigator.serial` — including `requestPort` gesture rules, `getPorts` persistence,
   `connect`/`disconnect` events, and a `SerialPort` whose streams can be made to stall,
@@ -50,7 +50,7 @@ lies produces tests that lie.**
 
 - Name: `describe('<unit>', ...)` / `it('<asserts the observable behaviour>', ...)`.
   `it('works')` is rejected. `it('promotes the longest-waiting tab when the master tab is
-  killed mid-write')` is the standard.
+killed mid-write')` is the standard.
 - **Arrange / Act / Assert**, separated by blank lines, in that order.
 - Assert on **observable behaviour** — public API results, emitted events, bytes that reached
   the device — never on private fields. A test that reaches into `#state` documents an
@@ -62,12 +62,12 @@ lies produces tests that lie.**
 
 Enforced in CI, build fails below:
 
-| Metric | Global | `src/master/`, `src/worker/`, `src/client/` |
-| --- | --- | --- |
-| Statements | 90% | 95% |
-| Branches | 85% | 95% |
-| Functions | 90% | 95% |
-| Lines | 90% | 95% |
+| Metric     | Global | `src/master/`, `src/worker/`, `src/client/` |
+| ---------- | ------ | ------------------------------------------- |
+| Statements | 90%    | 95%                                         |
+| Branches   | 85%    | 95%                                         |
+| Functions  | 90%    | 95%                                         |
+| Lines      | 90%    | 95%                                         |
 
 Coverage is a floor, not a goal. 100% coverage of the happy path with no failover test is a
 failing test suite regardless of what the number says.

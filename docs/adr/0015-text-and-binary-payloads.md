@@ -7,7 +7,7 @@
 
 A serial port carries bytes. Many devices are used as if they carried text, and requiring
 every application to construct a `TextEncoder` for a simple command string would be poor
-ergonomics for the most common case. But decoding *received* bytes as text is a trap: a
+ergonomics for the most common case. But decoding _received_ bytes as text is a trap: a
 multi-byte UTF-8 character can be split across two `read()` chunks, and naive per-chunk
 decoding produces replacement characters at chunk boundaries.
 
@@ -19,7 +19,7 @@ Nothing is appended - no terminator, no newline, ever. What the caller passes is
 device receives.
 
 **Receiving.** `onReceive` always delivers `data: Uint8Array` - a copy, never a view onto an
-internal buffer. When `encoding.decodeText` is enabled, the payload *additionally* carries
+internal buffer. When `encoding.decodeText` is enabled, the payload _additionally_ carries
 `text: string`, decoded with a **stateful streaming decoder** (`TextDecoder` with
 `stream: true`) held by the owner, so a character split across chunks is decoded
 correctly rather than mangled. The decoder is reset whenever the connection is reopened,
@@ -44,10 +44,12 @@ compile time.
 ## Consequences
 
 ### Positive
+
 - The common text case is a one-liner, and the correctness trap is handled once, centrally.
 - Binary users pay nothing: with decoding disabled, no decoder is constructed.
 
 ### Negative
+
 - The owner holds decoder state, which must be reset on reconnect and must not survive an
   ownership transfer. Explicitly covered by a test that splits a multi-byte character across
   a disconnect and asserts the partial sequence is dropped rather than mis-decoded.

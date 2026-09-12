@@ -157,9 +157,7 @@ export function serializeCause(cause: unknown): SerializedCause | undefined {
     const serialized: SerializedCause = { name: cause.name, message: cause.message };
     // `DOMException` is how Web Serial reports every failure, and its `name` is the part
     // worth keeping - it is what the error mapping table keys on.
-    return isDomException(cause)
-      ? { ...serialized, domExceptionName: cause.name }
-      : serialized;
+    return isDomException(cause) ? { ...serialized, domExceptionName: cause.name } : serialized;
   }
 
   return { name: 'NonError', message: describeUnknown(cause) };
@@ -211,7 +209,10 @@ export function describeUnknown(value: unknown): string {
   }
   if (typeof value === 'object' && value !== null) {
     try {
-      return JSON.stringify(value) ?? Object.prototype.toString.call(value);
+      // `JSON.stringify` is typed as returning `string`, but returns `undefined` for values
+      // it cannot represent. The cast restores the truth the lib declaration hides.
+      const json = JSON.stringify(value) as string | undefined;
+      return json ?? Object.prototype.toString.call(value);
     } catch {
       // Circular structures and objects with throwing getters are both realistic here;
       // the fallback is intentionally dull but always succeeds.

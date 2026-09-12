@@ -54,11 +54,13 @@ a dozen independent simulated tabs.
 ## Consequences
 
 ### Positive
+
 - Multi-tab scenarios are ordinary unit tests: fast, deterministic, and able to express
   interleavings that are otherwise impossible to trigger.
 - The set of platform APIs the library depends on is visible in one interface.
 
 ### Negative
+
 - The environment object is threaded through the internals. Accepted; it is a single readonly
   reference held by the composition root and passed down at construction.
 - The fakes must be faithful. Mitigated by conformance tests on the harness itself.

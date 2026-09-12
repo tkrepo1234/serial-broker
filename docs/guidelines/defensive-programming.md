@@ -8,12 +8,12 @@ disappear without notice. It must never enter an undefined state.
 
 There are exactly four, and each has a mandatory discipline:
 
-| # | Boundary | Discipline |
-| --- | --- | --- |
-| 1 | **Application → library** (public API calls) | Validate every argument eagerly and throw a typed error with a remediation hint. Never coerce silently. |
-| 2 | **Other contexts → library** (`postMessage` from worker/tab) | Parse with a validating decoder. Unknown or malformed messages are dropped and reported, never partially applied. |
-| 3 | **Persistence → library** (`localStorage`) | Treat stored JSON as hostile: it may be from an older version, hand-edited, or truncated. Validate, then migrate or discard. |
-| 4 | **Web Serial / hardware → library** | Assume every call can reject, hang forever, or resolve after the object is already stale. Everything gets a timeout and a disposal path. |
+| #   | Boundary                                                     | Discipline                                                                                                                               |
+| --- | ------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | **Application → library** (public API calls)                 | Validate every argument eagerly and throw a typed error with a remediation hint. Never coerce silently.                                  |
+| 2   | **Other contexts → library** (`postMessage` from worker/tab) | Parse with a validating decoder. Unknown or malformed messages are dropped and reported, never partially applied.                        |
+| 3   | **Persistence → library** (`localStorage`)                   | Treat stored JSON as hostile: it may be from an older version, hand-edited, or truncated. Validate, then migrate or discard.             |
+| 4   | **Web Serial / hardware → library**                          | Assume every call can reject, hang forever, or resolve after the object is already stale. Everything gets a timeout and a disposal path. |
 
 ## Rules
 

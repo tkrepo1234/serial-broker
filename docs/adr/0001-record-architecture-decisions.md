@@ -21,8 +21,8 @@ decision is superseded by a new record. Code that exists because of a decision c
 
 - **A single `ARCHITECTURE.md`.** Cheaper to write, but it describes the current state and
   silently loses the rejected alternatives — exactly the information that prevents someone
-  re-litigating a decision. We keep `docs/architecture.md` as well, but for *how it works*,
-  not *why it was chosen*.
+  re-litigating a decision. We keep `docs/architecture.md` as well, but for _how it works_,
+  not _why it was chosen_.
 - **Decisions in commit messages.** Not discoverable. Nobody greps a year of history before
   changing the election mechanism.
 - **A wiki.** Drifts from the code, cannot be reviewed in the same pull request as the change
@@ -31,10 +31,12 @@ decision is superseded by a new record. Code that exists because of a decision c
 ## Consequences
 
 ### Positive
+
 - Rejected options survive, so the same debate is not repeated.
 - An ADR is reviewable alongside the code it governs.
 
 ### Negative
+
 - Writing them costs time, and a stale ADR is worse than none. Mitigated by the immutability
   rule: ADRs are never "updated", only superseded, so they cannot drift into half-truth.
 

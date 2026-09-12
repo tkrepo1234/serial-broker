@@ -5,7 +5,7 @@
 
 ## Context
 
-The requirement is that a released port is *remembered* and reused on the next visit, without
+The requirement is that a released port is _remembered_ and reused on the next visit, without
 prompting the user again.
 
 Two separate things must persist, and they persist in different places:
@@ -19,7 +19,7 @@ Two separate things must persist, and they persist in different places:
 
 Critically, `SerialPort` objects are not serialisable and have no stable identifier exposed to
 script. The only identifying information available is `SerialPort.getInfo()`, which for USB
-devices yields `usbVendorId` and `usbProductId` - a *device type*, not a device instance.
+devices yields `usbVendorId` and `usbProductId` - a _device type_, not a device instance.
 
 ## Decision
 
@@ -55,11 +55,13 @@ devices yields `usbVendorId` and `usbProductId` - a *device type*, not a device 
 ## Consequences
 
 ### Positive
+
 - Reopening after a reload, a crash or a device power cycle is fully automatic.
 - No secret, handle or permission is stored by the library - the browser stays the authority,
   and the stored configuration contains nothing sensitive.
 
 ### Negative
+
 - Two identical devices on one machine cannot be addressed separately. Documented.
 - A user revoking the permission in site settings turns an automatic reconnect into
   `awaiting-permission`; this is reported via `onStatusChange` with a remediation string.

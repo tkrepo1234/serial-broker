@@ -20,15 +20,15 @@ objects lose subclass identity and custom fields when cloned.
 
 One error class, `SerialBrokerError extends Error`, carrying:
 
-| Field | Purpose |
-| --- | --- |
-| `code` | Stable, documented, machine-readable. The only thing consumers should branch on. |
-| `configName` | Which configuration, when applicable. |
-| `context` | Structured, structurally-cloneable detail (attempt number, timeout value, peer version...). |
-| `remediation` | A specific, actionable sentence for the developer. Mandatory. |
-| `isRetryable` | Whether the library is handling it by retrying. |
-| `timestamp` | From the injected clock. |
-| `cause` | The original error, always chained, never discarded. |
+| Field         | Purpose                                                                                     |
+| ------------- | ------------------------------------------------------------------------------------------- |
+| `code`        | Stable, documented, machine-readable. The only thing consumers should branch on.            |
+| `configName`  | Which configuration, when applicable.                                                       |
+| `context`     | Structured, structurally-cloneable detail (attempt number, timeout value, peer version...). |
+| `remediation` | A specific, actionable sentence for the developer. Mandatory.                               |
+| `isRetryable` | Whether the library is handling it by retrying.                                             |
+| `timestamp`   | From the injected clock.                                                                    |
+| `cause`       | The original error, always chained, never discarded.                                        |
 
 Plus `toJSON()` producing a `SerializedSerialBrokerError`, and a matching
 `deserializeError()`, so an error raised in the owner is reconstructed faithfully in every
@@ -54,10 +54,12 @@ string matching on the message.
 ## Consequences
 
 ### Positive
+
 - Consumers learn one type and a documented list of codes.
 - An error looks identical in every tab, which makes multi-tab support tractable.
 
 ### Negative
+
 - A mapping table must be maintained as Chromium evolves. It is one file, exhaustively
   switch-checked by the compiler, with a documented fallback code for the unmapped case.
 

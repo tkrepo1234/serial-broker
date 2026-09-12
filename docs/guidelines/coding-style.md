@@ -5,28 +5,28 @@ Never hand-format; never argue about it in review. `npm run format` is the final
 
 ## Non-negotiable formatting (enforced)
 
-| Rule | Value | Enforced by |
-| --- | --- | --- |
-| Indentation | 2 spaces, never tabs | Prettier, `.editorconfig` |
-| Line width | 100 columns | Prettier |
-| Quotes | single, backticks for interpolation | Prettier |
-| Semicolons | always | Prettier |
-| Trailing commas | all (multiline) | Prettier |
-| Line endings | LF | `.gitattributes` |
-| File encoding | UTF-8, no BOM | `.editorconfig` |
+| Rule            | Value                               | Enforced by               |
+| --------------- | ----------------------------------- | ------------------------- |
+| Indentation     | 2 spaces, never tabs                | Prettier, `.editorconfig` |
+| Line width      | 100 columns                         | Prettier                  |
+| Quotes          | single, backticks for interpolation | Prettier                  |
+| Semicolons      | always                              | Prettier                  |
+| Trailing commas | all (multiline)                     | Prettier                  |
+| Line endings    | LF                                  | `.gitattributes`          |
+| File encoding   | UTF-8, no BOM                       | `.editorconfig`           |
 
 ## Naming
 
 Following the Google TypeScript Style Guide:
 
-| Kind | Convention | Example |
-| --- | --- | --- |
-| Class, interface, type alias, enum | `UpperCamelCase` | `PortSupervisor` |
-| Variable, parameter, function, method, property | `lowerCamelCase` | `reconnectDelayMs` |
-| Module-level constant (deeply immutable) | `CONSTANT_CASE` | `DEFAULT_OPEN_TIMEOUT_MS` |
-| Type parameter | single capital or `UpperCamelCase` | `T`, `TPayload` |
-| File | `kebab-case.ts` | `port-supervisor.ts` |
-| Test file | `<unit-under-test>.test.ts` | `port-supervisor.test.ts` |
+| Kind                                            | Convention                         | Example                   |
+| ----------------------------------------------- | ---------------------------------- | ------------------------- |
+| Class, interface, type alias, enum              | `UpperCamelCase`                   | `PortSupervisor`          |
+| Variable, parameter, function, method, property | `lowerCamelCase`                   | `reconnectDelayMs`        |
+| Module-level constant (deeply immutable)        | `CONSTANT_CASE`                    | `DEFAULT_OPEN_TIMEOUT_MS` |
+| Type parameter                                  | single capital or `UpperCamelCase` | `T`, `TPayload`           |
+| File                                            | `kebab-case.ts`                    | `port-supervisor.ts`      |
+| Test file                                       | `<unit-under-test>.test.ts`        | `port-supervisor.test.ts` |
 
 Additional rules:
 
@@ -71,6 +71,7 @@ Every source file follows this order, top to bottom:
   ```
 
   `core/` imports nothing from the layers above it. A circular import is a build failure.
+
 - No deep imports across layers: a layer exposes its surface through its own `index.ts`.
 
 ## Language rules

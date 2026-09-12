@@ -1,5 +1,5 @@
 import type { Clock } from './clock.js';
-import { SerialBrokerErrorCode } from './error-codes.js';
+import type { SerialBrokerErrorCode } from './error-codes.js';
 import { SerialBrokerError } from './errors.js';
 
 /** A promise with externally accessible `resolve` and `reject`. */
@@ -35,6 +35,9 @@ export function createDeferred<T>(): Deferred<T> {
         return;
       }
       isSettled = true;
+      // A Deferred forwards whatever its owner rejects with. Every caller in this library
+      // passes a SerialBrokerError, but the primitive itself must not assume that.
+      // eslint-disable-next-line @typescript-eslint/prefer-promise-reject-errors
       rej(reason);
     };
   });
@@ -49,6 +52,39 @@ export function createDeferred<T>(): Deferred<T> {
     },
     get isSettled() {
       return isSettled;
+    },
+  };
+}
+
+/**
+ * A promise that carries no value, settled from outside.
+ *
+ * Most of this library's deferreds are signals rather than value carriers: a lock released, a
+ * write acknowledged, a teardown finished. Giving that case its own type says so, and keeps
+ * `resolve()` callable with no argument.
+ */
+export interface Signal {
+  readonly promise: Promise<void>;
+  resolve(): void;
+  reject(reason: unknown): void;
+  /** `true` once `resolve` or `reject` has been called. */
+  readonly isSettled: boolean;
+}
+
+/** Creates a {@link Signal}. */
+export function createSignal(): Signal {
+  const deferred = createDeferred<undefined>();
+
+  return {
+    promise: deferred.promise,
+    resolve: () => {
+      deferred.resolve(undefined);
+    },
+    reject: (reason) => {
+      deferred.reject(reason);
+    },
+    get isSettled() {
+      return deferred.isSettled;
     },
   };
 }

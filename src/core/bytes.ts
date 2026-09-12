@@ -19,7 +19,9 @@ export function copyBytes(source: BufferSource, argumentName = 'data'): Uint8Arr
   if (ArrayBuffer.isView(source)) {
     // `slice` on the view's own byte range: a `DataView` or a `Uint16Array` must contribute
     // exactly the bytes it spans, not its whole backing buffer.
-    return new Uint8Array(source.buffer.slice(source.byteOffset, source.byteOffset + source.byteLength));
+    return new Uint8Array(
+      source.buffer.slice(source.byteOffset, source.byteOffset + source.byteLength),
+    );
   }
 
   throw new SerialBrokerError(

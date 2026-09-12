@@ -8,14 +8,14 @@ short sentences, no marketing language, no "simply"/"just"/"obviously".
 
 ## Layers
 
-| Artefact | Audience | Rule |
-| --- | --- | --- |
-| **TSDoc in source** | Developers via IDE and generated API docs | Every exported symbol. |
-| **README.md** | Someone deciding whether to use this | Working example within the first screen. |
-| **docs/architecture.md** | Someone modifying the library | Explains the mechanism, not the API. |
-| **docs/adr/** | Future maintainers asking "why is it like this" | One decision per record, immutable once accepted. |
-| **CHANGELOG.md** | Upgraders | Keep a Changelog format, every user-visible change. |
-| **examples/** | Someone integrating | Must run; CI type-checks them. |
+| Artefact                 | Audience                                        | Rule                                                |
+| ------------------------ | ----------------------------------------------- | --------------------------------------------------- |
+| **TSDoc in source**      | Developers via IDE and generated API docs       | Every exported symbol.                              |
+| **README.md**            | Someone deciding whether to use this            | Working example within the first screen.            |
+| **docs/architecture.md** | Someone modifying the library                   | Explains the mechanism, not the API.                |
+| **docs/adr/**            | Future maintainers asking "why is it like this" | One decision per record, immutable once accepted.   |
+| **CHANGELOG.md**         | Upgraders                                       | Keep a Changelog format, every user-visible change. |
+| **examples/**            | Someone integrating                             | Must run; CI type-checks them.                      |
 
 ## TSDoc rules
 
@@ -24,14 +24,14 @@ Every exported symbol carries a doc comment with:
 - A one-sentence summary in the imperative ("Registers a configuration…"), then a blank line,
   then detail.
 - `@param` for every parameter, stating **units, valid ranges and defaults**.
-- `@returns` describing the value *and* when the promise settles.
+- `@returns` describing the value _and_ when the promise settles.
 - `@throws` listing every error `code` the call can produce, with the condition.
 - `@remarks` for behaviour that is not obvious from the signature — especially anything
   about cross-tab effects, user-gesture requirements, or persistence.
 - `@example` with runnable code for every public method.
 - `@defaultValue` on every optional option property.
 
-```ts
+````ts
 /**
  * Sends data to the device associated with a configuration.
  *
@@ -52,7 +52,7 @@ Every exported symbol carries a doc comment with:
  * await SerialBroker.send('CardReader', new Uint8Array([0x02, 0x41, 0x03]));
  * ```
  */
-```
+````
 
 Do not document the obvious (`@param name - The name.`). Either say something useful or
 leave the tag out and let the type speak.
@@ -61,14 +61,14 @@ leave the tag out and let the type speak.
 
 Use these words and only these words, in code, comments and prose:
 
-| Term | Meaning |
-| --- | --- |
-| **configuration** | A named set of device filter + serial settings. The unit of everything. |
-| **owner** | The browser context that currently holds the physical port. (Internal only — never in the public API.) |
-| **participant** | Any context attached to a configuration. |
-| **broker** | The `SharedWorker` that routes messages between participants. |
-| **payload** | The bytes on the wire. Never "message" — that is a protocol-layer concept. |
-| **frame** | Reserved for the protocol layer. This library has no frames. |
+| Term              | Meaning                                                                                                |
+| ----------------- | ------------------------------------------------------------------------------------------------------ |
+| **configuration** | A named set of device filter + serial settings. The unit of everything.                                |
+| **owner**         | The browser context that currently holds the physical port. (Internal only — never in the public API.) |
+| **participant**   | Any context attached to a configuration.                                                               |
+| **broker**        | The `SharedWorker` that routes messages between participants.                                          |
+| **payload**       | The bytes on the wire. Never "message" — that is a protocol-layer concept.                             |
+| **frame**         | Reserved for the protocol layer. This library has no frames.                                           |
 
 Banned: "master/slave" in code and documentation — the role is **owner**, the others are
 **participants**. ([ADR-0005](../adr/0005-owner-election-via-web-locks.md) explains the

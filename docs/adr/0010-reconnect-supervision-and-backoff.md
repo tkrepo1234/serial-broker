@@ -63,11 +63,13 @@ Additionally:
 ## Consequences
 
 ### Positive
+
 - Recovery is typically immediate, and hopeless cases degrade quietly to one attempt every
   30 seconds instead of a busy loop.
 - Every path into reconnection is one function, so it is testable in isolation.
 
 ### Negative
+
 - `stableAfterMs` adds a concept the application can observe only indirectly (as the timing of
   reconnect attempts). Considered acceptable; it is documented and configurable.
 
