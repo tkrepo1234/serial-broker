@@ -123,6 +123,18 @@ export class FakeBroadcastHub {
     } as BroadcastChannelLike;
   }
 
+  /**
+   * Posts a message as some context that is not part of this test's set of tabs.
+   *
+   * Used to simulate traffic from an older build of the library, or from an unrelated script
+   * on the same origin that happens to use the same channel name.
+   */
+  injectForeign(name: string, raw: unknown): void {
+    for (const peer of this.#channels.get(name) ?? []) {
+      queueMicrotask(() => peer.listener({ data: raw }));
+    }
+  }
+
   /** Removes a context's channels without the polite `close()`, as a killed tab does. */
   killContext(contextId: string): void {
     for (const set of this.#channels.values()) {
@@ -155,9 +167,7 @@ export class FakeBus {
   createTransport(contextId: string, request: TransportRequest): Transport {
     return this.mode === 'sharedworker'
       ? this.#createWorkerTransport(contextId, request)
-      : new BroadcastChannelTransport(request, (name) =>
-          this.broadcastHub.create(name, contextId),
-        );
+      : new BroadcastChannelTransport(request, (name) => this.broadcastHub.create(name, contextId));
   }
 
   /** Simulates a context vanishing without cleanup. */

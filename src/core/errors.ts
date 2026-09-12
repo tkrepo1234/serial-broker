@@ -98,8 +98,13 @@ export class SerialBrokerError extends Error {
     this.timestamp = options.timestamp ?? 0;
 
     // Keeps the constructor out of the stack in V8, so the first frame is the throw site.
-    if (typeof Error.captureStackTrace === 'function') {
-      Error.captureStackTrace(this, SerialBrokerError);
+    // `captureStackTrace` is a V8 extension rather than part of the language, so it is reached
+    // through a widened type instead of assumed to exist.
+    const { captureStackTrace } = Error as unknown as {
+      captureStackTrace?: (target: object, constructorOpt?: unknown) => void;
+    };
+    if (typeof captureStackTrace === 'function') {
+      captureStackTrace(this, SerialBrokerError);
     }
   }
 

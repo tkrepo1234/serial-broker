@@ -116,7 +116,7 @@ export class SharedWorkerTransport implements Transport {
   }
 
   /** {@inheritDoc Transport.setOwnership} */
-  setOwnership(): void {
+  setOwnership(_configName: string, _isOwner: boolean): void {
     // Nothing to do: the broker learns of ownership from the `owner-claimed` and
     // `owner-released` messages the client already sends, and routes `to: 'owner'` itself.
   }

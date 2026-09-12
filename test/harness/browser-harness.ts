@@ -8,7 +8,10 @@ import type {
   SerialBrokerOptions,
   StatusChangeEvent,
 } from '../../src/core/types.js';
-import type { KeyValueStorage, SerialBrokerEnvironment } from '../../src/environment/environment.js';
+import type {
+  KeyValueStorage,
+  SerialBrokerEnvironment,
+} from '../../src/environment/environment.js';
 
 import { FakeBus, type TransportMode } from './fake-bus.js';
 import { FakeClock, flushMicrotasks } from './fake-clock.js';
@@ -158,7 +161,7 @@ export class BrowserHarness {
   openTab(): VirtualTab {
     this.#nextTabNumber += 1;
     const id = `tab${String(this.#nextTabNumber)}`;
-    const client = new SerialBrokerClient(this.#environmentFor(id));
+    const client = new SerialBrokerClient(this.createEnvironment(id));
     const tab = new VirtualTab(id, client, this);
     this.#tabs.set(id, tab);
     return tab;
@@ -200,7 +203,13 @@ export class BrowserHarness {
     this.bus.killContext(id, clientId as never);
   }
 
-  #environmentFor(contextId: string): SerialBrokerEnvironment {
+  /**
+   * Builds the environment a simulated tab runs on.
+   *
+   * Public so that a test can construct a deliberately broken one - no Web Serial, no Web
+   * Locks - which is the only way to exercise the paths that refuse to start.
+   */
+  createEnvironment(contextId: string): SerialBrokerEnvironment {
     const logger = new ScopedLogger(this.options.logger ?? NOOP_LOGGER, { context: contextId });
 
     return {

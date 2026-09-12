@@ -69,6 +69,18 @@ function asBytes(value: unknown): Uint8Array | undefined {
  *   must not be able to break the receive path.
  */
 export function decodeMessage(raw: unknown): DecodeResult {
+  try {
+    return decodeChecked(raw);
+  } catch (error) {
+    // The contract is absolute: a message must never be able to break the receive path, and
+    // "reading a field cannot throw" is an assumption, not a fact. Structured cloning does not
+    // carry getters today, so this is unreachable through the supported transports - which is
+    // exactly why it is worth two lines rather than an argument.
+    return fail({ reason: 'malformed', type: 'unreadable', field: String(error) });
+  }
+}
+
+function decodeChecked(raw: unknown): DecodeResult {
   if (!isRecord(raw)) {
     return fail({ reason: 'not-an-object' });
   }

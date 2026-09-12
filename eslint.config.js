@@ -94,14 +94,29 @@ export default defineConfig(
     rules: { 'no-restricted-globals': 'off' },
   },
 
-  // Tests may assert on shapes that are deliberately loose, and may use non-null assertions
-  // where the arrangement guarantees the value.
+  // Test code answers to different constraints than the library it tests.
+  //
+  // A fake implements an interface it does not need all of: an `async` method with no `await`
+  // is how a stand-in satisfies a signature the real thing needs. A test matrix deletes
+  // computed keys to build every malformed variant of a message. An assertion the compiler
+  // calls redundant is often the thing documenting what a test is deliberately violating.
+  // And the harness needs real timers to let promise chains run, which is precisely what the
+  // library must never do.
+  //
+  // None of these relaxations apply to `src/`, where every one of these rules is on.
   {
     files: ['test/**/*.ts'],
     rules: {
       '@typescript-eslint/no-non-null-assertion': 'off',
       '@typescript-eslint/no-unnecessary-condition': 'off',
+      '@typescript-eslint/no-unnecessary-type-assertion': 'off',
+      '@typescript-eslint/non-nullable-type-assertion-style': 'off',
+      '@typescript-eslint/no-confusing-void-expression': 'off',
+      '@typescript-eslint/no-meaningless-void-operator': 'off',
+      '@typescript-eslint/no-dynamic-delete': 'off',
+      '@typescript-eslint/require-await': 'off',
       '@typescript-eslint/unbound-method': 'off',
+      'no-restricted-globals': 'off',
     },
   },
 

@@ -110,14 +110,9 @@ export class PortSupervisor {
     }
 
     if (previous.kind === 'open') {
-      // Draining first means a write that has already reached the device completes; the
-      // deadline stops a wedged device from holding teardown open forever.
-      await this.#raceDeadline(
-        this.#writes.drain(),
-        this.configuration.connection.writeTimeoutMs,
-        SerialBrokerErrorCode.WRITE_TIMEOUT,
-        'Timed out draining writes while closing the port',
-      );
+      // Draining first means a write that has already reached the device completes rather than
+      // being truncated; the deadline stops a wedged device from holding teardown open forever.
+      await this.#closeStep(this.#writes.drain(), 'draining writes');
       await this.#closeConnection(previous);
     }
 
@@ -495,8 +490,11 @@ export class PortSupervisor {
       return;
     }
 
+    // `attempt` counts attempts *made*, so after the first failure it is already 1. The
+    // retry index is one less, which is what makes the first retry immediate: a power-cycled
+    // device is usually back within one event-loop turn (ADR-0010).
     const delayMs = computeBackoffDelayMs(
-      this.#backoff.attempt,
+      this.#backoff.attempt - 1,
       this.configuration.connection,
       this.environment.random,
     );
@@ -526,32 +524,36 @@ export class PortSupervisor {
    * disposal that fails must not prevent the rest of it.
    */
   async #closeConnection(state: Extract<ConnectionState, { kind: 'open' }>): Promise<void> {
-    // `cancel` both stops the read loop and releases the reader's lock on the stream; calling
-    // `releaseLock` on a reader with a pending read would throw instead.
-    await settle(state.reader.cancel());
-    await settle(state.writer.abort());
-    await settle(
-      this.#raceDeadline(
-        Promise.resolve(state.port.close()),
-        this.configuration.connection.openTimeoutMs,
-        SerialBrokerErrorCode.OPEN_TIMEOUT,
-        'Closing the port did not complete in time',
-      ),
-    );
+    // Every one of these is bounded, including the two that look like pure local cleanup.
+    // They are not: `cancel()` and `abort()` both wait for the stream's in-flight operation to
+    // settle, so a device that has stopped answering mid-write leaves all three pending
+    // forever - and with them, whatever asked for the teardown.
+    //
+    // `cancel` comes first because it stops the read loop and releases the reader's lock in
+    // one step; `releaseLock` on a reader with a pending read throws instead.
+    await this.#closeStep(state.reader.cancel(), 'cancelling the reader');
+    await this.#closeStep(state.writer.abort(), 'aborting the writer');
+    await this.#closeStep(Promise.resolve(state.port.close()), 'closing the port');
   }
 
-  async #raceDeadline(
-    operation: Promise<unknown>,
-    timeoutMs: number,
-    code: SerialBrokerErrorCode,
-    message: string,
-  ): Promise<void> {
-    await withDeadline(operation, this.environment.clock, {
-      timeoutMs,
-      code,
-      message,
-      configName: this.configuration.name,
-    });
+  /**
+   * Runs one teardown step, bounded and swallowing its failure.
+   *
+   * Teardown runs on paths where something has already gone wrong; a step that fails or hangs
+   * must not prevent the remaining steps or the caller that is waiting for all of them.
+   */
+  async #closeStep(operation: Promise<unknown>, what: string): Promise<void> {
+    try {
+      await withDeadline(operation, this.environment.clock, {
+        timeoutMs: this.configuration.connection.openTimeoutMs,
+        code: SerialBrokerErrorCode.OPEN_TIMEOUT,
+        message: `Timed out while ${what}`,
+        configName: this.configuration.name,
+      });
+    } catch {
+      // Expected when the device has already gone. The caller is tearing down precisely
+      // because something is wrong and is already reporting why.
+    }
   }
 
   // --- Plumbing ---------------------------------------------------------------------------
@@ -625,14 +627,4 @@ export class PortSupervisor {
 /** The `name` of a thrown value, which for Web Serial is always a `DOMException` name. */
 function errorName(error: unknown): string | undefined {
   return error instanceof Error ? error.name : undefined;
-}
-
-/** Awaits a promise and discards its outcome. Used only on teardown paths. */
-async function settle(operation: Promise<unknown>): Promise<void> {
-  try {
-    await operation;
-  } catch {
-    // Teardown failures are expected when the device has already gone; there is nothing to
-    // recover and the caller is already reporting the reason it is tearing down.
-  }
 }

@@ -17,7 +17,10 @@ export default defineConfig({
   outExtension: ({ format }) => ({ js: format === 'cjs' ? '.cjs' : '.js' }),
   target: 'es2022',
   platform: 'browser',
-  dts: true,
+  // Declarations come from `tsc` rather than from the bundler: tsup's dts step runs its own
+  // TypeScript configuration, and emitting them from the real one keeps the published types
+  // identical to the ones the test suite type-checks against.
+  dts: false,
   sourcemap: true,
   clean: true,
   treeshake: true,
