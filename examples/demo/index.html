@@ -1,0 +1,261 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>serial-broker demo</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        --bg: #ffffff;
+        --fg: #16181d;
+        --muted: #5c6370;
+        --line: #d8dce3;
+        --accent: #1b57c4;
+        --ok: #1a7f4b;
+        --warn: #a2660a;
+        --bad: #b3261e;
+        --panel: #f6f7f9;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg: #14161a;
+          --fg: #e8eaed;
+          --muted: #9aa0a9;
+          --line: #2c3038;
+          --accent: #79a6ff;
+          --ok: #5ac48b;
+          --warn: #e0b050;
+          --bad: #ff8a80;
+          --panel: #1b1e24;
+        }
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        padding: 2rem 1.5rem 3rem;
+        background: var(--bg);
+        color: var(--fg);
+        font:
+          15px/1.5 system-ui,
+          -apple-system,
+          Segoe UI,
+          sans-serif;
+        max-width: 60rem;
+        margin-inline: auto;
+      }
+      h1 {
+        font-size: 1.5rem;
+        margin: 0 0 0.25rem;
+      }
+      .lede {
+        color: var(--muted);
+        margin: 0 0 2rem;
+      }
+      fieldset {
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 1rem 1.25rem 1.25rem;
+        margin: 0 0 1.25rem;
+      }
+      legend {
+        font-weight: 600;
+        padding: 0 0.4rem;
+      }
+      label {
+        display: block;
+        font-size: 0.85rem;
+        color: var(--muted);
+        margin-bottom: 0.2rem;
+      }
+      .row {
+        display: flex;
+        gap: 0.75rem;
+        flex-wrap: wrap;
+        align-items: end;
+      }
+      .row > div {
+        flex: 1 1 8rem;
+      }
+      input,
+      select,
+      button {
+        font: inherit;
+        padding: 0.45rem 0.6rem;
+        border-radius: 6px;
+        border: 1px solid var(--line);
+        background: var(--bg);
+        color: var(--fg);
+        width: 100%;
+      }
+      button {
+        background: var(--accent);
+        color: #fff;
+        border-color: transparent;
+        cursor: pointer;
+        font-weight: 600;
+        width: auto;
+        padding-inline: 1rem;
+      }
+      button.secondary {
+        background: transparent;
+        color: var(--fg);
+        border-color: var(--line);
+      }
+      button:disabled {
+        opacity: 0.45;
+        cursor: not-allowed;
+      }
+      .status {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        font-weight: 600;
+      }
+      .dot {
+        width: 0.6rem;
+        height: 0.6rem;
+        border-radius: 50%;
+        background: var(--muted);
+      }
+      .dot.open {
+        background: var(--ok);
+      }
+      .dot.reconnecting,
+      .dot.connecting,
+      .dot.awaiting-permission {
+        background: var(--warn);
+      }
+      .dot.failed {
+        background: var(--bad);
+      }
+      #log {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 0.75rem;
+        height: 22rem;
+        overflow-y: auto;
+        font:
+          13px/1.45 ui-monospace,
+          SFMono-Regular,
+          Consolas,
+          monospace;
+        white-space: pre-wrap;
+        word-break: break-word;
+      }
+      .entry {
+        display: grid;
+        grid-template-columns: 5.5rem 4.5rem 1fr;
+        gap: 0.5rem;
+        padding: 0.1rem 0;
+      }
+      .time {
+        color: var(--muted);
+      }
+      .kind {
+        font-weight: 600;
+      }
+      .rx {
+        color: var(--ok);
+      }
+      .tx-local {
+        color: var(--accent);
+      }
+      .tx-remote {
+        color: var(--warn);
+      }
+      .err {
+        color: var(--bad);
+      }
+      .hint {
+        color: var(--muted);
+        font-size: 0.85rem;
+        margin-top: 0.75rem;
+      }
+      code {
+        background: var(--panel);
+        padding: 0.1rem 0.3rem;
+        border-radius: 4px;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>serial-broker</h1>
+    <p class="lede">
+      Open this page in several tabs. They share one port: one tab holds it, all of them see
+      everything. Close the tab that holds it and watch another take over.
+    </p>
+
+    <fieldset>
+      <legend>Device</legend>
+      <div class="row">
+        <div>
+          <label for="vendorId">Vendor ID</label>
+          <input id="vendorId" value="0x1a86" />
+        </div>
+        <div>
+          <label for="productId">Product ID</label>
+          <input id="productId" value="0x7523" />
+        </div>
+        <div>
+          <label for="baudRate">Baud rate</label>
+          <input id="baudRate" value="9600" />
+        </div>
+        <div style="flex: 0 0 auto">
+          <button id="connect">Set up</button>
+        </div>
+        <div style="flex: 0 0 auto">
+          <button id="grant" class="secondary" hidden>Choose device…</button>
+        </div>
+        <div style="flex: 0 0 auto">
+          <button id="release" class="secondary" disabled>Release</button>
+        </div>
+      </div>
+      <p class="hint">
+        The defaults are a CH340 USB-serial adapter. Your device's IDs are in Device Manager on
+        Windows, or <code>lsusb</code> on Linux.
+      </p>
+    </fieldset>
+
+    <fieldset>
+      <legend>Connection</legend>
+      <p class="status">
+        <span id="dot" class="dot"></span><span id="statusText">not set up</span>
+      </p>
+      <div class="row">
+        <div>
+          <label for="payload">Send</label>
+          <input id="payload" value="STATUS?" placeholder="text to send" />
+        </div>
+        <div style="flex: 0 0 auto">
+          <label for="terminator">Append</label>
+          <select id="terminator">
+            <option value="">nothing</option>
+            <option value="&#13;&#10;" selected>CR LF</option>
+            <option value="&#10;">LF</option>
+            <option value="&#13;">CR</option>
+          </select>
+        </div>
+        <div style="flex: 0 0 auto">
+          <button id="send" disabled>Send</button>
+        </div>
+      </div>
+      <p class="hint">
+        The library appends nothing of its own - the terminator above is added by this demo, because
+        most devices expect one.
+      </p>
+    </fieldset>
+
+    <fieldset>
+      <legend>
+        Traffic <button id="clear" class="secondary" style="float: right">Clear</button>
+      </legend>
+      <div id="log" role="log" aria-live="polite"></div>
+    </fieldset>
+
+    <script type="module" src="./main.js"></script>
+  </body>
+</html>

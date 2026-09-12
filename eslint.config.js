@@ -8,7 +8,16 @@ import tseslint from 'typescript-eslint';
  * Flat config. The rules here are the executable form of docs/guidelines/*.
  */
 export default defineConfig(
-  { ignores: ['dist/**', 'coverage/**', 'node_modules/**', 'docs/api/**'] },
+  {
+    ignores: [
+      'dist/**',
+      'coverage/**',
+      'node_modules/**',
+      'docs/api/**',
+      // The demo's bundled output, which is built from the sources next to it.
+      'examples/demo/main.js',
+    ],
+  },
 
   js.configs.recommended,
   ...tseslint.configs.strictTypeChecked,

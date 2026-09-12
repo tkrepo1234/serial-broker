@@ -20,3 +20,7 @@ npm-debug.log*
 
 # Local toolchain (portable runtimes are not part of the repository)
 tools/
+
+# Built demo bundle
+examples/demo/main.js
+examples/demo/main.js.map

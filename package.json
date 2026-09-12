@@ -48,6 +48,8 @@
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "docs:api": "typedoc",
+    "demo:build": "tsup --config tsup.demo.config.ts",
+    "demo": "npm run build && npm run demo:build && npx --yes serve .",
     "verify": "npm run format:check && npm run lint && npm run typecheck && npm run test:coverage && npm run build",
     "prepublishOnly": "npm run verify"
   },
