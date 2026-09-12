@@ -243,9 +243,13 @@ export interface StatusChangeEvent {
 
 /** Maps each event name to its payload type. */
 export interface SerialBrokerEventMap {
+  /** A chunk arrived from the device. Delivered in every tab. */
   readonly onReceive: ReceiveEvent;
+  /** Bytes reached the device. Delivered in every tab, including the one that sent them. */
   readonly onSend: SendEvent;
+  /** Something went wrong. */
   readonly onError: ErrorEvent;
+  /** The connection status changed. */
   readonly onStatusChange: StatusChangeEvent;
 }
 
@@ -294,9 +298,13 @@ export type LogLevel = 'debug' | 'info' | 'warn' | 'error';
 
 /** Structured fields attached to every log record, so records from several tabs correlate. */
 export interface LogFields {
+  /** Which configuration the record concerns. */
   readonly configName?: string | undefined;
+  /** Which browsing context wrote it. This is what correlates records from several tabs. */
   readonly clientId?: string | undefined;
+  /** A dotted identifier for the event, such as `supervisor.open`. Stable enough to grep. */
   readonly event?: string | undefined;
+  /** Anything else the record carries. Always structurally cloneable. */
   readonly [key: string]: unknown;
 }
 
@@ -307,5 +315,11 @@ export interface LogFields {
  * an implementation. See docs/guidelines/error-handling.md.
  */
 export interface Logger {
+  /**
+   * Receives one diagnostic record.
+   *
+   * Must not throw: a logger that fails must not fail the operation being logged. The library
+   * guards against it anyway, but an implementation that throws is a bug in the application.
+   */
   log(level: LogLevel, message: string, fields: LogFields): void;
 }

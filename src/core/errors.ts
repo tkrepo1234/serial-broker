@@ -5,25 +5,36 @@ import { REMEDIATION, RETRYABLE_CODES, SerialBrokerErrorCode } from './error-cod
  *
  * Errors must cross `postMessage` boundaries: a failure in the owning tab has to be reported
  * in every other tab. Structured cloning does not preserve `Error` subclasses or their custom
- * fields, so errors travel in this shape and are rebuilt with {@link deserializeError}.
+ * fields, so errors travel in this shape and are rebuilt on arrival.
  *
  * See ADR-0012.
  */
 export interface SerializedSerialBrokerError {
+  /** Marks the object as one of ours, so a receiver can recognise it before reading it. */
   readonly $type: 'SerialBrokerError';
+  /** Stable, machine-readable classification. The only field worth branching on. */
   readonly code: SerialBrokerErrorCode;
+  /** The human-readable message. Never parse it; message text may change in a patch release. */
   readonly message: string;
+  /** The configuration this error relates to, or `undefined` for a global failure. */
   readonly configName: string | undefined;
+  /** Structured detail: attempt counts, timeout values, byte counts, peer versions. */
   readonly context: Readonly<Record<string, unknown>>;
+  /** A specific, actionable sentence describing what the developer should do. */
   readonly remediation: string;
+  /** `true` when the library is already retrying and the application need not act. */
   readonly isRetryable: boolean;
+  /** Epoch milliseconds at which the error was created, in its originating context. */
   readonly timestamp: number;
+  /** The underlying failure, reduced to what survives structured cloning. */
   readonly cause: SerializedCause | undefined;
 }
 
 /** An underlying error reduced to what survives structured cloning. */
 export interface SerializedCause {
+  /** The original error's `name`. For Web Serial failures this is the `DOMException` name. */
   readonly name: string;
+  /** The original error's message. */
   readonly message: string;
   /** Present for `DOMException`s, which is how Web Serial reports every failure. */
   readonly domExceptionName?: string;

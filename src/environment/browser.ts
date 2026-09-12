@@ -16,8 +16,11 @@ import type {
 
 /** Settings the application can influence. */
 export interface BrowserEnvironmentOptions {
+  /** {@inheritDoc SerialBrokerGlobalOptions.workerUrl} */
   readonly workerUrl?: string | URL | undefined;
+  /** Forces a transport instead of selecting one automatically. @defaultValue 'auto' */
   readonly transport?: TransportKind | undefined;
+  /** Receives diagnostics. Nothing is logged unless one is supplied. */
   readonly logger?: Logger | undefined;
 }
 

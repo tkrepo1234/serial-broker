@@ -18,29 +18,271 @@ import { createBrowserEnvironment, isSupported } from './environment/browser.js'
  * their configuration or leak internals. Nothing here reveals which browsing context owns the
  * port, that a `SharedWorker` exists, or that a Web Lock is held - by design, so that those
  * choices stay changeable (ADR-0011).
+ *
+ * The documentation lives on this interface rather than on the {@link SerialBroker} object,
+ * because the interface is the contract: it is what an IDE shows, what a consumer implements
+ * against in a test double, and what SemVer covers.
  */
 export interface SerialBrokerApi {
+  /**
+   * Registers a configuration and starts keeping it connected.
+   *
+   * If the browser already has permission for a matching device - because the user granted it
+   * on an earlier visit - the port is opened immediately, with no prompt and no user gesture.
+   * Otherwise the status becomes `awaiting-permission` and the application must call
+   * {@link SerialBrokerApi.requestAccess} from a user gesture (ADR-0009).
+   *
+   * Calling this again with the same name and equivalent options is a no-op, so it is safe to
+   * call on every page initialisation. Calling it with options that would open the port
+   * differently is a conflict rather than a silent reconfiguration, because the port may be
+   * open in another tab with the old settings.
+   *
+   * @param name - Identifies this configuration in every other call. Must be non-empty, at
+   *   most 128 characters, and free of control characters.
+   * @param options - Device filter, line settings, and optionally reconnect and encoding
+   *   behaviour.
+   * @returns A promise that resolves once the configuration is registered. It does **not**
+   *   wait for the connection: watch `onStatusChange` for that.
+   * @throws A `SerialBrokerError` with code `INVALID_ARGUMENT` when an option is invalid,
+   *   `CONFIGURATION_CONFLICT` when the name is already set up with different device or line
+   *   settings, or `WEB_SERIAL_UNAVAILABLE` when the browser cannot support it.
+   * @example
+   * ```ts
+   * await SerialBroker.setup('Scale', {
+   *   device: { vendorId: 0x0403, productId: 0x6001 },
+   *   serial: { baudRate: 19_200, parity: 'even' },
+   *   connection: { maxDelayMs: 10_000 },
+   * });
+   * ```
+   * @example A port with no USB identity - a built-in RS-232 interface, a virtual COM port
+   * ```ts
+   * await SerialBroker.setup('PanelPort', {
+   *   device: { any: true },
+   *   serial: { baudRate: 9600 },
+   * });
+   * ```
+   */
   setup(name: string, options: SerialBrokerOptions): Promise<void>;
+
+  /**
+   * Stops using a configuration in this tab.
+   *
+   * Other tabs are unaffected: if one of them still has it set up, the port stays open and
+   * ownership moves there if this tab happened to hold it. Pending writes are rejected rather
+   * than left hanging.
+   *
+   * The browser's permission for the device is deliberately kept, so a later `setup()` needs
+   * no prompt. Pass `{ forgetDevice: true }` to revoke it as well.
+   *
+   * @param name - The configuration name. Releasing one that is not set up is a no-op.
+   * @param options - Whether to also revoke the browser's device permission.
+   * @returns A promise that resolves once the port has been closed and the lock released.
+   *   Teardown is bounded: a device that has stopped answering cannot hold it open.
+   * @example
+   * ```ts
+   * await SerialBroker.release('Scale');
+   * await SerialBroker.release('Scale', { forgetDevice: true });
+   * ```
+   */
   release(name: string, options?: ReleaseOptions): Promise<void>;
+
+  /**
+   * Stops using every configuration in this tab.
+   *
+   * @param options - Applied to each configuration in turn.
+   */
   releaseAll(options?: ReleaseOptions): Promise<void>;
+
+  /**
+   * Sends data to the device.
+   *
+   * The write is performed by whichever tab currently owns the port; the caller does not have
+   * to be that tab and cannot tell whether it is. If no connection is available yet, the write
+   * waits for one rather than failing immediately - bounded by `connection.writeTimeoutMs`.
+   *
+   * Writes issued by one tab reach the device in the order that tab issued them, and the bytes
+   * of one call are never interleaved with another's. Writes from *different* tabs have no
+   * defined relative order (ADR-0013).
+   *
+   * @param name - The configuration name passed to {@link SerialBrokerApi.setup}.
+   * @param data - Text, encoded as UTF-8, or raw bytes. Nothing is appended: no newline, no
+   *   terminator. What you pass is what the device receives.
+   * @returns A promise that resolves once the bytes have been handed to the device - not once
+   *   the device has acted on them, which a serial port cannot report.
+   * @throws A `SerialBrokerError` with code `UNKNOWN_CONFIGURATION`, `NOT_CONNECTED`,
+   *   `WRITE_FAILED`, `WRITE_TIMEOUT`, or `OWNER_LOST_DURING_WRITE` when the owning tab closed
+   *   mid-write and it is unknowable whether the device received the bytes. The library never
+   *   retries that last case on its own.
+   * @example
+   * ```ts
+   * await SerialBroker.send('Printer', 'INIT');
+   * await SerialBroker.send('Printer', new Uint8Array([0x1b, 0x40]));
+   * ```
+   */
   send(name: string, data: SendableData): Promise<void>;
+
+  /**
+   * Registers an event listener.
+   *
+   * | Event | Fires when |
+   * | --- | --- |
+   * | `onReceive` | A chunk arrives from the device, in every tab. Chunk boundaries carry no meaning - this library performs no framing (ADR-0002). |
+   * | `onSend` | Bytes reach the device, in every tab. `origin` is `'local'` if this tab issued the write and `'remote'` if another one did. |
+   * | `onError` | Anything goes wrong, in every tab that is affected. |
+   * | `onStatusChange` | The connection status changes. |
+   *
+   * A listener that throws is reported through `onError` and does not prevent the other
+   * listeners receiving the event. Registering the same function twice has no extra effect.
+   *
+   * @param name - The configuration name.
+   * @param event - Which event to listen for.
+   * @param listener - Called with the event payload. Must not assume it runs on any particular
+   *   tab: every tab receives the same events.
+   * @returns A function that removes this listener. Calling it twice is harmless.
+   * @throws A `SerialBrokerError` with code `UNKNOWN_CONFIGURATION` if `name` is not set up in
+   *   this tab, or `INVALID_ARGUMENT` if `listener` is not a function.
+   * @example
+   * ```ts
+   * const stop = SerialBroker.subscribe('Scale', 'onReceive', (event) => {
+   *   process(event.data);
+   * });
+   * // later
+   * stop();
+   * ```
+   */
   subscribe<TEvent extends SerialBrokerEventName>(
     name: string,
     event: TEvent,
     listener: (payload: SerialBrokerEventMap[TEvent]) => void,
   ): Unsubscribe;
+
+  /**
+   * Removes a listener registered with {@link SerialBrokerApi.subscribe}.
+   *
+   * Provided for code that keeps its callbacks in fields rather than holding the unsubscribe
+   * function. Removing a listener that was never registered is a no-op, as is removing one
+   * from a configuration that is not set up.
+   *
+   * @param name - The configuration name.
+   * @param event - The event it was registered for.
+   * @param listener - The exact function reference that was registered.
+   */
   unsubscribe<TEvent extends SerialBrokerEventName>(
     name: string,
     event: TEvent,
     listener: (payload: SerialBrokerEventMap[TEvent]) => void,
   ): void;
+
+  /**
+   * Returns a point-in-time view of a configuration.
+   *
+   * Synchronous and local: it reads a cached snapshot and never blocks. `observedAt` says when
+   * the snapshot was taken, so a stale value is recognisable rather than misleading. The
+   * snapshot describes the *connection* and never the coordination - which tab owns the port
+   * is deliberately not representable (ADR-0011).
+   *
+   * @param name - The configuration name.
+   * @returns A frozen snapshot. Treat the `status` union as extensible: handle an unrecognised
+   *   value gracefully rather than throwing.
+   * @throws A `SerialBrokerError` with code `UNKNOWN_CONFIGURATION`.
+   * @example
+   * ```ts
+   * const { status, lastErrorCode } = SerialBroker.getStatus('Scale');
+   * if (status === 'failed') showReconnectButton(lastErrorCode);
+   * ```
+   */
   getStatus(name: string): SerialBrokerStatusSnapshot;
+
+  /**
+   * Reports whether a configuration with this name is set up **in this tab**.
+   *
+   * Says nothing about other tabs: a configuration another tab is using is not visible here
+   * until this tab sets it up too.
+   *
+   * @throws A `SerialBrokerError` with code `INVALID_ARGUMENT` if the name is not a valid one.
+   */
   exists(name: string): boolean;
+
+  /** Every configuration name set up in this tab, in registration order. */
   names(): readonly string[];
+
+  /**
+   * Shows the browser's serial port picker.
+   *
+   * **Must be called synchronously from a user gesture handler.** The browser only shows the
+   * picker during transient activation, and any `await` before this call will have consumed
+   * it. Once the user grants a device, the permission persists across visits and this never
+   * needs to be called again for that device.
+   *
+   * The picker is pre-filtered to the configured device, unless the configuration accepts any
+   * port, in which case every port is offered.
+   *
+   * @param name - The configuration name.
+   * @returns `true` if a device is now available, `false` if the user dismissed the picker - a
+   *   decision, not a failure, so it does not throw.
+   * @throws A `SerialBrokerError` with code `USER_GESTURE_REQUIRED` when called outside a
+   *   gesture, `DEVICE_MISMATCH` when the chosen port is not the configured device, or
+   *   `PERMISSION_REQUIRED` when another tab owns the configuration and must be the one to ask.
+   * @example
+   * ```ts
+   * connectButton.addEventListener('click', async () => {
+   *   const granted = await SerialBroker.requestAccess('CardReader');
+   *   connectButton.hidden = granted;
+   * });
+   * ```
+   */
   requestAccess(name: string): Promise<boolean>;
+
+  /**
+   * Sets up every configuration persisted by an earlier visit.
+   *
+   * Call this once during initialisation to reconnect without knowing in advance which devices
+   * the user has configured. Configurations already set up in this tab are skipped, and an
+   * entry that no longer validates is discarded rather than failing the whole restore.
+   *
+   * @returns The names that were restored.
+   * @example
+   * ```ts
+   * const restored = await SerialBroker.restore();
+   * console.info(`reconnecting to ${restored.length} device(s)`);
+   * ```
+   */
   restore(): Promise<readonly string[]>;
+
+  /**
+   * Applies library-wide settings.
+   *
+   * Must be called **before the first {@link SerialBrokerApi.setup}**: the settings are read
+   * when the internal client is built, and calling it afterwards has no effect on an existing
+   * one.
+   *
+   * @param options - Merged into the current settings; omitted fields are left alone.
+   * @example
+   * ```ts
+   * SerialBroker.configure({
+   *   workerUrl: '/assets/serial-broker.worker.js',
+   *   logger: { log: (level, message, fields) => console[level](message, fields) },
+   * });
+   * ```
+   */
   configure(options: SerialBrokerGlobalOptions): void;
+
+  /**
+   * Reports whether this browser can support the library at all.
+   *
+   * Checks for a secure context, Web Serial, Web Locks and a message bus. Use it to decide
+   * whether to offer a device-connected feature, rather than discovering the problem at
+   * `setup()`.
+   */
   isSupported(): boolean;
+
+  /**
+   * Releases everything this tab holds.
+   *
+   * Rarely needed: a closing tab releases everything anyway, and ownership moves to another tab
+   * automatically. Useful in single-page applications that tear down a feature area, and in
+   * tests. A later `setup()` builds a fresh client.
+   */
   dispose(): Promise<void>;
 }
 
@@ -68,8 +310,11 @@ function client(): SerialBrokerClient {
  * Shared access to a serial port across every tab of an origin.
  *
  * One tab holds the physical port; every tab can read from it and write to it. When that tab
- * closes, another takes over automatically. When the device is unplugged or powered off, the
- * connection is re-established as soon as it comes back, with no application code.
+ * closes - or crashes - another takes over automatically. When the device is unplugged or
+ * powered off, the connection is re-established as soon as it comes back, with no application
+ * code.
+ *
+ * See {@link SerialBrokerApi} for what each method does.
  *
  * @example Connect to a card reader and print what it sends
  * ```ts
@@ -92,214 +337,72 @@ function client(): SerialBrokerClient {
  * ```
  */
 export const SerialBroker: SerialBrokerApi = {
-  /**
-   * Registers a configuration and starts keeping it connected.
-   *
-   * If the browser already has permission for a matching device - because the user granted it
-   * on an earlier visit - the port is opened immediately, with no prompt and no user gesture.
-   * Otherwise the status becomes `awaiting-permission` and the application must call
-   * {@link SerialBrokerApi.requestAccess} from a user gesture (ADR-0009).
-   *
-   * Calling this again with the same name and equivalent options is a no-op, so it is safe to
-   * call on every page initialisation.
-   *
-   * @param name - Identifies this configuration in every other call. Must be non-empty, at
-   *   most 128 characters, and free of control characters.
-   * @param options - Device filter, line settings, and optionally reconnect and encoding
-   *   behaviour.
-   * @throws A {@link SerialBrokerError} with code `INVALID_ARGUMENT` when an option is
-   *   invalid, `CONFIGURATION_CONFLICT` when the name is already set up with different device
-   *   or line settings, or `WEB_SERIAL_UNAVAILABLE` when the browser cannot support it.
-   * @example
-   * ```ts
-   * await SerialBroker.setup('Scale', {
-   *   device: { vendorId: 0x0403, productId: 0x6001 },
-   *   serial: { baudRate: 19200, parity: 'even' },
-   *   connection: { maxDelayMs: 10_000 },
-   * });
-   * ```
-   */
+  /** {@inheritDoc SerialBrokerApi.setup} */
   async setup(name, options) {
     await client().setup(name, options);
   },
 
-  /**
-   * Stops using a configuration in this tab.
-   *
-   * Other tabs are unaffected: if one of them still has it set up, the port stays open and
-   * ownership moves there if this tab happened to hold it.
-   *
-   * The browser's permission for the device is deliberately kept, so a later `setup()` needs
-   * no prompt. Pass `{ forgetDevice: true }` to revoke it as well.
-   *
-   * Releasing a name that is not set up is a no-op.
-   */
+  /** {@inheritDoc SerialBrokerApi.release} */
   async release(name, options) {
     await client().release(name, options);
   },
 
-  /** Stops using every configuration in this tab. */
+  /** {@inheritDoc SerialBrokerApi.releaseAll} */
   async releaseAll(options) {
     await client().releaseAll(options);
   },
 
-  /**
-   * Sends data to the device.
-   *
-   * The write is performed by whichever tab currently owns the port; the caller does not have
-   * to be that tab and cannot tell whether it is. Writes issued by one tab reach the device in
-   * the order that tab issued them, and the bytes of one call are never interleaved with
-   * another's. Writes from *different* tabs have no defined relative order (ADR-0013).
-   *
-   * @param name - The configuration name passed to {@link SerialBrokerApi.setup}.
-   * @param data - Text, encoded as UTF-8, or raw bytes. Nothing is appended: no newline, no
-   *   terminator. What you pass is what the device receives.
-   * @returns A promise that resolves once the bytes have been handed to the device - not once
-   *   the device has acted on them, which a serial port cannot report.
-   * @throws A {@link SerialBrokerError} with code `UNKNOWN_CONFIGURATION`, `NOT_CONNECTED`,
-   *   `WRITE_FAILED`, `WRITE_TIMEOUT`, or `OWNER_LOST_DURING_WRITE` when the owning tab closed
-   *   mid-write and it is unknowable whether the device received the bytes.
-   * @example
-   * ```ts
-   * await SerialBroker.send('Printer', 'INIT');
-   * await SerialBroker.send('Printer', new Uint8Array([0x1b, 0x40]));
-   * ```
-   */
+  /** {@inheritDoc SerialBrokerApi.send} */
   async send(name, data) {
     await client().send(name, data);
   },
 
-  /**
-   * Registers a listener.
-   *
-   * | Event | Fires when |
-   * | --- | --- |
-   * | `onReceive` | A chunk arrives from the device, in every tab. Chunk boundaries carry no meaning - this library performs no framing (ADR-0002). |
-   * | `onSend` | Bytes reach the device, in every tab. `origin` is `'local'` if this tab issued the write and `'remote'` if another one did. |
-   * | `onError` | Anything goes wrong, in every tab that is affected. |
-   * | `onStatusChange` | The connection status changes. |
-   *
-   * A listener that throws is reported through `onError` and does not prevent the other
-   * listeners receiving the event.
-   *
-   * @returns A function that removes this listener. Calling it twice is harmless.
-   * @throws A {@link SerialBrokerError} with code `UNKNOWN_CONFIGURATION` if `name` is not set
-   *   up in this tab.
-   * @example
-   * ```ts
-   * const stop = SerialBroker.subscribe('Scale', 'onReceive', (event) => {
-   *   process(event.data);
-   * });
-   * // later
-   * stop();
-   * ```
-   */
+  /** {@inheritDoc SerialBrokerApi.subscribe} */
   subscribe(name, event, listener) {
     return client().subscribe(name, event, listener);
   },
 
-  /**
-   * Removes a listener registered with {@link SerialBrokerApi.subscribe}.
-   *
-   * Removing one that was never registered is a no-op.
-   */
+  /** {@inheritDoc SerialBrokerApi.unsubscribe} */
   unsubscribe(name, event, listener) {
     client().unsubscribe(name, event, listener);
   },
 
-  /**
-   * Returns a point-in-time view of a configuration.
-   *
-   * Synchronous and local: it reads a cached snapshot and never blocks. `observedAt` says when
-   * the snapshot was taken, so a stale value is recognisable rather than misleading.
-   *
-   * @throws A {@link SerialBrokerError} with code `UNKNOWN_CONFIGURATION`.
-   */
+  /** {@inheritDoc SerialBrokerApi.getStatus} */
   getStatus(name) {
     return client().getStatus(name);
   },
 
-  /** `true` if a configuration with this name is set up in this tab. */
+  /** {@inheritDoc SerialBrokerApi.exists} */
   exists(name) {
     return client().exists(name);
   },
 
-  /** Every configuration name set up in this tab. */
+  /** {@inheritDoc SerialBrokerApi.names} */
   names() {
     return client().names();
   },
 
-  /**
-   * Shows the browser's serial port picker.
-   *
-   * **Must be called synchronously from a user gesture handler.** The browser only shows the
-   * picker during transient activation, and any `await` before this call will have consumed
-   * it. Once the user grants a device, the permission persists across visits and this never
-   * needs to be called again for that device.
-   *
-   * @returns `true` if a device is now available, `false` if the user dismissed the picker -
-   *   a decision, not a failure, so it does not throw.
-   * @throws A {@link SerialBrokerError} with code `USER_GESTURE_REQUIRED` when called outside
-   *   a gesture, or `DEVICE_MISMATCH` when the chosen port is not the configured device.
-   * @example
-   * ```ts
-   * connectButton.addEventListener('click', async () => {
-   *   const granted = await SerialBroker.requestAccess('CardReader');
-   *   connectButton.hidden = granted;
-   * });
-   * ```
-   */
+  /** {@inheritDoc SerialBrokerApi.requestAccess} */
   async requestAccess(name) {
     return await client().requestAccess(name);
   },
 
-  /**
-   * Sets up every configuration persisted by an earlier visit.
-   *
-   * Call this once during initialisation to reconnect without knowing in advance which
-   * devices the user has configured. Configurations already set up in this tab are skipped.
-   *
-   * @returns The names that were restored.
-   */
+  /** {@inheritDoc SerialBrokerApi.restore} */
   async restore() {
     return await client().restore();
   },
 
-  /**
-   * Applies library-wide settings.
-   *
-   * Must be called before the first {@link SerialBrokerApi.setup}: the settings are read when
-   * the internal client is built, and calling it later has no effect on an existing one.
-   *
-   * @example
-   * ```ts
-   * SerialBroker.configure({
-   *   workerUrl: '/assets/serial-broker.worker.js',
-   *   logger: { log: (level, message, fields) => console[level](message, fields) },
-   * });
-   * ```
-   */
+  /** {@inheritDoc SerialBrokerApi.configure} */
   configure(options) {
     globalOptions = { ...globalOptions, ...options };
   },
 
-  /**
-   * `true` if this browser can support the library.
-   *
-   * Checks for Web Serial, Web Locks and a message bus. Use it to decide whether to offer a
-   * device-connected feature at all, rather than discovering it at `setup()`.
-   */
+  /** {@inheritDoc SerialBrokerApi.isSupported} */
   isSupported() {
     return isSupported();
   },
 
-  /**
-   * Releases everything this tab holds.
-   *
-   * Rarely needed: a closing tab releases everything anyway, and ownership moves to another
-   * tab automatically. Useful in single-page applications that tear down a feature area, and
-   * in tests.
-   */
+  /** {@inheritDoc SerialBrokerApi.dispose} */
   async dispose() {
     const current = instance;
     instance = undefined;

@@ -24,3 +24,6 @@ tools/
 # Built demo bundle
 examples/demo/main.js
 examples/demo/main.js.map
+
+# Generated API reference (reproduce with: npm run docs:api)
+docs/api/

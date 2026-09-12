@@ -10,14 +10,42 @@ step.
 
 ## Status
 
-|                  |                             |
-| ---------------- | --------------------------- |
-| **Last run**     | _never — not yet run_       |
-| **Blocking for** | the first published release |
+|                          |                                                         |
+| ------------------------ | ------------------------------------------------------- |
+| **Browser, no hardware** | **run 2026-09-12 on Edge 153 / Windows 11** — see below |
+| **With real hardware**   | _never run_                                             |
+| **Blocking for**         | the first published release                             |
 
-Everything below is written and ready to run; nothing in it has been executed yet. The
-automated suite (437 tests) and the build are green, and the demo is served and parses, but no
-part of this library has touched a physical serial port.
+### 2026-09-12 — Edge 153.0.0.0, Windows 11 Home 26200, no device attached
+
+What a browser can prove without a device was run and passed. The library was loaded from
+`dist/`, served over `http://localhost`:
+
+- **Platform requirements** — secure context, `navigator.serial`, `navigator.locks`,
+  `SharedWorker` and `BroadcastChannel` all present; `isSupported()` agrees.
+- **State machine** — `setup()` with no granted device walks `idle → connecting →
+awaiting-permission` and stops there, as designed. No prompt is attempted.
+- **Web Lock** — `navigator.locks.query()` shows exactly one exclusive holder of
+  `serial-broker/owner/v1/<name>`. A second tab joins as one pending request, not a second
+  holder.
+- **Status propagation** — a second tab reaches `awaiting-permission` **without** passing
+  through `connecting`: it took the status from the owner over the bus, which is the path
+  added so the BroadcastChannel fallback behaves like the broker.
+- **Persistence** — the configuration survives in `localStorage` and a new tab restores and
+  reconnects to it unprompted.
+- **Failover after an abrupt death** — the decisive one. A same-origin iframe took ownership,
+  this tab queued behind it, and the iframe was then removed from the DOM: its context ceases
+  to exist with no unload handler and no release. The lock moved to the waiting context
+  immediately (`held: 1, pending: 0`, confirmed by an `ifAvailable` probe). This is ADR-0005
+  working on the real platform rather than in simulation.
+- **The broker** — a real `SharedWorker` was constructed from `dist/serial-broker.worker.js`,
+  two ports attached, and a message from one was delivered to the other and **not** echoed
+  back to its sender.
+- **Console** — no errors, no unhandled rejections.
+
+What this run does **not** cover, and what the checklist below is still for: opening a port,
+reading, writing, chunking, text decoding across chunk boundaries, unplugging a device
+mid-write, and everything that needs a device to answer.
 
 ## Testing without hardware: what does not work
 
@@ -62,6 +90,9 @@ Each row corresponds to a row of the scenario matrix in
 [testing.md](./guidelines/testing.md), which the automated suite covers in simulation.
 
 ### First connection
+
+Steps 1 and the `awaiting-permission` half of 2 were confirmed in the 2026-09-12 browser run;
+they are left unticked because the checklist is about a run **with** hardware.
 
 - [ ] **1.** Enter the device's IDs, click _Set up_. Status becomes `awaiting-permission` and
       _Choose device…_ appears.
