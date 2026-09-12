@@ -15,9 +15,19 @@ export type NormalizedEncodingSettings = Required<EncodingSettings>;
  * Everything past the validation boundary works with this shape: no optional fields, no
  * defaults to re-apply, nothing to re-validate. See docs/guidelines/defensive-programming.md.
  */
+/**
+ * A validated device filter.
+ *
+ * Discriminated rather than "optional IDs", so that no code can read a vendor ID that a
+ * configuration does not have. See [ADR-0016](../../docs/adr/0016-non-usb-devices.md).
+ */
+export type NormalizedDeviceFilter =
+  | { readonly kind: 'usb'; readonly vendorId: number; readonly productId: number }
+  | { readonly kind: 'any' };
+
 export interface NormalizedConfiguration {
   readonly name: string;
-  readonly device: { readonly vendorId: number; readonly productId: number };
+  readonly device: NormalizedDeviceFilter;
   readonly serial: NormalizedSerialSettings;
   readonly connection: NormalizedConnectionSettings;
   readonly encoding: NormalizedEncodingSettings;

@@ -38,7 +38,7 @@ Node 20.11 or newer. The library itself never runs in Node — that is only the 
 3. Make it pass.
 4. `npm run verify` must be green, including the coverage gates.
 5. Commit with [Conventional Commits](./docs/guidelines/git-workflow.md). The body explains
-   *why*; the diff already shows *what*.
+   _why_; the diff already shows _what_.
 6. Update `CHANGELOG.md` if the change is user-visible, and TSDoc on every touched export.
 7. Write an ADR if you made or reversed an architectural decision, and reference it from the
    code.

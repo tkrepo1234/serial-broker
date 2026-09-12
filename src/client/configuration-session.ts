@@ -190,8 +190,10 @@ export class ConfigurationSession {
     return Object.freeze({
       name: this.configuration.name,
       status: this.#status,
-      vendorId: this.configuration.device.vendorId,
-      productId: this.configuration.device.productId,
+      vendorId:
+        this.configuration.device.kind === 'usb' ? this.configuration.device.vendorId : undefined,
+      productId:
+        this.configuration.device.kind === 'usb' ? this.configuration.device.productId : undefined,
       serialOptions: this.configuration.serial,
       since: this.#statusSince,
       observedAt: this.environment.clock.now(),

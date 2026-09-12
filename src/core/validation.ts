@@ -4,6 +4,7 @@ import {
   DEFAULT_SERIAL_SETTINGS,
   MAX_CONFIG_NAME_LENGTH,
   type NormalizedConfiguration,
+  type NormalizedDeviceFilter,
 } from './defaults.js';
 import { SerialBrokerErrorCode } from './error-codes.js';
 import { SerialBrokerError } from './errors.js';
@@ -132,6 +133,42 @@ function requireObject(value: unknown, argumentName: string): Record<string, unk
 }
 
 /**
+ * Validates a device filter.
+ *
+ * Two shapes, kept apart rather than merged into one with optional IDs: a configuration
+ * either identifies a USB device or accepts whatever the user granted, and code downstream
+ * must not be able to read a vendor ID from the second kind. See
+ * [ADR-0016](../../docs/adr/0016-non-usb-devices.md).
+ *
+ * Mixing them - passing `any` *and* IDs - is rejected rather than silently resolved, because
+ * either interpretation would be a guess about what the caller meant.
+ */
+function normalizeDeviceFilter(device: Record<string, unknown>): NormalizedDeviceFilter {
+  const wantsAny = device['any'];
+  const hasIds = device['vendorId'] !== undefined || device['productId'] !== undefined;
+
+  if (wantsAny !== undefined) {
+    if (wantsAny !== true) {
+      throw invalid('options.device.any', 'true, or absent', wantsAny);
+    }
+    if (hasIds) {
+      throw invalid(
+        'options.device',
+        'either { vendorId, productId } or { any: true }, not both',
+        'both',
+      );
+    }
+    return Object.freeze({ kind: 'any' as const });
+  }
+
+  return Object.freeze({
+    kind: 'usb' as const,
+    vendorId: requireInteger(device['vendorId'], 'options.device.vendorId', 0, USB_ID_MAX),
+    productId: requireInteger(device['productId'], 'options.device.productId', 0, USB_ID_MAX),
+  });
+}
+
+/**
  * Validates and normalises the options passed to `setup()`.
  *
  * @param name - The configuration name.
@@ -155,10 +192,7 @@ export function normalizeConfiguration(name: unknown, options: unknown): Normali
 
   return Object.freeze({
     name: validName,
-    device: Object.freeze({
-      vendorId: requireInteger(device['vendorId'], 'options.device.vendorId', 0, USB_ID_MAX),
-      productId: requireInteger(device['productId'], 'options.device.productId', 0, USB_ID_MAX),
-    }),
+    device: normalizeDeviceFilter(device),
     serial: Object.freeze({
       // The upper bound is generous rather than authoritative: the set of supported rates is
       // a property of the adapter, not of this library, and rejecting an unusual but valid
@@ -295,12 +329,21 @@ export function isDeviceCompatible(
   b: NormalizedConfiguration,
 ): boolean {
   return (
-    a.device.vendorId === b.device.vendorId &&
-    a.device.productId === b.device.productId &&
+    isSameDevice(a.device, b.device) &&
     a.serial.baudRate === b.serial.baudRate &&
     a.serial.dataBits === b.serial.dataBits &&
     a.serial.stopBits === b.serial.stopBits &&
     a.serial.parity === b.serial.parity &&
     a.serial.flowControl === b.serial.flowControl
   );
+}
+
+/** `true` if two filters name the same device. */
+function isSameDevice(a: NormalizedDeviceFilter, b: NormalizedDeviceFilter): boolean {
+  if (a.kind === 'any' || b.kind === 'any') {
+    // Two "any" filters are compatible; an "any" and a USB filter are not, because one of
+    // them would open a port the other did not ask for.
+    return a.kind === b.kind;
+  }
+  return a.vendorId === b.vendorId && a.productId === b.productId;
 }

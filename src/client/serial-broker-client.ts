@@ -489,7 +489,10 @@ export class SerialBrokerClient {
 /** Turns a normalised configuration back into the options `setup()` accepts. */
 function toOptions(configuration: NormalizedConfiguration): SerialBrokerOptions {
   return {
-    device: configuration.device,
+    device:
+      configuration.device.kind === 'usb'
+        ? { vendorId: configuration.device.vendorId, productId: configuration.device.productId }
+        : { any: true },
     serial: configuration.serial,
     connection: configuration.connection,
     encoding: configuration.encoding,

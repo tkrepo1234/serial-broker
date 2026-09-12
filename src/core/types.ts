@@ -38,12 +38,32 @@ export type SerialBrokerStatus = (typeof SerialBrokerStatus)[keyof typeof Serial
  * These identify a device *type*, not an individual device: two identical adapters cannot be
  * told apart, because the platform exposes no serial number. See ADR-0009.
  */
-export interface DeviceFilter {
+export interface UsbDeviceFilter {
   /** USB vendor ID, `0x0000`-`0xffff`. For a CH340 adapter this is `0x1a86`. */
   readonly vendorId: number;
   /** USB product ID, `0x0000`-`0xffff`. */
   readonly productId: number;
 }
+
+/**
+ * Accepts any port the user has granted, whatever it is.
+ *
+ * For ports that are **not** USB devices, and therefore report no vendor or product ID at
+ * all: a built-in RS-232 interface on an industrial PC, a virtual COM port pair, a
+ * Bluetooth serial profile. `SerialPort.getInfo()` returns nothing identifying for these, so
+ * there is no filter to write.
+ *
+ * The cost is that the library cannot tell two such ports apart. With more than one granted,
+ * it uses the first and reports the ambiguity at `warn` level. Use the USB filter whenever
+ * the device has IDs. See [ADR-0016](../../docs/adr/0016-non-usb-devices.md).
+ */
+export interface AnyDeviceFilter {
+  /** Must be `true`. Spelled as a field so the intent is explicit at the call site. */
+  readonly any: true;
+}
+
+/** How a configuration says which device it wants. */
+export type DeviceFilter = UsbDeviceFilter | AnyDeviceFilter;
 
 /**
  * Serial line settings, passed through to `SerialPort.open()`.
@@ -145,10 +165,10 @@ export interface SerialBrokerStatusSnapshot {
   readonly name: string;
   /** The current connection status. */
   readonly status: SerialBrokerStatus;
-  /** The configured USB vendor ID. */
-  readonly vendorId: number;
-  /** The configured USB product ID. */
-  readonly productId: number;
+  /** The configured USB vendor ID, or `undefined` for a configuration that accepts any port. */
+  readonly vendorId: number | undefined;
+  /** The configured USB product ID, or `undefined` for a configuration that accepts any port. */
+  readonly productId: number | undefined;
   /** The effective serial settings, with defaults applied. */
   readonly serialOptions: Required<SerialSettings>;
   /** Epoch milliseconds at which the current status was entered. */

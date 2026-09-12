@@ -145,8 +145,16 @@ export class PortSupervisor {
         {
           configName: this.configuration.name,
           context: {
-            expectedVendorId: this.configuration.device.vendorId,
-            expectedProductId: this.configuration.device.productId,
+            // Reached only for a USB filter: an `any` filter matches every port, so there is
+            // nothing it can mismatch.
+            expectedVendorId:
+              this.configuration.device.kind === 'usb'
+                ? this.configuration.device.vendorId
+                : undefined,
+            expectedProductId:
+              this.configuration.device.kind === 'usb'
+                ? this.configuration.device.productId
+                : undefined,
             actualVendorId: info.usbVendorId,
             actualProductId: info.usbProductId,
           },

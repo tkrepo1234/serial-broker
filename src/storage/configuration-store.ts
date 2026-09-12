@@ -179,7 +179,12 @@ export class ConfigurationStore {
  */
 function toStorable(configuration: NormalizedConfiguration): unknown {
   return {
-    device: configuration.device,
+    // Stored in the shape `setup()` accepts, not the normalised one, so a restored entry goes
+    // through exactly the same validation as a fresh one.
+    device:
+      configuration.device.kind === 'usb'
+        ? { vendorId: configuration.device.vendorId, productId: configuration.device.productId }
+        : { any: true },
     serial: configuration.serial,
     connection: {
       ...configuration.connection,

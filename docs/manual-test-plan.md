@@ -10,9 +10,9 @@ step.
 
 ## Status
 
-| | |
-| --- | --- |
-| **Last run** | *never — not yet run* |
+|                  |                             |
+| ---------------- | --------------------------- |
+| **Last run**     | _never — not yet run_       |
 | **Blocking for** | the first published release |
 
 Everything below is written and ready to run; nothing in it has been executed yet. The
@@ -36,9 +36,9 @@ Each row corresponds to a row of the scenario matrix in
 
 ### First connection
 
-- [ ] **1.** Enter the device's IDs, click *Set up*. Status becomes `awaiting-permission` and
-      *Choose device…* appears.
-- [ ] **2.** Click *Choose device…*. Chrome shows its port picker, filtered to the configured
+- [ ] **1.** Enter the device's IDs, click _Set up_. Status becomes `awaiting-permission` and
+      _Choose device…_ appears.
+- [ ] **2.** Click _Choose device…_. Chrome shows its port picker, filtered to the configured
       device. Pick it: status becomes `open`.
 - [ ] **3.** Send `HELLO`. With TX/RX bridged, both a `sent` and a `received` line appear.
 - [ ] **4.** Reload the page. It reconnects **with no prompt** — the browser remembered the
@@ -77,7 +77,7 @@ Each row corresponds to a row of the scenario matrix in
 
 - [ ] **18.** Revoke the device in Chrome's site settings while connected. The tabs report the
       loss; after a reload the status is `awaiting-permission` again.
-- [ ] **19.** Click *Release* with `forgetDevice` — verify the next `setup()` prompts again.
+- [ ] **19.** Click _Release_ with `forgetDevice` — verify the next `setup()` prompts again.
       (The demo's Release button does not pass it; test through the console.)
 
 ### Data

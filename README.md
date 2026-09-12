@@ -97,7 +97,7 @@ calling it again with equivalent options does nothing.
 
 ```ts
 await SerialBroker.setup('Scale', {
-  device: { vendorId: 0x0403, productId: 0x6001 }, // USB vendor and product ID
+  device: { vendorId: 0x0403, productId: 0x6001 }, // USB vendor and product ID, or { any: true }
   serial: {
     baudRate: 19200, // required
     dataBits: 8, // 7 | 8                    default 8
@@ -124,6 +124,25 @@ await SerialBroker.setup('Scale', {
   persist: true, // restore this configuration after a reload
 });
 ```
+
+### Devices without USB IDs
+
+`SerialPort.getInfo()` reports vendor and product IDs **only for USB devices**. A built-in
+RS-232 interface on an industrial PC, a virtual COM port pair, a Bluetooth serial profile:
+none of them report anything to filter on. For those, say so:
+
+```ts
+await SerialBroker.setup('PanelPort', {
+  device: { any: true },
+  serial: { baudRate: 9600 },
+});
+```
+
+The library then accepts whatever port the user granted, and the picker is shown unfiltered.
+
+The trade-off is real: with more than one such port granted, the library cannot tell them
+apart — it uses the first and warns. **Use the USB filter whenever the device has IDs.** See
+[ADR-0016](./docs/adr/0016-non-usb-devices.md).
 
 ### `send(name, data): Promise<void>`
 
@@ -248,7 +267,8 @@ on would break every guarantee above.
 
 - **Two identical devices cannot be told apart.** The platform exposes only USB vendor and
   product IDs, not a serial number. With two identical adapters attached, the library uses the
-  first granted one and warns.
+  first granted one and warns. The same applies, more strongly, to a `{ any: true }`
+  configuration, which cannot distinguish ports at all.
 - **Data can be lost during a handover.** When the owning tab dies, the browser closes its
   port; the successor reopens it, and anything the device sent in between went to nobody. This
   is a property of the platform, not a bug that can be fixed here.

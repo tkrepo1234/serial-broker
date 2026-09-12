@@ -23,6 +23,7 @@ export { SerialBrokerErrorCode, REMEDIATION } from './core/error-codes.js';
 export {
   SerialBrokerStatus,
   type ConnectionSettings,
+  type AnyDeviceFilter,
   type DeviceFilter,
   type EncodingSettings,
   type ErrorEvent,
@@ -43,6 +44,7 @@ export {
   type StatusChangeEvent,
   type TransportKind,
   type Unsubscribe,
+  type UsbDeviceFilter,
 } from './core/types.js';
 
 export {

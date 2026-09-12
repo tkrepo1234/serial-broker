@@ -25,6 +25,15 @@ type SerialEventListener = (event: { readonly target: EventTarget | null }) => v
  * leaving `write()` pending forever is the reason every call in the library has a deadline.
  */
 export class FakeDevice {
+  /**
+   * Whether this device reports USB identity.
+   *
+   * A virtual COM port pair, a built-in RS-232 interface and a Bluetooth serial profile all
+   * report nothing from `getInfo()`. Simulating that is the only way to test the `any`
+   * filter honestly (ADR-0016).
+   */
+  isUsb = true;
+
   /** Everything written to this device, in order, across every open. */
   readonly written: Uint8Array[] = [];
   /** How many times this device has been opened. */
@@ -115,8 +124,11 @@ export class FakeSerialPort {
     private readonly onDeviceForgotten: () => void,
   ) {}
 
-  getInfo(): { usbVendorId: number; usbProductId: number } {
-    return { usbVendorId: this.device.vendorId, usbProductId: this.device.productId };
+  getInfo(): { usbVendorId?: number; usbProductId?: number } {
+    // A non-USB port reports an empty dictionary, exactly as the platform does.
+    return this.device.isUsb
+      ? { usbVendorId: this.device.vendorId, usbProductId: this.device.productId }
+      : {};
   }
 
   get readable(): ReadableStream<Uint8Array> | null {
@@ -245,6 +257,16 @@ export class FakeSerialRegistry {
   addDevice(vendorId: number, productId: number): FakeDevice {
     const device = new FakeDevice(vendorId, productId);
     this.#devices.push(device);
+    return device;
+  }
+
+  /**
+   * Adds a port that reports no USB identity - a virtual COM port, a built-in RS-232
+   * interface, a Bluetooth serial profile. See ADR-0016.
+   */
+  addNonUsbPort(): FakeDevice {
+    const device = this.addDevice(0, 0);
+    device.isUsb = false;
     return device;
   }
 

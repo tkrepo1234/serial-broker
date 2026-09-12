@@ -1,3 +1,7 @@
+| [0016](./0016-non-usb-devices.md) | Support ports that are not USB devices | Accepted |
+| [0015](./0015-text-and-binary-payloads.md) | Deliver bytes, offer text as a configured convenience | Accepted |
+| [0016](./0016-non-usb-devices.md) | Support ports that are not USB devices | Accepted |
+
 # Architecture Decision Records
 
 Every architectural decision in this library is recorded here, using a
@@ -24,3 +28,4 @@ because of a decision references it in a comment (`// See ADR-0005.`).
 | [0013](./0013-write-ordering-and-delivery-semantics.md)      | Per-participant write ordering with at-most-once delivery                      | Accepted |
 | [0014](./0014-dependency-injection-of-the-environment.md)    | Inject the browser environment for testability                                 | Accepted |
 | [0015](./0015-text-and-binary-payloads.md)                   | Deliver bytes, offer text as a configured convenience                          | Accepted |
+| [0016](./0016-non-usb-devices.md)                            | Support ports that are not USB devices                                         | Accepted |
