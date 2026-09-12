@@ -1,0 +1,35 @@
+/**
+ * Version of the inter-context message protocol.
+ *
+ * This is **not** the package version and does not follow SemVer. It is incremented on any
+ * change to the message shapes in `messages.ts` - there are no compatible additions, because
+ * a participant that misreads one field can send bytes to a device that nobody asked for.
+ *
+ * Contexts running different protocol versions do not federate: the version is part of the
+ * lock name and the broker channel name, so they partition into independent groups and report
+ * `PROTOCOL_VERSION_MISMATCH` rather than corrupting each other. See ADR-0008.
+ */
+export const PROTOCOL_VERSION = 1;
+
+/** Prefix for every name this library claims in a shared namespace. */
+const NAMESPACE = 'serial-broker';
+
+/**
+ * Name of the Web Lock that represents ownership of a configuration's port.
+ *
+ * Holding this lock *is* being the owner - there is no separate flag that could disagree with
+ * it. See ADR-0005.
+ */
+export function ownerLockName(configName: string): string {
+  return `${NAMESPACE}/owner/v${String(PROTOCOL_VERSION)}/${configName}`;
+}
+
+/** Name of the `SharedWorker` instance, and of the `BroadcastChannel` in the fallback. */
+export function brokerChannelName(): string {
+  return `${NAMESPACE}/broker/v${String(PROTOCOL_VERSION)}`;
+}
+
+/** Key under which configurations are persisted. */
+export function storageKey(): string {
+  return `${NAMESPACE}/v${String(PROTOCOL_VERSION)}/configurations`;
+}
