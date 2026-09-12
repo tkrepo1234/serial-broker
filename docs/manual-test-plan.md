@@ -16,8 +16,35 @@ step.
 | **Blocking for** | the first published release |
 
 Everything below is written and ready to run; nothing in it has been executed yet. The
-automated suite (423 tests) and the build are green, and the demo is served and parses, but no
+automated suite (437 tests) and the build are green, and the demo is served and parses, but no
 part of this library has touched a physical serial port.
+
+## Testing without hardware: what does not work
+
+**com0com was tried on 2026-09-12 and does not work on current Windows 11.** Recorded here so
+nobody spends the afternoon finding out again.
+
+The signed build (`com0com-3.0.0.0-i386-and-x64-signed.zip` from SourceForge) installs
+cleanly, and `setupc.exe install PortName=COM31 PortName=COM32` reports success — but the
+device then sits at `ConfigManagerErrorCode 52`: _Windows cannot verify the digital signature
+for the drivers required for this device._ No COM ports appear.
+
+The reason is in the certificate: it was issued in 2016 (CyberCircuits, via Comodo) and
+expired in 2018. Since Windows 10 1607, x64 kernel drivers must be attestation-signed through
+the Hardware Dev Center; the exception covers drivers cross-signed **before July 2015**, which
+this is not. The signature is valid — it is simply not the kind of signature Windows will load.
+
+Tested on: Windows 11 Home, build 26200. Uninstalled completely afterwards; nothing was left
+behind.
+
+**What to use instead:** a USB-serial adapter with its TX and RX pins bridged. The vendor
+drivers (CH340, FTDI, CP2102) are WHQL-signed, there is no signature problem, and the test is
+more honest anyway — only real hardware can be unplugged mid-write, which is the case this
+library exists for.
+
+If a virtual port is ever needed, the remaining candidates are commercial and would have to be
+checked for a _current_ WHQL signature first: Virtual Serial Port Driver (Electronic Team),
+HHD Virtual Serial Port Tools. Neither has been evaluated.
 
 ## Setup
 
