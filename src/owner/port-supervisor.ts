@@ -86,16 +86,6 @@ export class PortSupervisor {
     private readonly logger: ScopedLogger,
   ) {}
 
-  /** The current status. */
-  get status(): SerialBrokerStatus {
-    return this.#status;
-  }
-
-  /** `true` when the device is open and writes can be performed. */
-  get isOpen(): boolean {
-    return this.#state.kind === 'open';
-  }
-
   /**
    * Describes the connection for a diagnostics report (ADR-0018).
    *

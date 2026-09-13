@@ -7,6 +7,7 @@ import type {
   SerialBrokerEventName,
   SerialBrokerStatus,
 } from './types.js';
+import { toSetupOptions } from './validation.js';
 
 /**
  * The shapes of a diagnostics report (ADR-0018).
@@ -253,18 +254,14 @@ export type ObservedEvent =
 /**
  * Describes a normalised configuration as the settings it runs with.
  *
+ * The settings a report shows are exactly the options `setup()` would accept, so this is the
+ * same conversion as {@link toSetupOptions} - kept under its own name because it is what the
+ * diagnostics view calls, and a report must never describe a configuration differently from how
+ * it would be restored.
+ *
  * @param configuration - A configuration that has passed validation.
  * @returns A plain, structurally cloneable description.
  */
 export function describeSettings(configuration: NormalizedConfiguration): EffectiveSettings {
-  return {
-    device:
-      configuration.device.kind === 'usb'
-        ? { vendorId: configuration.device.vendorId, productId: configuration.device.productId }
-        : { any: true },
-    serial: { ...configuration.serial },
-    connection: { ...configuration.connection },
-    encoding: { ...configuration.encoding },
-    persist: configuration.persist,
-  };
+  return toSetupOptions(configuration);
 }

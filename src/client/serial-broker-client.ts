@@ -10,15 +10,24 @@ import type {
   SendableData,
   SerialBrokerEventMap,
   SerialBrokerEventName,
-  SerialBrokerOptions,
   SerialBrokerStatusSnapshot,
   Unsubscribe,
 } from '../core/types.js';
-import { isDeviceCompatible, normalizeConfiguration, validateName } from '../core/validation.js';
+import {
+  isDeviceCompatible,
+  normalizeConfiguration,
+  toSetupOptions,
+  validateName,
+} from '../core/validation.js';
 import type { SerialBrokerEnvironment } from '../environment/environment.js';
 import { matchesDevice } from '../owner/port-matcher.js';
 import { describeDecodeFailure, type DecodeFailure } from '../protocol/decode.js';
-import type { ClientId, ProtocolMessage, RequestId } from '../protocol/messages.js';
+import {
+  configNameOf,
+  type ClientId,
+  type ProtocolMessage,
+  type RequestId,
+} from '../protocol/messages.js';
 import { PROTOCOL_VERSION } from '../protocol/version.js';
 import { ConfigurationStore } from '../storage/configuration-store.js';
 
@@ -152,7 +161,7 @@ export class SerialBrokerClient {
       if (this.#sessions.has(configuration.name)) {
         continue;
       }
-      await this.setup(configuration.name, toOptions(configuration));
+      await this.setup(configuration.name, toSetupOptions(configuration));
       restored.push(configuration.name);
     }
 
@@ -325,10 +334,9 @@ export class SerialBrokerClient {
       clock: this.environment.clock,
     });
 
+    // Not registered with `#disposal`: `dispose()` closes the transport itself, before the device
+    // listeners go, and closing it a second time from the stack would only do nothing.
     this.#transport = transport;
-    this.#disposal.add(() => {
-      transport.close();
-    });
 
     this.#listenForDeviceChanges();
 
@@ -384,7 +392,7 @@ export class SerialBrokerClient {
       return;
     }
 
-    const configName = 'configName' in message ? message.configName : undefined;
+    const configName = configNameOf(message);
     if (configName === undefined) {
       return;
     }
@@ -538,18 +546,4 @@ export class SerialBrokerClient {
       );
     }
   }
-}
-
-/** Turns a normalised configuration back into the options `setup()` accepts. */
-function toOptions(configuration: NormalizedConfiguration): SerialBrokerOptions {
-  return {
-    device:
-      configuration.device.kind === 'usb'
-        ? { vendorId: configuration.device.vendorId, productId: configuration.device.productId }
-        : { any: true },
-    serial: configuration.serial,
-    connection: configuration.connection,
-    encoding: configuration.encoding,
-    persist: configuration.persist,
-  };
 }

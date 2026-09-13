@@ -221,3 +221,14 @@ export type ProtocolMessage =
 
 /** Discriminator values, for exhaustiveness checks. */
 export type ProtocolMessageType = ProtocolMessage['type'];
+
+/**
+ * The configuration a message concerns, or `undefined` for one that concerns a whole context.
+ *
+ * Routing - in the broker, in the fallback transport, in the client - depends on this answer, and
+ * which message types carry a configuration is a fact of this vocabulary, so it is asked here
+ * rather than at every place that routes.
+ */
+export function configNameOf(message: ProtocolMessage): string | undefined {
+  return 'configName' in message ? message.configName : undefined;
+}

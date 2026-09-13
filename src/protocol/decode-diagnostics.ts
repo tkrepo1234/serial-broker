@@ -1,6 +1,7 @@
 import { CONNECTION_STATES } from '../core/diagnostics.js';
 import type { ParticipantDiagnostics } from '../core/diagnostics.js';
-import { SerialBrokerStatus } from '../core/types.js';
+
+import { isFiniteNumber, isNonEmptyString, isRecord, isStatus } from './guards.js';
 
 /**
  * Validation of a diagnostics report arriving from another context (ADR-0018).
@@ -30,15 +31,6 @@ const CONNECTION_NUMBER_FIELDS = [
 const LISTENER_FIELDS = ['onReceive', 'onSend', 'onError', 'onStatusChange'] as const;
 const PENDING_WRITE_FIELDS = ['total', 'dispatched', 'started'] as const;
 const CONNECTION_COUNT_FIELDS = ['attempt', 'queuedWrites', 'bytesReceived', 'bytesSent'] as const;
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === 'object' && value !== null && !Array.isArray(value);
-
-const isNonEmptyString = (value: unknown): value is string =>
-  typeof value === 'string' && value.length > 0;
-
-const isFiniteNumber = (value: unknown): value is number =>
-  typeof value === 'number' && Number.isFinite(value);
 
 /** A number that may be infinite, as `maxAttempts` is by default, but never `NaN`. */
 const isNumber = (value: unknown): value is number =>
@@ -135,11 +127,5 @@ function isConnectionDiagnostics(value: unknown): boolean {
     hasAll(value, CONNECTION_COUNT_FIELDS, isCount) &&
     isOptionalTimestamp(value['nextAttemptAt']) &&
     isOptionalTimestamp(value['openedAt'])
-  );
-}
-
-function isStatus(value: unknown): boolean {
-  return (
-    typeof value === 'string' && (Object.values(SerialBrokerStatus) as string[]).includes(value)
   );
 }

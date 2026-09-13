@@ -2,7 +2,7 @@ import type { NormalizedConfiguration } from '../core/defaults.js';
 import { SerialBrokerErrorCode } from '../core/error-codes.js';
 import { describeUnknown, SerialBrokerError } from '../core/errors.js';
 import type { ScopedLogger } from '../core/logger.js';
-import { normalizeConfiguration } from '../core/validation.js';
+import { normalizeConfiguration, toSetupOptions } from '../core/validation.js';
 import type { KeyValueStorage } from '../environment/environment.js';
 import { storageKey } from '../protocol/version.js';
 
@@ -181,25 +181,20 @@ export class ConfigurationStore {
  * defaults apply to it instead of yesterday's being frozen in.
  */
 function toStorable(configuration: NormalizedConfiguration): unknown {
+  const options = toSetupOptions(configuration);
   return {
-    // Stored in the shape `setup()` accepts, not the normalised one, so a restored entry goes
-    // through exactly the same validation as a fresh one.
-    device:
-      configuration.device.kind === 'usb'
-        ? { vendorId: configuration.device.vendorId, productId: configuration.device.productId }
-        : { any: true },
-    serial: configuration.serial,
+    ...options,
     connection: {
-      ...configuration.connection,
+      ...options.connection,
       // `Infinity` is not representable in JSON and round-trips as `null`, which would fail
       // validation on the way back in. Omitting it lets the default apply, which is the same
       // value.
       maxAttempts:
-        configuration.connection.maxAttempts === Number.POSITIVE_INFINITY
+        options.connection.maxAttempts === Number.POSITIVE_INFINITY
           ? undefined
-          : configuration.connection.maxAttempts,
+          : options.connection.maxAttempts,
     },
-    encoding: configuration.encoding,
+    // Only a persisted configuration is ever stored, so this is always `true`.
     persist: true,
   };
 }

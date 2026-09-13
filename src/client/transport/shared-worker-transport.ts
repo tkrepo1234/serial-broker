@@ -5,6 +5,7 @@ import { HEARTBEAT_INTERVAL_MS } from '../../protocol/heartbeat.js';
 import type { ProtocolMessage } from '../../protocol/messages.js';
 import { brokerChannelName, PROTOCOL_VERSION } from '../../protocol/version.js';
 
+import { MessageSender } from './message-sender.js';
 import type { Transport, TransportRequest } from './transport.js';
 
 /** The `SharedWorker` surface this transport uses. Narrowed so a fake stays small. */
@@ -53,6 +54,7 @@ export class SharedWorkerTransport implements Transport {
 
   readonly #port: MessagePortLike;
   readonly #disposal = new DisposalStack();
+  readonly #sender: MessageSender;
   readonly #request: TransportRequest;
   readonly #startup: WorkerStartup | undefined;
   #isReady = false;
@@ -76,6 +78,13 @@ export class SharedWorkerTransport implements Transport {
 
     const worker = createWorker(url, brokerChannelName());
     this.#port = worker.port;
+    this.#sender = new MessageSender(
+      request,
+      (message) => {
+        this.#port.postMessage(message);
+      },
+      this.#disposal,
+    );
 
     worker.addEventListener('error', (event) => {
       if (this.#disposal.isDisposed) {
@@ -110,12 +119,7 @@ export class SharedWorkerTransport implements Transport {
       this.#port.close();
     });
 
-    this.send({
-      type: 'hello',
-      v: PROTOCOL_VERSION,
-      from: this.clientId,
-      to: 'all',
-    });
+    this.#sender.sendHello();
 
     this.#scheduleHeartbeat();
     this.#disposal.add(() => {
@@ -127,42 +131,20 @@ export class SharedWorkerTransport implements Transport {
 
   /** {@inheritDoc Transport.send} */
   send(message: ProtocolMessage): void {
-    if (this.#disposal.isDisposed) {
-      return;
-    }
-
-    try {
-      this.#port.postMessage(message);
-    } catch (error) {
-      // `postMessage` throws on a closed port and on a payload that cannot be cloned. Sending
-      // stops once this transport is closed, so either is worth reporting.
-      this.#request.onTransportError(error);
-    }
+    this.#sender.send(message);
   }
 
   /** {@inheritDoc Transport.attach} */
   attach(configName: string): void {
     this.#attached.add(configName);
-    this.send({
-      type: 'attach',
-      v: PROTOCOL_VERSION,
-      from: this.clientId,
-      to: 'all',
-      configName,
-    });
+    this.#sender.sendAttach(configName);
   }
 
   /** {@inheritDoc Transport.detach} */
   detach(configName: string): void {
     this.#attached.delete(configName);
     this.#owned.delete(configName);
-    this.send({
-      type: 'detach',
-      v: PROTOCOL_VERSION,
-      from: this.clientId,
-      to: 'all',
-      configName,
-    });
+    this.#sender.sendDetach(configName);
   }
 
   /** {@inheritDoc Transport.setOwnership} */
@@ -182,12 +164,7 @@ export class SharedWorkerTransport implements Transport {
       return;
     }
 
-    this.send({
-      type: 'goodbye',
-      v: PROTOCOL_VERSION,
-      from: this.clientId,
-      to: 'all',
-    });
+    this.#sender.sendGoodbye();
 
     this.#disposal.disposeAll();
   }

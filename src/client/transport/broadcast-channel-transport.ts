@@ -1,8 +1,9 @@
 import { DisposalStack } from '../../core/disposable.js';
 import { decodeMessage } from '../../protocol/decode.js';
-import type { ProtocolMessage } from '../../protocol/messages.js';
-import { brokerChannelName, PROTOCOL_VERSION } from '../../protocol/version.js';
+import { configNameOf, type ProtocolMessage } from '../../protocol/messages.js';
+import { brokerChannelName } from '../../protocol/version.js';
 
+import { MessageSender } from './message-sender.js';
 import type { Transport, TransportRequest } from './transport.js';
 
 /** The `BroadcastChannel` surface this transport uses. */
@@ -39,6 +40,7 @@ export class BroadcastChannelTransport implements Transport {
 
   readonly #channel: BroadcastChannelLike;
   readonly #disposal = new DisposalStack();
+  readonly #sender: MessageSender;
   readonly #request: TransportRequest;
   readonly #attached = new Set<string>();
   readonly #owned = new Set<string>();
@@ -47,6 +49,13 @@ export class BroadcastChannelTransport implements Transport {
     this.clientId = request.clientId;
     this.#request = request;
     this.#channel = createChannel(brokerChannelName());
+    this.#sender = new MessageSender(
+      request,
+      (message) => {
+        this.#channel.postMessage(message);
+      },
+      this.#disposal,
+    );
 
     this.#channel.addEventListener('message', (event: { readonly data: unknown }) => {
       this.#receive(event.data);
@@ -60,50 +69,25 @@ export class BroadcastChannelTransport implements Transport {
       this.#channel.close();
     });
 
-    this.send({
-      type: 'hello',
-      v: PROTOCOL_VERSION,
-      from: this.clientId,
-      to: 'all',
-    });
+    this.#sender.sendHello();
   }
 
   /** {@inheritDoc Transport.send} */
   send(message: ProtocolMessage): void {
-    if (this.#disposal.isDisposed) {
-      return;
-    }
-
-    try {
-      this.#channel.postMessage(message);
-    } catch (error) {
-      this.#request.onTransportError(error);
-    }
+    this.#sender.send(message);
   }
 
   /** {@inheritDoc Transport.attach} */
   attach(configName: string): void {
     this.#attached.add(configName);
-    this.send({
-      type: 'attach',
-      v: PROTOCOL_VERSION,
-      from: this.clientId,
-      to: 'all',
-      configName,
-    });
+    this.#sender.sendAttach(configName);
   }
 
   /** {@inheritDoc Transport.detach} */
   detach(configName: string): void {
     this.#attached.delete(configName);
     this.#owned.delete(configName);
-    this.send({
-      type: 'detach',
-      v: PROTOCOL_VERSION,
-      from: this.clientId,
-      to: 'all',
-      configName,
-    });
+    this.#sender.sendDetach(configName);
   }
 
   /** {@inheritDoc Transport.setOwnership} */
@@ -121,12 +105,7 @@ export class BroadcastChannelTransport implements Transport {
       return;
     }
 
-    this.send({
-      type: 'goodbye',
-      v: PROTOCOL_VERSION,
-      from: this.clientId,
-      to: 'all',
-    });
+    this.#sender.sendGoodbye();
 
     this.#attached.clear();
     this.#owned.clear();
@@ -157,7 +136,7 @@ export class BroadcastChannelTransport implements Transport {
   }
 
   #isAddressedToUs(message: ProtocolMessage): boolean {
-    const configName = 'configName' in message ? message.configName : undefined;
+    const configName = configNameOf(message);
 
     switch (message.to) {
       case 'all':

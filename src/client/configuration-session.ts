@@ -1,7 +1,6 @@
 import { assertNever } from '../core/assert.js';
 import type { NormalizedConfiguration } from '../core/defaults.js';
 import { describeSettings, type ConfigurationDiagnostics } from '../core/diagnostics.js';
-import { DisposalStack } from '../core/disposable.js';
 import { EventEmitter } from '../core/emitter.js';
 import { SerialBrokerErrorCode } from '../core/error-codes.js';
 import { deserializeError, SerialBrokerError } from '../core/errors.js';
@@ -43,7 +42,6 @@ import type { Transport } from './transport/transport.js';
 export class ConfigurationSession {
   readonly #emitter: EventEmitter;
   readonly #election: OwnershipElection;
-  readonly #disposal = new DisposalStack();
   readonly #writes: PendingWrites;
 
   #supervisor: PortSupervisor | undefined;
@@ -149,7 +147,6 @@ export class ConfigurationSession {
     this.transport.detach(this.configuration.name);
     this.#setStatus(SerialBrokerStatus.Released);
     this.#emitter.clear();
-    this.#disposal.disposeAll();
   }
 
   // --- Application-facing ------------------------------------------------------------------

@@ -1,5 +1,10 @@
 import type { ScopedLogger } from '../core/logger.js';
-import { BROKER_ID, type ClientId, type ProtocolMessage } from '../protocol/messages.js';
+import {
+  BROKER_ID,
+  configNameOf,
+  type ClientId,
+  type ProtocolMessage,
+} from '../protocol/messages.js';
 import { PROTOCOL_VERSION } from '../protocol/version.js';
 
 /** What the broker needs from whichever transport is hosting it. */
@@ -286,7 +291,7 @@ export class Broker {
    * make a context's view of its own actions depend on the broker being alive.
    */
   #broadcast(message: ProtocolMessage, sender: ClientId): void {
-    const configName = 'configName' in message ? message.configName : undefined;
+    const configName = configNameOf(message);
     if (configName === undefined) {
       return;
     }
@@ -318,7 +323,7 @@ export class Broker {
   }
 
   #deliverToOwner(message: ProtocolMessage): void {
-    const configName = 'configName' in message ? message.configName : undefined;
+    const configName = configNameOf(message);
     if (configName === undefined) {
       return;
     }

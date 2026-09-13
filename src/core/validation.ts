@@ -6,6 +6,7 @@ import {
   type NormalizedConfiguration,
   type NormalizedDeviceFilter,
 } from './defaults.js';
+import type { EffectiveSettings } from './diagnostics.js';
 import { SerialBrokerErrorCode } from './error-codes.js';
 import { SerialBrokerError } from './errors.js';
 import type { SerialBrokerOptions } from './types.js';
@@ -306,6 +307,31 @@ export function normalizeConfiguration(name: unknown, options: unknown): Normali
     }),
     persist: requireBoolean(orDefault(raw.persist, true), 'options.persist'),
   });
+}
+
+/**
+ * Turns a normalised configuration back into the options `setup()` accepts.
+ *
+ * The inverse of {@link normalizeConfiguration}, and the one place the device filter is turned
+ * back into its application-facing shape. A configuration leaves the validated core this way
+ * wherever it goes: restored through `setup()`, written to storage, described in a diagnostics
+ * report (ADR-0018). Each nested object is a copy, so the result can be changed or cloned without
+ * touching the frozen original.
+ *
+ * @param configuration - A configuration that has passed validation.
+ * @returns Options that `normalizeConfiguration` turns back into an equal configuration.
+ */
+export function toSetupOptions(configuration: NormalizedConfiguration): EffectiveSettings {
+  return {
+    device:
+      configuration.device.kind === 'usb'
+        ? { vendorId: configuration.device.vendorId, productId: configuration.device.productId }
+        : { any: true },
+    serial: { ...configuration.serial },
+    connection: { ...configuration.connection },
+    encoding: { ...configuration.encoding },
+    persist: configuration.persist,
+  };
 }
 
 /**

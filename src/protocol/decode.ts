@@ -1,8 +1,8 @@
 import { assertNever } from '../core/assert.js';
 import { isSerializedError } from '../core/errors.js';
-import { SerialBrokerStatus } from '../core/types.js';
 
 import { isParticipantDiagnostics } from './decode-diagnostics.js';
+import { isFiniteNumber, isNonEmptyString, isRecord, isStatus } from './guards.js';
 import type { ClientId, MessageTarget, ProtocolMessage, RequestId } from './messages.js';
 import { PROTOCOL_VERSION } from './version.js';
 
@@ -35,20 +35,8 @@ function malformed(type: string, field: string): DecodeResult {
   return fail({ reason: 'malformed', type, field });
 }
 
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === 'object' && value !== null;
-
-const isNonEmptyString = (value: unknown): value is string =>
-  typeof value === 'string' && value.length > 0;
-
-const isFiniteNumber = (value: unknown): value is number =>
-  typeof value === 'number' && Number.isFinite(value);
-
 const isNameList = (value: unknown): value is readonly string[] =>
   Array.isArray(value) && value.every(isNonEmptyString);
-
-const isStatus = (value: unknown): value is SerialBrokerStatus =>
-  typeof value === 'string' && (Object.values(SerialBrokerStatus) as string[]).includes(value);
 
 /**
  * Payloads arrive as `Uint8Array` through structured cloning.

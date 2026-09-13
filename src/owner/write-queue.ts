@@ -26,9 +26,9 @@ export class WriteQueue {
   enqueue<T>(job: () => Promise<T>): Promise<T> {
     this.#depth += 1;
 
-    // Both handlers run `job`: a preceding failure must not skip this job, and must not be
-    // reported to this caller either.
-    const result = this.#tail.then(job, job);
+    // `#tail` never rejects - it is rebuilt below with a handler for either outcome - so a
+    // preceding failure can neither skip this job nor be reported to this caller.
+    const result = this.#tail.then(job);
 
     this.#tail = result.then(
       () => {

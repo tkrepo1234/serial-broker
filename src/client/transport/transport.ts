@@ -64,6 +64,4 @@ export interface TransportRequest {
   readonly logger: ScopedLogger;
   /** Time, for the heartbeats a `SharedWorker` participant sends (ADR-0021). */
   readonly clock: Clock;
-  /** URL of the broker script. Ignored by the fallback. */
-  readonly workerUrl?: string | URL | undefined;
 }
