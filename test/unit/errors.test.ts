@@ -146,6 +146,39 @@ describe('error serialization', () => {
     expect(wrapped.toJSON().cause).not.toHaveProperty('domExceptionName');
   });
 
+  it('names the DOMException of a cause, and nothing else that carries a code', () => {
+    const fromBrowser = new SerialBrokerError(SerialBrokerErrorCode.OPEN_FAILED, 'x', {
+      cause: new DOMException('The port is already open', 'InvalidStateError'),
+    });
+    // Node's system errors, and many an application's own, carry a `code` of their own.
+    const fromApplication = new SerialBrokerError(SerialBrokerErrorCode.LISTENER_THREW, 'x', {
+      cause: Object.assign(new Error('socket hang up'), { code: 'ECONNRESET' }),
+    });
+
+    expect(fromBrowser.toJSON().cause).toEqual({
+      name: 'InvalidStateError',
+      message: 'The port is already open',
+      domExceptionName: 'InvalidStateError',
+    });
+    expect(fromApplication.toJSON().cause).toEqual({ name: 'Error', message: 'socket hang up' });
+  });
+
+  it('serializes a cause that cannot even be inspected', () => {
+    const { proxy, revoke } = Proxy.revocable({}, {});
+    revoke();
+    const hostileName = Object.defineProperty(new Error('x'), 'name', {
+      get(): never {
+        throw new Error('no');
+      },
+    });
+
+    // toJSON() is how the error reaches the other tabs; throwing there would lose it everywhere.
+    for (const cause of [proxy, hostileName]) {
+      const error = new SerialBrokerError(SerialBrokerErrorCode.LISTENER_THREW, 'x', { cause });
+      expect(error.toJSON().cause?.name).toBe('NonError');
+    }
+  });
+
   it('is JSON-serialisable for a logging pipeline', () => {
     const error = new SerialBrokerError(SerialBrokerErrorCode.NOT_CONNECTED, 'x', {
       configName: 'Reader',
@@ -184,5 +217,12 @@ describe('describeUnknown', () => {
     };
 
     expect(() => describeUnknown(hostile)).not.toThrow();
+  });
+
+  it('survives a revoked proxy, which cannot even be asked what it is', () => {
+    const { proxy, revoke } = Proxy.revocable({}, {});
+    revoke();
+
+    expect(describeUnknown(proxy)).toBe('a value that cannot be described');
   });
 });

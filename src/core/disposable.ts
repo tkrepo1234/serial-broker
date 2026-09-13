@@ -1,10 +1,5 @@
 import { describeUnknown } from './errors.js';
 
-/** Something that can be released. Disposal must be idempotent and must never throw. */
-export interface Disposable {
-  dispose(): void;
-}
-
 /**
  * Collects disposers and releases them in reverse acquisition order.
  *
@@ -16,13 +11,18 @@ export interface Disposable {
  * - **Exception-safe:** a throwing disposer never prevents the remaining ones from running.
  * - **Ordered:** last acquired, first released.
  *
+ * There is deliberately no `dispose()` that returns nothing: teardown hands back what failed, so
+ * that a caller has to decide what to do with it rather than lose it (docs/guidelines/error-handling.md).
+ *
  * See docs/guidelines/defensive-programming.md.
  */
-export class DisposalStack implements Disposable {
+export class DisposalStack {
   readonly #disposers: (() => void)[] = [];
+  /** Failures of disposers that {@link add} ran at once, not yet returned by {@link disposeAll}. */
+  readonly #failures: unknown[] = [];
   #isDisposed = false;
 
-  /** `true` once {@link dispose} has run. */
+  /** `true` once {@link disposeAll} has run. */
   get isDisposed(): boolean {
     return this.#isDisposed;
   }
@@ -42,15 +42,6 @@ export class DisposalStack implements Disposable {
     this.#disposers.push(disposer);
   }
 
-  /** Registers a {@link Disposable}. */
-  addDisposable(disposable: Disposable): void {
-    this.add(() => {
-      disposable.dispose();
-    });
-  }
-
-  readonly #failures: unknown[] = [];
-
   /**
    * Runs every disposer in reverse order.
    *
@@ -66,9 +57,7 @@ export class DisposalStack implements Disposable {
     }
     this.#isDisposed = true;
 
-    const failures: unknown[] = [...this.#failures];
-    this.#failures.length = 0;
-
+    const failures: unknown[] = [];
     while (this.#disposers.length > 0) {
       // `pop()` cannot return undefined while length > 0, but `noUncheckedIndexedAccess`
       // cannot know that, and an explicit check is cheaper than an assertion here.
@@ -82,11 +71,6 @@ export class DisposalStack implements Disposable {
     // lands in `#failures`: collected here, so it is reported by this call rather than a later one.
     failures.push(...this.#failures.splice(0));
     return failures.map(describeUnknown);
-  }
-
-  /** {@inheritDoc Disposable.dispose} */
-  dispose(): void {
-    this.disposeAll();
   }
 }
 

@@ -82,6 +82,12 @@ export class EventEmitter {
 
     // Snapshot: a listener may subscribe or unsubscribe during dispatch.
     for (const listener of [...listeners]) {
+      // A listener removed earlier in this dispatch - by another listener, or by `clear()` when
+      // the configuration is released - has been told it hears nothing more, as a DOM event
+      // target would have told it. Only the set in effect now says so, not the snapshot.
+      if (this.#listeners.get(event)?.has(listener) !== true) {
+        continue;
+      }
       try {
         (listener as (payload: SerialBrokerEventMap[TEvent]) => void)(payload);
       } catch (error) {
@@ -96,12 +102,6 @@ export class EventEmitter {
   }
 
   #reportSafely(event: SerialBrokerEventName, error: unknown): void {
-    const wrapped = new SerialBrokerError(
-      SerialBrokerErrorCode.LISTENER_THREW,
-      `A listener for "${event}" threw: ${describeUnknown(error)}`,
-      { context: { event }, timestamp: this.now(), cause: error },
-    );
-
     if (event === 'onError') {
       // Reporting a failed onError listener through onError would recurse indefinitely.
       // The error is dropped here by design; the listener's own bug is its author's to find.
@@ -109,7 +109,13 @@ export class EventEmitter {
     }
 
     try {
-      this.reportListenerError(wrapped);
+      this.reportListenerError(
+        new SerialBrokerError(
+          SerialBrokerErrorCode.LISTENER_THREW,
+          `A listener for "${event}" threw: ${describeUnknown(error)}`,
+          { context: { event }, timestamp: this.now(), cause: error },
+        ),
+      );
     } catch {
       // The reporter itself is library code and must not throw. If it somehow does, there is
       // no channel left to report on, and losing the event is better than losing the tab.

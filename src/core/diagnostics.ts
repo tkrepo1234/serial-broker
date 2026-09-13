@@ -150,9 +150,13 @@ export interface ParticipantDiagnostics {
 
 /** A Web Lock this library holds or is waiting for. */
 export interface LockDiagnostics {
-  /** The lock name, `serial-broker/owner/v<protocol version>/<configuration name>`. */
+  /**
+   * The lock name: `serial-broker/owner/v<protocol version>/<configuration name>` for the ownership
+   * of a port, and `serial-broker/tab-slot/…` or `serial-broker/tab-slot-gate/…` for the places of
+   * a configuration with a tab limit (ADR-0025).
+   */
   readonly name: string;
-  /** The lock mode. Ownership locks are always exclusive. */
+  /** The lock mode. This library only takes exclusive locks. */
   readonly mode: 'exclusive' | 'shared';
   /**
    * The browser's identifier for the context, from `LockManager.query()`.

@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import { assertNever } from '../../src/core/assert.js';
-import { toHex } from '../../src/core/bytes.js';
+import { chunkBytes, copyBytes, toHex } from '../../src/core/bytes.js';
 import { createDeferred, createSignal, withDeadline } from '../../src/core/deadline.js';
 import { DisposalStack } from '../../src/core/disposable.js';
 import { SerialBrokerErrorCode } from '../../src/core/error-codes.js';
@@ -28,7 +28,7 @@ describe('DisposalStack', () => {
     stack.add(() => order.push(1));
     stack.add(() => order.push(2));
     stack.add(() => order.push(3));
-    stack.dispose();
+    stack.disposeAll();
 
     // Last acquired, first released: a reader taken after a port must be released before it.
     expect(order).toEqual([3, 2, 1]);
@@ -39,8 +39,8 @@ describe('DisposalStack', () => {
     const disposer = vi.fn();
 
     stack.add(disposer);
-    stack.dispose();
-    stack.dispose();
+    stack.disposeAll();
+    stack.disposeAll();
 
     expect(disposer).toHaveBeenCalledOnce();
     expect(stack.isDisposed).toBe(true);
@@ -65,7 +65,7 @@ describe('DisposalStack', () => {
 
   it('disposes immediately anything registered after teardown', () => {
     const stack = new DisposalStack();
-    stack.dispose();
+    stack.disposeAll();
     const late = vi.fn();
 
     stack.add(late);
@@ -85,16 +85,6 @@ describe('DisposalStack', () => {
 
     expect(stack.disposeAll()).toEqual(['Error: late']);
     expect(stack.disposeAll()).toEqual([]);
-  });
-
-  it('accepts a Disposable as well as a function', () => {
-    const stack = new DisposalStack();
-    const disposable = { dispose: vi.fn() };
-
-    stack.addDisposable(disposable);
-    stack.dispose();
-
-    expect(disposable.dispose).toHaveBeenCalledOnce();
   });
 });
 
@@ -319,6 +309,49 @@ describe('ScopedLogger', () => {
     expect(() => {
       NOOP_LOGGER.log('error', 'x', {});
     }).not.toThrow();
+  });
+});
+
+describe('copyBytes', () => {
+  it.each([
+    ['null', null, 'null', undefined],
+    ['a number', 42, 'number', 42],
+    ['an array of numbers', [1, 2], 'object', undefined],
+  ])('describes %s like any other invalid argument', (_label, value, actualType, actualValue) => {
+    // docs/site/errors.md promises these fields for every INVALID_ARGUMENT.
+    expect(() => copyBytes(value as unknown as BufferSource)).toThrow(
+      expect.objectContaining({
+        code: SerialBrokerErrorCode.INVALID_ARGUMENT,
+        context: {
+          argumentName: 'data',
+          expected: 'a string, an ArrayBuffer or an ArrayBufferView',
+          actualType,
+          actualValue,
+        },
+      }),
+    );
+  });
+
+  it('copies exactly the bytes a view spans, never sharing its buffer', () => {
+    const buffer = new Uint8Array([1, 2, 3, 4, 5, 6]).buffer;
+    const view = new DataView(buffer, 2, 3);
+
+    const copy = copyBytes(view);
+    new Uint8Array(buffer).fill(0);
+
+    expect([...copy]).toEqual([3, 4, 5]);
+  });
+});
+
+describe('chunkBytes', () => {
+  it('splits a payload into ordered chunks of at most the given size', () => {
+    const chunks = chunkBytes(new Uint8Array([1, 2, 3, 4, 5]), 2);
+
+    expect(chunks.map((chunk) => [...chunk])).toEqual([[1, 2], [3, 4], [5]]);
+  });
+
+  it('keeps writing nothing an observable single chunk', () => {
+    expect(chunkBytes(new Uint8Array(0), 4)).toHaveLength(1);
   });
 });
 

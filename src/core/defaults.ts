@@ -64,7 +64,10 @@ export const DEFAULT_ENCODING_SETTINGS: NormalizedEncodingSettings = {
   decodeText: false,
 };
 
-/** Default for {@link SerialBrokerOptions.maxTabs}: no limit, as before the option existed. */
+/** Default for {@link SerialBrokerOptions.persist}: remembered, so `restore()` brings it back. */
+export const DEFAULT_PERSIST = true;
+
+/** Default for {@link SerialBrokerOptions.maxTabs}: no limit. */
 export const DEFAULT_MAX_TABS = Number.POSITIVE_INFINITY;
 
 /** Longest accepted configuration name. Long enough for any real name, short enough to bound

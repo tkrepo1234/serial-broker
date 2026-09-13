@@ -13,7 +13,10 @@ export const SerialBrokerErrorCode = {
   INVALID_ARGUMENT: 'INVALID_ARGUMENT',
   /** No configuration with this name has been set up in this context. */
   UNKNOWN_CONFIGURATION: 'UNKNOWN_CONFIGURATION',
-  /** `setup()` was called again for an existing name with incompatible options. */
+  /**
+   * `setup()` was called again for an existing name with a different device, line settings or
+   * `maxTabs`; or a tab runs a different `maxTabs` than the tab holding the port.
+   */
   CONFIGURATION_CONFLICT: 'CONFIGURATION_CONFLICT',
   /** The configuration was released while an operation was still pending. */
   CONFIGURATION_RELEASED: 'CONFIGURATION_RELEASED',
@@ -29,9 +32,15 @@ export const SerialBrokerErrorCode = {
   BROKER_UNAVAILABLE: 'BROKER_UNAVAILABLE',
 
   // --- Permission ------------------------------------------------------------------------
-  /** No granted port matches the configured device, and no user gesture is available. */
+  /**
+   * `requestAccess()` was called in a tab that does not hold the port, while the device is not
+   * connected. Only the tab holding the port can act on the user's choice.
+   */
   PERMISSION_REQUIRED: 'PERMISSION_REQUIRED',
-  /** The user dismissed the port picker, or the browser refused the request. */
+  /**
+   * The user closed the port picker, or no port in it matched. Never reaches the application:
+   * `requestAccess()` resolves `false` instead, because that is a decision, not a failure.
+   */
   PERMISSION_DENIED: 'PERMISSION_DENIED',
   /** `requestAccess()` was called outside a user gesture. */
   USER_GESTURE_REQUIRED: 'USER_GESTURE_REQUIRED',
@@ -41,7 +50,7 @@ export const SerialBrokerErrorCode = {
   // --- Connection ------------------------------------------------------------------------
   /** `port.open()` failed. */
   OPEN_FAILED: 'OPEN_FAILED',
-  /** `port.open()` did not settle within `openTimeoutMs`. */
+  /** `port.open()` or `port.close()` did not settle within `openTimeoutMs`. */
   OPEN_TIMEOUT: 'OPEN_TIMEOUT',
   /** The device went away: unplugged, powered off, or the stream errored. */
   DEVICE_DISCONNECTED: 'DEVICE_DISCONNECTED',
@@ -107,7 +116,7 @@ export const REMEDIATION: Record<SerialBrokerErrorCode, string> = {
   UNKNOWN_CONFIGURATION:
     'Call SerialBroker.setup(name, options) before using this name in this context.',
   CONFIGURATION_CONFLICT:
-    'Release the existing configuration with SerialBroker.release(name) before setting it up with different device or serial options, or reuse the existing options.',
+    'Pass the same device, line settings and maxTabs for a name in every call and every tab. To change them, release the configuration with SerialBroker.release(name) first, then set it up again.',
   CONFIGURATION_RELEASED:
     'The configuration was released while this operation was pending. Set it up again if you still need it.',
   WEB_SERIAL_UNAVAILABLE:
@@ -119,7 +128,7 @@ export const REMEDIATION: Record<SerialBrokerErrorCode, string> = {
   BROKER_UNAVAILABLE:
     'The broker script could not be loaded, or the worker running it stopped answering. If it did not load, ensure serial-broker.worker.js is served from the same origin, or pass its URL with SerialBroker.configure({ workerUrl }). If it stopped answering, the tabs connect to a new worker on their own; nothing needs to be done unless it keeps happening.',
   PERMISSION_REQUIRED:
-    'Call SerialBroker.requestAccess(name) from inside a click or keypress handler. The browser only shows the serial port picker during a user gesture.',
+    'Only the tab holding the port can ask the user for it. Offer requestAccess() in response to the status "awaiting-permission", which every tab receives, and ask the user to try again if this happens anyway.',
   PERMISSION_DENIED:
     'The user dismissed the port picker or the permission was revoked in site settings. Offer the action again from a user gesture.',
   USER_GESTURE_REQUIRED:
@@ -127,27 +136,27 @@ export const REMEDIATION: Record<SerialBrokerErrorCode, string> = {
   DEVICE_MISMATCH:
     'The selected port reports different USB vendor/product IDs than configured. Check the IDs in `context` against your device, or widen the configuration.',
   OPEN_FAILED:
-    'The port could not be opened. Another application may hold the device; check that no terminal program or driver tool has it open.',
+    'The port could not be opened. Another application may hold the device, or the adapter rejects the line settings; when it repeats, close terminal programs and driver tools using the device, and check the serial options.',
   OPEN_TIMEOUT:
-    'Opening the port exceeded connection.openTimeoutMs. This usually means a hung driver; unplugging and replugging the device clears it.',
+    'Opening or closing the port exceeded connection.openTimeoutMs. This usually means a hung driver; unplugging and replugging the device clears it.',
   DEVICE_DISCONNECTED:
     'No action required: the library reconnects automatically when the device reappears. Use onStatusChange to reflect the state in your UI.',
   RECONNECT_EXHAUSTED:
     'Reconnection stopped after connection.maxAttempts. It resumes automatically if the device is plugged in again; to retry sooner, release the configuration and set it up again.',
   READ_FAILED:
-    'The read stream failed. The library reopens the port automatically; if this repeats, the adapter or cable is likely faulty.',
+    'The read stream failed, often from a framing or parity error. The library reopens the port automatically; if this repeats, check the line settings, the cable and the adapter.',
   NOT_CONNECTED:
     'The connection was lost before the write was handed to the device, so nothing was written and sending it again is safe. To avoid it, wait for status "open" via subscribe(name, "onStatusChange", ...) before sending.',
   WRITE_FAILED:
     'The device rejected the write. `context.bytesWritten` shows how many bytes were handed over before the failure; decide whether your command is safe to repeat.',
   WRITE_TIMEOUT:
-    'The write did not complete within connection.writeTimeoutMs. The device may be applying flow control; check wiring and the flowControl serial option.',
+    'The write did not complete within connection.writeTimeoutMs. When `context.started` is false nothing was written and it can be sent again; otherwise the device may have received it. If timeouts are frequent while the port is open, check the flowControl serial option and whether the device is ready to receive.',
   OWNER_LOST_DURING_WRITE:
     'The tab that owned the port closed mid-write, so it is unknown whether the device received the bytes. Only repeat the command if it is idempotent for your device.',
   PROTOCOL_VERSION_MISMATCH:
     'Another tab runs a different version of this library. Reload all tabs of this application after deploying a version with a protocol change.',
   STORAGE_UNAVAILABLE:
-    'localStorage is not writable, so the configuration will not be restored after a reload. Everything else keeps working. Common in private windows and sandboxed iframes.',
+    'A read or write to localStorage failed, for instance because its quota is used up, so configurations may not be restored after a reload. Everything else keeps working; set the configurations up again after a reload.',
   STORAGE_CORRUPT:
     'A stored configuration could not be read or is no longer valid, and was removed from storage. Set it up again to have it remembered.',
   LISTENER_THREW:

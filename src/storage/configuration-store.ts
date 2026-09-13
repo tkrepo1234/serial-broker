@@ -131,7 +131,10 @@ export class ConfigurationStore {
   /** Removes one configuration. */
   remove(name: string): void {
     const all = this.#readRecord();
-    if (!(name in all)) {
+    // `Object.hasOwn`, not `in`: `in` also finds `constructor`, `toString` and every other name on
+    // the prototype chain, and would write storage - or report it unavailable - for a name that
+    // was never stored.
+    if (!Object.hasOwn(all, name)) {
       return;
     }
     // Rebuilt rather than deleted from: a dynamic `delete` on an object built from untrusted

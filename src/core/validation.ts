@@ -2,10 +2,13 @@ import {
   DEFAULT_MAX_TABS,
   DEFAULT_CONNECTION_SETTINGS,
   DEFAULT_ENCODING_SETTINGS,
+  DEFAULT_PERSIST,
   DEFAULT_SERIAL_SETTINGS,
   MAX_CONFIG_NAME_LENGTH,
   type NormalizedConfiguration,
+  type NormalizedConnectionSettings,
   type NormalizedDeviceFilter,
+  type NormalizedSerialSettings,
 } from './defaults.js';
 import type { EffectiveSettings } from './diagnostics.js';
 import { SerialBrokerErrorCode } from './error-codes.js';
@@ -28,18 +31,61 @@ const VALID_STOP_BITS: readonly number[] = [1, 2];
 const VALID_PARITY: readonly string[] = ['none', 'even', 'odd'];
 const VALID_FLOW_CONTROL: readonly string[] = ['none', 'hardware'];
 
-/** Raises an `INVALID_ARGUMENT` error naming the offending argument and what was expected. */
-function invalid(argumentName: string, expected: string, actual: unknown): SerialBrokerError {
+/**
+ * The highest baud rate accepted. Generous rather than authoritative: the set of supported rates
+ * is a property of the adapter, not of this library, and rejecting an unusual but valid rate would
+ * be worse than letting `open()` report it.
+ */
+const MAX_BAUD_RATE = 20_000_000;
+
+/** The largest buffer or chunk size accepted: 16 MiB, the largest read buffer Chromium allocates. */
+const MAX_BUFFER_BYTES = 16 * 1024 * 1024;
+
+/** The longest reconnect delay accepted: an hour. */
+const MAX_DELAY_MS = 3_600_000;
+
+/** The longest open or write deadline accepted: ten minutes. */
+const MAX_TIMEOUT_MS = 600_000;
+
+/** The most reconnect attempts accepted other than `Infinity`. */
+const MAX_ATTEMPTS = 1_000_000;
+
+/**
+ * The largest tab limit other than `Infinity`.
+ *
+ * A tab waiting for a place requests every place at once (ADR-0025), so the limit is a number of
+ * Web Lock requests. A hundred tabs is more than any application uses one device from.
+ */
+const MAX_TAB_LIMIT = 100;
+
+/**
+ * Builds an `INVALID_ARGUMENT` error naming the offending argument and what was expected.
+ *
+ * Every argument rejection goes through here, so `context` always has the shape
+ * docs/site/errors.md documents: `argumentName`, `expected`, `actualType` and, for a simple value,
+ * `actualValue`.
+ *
+ * @param options - `cause`, where something other than this module rejected the value, and
+ *   `context` to add to the documented fields.
+ */
+export function invalidArgument(
+  argumentName: string,
+  expected: string,
+  actual: unknown,
+  options: { readonly cause?: unknown; readonly context?: Readonly<Record<string, unknown>> } = {},
+): SerialBrokerError {
   return new SerialBrokerError(
     SerialBrokerErrorCode.INVALID_ARGUMENT,
     `${argumentName} must be ${expected}`,
     {
       context: {
+        ...options.context,
         argumentName,
         expected,
         actualType: actual === null ? 'null' : typeof actual,
         actualValue: isLoggableValue(actual) ? actual : undefined,
       },
+      cause: options.cause,
     },
   );
 }
@@ -60,13 +106,13 @@ function isLoggableValue(value: unknown): value is string | number | boolean {
  */
 export function validateName(name: unknown, argumentName = 'name'): string {
   if (typeof name !== 'string') {
-    throw invalid(argumentName, 'a string', name);
+    throw invalidArgument(argumentName, 'a string', name);
   }
   if (name.length === 0) {
-    throw invalid(argumentName, 'a non-empty string', name);
+    throw invalidArgument(argumentName, 'a non-empty string', name);
   }
   if (name.length > MAX_CONFIG_NAME_LENGTH) {
-    throw invalid(
+    throw invalidArgument(
       argumentName,
       `at most ${String(MAX_CONFIG_NAME_LENGTH)} characters`,
       name.length,
@@ -78,13 +124,13 @@ export function validateName(name: unknown, argumentName = 'name'): string {
   for (let index = 0; index < name.length; index += 1) {
     const codeUnit = name.charCodeAt(index);
     if (codeUnit < 0x20 || (codeUnit >= 0x7f && codeUnit <= 0x9f)) {
-      throw invalid(argumentName, 'free of control characters', name);
+      throw invalidArgument(argumentName, 'free of control characters', name);
     }
   }
   // An unpaired surrogate becomes U+FFFD wherever the name is encoded as UTF-8, as a Web Lock name
   // is on its way to the browser: two different names could then share one ownership lock.
   if (hasUnpairedSurrogate(name)) {
-    throw invalid(argumentName, 'well-formed Unicode, without unpaired surrogates', name);
+    throw invalidArgument(argumentName, 'well-formed Unicode, without unpaired surrogates', name);
   }
   return name;
 }
@@ -107,10 +153,39 @@ function hasUnpairedSurrogate(text: string): boolean {
 
 function requireInteger(value: unknown, argumentName: string, min: number, max: number): number {
   if (typeof value !== 'number' || !Number.isInteger(value)) {
-    throw invalid(argumentName, 'an integer', value);
+    throw invalidArgument(argumentName, 'an integer', value);
   }
   if (value < min || value > max) {
-    throw invalid(argumentName, `an integer between ${String(min)} and ${String(max)}`, value);
+    throw invalidArgument(
+      argumentName,
+      `an integer between ${String(min)} and ${String(max)}`,
+      value,
+    );
+  }
+  return value;
+}
+
+/**
+ * An integer in range, or `Infinity` for "no limit".
+ *
+ * `maxAttempts` and `maxTabs` both default to `Infinity`, so both must accept it - and both say so
+ * when they reject a value, or the message would contradict the documented default.
+ */
+function requireIntegerOrInfinity(
+  value: unknown,
+  argumentName: string,
+  min: number,
+  max: number,
+): number {
+  if (value === Number.POSITIVE_INFINITY) {
+    return value;
+  }
+  if (typeof value !== 'number' || !Number.isInteger(value) || value < min || value > max) {
+    throw invalidArgument(
+      argumentName,
+      `an integer between ${String(min)} and ${String(max)}, or Infinity`,
+      value,
+    );
   }
   return value;
 }
@@ -121,11 +196,11 @@ function requireFiniteNumber(
   min: number,
   max: number,
 ): number {
-  if (typeof value !== 'number' || Number.isNaN(value)) {
-    throw invalid(argumentName, 'a number', value);
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    throw invalidArgument(argumentName, 'a finite number', value);
   }
   if (value < min || value > max) {
-    throw invalid(argumentName, `between ${String(min)} and ${String(max)}`, value);
+    throw invalidArgument(argumentName, `between ${String(min)} and ${String(max)}`, value);
   }
   return value;
 }
@@ -136,14 +211,14 @@ function requireOneOf<T extends string | number>(
   allowed: readonly T[],
 ): T {
   if (!allowed.includes(value as T)) {
-    throw invalid(argumentName, `one of ${allowed.map(String).join(', ')}`, value);
+    throw invalidArgument(argumentName, `one of ${allowed.map(String).join(', ')}`, value);
   }
   return value as T;
 }
 
 function requireBoolean(value: unknown, argumentName: string): boolean {
   if (typeof value !== 'boolean') {
-    throw invalid(argumentName, 'a boolean', value);
+    throw invalidArgument(argumentName, 'a boolean', value);
   }
   return value;
 }
@@ -160,9 +235,14 @@ function orDefault(value: unknown, fallback: unknown): unknown {
 
 function requireObject(value: unknown, argumentName: string): Record<string, unknown> {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) {
-    throw invalid(argumentName, 'an object', value);
+    throw invalidArgument(argumentName, 'an object', value);
   }
   return value as Record<string, unknown>;
+}
+
+/** Like {@link requireObject}, for an optional group of options: absent means all defaults. */
+function optionalObject(value: unknown, argumentName: string): Record<string, unknown> {
+  return value === undefined ? {} : requireObject(value, argumentName);
 }
 
 /**
@@ -182,13 +262,13 @@ function normalizeDeviceFilter(device: Record<string, unknown>): NormalizedDevic
 
   if (wantsAny !== undefined) {
     if (wantsAny !== true) {
-      throw invalid('options.device.any', 'true, or absent', wantsAny);
+      throw invalidArgument('options.device.any', 'true, or absent', wantsAny);
     }
     if (hasIds) {
-      throw invalid(
+      throw invalidArgument(
         'options.device',
         'either { vendorId, productId } or { any: true }, not both',
-        'both',
+        device,
       );
     }
     return Object.freeze({ kind: 'any' as const });
@@ -216,105 +296,44 @@ export function normalizeConfiguration(name: unknown, options: unknown): Normali
 
   const device = requireObject(raw.device, 'options.device');
   const serial = requireObject(raw.serial, 'options.serial');
-  const connection =
-    raw.connection === undefined ? {} : requireObject(raw.connection, 'options.connection');
-  const encoding =
-    raw.encoding === undefined ? {} : requireObject(raw.encoding, 'options.encoding');
+  const connection = optionalObject(raw.connection, 'options.connection');
+  const encoding = optionalObject(raw.encoding, 'options.encoding');
 
-  const maxAttemptsRaw = orDefault(
-    connection['maxAttempts'],
-    DEFAULT_CONNECTION_SETTINGS.maxAttempts,
-  );
+  // Each option is read with its default and its full argument name in one place, so the name a
+  // rejection reports cannot drift from the field that was read.
+  const serialOption = (key: keyof Omit<NormalizedSerialSettings, 'baudRate'>) =>
+    [orDefault(serial[key], DEFAULT_SERIAL_SETTINGS[key]), `options.serial.${key}`] as const;
+  const connectionOption = (key: keyof NormalizedConnectionSettings) =>
+    [
+      orDefault(connection[key], DEFAULT_CONNECTION_SETTINGS[key]),
+      `options.connection.${key}`,
+    ] as const;
 
   return Object.freeze({
     name: validName,
     device: normalizeDeviceFilter(device),
     serial: Object.freeze({
-      // The upper bound is generous rather than authoritative: the set of supported rates is
-      // a property of the adapter, not of this library, and rejecting an unusual but valid
-      // rate would be worse than letting `open()` report it.
-      baudRate: requireInteger(serial['baudRate'], 'options.serial.baudRate', 1, 20_000_000),
-      dataBits: requireOneOf(
-        orDefault(serial['dataBits'], DEFAULT_SERIAL_SETTINGS.dataBits),
-        'options.serial.dataBits',
-        VALID_DATA_BITS,
-      ) as 7 | 8,
-      stopBits: requireOneOf(
-        orDefault(serial['stopBits'], DEFAULT_SERIAL_SETTINGS.stopBits),
-        'options.serial.stopBits',
-        VALID_STOP_BITS,
-      ) as 1 | 2,
-      parity: requireOneOf(
-        orDefault(serial['parity'], DEFAULT_SERIAL_SETTINGS.parity),
-        'options.serial.parity',
-        VALID_PARITY,
-      ) as 'none' | 'even' | 'odd',
-      bufferSize: requireInteger(
-        orDefault(serial['bufferSize'], DEFAULT_SERIAL_SETTINGS.bufferSize),
-        'options.serial.bufferSize',
-        1,
-        16 * 1024 * 1024,
-      ),
-      flowControl: requireOneOf(
-        orDefault(serial['flowControl'], DEFAULT_SERIAL_SETTINGS.flowControl),
-        'options.serial.flowControl',
-        VALID_FLOW_CONTROL,
-      ) as 'none' | 'hardware',
+      baudRate: requireInteger(serial['baudRate'], 'options.serial.baudRate', 1, MAX_BAUD_RATE),
+      dataBits: requireOneOf(...serialOption('dataBits'), VALID_DATA_BITS) as 7 | 8,
+      stopBits: requireOneOf(...serialOption('stopBits'), VALID_STOP_BITS) as 1 | 2,
+      parity: requireOneOf(...serialOption('parity'), VALID_PARITY) as 'none' | 'even' | 'odd',
+      bufferSize: requireInteger(...serialOption('bufferSize'), 1, MAX_BUFFER_BYTES),
+      flowControl: requireOneOf(...serialOption('flowControl'), VALID_FLOW_CONTROL) as
+        'none' | 'hardware',
     }),
     connection: Object.freeze({
-      initialDelayMs: requireInteger(
-        orDefault(connection['initialDelayMs'], DEFAULT_CONNECTION_SETTINGS.initialDelayMs),
-        'options.connection.initialDelayMs',
-        0,
-        3_600_000,
-      ),
-      factor: requireFiniteNumber(
-        orDefault(connection['factor'], DEFAULT_CONNECTION_SETTINGS.factor),
-        'options.connection.factor',
-        1,
-        100,
-      ),
-      maxDelayMs: requireInteger(
-        orDefault(connection['maxDelayMs'], DEFAULT_CONNECTION_SETTINGS.maxDelayMs),
-        'options.connection.maxDelayMs',
-        0,
-        3_600_000,
-      ),
-      jitter: requireFiniteNumber(
-        orDefault(connection['jitter'], DEFAULT_CONNECTION_SETTINGS.jitter),
-        'options.connection.jitter',
-        0,
-        1,
-      ),
-      // Infinity is the documented default and must stay accepted, so this one field cannot
-      // go through `requireInteger`.
-      maxAttempts:
-        maxAttemptsRaw === Number.POSITIVE_INFINITY
-          ? Number.POSITIVE_INFINITY
-          : requireInteger(maxAttemptsRaw, 'options.connection.maxAttempts', 0, 1_000_000),
-      stableAfterMs: requireInteger(
-        orDefault(connection['stableAfterMs'], DEFAULT_CONNECTION_SETTINGS.stableAfterMs),
-        'options.connection.stableAfterMs',
-        0,
-        3_600_000,
-      ),
-      openTimeoutMs: requireInteger(
-        orDefault(connection['openTimeoutMs'], DEFAULT_CONNECTION_SETTINGS.openTimeoutMs),
-        'options.connection.openTimeoutMs',
-        1,
-        600_000,
-      ),
-      writeTimeoutMs: requireInteger(
-        orDefault(connection['writeTimeoutMs'], DEFAULT_CONNECTION_SETTINGS.writeTimeoutMs),
-        'options.connection.writeTimeoutMs',
-        1,
-        600_000,
-      ),
+      initialDelayMs: requireInteger(...connectionOption('initialDelayMs'), 0, MAX_DELAY_MS),
+      factor: requireFiniteNumber(...connectionOption('factor'), 1, 100),
+      maxDelayMs: requireInteger(...connectionOption('maxDelayMs'), 0, MAX_DELAY_MS),
+      jitter: requireFiniteNumber(...connectionOption('jitter'), 0, 1),
+      maxAttempts: requireIntegerOrInfinity(...connectionOption('maxAttempts'), 0, MAX_ATTEMPTS),
+      stableAfterMs: requireInteger(...connectionOption('stableAfterMs'), 0, MAX_DELAY_MS),
+      openTimeoutMs: requireInteger(...connectionOption('openTimeoutMs'), 1, MAX_TIMEOUT_MS),
+      writeTimeoutMs: requireInteger(...connectionOption('writeTimeoutMs'), 1, MAX_TIMEOUT_MS),
       maxWriteChunkBytes: requireInteger(
-        orDefault(connection['maxWriteChunkBytes'], DEFAULT_CONNECTION_SETTINGS.maxWriteChunkBytes),
-        'options.connection.maxWriteChunkBytes',
+        ...connectionOption('maxWriteChunkBytes'),
         1,
-        16 * 1024 * 1024,
+        MAX_BUFFER_BYTES,
       ),
     }),
     encoding: Object.freeze({
@@ -327,8 +346,13 @@ export function normalizeConfiguration(name: unknown, options: unknown): Normali
         'options.encoding.decodeText',
       ),
     }),
-    persist: requireBoolean(orDefault(raw.persist, true), 'options.persist'),
-    maxTabs: normalizeTabLimit(orDefault(raw.maxTabs, DEFAULT_MAX_TABS)),
+    persist: requireBoolean(orDefault(raw.persist, DEFAULT_PERSIST), 'options.persist'),
+    maxTabs: requireIntegerOrInfinity(
+      orDefault(raw.maxTabs, DEFAULT_MAX_TABS),
+      'options.maxTabs',
+      1,
+      MAX_TAB_LIMIT,
+    ),
   });
 }
 
@@ -359,21 +383,6 @@ export function toSetupOptions(configuration: NormalizedConfiguration): Effectiv
 }
 
 /**
- * The largest limit other than `Infinity`.
- *
- * A tab waiting for a place requests every place at once (ADR-0025), so the limit is a number of
- * Web Lock requests. A hundred tabs is more than any application uses one device from.
- */
-const MAX_TAB_LIMIT = 100;
-
-function normalizeTabLimit(value: unknown): number {
-  // Infinity is the documented default and must stay accepted, as for `maxAttempts`.
-  return value === Number.POSITIVE_INFINITY
-    ? Number.POSITIVE_INFINITY
-    : requireInteger(value, 'options.maxTabs', 1, MAX_TAB_LIMIT);
-}
-
-/**
  * Checks that an encoding label is one `TextDecoder` will accept, and returns its canonical name.
  *
  * Verified eagerly rather than at first use: an unknown label would otherwise surface as a
@@ -382,17 +391,14 @@ function normalizeTabLimit(value: unknown): number {
  * comparison sees, so a label spelled differently cannot behave differently.
  */
 function validateEncodingLabel(value: unknown, argumentName: string): string {
+  const expected = 'an encoding label that TextDecoder accepts';
   if (typeof value !== 'string' || value.length === 0) {
-    throw invalid(argumentName, 'a non-empty encoding label', value);
+    throw invalidArgument(argumentName, expected, value);
   }
   try {
     return new TextDecoder(value).encoding;
   } catch (error) {
-    throw new SerialBrokerError(
-      SerialBrokerErrorCode.INVALID_ARGUMENT,
-      `${argumentName} is not an encoding this browser supports`,
-      { context: { argumentName, label: value }, cause: error },
-    );
+    throw invalidArgument(argumentName, expected, value, { cause: error });
   }
 }
 
