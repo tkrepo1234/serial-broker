@@ -24,7 +24,7 @@
   "type": "module",
   "sideEffects": false,
   "engines": {
-    "node": ">=20.11"
+    "node": ">=22.13"
   },
   "files": [
     "dist",

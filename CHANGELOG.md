@@ -59,6 +59,22 @@ coordinate with each other. See
   remembered configuration found by `restore()` in a fresh tab, another protocol version noticed
   while nothing was set up - are kept for the first `onError` listener.
 
+### Changed while hardening (2026-09-13)
+
+- `transport: 'sharedworker'` fails with `BROKER_UNAVAILABLE` where the platform has no
+  `SharedWorker`, instead of silently using a `BroadcastChannel`.
+- `subscribe()` rejects an event name it does not know with `INVALID_ARGUMENT`, instead of
+  registering a listener that is never called.
+- A tab that withdrew over a different `maxTabs` rejects `send()` at once with
+  `CONFIGURATION_CONFLICT`, instead of letting the write wait for its deadline.
+- Errors thrown at the public surface carry the time they arose instead of `0`, and every
+  `INVALID_ARGUMENT` has the same context: `argumentName`, `expected`, `actualType`,
+  `actualValue`.
+- Connection attempts are numbered from one alike in errors, log records and diagnostics.
+- New log records: `supervisor.teardown-failed`, `client.dispose-failed`,
+  `transport.dispose-failed`, and the `transport.*` records of a worker that stopped answering.
+- The package requires Node 22.13 or later to build and test, as the toolchain does.
+
 ### Notes
 
 - Wire protocol version: **6**. Version 1 was never released; 2 added the diagnostics request and

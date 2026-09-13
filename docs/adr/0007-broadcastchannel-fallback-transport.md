@@ -3,6 +3,10 @@
 - **Status:** Accepted, amended by [ADR-0024](./0024-keep-the-worker-handshake-version-independent.md)
 - **Date:** 2026-09-12
 
+> **Note (2026-09-13).** "The shared broker core keeps the duplication small" no longer holds: the
+> `BroadcastChannel` transport uses no broker code. Each tab decides from the envelope whether a
+> message is for it, and what both transports share is the sending half (`message-sender.ts`).
+
 ## Context
 
 `SharedWorker` is not universally available even where Web Serial is. It is absent on

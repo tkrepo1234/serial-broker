@@ -52,6 +52,7 @@ message.
 | `client.error`                    | error | A failure not tied to one configuration, such as a message bus failure.                   |
 | `client.malformed-message`        | warn  | A message from another tab could not be read and was dropped.                             |
 | `client.forget-failed`            | warn  | The browser could not revoke a device permission.                                         |
+| `client.dispose-failed`           | warn  | A cleanup step failed while the client was disposed; `reason` says which.                 |
 | `client.announcement-unavailable` | warn  | The version announcement cannot be used; tabs on other protocol versions go unnoticed.    |
 | `facade.late-configure`           | warn  | `configure()` was called after the client was built; its options apply after `dispose()`. |
 | `election.acquired`               | info  | This tab now holds the port.                                                              |
@@ -69,6 +70,7 @@ message.
 | `transport.worker-restarted`      | info  | A new worker was started after the old one stopped answering.                             |
 | `transport.worker-restart-failed` | warn  | Starting a new worker failed; the next unanswered heartbeats try again.                   |
 | `transport.broker-restored`       | info  | The worker answers again.                                                                 |
+| `transport.dispose-failed`        | warn  | A cleanup step failed while the message bus was closed.                                   |
 | `storage.unavailable`             | warn  | A read or write to `localStorage` failed; configurations may not be remembered.           |
 | `storage.invalid-entry`           | warn  | A remembered configuration was invalid and discarded.                                     |
 | `storage.corrupt`                 | warn  | The stored configurations could not be read and were discarded.                           |
@@ -83,6 +85,10 @@ Payload bytes never appear above `debug`, and at `debug` only with `logPayloads:
 A diagnostics observer, described below, takes a logger of its own and logs under `diagnostics.*`
 at `warn`: a message it could not read, a failure of the message bus, a `watch` listener that
 threw, and a browser that cannot list Web Locks.
+
+The broker in the `SharedWorker` keeps its own records under `broker.*` and `worker.*`. A worker
+has no way to hand them to a tab's logger, so they are not seen; what they would say reaches the
+tabs as the `transport.*` records above.
 
 Logging is per tab: a logger sees the records of the tab it was configured in. To follow what
 happens across tabs, collect records from each — or use the diagnostics entry point below.

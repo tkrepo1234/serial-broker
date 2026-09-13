@@ -154,7 +154,8 @@ a secure context, or disabled by policy. Each of these builds serial-broker's in
 there is none yet, and that is where the check happens. `exists()`, `names()`, `unsubscribe()`,
 `release()` and `releaseAll()` build nothing while nothing is set up, and raise nothing. Also
 delivered through `onError` when the browser refuses to open a port because of a permissions
-policy.
+policy, and when the granted ports cannot be listed during an attempt to connect; the status then
+becomes `awaiting-permission`.
 **Do:** check `isSupported()` before `setup()`, and tell the user which browsers work. Nothing
 can be done from the page itself.
 
@@ -272,10 +273,11 @@ holding the port reconnects.
 **Do:** decide, for the command, whether a partial write can be repeated.
 
 `NOT_CONNECTED`
-: **Arises** when the connection was lost in the moment between a write being accepted and being
-handed to the device. Nothing was written.
-**Context:** `status`.
-**Do:** send again, or wait for `open` first.
+: **Not delivered to the application.** It is how the tab holding the port hands a write back when
+its connection was lost between accepting the write and handing it to the device: nothing was
+written, and the tab that issued the write keeps it and sends it again once the port is open. A
+write that finds no connection until its deadline fails with `WRITE_TIMEOUT` instead. The code
+appears in logs and in diagnostics only.
 
 `OWNER_LOST_DURING_WRITE`
 : **Arises** when the tab holding the port went away while the write was being written. Whether the

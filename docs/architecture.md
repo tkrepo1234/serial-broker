@@ -51,6 +51,7 @@ client               src/client/               one context's view of every confi
   ├ session          configuration-session.ts  one configuration: events, writes, role
   ├ tab slot         tab-slot.ts               a place among the maxTabs tabs
   ├ pending writes   pending-writes.ts         the writes this context issued, until they settle
+  ├ accepted writes  accepted-writes.ts        the owner's record, so a repeated write runs once
   ├ observer         diagnostics-observer.ts   the diagnostics observer
   └ transport        transport/                the message bus, two implementations
   │

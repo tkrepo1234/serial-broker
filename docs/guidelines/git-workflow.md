@@ -8,19 +8,17 @@ happens on short-lived branches named `<type>/<short-description>`, e.g.
 
 ## Commits
 
-[Conventional Commits](https://www.conventionalcommits.org/), because the changelog and the
-version bump are derived from them:
+The subject is one imperative sentence saying what the commit does for the library, in plain
+words - "Keep writes at most once at the port", not "fix(client): dedupe". The changelog is written
+by hand, from what changed for users, so nothing is derived from a prefix:
 
 ```
-<type>(<scope>): <imperative summary, <= 72 chars>
+<imperative summary, <= 72 chars, no trailing period>
 
-<body: why, not what. Wrapped at 100 columns.>
+<body: why, not what. Wrapped at 80 columns. Refs: ADR-0005>
 
-<footer: BREAKING CHANGE: ..., Refs: ADR-0005, Closes #12>
+<trailers>
 ```
-
-Types: `feat`, `fix`, `perf`, `refactor`, `docs`, `test`, `build`, `ci`, `chore`.
-Scopes: `core`, `client`, `worker`, `owner`, `storage`, `protocol`, `api`, `docs`, `test`.
 
 Rules:
 

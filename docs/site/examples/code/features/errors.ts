@@ -20,7 +20,6 @@ export async function sendForUser(name: string, command: string): Promise<string
     }
     switch (error.code) {
       case SerialBrokerErrorCode.WRITE_TIMEOUT:
-      case SerialBrokerErrorCode.NOT_CONNECTED:
         return 'The device is not reachable right now. Try again when it shows as connected.';
       case SerialBrokerErrorCode.OWNER_LOST_DURING_WRITE:
         return 'Another window closed while sending. Check the device before sending again.';

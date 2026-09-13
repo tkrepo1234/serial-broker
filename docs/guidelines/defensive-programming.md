@@ -45,16 +45,17 @@ compile error, and a runtime `INTERNAL_INVARIANT` for values that were never typ
 ### Every await can hang — bound it
 
 Web Serial calls (`open`, `close`, `writer.write`, `reader.read`) have been observed to never
-settle when a device is yanked mid-transfer. **Every external promise is wrapped in a
-deadline** (`core/deadline.ts`). A timeout is a normal, reported outcome, not an exception to
-the design.
+settle when a device is yanked mid-transfer. **Every external promise that ends an operation is
+wrapped in a deadline** (`core/deadline.ts`). A timeout is a normal, reported outcome, not an
+exception to the design. A pending `read()` is the one exception: waiting for data is its job, so it
+is ended by cancelling its reader, and the cancel is what is bounded.
 
 ### Every resource has exactly one owner and one disposal path
 
-Readers, writers, locks, worker ports, timers and event listeners are acquired through a
-`Disposable` that is registered with the owning object's disposal stack. Disposal is:
+Readers, writers, locks, worker ports, timers and event listeners are released by a disposer
+registered with the owning object's `DisposalStack`. Disposal is:
 
-- **idempotent** — calling `dispose()` twice is legal and does nothing the second time;
+- **idempotent** — calling `disposeAll()` twice is legal and runs nothing the second time;
 - **exception-safe** — a throwing disposer never prevents the remaining disposers running;
 - **ordered** — last acquired, first released.
 

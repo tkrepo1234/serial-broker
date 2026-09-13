@@ -148,10 +148,12 @@ export class FakeWorkerHost {
 
 /** An in-memory `BroadcastChannel` hub: every channel of a name hears every other. */
 export class FakeBroadcastHub {
-  readonly #channels = new Map<string, Set<{ id: string; listener: MessageListener }>>();
+  readonly #channels = new Map<string, Set<{ id: string; listeners: MessageListener[] }>>();
 
   create(name: string, contextId: string): BroadcastChannelLike {
-    const entry = { id: contextId, listener: (() => undefined) as MessageListener };
+    // Every listener registered on a channel hears each message, as on the platform: keeping only
+    // the last one would hide a listener registered twice, or one replaced by mistake.
+    const entry = { id: contextId, listeners: [] as MessageListener[] };
     const set = this.#channels.get(name) ?? new Set();
     set.add(entry);
     this.#channels.set(name, set);
@@ -168,7 +170,9 @@ export class FakeBroadcastHub {
           // the dead. Delivering it anyway would let a killed tab keep writing to the device.
           deliver((event) => {
             if (set.has(peer)) {
-              peer.listener(event);
+              for (const listener of peer.listeners) {
+                listener(event);
+              }
             }
           }, message);
         }
@@ -178,7 +182,7 @@ export class FakeBroadcastHub {
       },
       addEventListener: (type: string, listener: unknown) => {
         if (type === 'message') {
-          entry.listener = listener as MessageListener;
+          entry.listeners.push(listener as MessageListener);
         }
       },
     } as BroadcastChannelLike;
@@ -192,7 +196,14 @@ export class FakeBroadcastHub {
    */
   injectForeign(name: string, raw: unknown): void {
     for (const peer of this.#channels.get(name) ?? []) {
-      queueMicrotask(() => peer.listener({ data: raw }));
+      // Cloned, as everything crossing a channel is: a test cannot hand over what a browser could
+      // not send.
+      const data: unknown = structuredClone(raw);
+      queueMicrotask(() => {
+        for (const listener of peer.listeners) {
+          listener({ data });
+        }
+      });
     }
   }
 
@@ -341,6 +352,16 @@ export class FakeBus {
     const loads = this.workerScript === 'loads';
     /** The tab's end of the port. */
     let tabListener: MessageListener | undefined;
+    /**
+     * A port whose listener is added with `addEventListener` delivers nothing until `start()`. The
+     * fake keeps to that, so a transport that forgets the call fails here and not only in a browser.
+     */
+    let isStarted = false;
+    const connectWhenReady = (): void => {
+      if (loads && isStarted && tabListener !== undefined) {
+        host.connect(clientId, tabListener);
+      }
+    };
 
     const port: MessagePortLike = {
       postMessage: (message) => {
@@ -355,6 +376,7 @@ export class FakeBus {
         // another version drops them too, but answers the frozen handshake (ADR-0024).
         if (
           this.workerScript === 'other-version' &&
+          isStarted &&
           tabListener !== undefined &&
           (message as { readonly type?: unknown }).type === 'hello'
         ) {
@@ -367,7 +389,11 @@ export class FakeBus {
         }
       },
       start: () => {
-        /* nothing to do: this fake delivers as soon as a listener is registered */
+        if (isStarted) {
+          return;
+        }
+        isStarted = true;
+        connectWhenReady();
       },
       close: () => {
         if (loads && tabListener !== undefined) {
@@ -379,9 +405,7 @@ export class FakeBus {
           return;
         }
         tabListener = listener as MessageListener;
-        if (loads) {
-          host.connect(clientId, tabListener);
-        }
+        connectWhenReady();
       },
     } as MessagePortLike;
 

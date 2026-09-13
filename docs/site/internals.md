@@ -20,6 +20,7 @@ diagnostics   src/diagnostics.ts          openDiagnostics: an observer, independ
 client        src/client/                 one tab's view of every configuration
   ├ session   configuration-session.ts    one configuration: events, writes, role
   ├ writes    pending-writes.ts           the delivery guarantee for writes this tab issued
+  ├ accepted  accepted-writes.ts          the owner's record of the writes it accepted
   ├ places    tab-slot.ts                 the tab limit: one Web Lock per place
   ├ observer  diagnostics-observer.ts     the read-only diagnostics participant
   └ transport transport/                  the message bus: SharedWorker or BroadcastChannel
