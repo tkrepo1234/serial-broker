@@ -46,7 +46,8 @@ export interface SerialBrokerApi {
    *   wait for the connection: watch `onStatusChange` for that.
    * @throws A `SerialBrokerError` with code `INVALID_ARGUMENT` when an option is invalid,
    *   `CONFIGURATION_CONFLICT` when the name is already set up with different device or line
-   *   settings, or `WEB_SERIAL_UNAVAILABLE` when the browser cannot support it.
+   *   settings or a different `maxTabs`, or `WEB_SERIAL_UNAVAILABLE`, `WEB_LOCKS_UNAVAILABLE`,
+   *   `TRANSPORT_UNAVAILABLE` or `BROKER_UNAVAILABLE` when the browser cannot support it.
    * @example
    * ```ts
    * await SerialBroker.setup('Scale', {
@@ -111,11 +112,12 @@ export interface SerialBrokerApi {
    * @returns A promise that resolves once the bytes have been handed to the device - not once
    *   the device has acted on them, which a serial port cannot report.
    * @throws A `SerialBrokerError` with code `UNKNOWN_CONFIGURATION`, `INVALID_ARGUMENT` for a
-   *   string while an `encoding` other than UTF-8 is configured, `NOT_CONNECTED`, `WRITE_FAILED`,
-   *   `WRITE_TIMEOUT`, `CONFIGURATION_RELEASED` when the configuration is released while the
-   *   write waits, or `OWNER_LOST_DURING_WRITE` when the owning tab closed mid-write and it is
-   *   unknowable whether the device received the bytes. The library never retries that last
-   *   case on its own.
+   *   string while an `encoding` other than UTF-8 is configured, `WRITE_FAILED`, `WRITE_TIMEOUT`,
+   *   `CONFIGURATION_RELEASED` when the configuration is released while the write waits,
+   *   `CONFIGURATION_CONFLICT` once this tab has withdrawn because the tab holding the port runs
+   *   a different `maxTabs`, or `OWNER_LOST_DURING_WRITE` when the owning tab closed mid-write
+   *   and it is unknowable whether the device received the bytes. The library never retries
+   *   that last case on its own.
    * @example
    * ```ts
    * await SerialBroker.send('Printer', 'INIT');
@@ -143,7 +145,8 @@ export interface SerialBrokerApi {
    *   tab: every tab receives the same events.
    * @returns A function that removes this listener. Calling it twice is harmless.
    * @throws A `SerialBrokerError` with code `UNKNOWN_CONFIGURATION` if `name` is not set up in
-   *   this tab, or `INVALID_ARGUMENT` if `listener` is not a function.
+   *   this tab, or `INVALID_ARGUMENT` if `event` is not one of the four events or `listener` is
+   *   not a function.
    * @example
    * ```ts
    * const stop = SerialBroker.subscribe('Scale', 'onReceive', (event) => {
@@ -223,9 +226,10 @@ export interface SerialBrokerApi {
    * @param name - The configuration name.
    * @returns `true` if a device is now available, `false` if the user dismissed the picker - a
    *   decision, not a failure, so it does not throw.
-   * @throws A `SerialBrokerError` with code `USER_GESTURE_REQUIRED` when called outside a
-   *   gesture, `DEVICE_MISMATCH` when the chosen port is not the configured device, or
-   *   `PERMISSION_REQUIRED` when another tab owns the configuration and must be the one to ask.
+   * @throws A `SerialBrokerError` with code `UNKNOWN_CONFIGURATION`, `USER_GESTURE_REQUIRED` when
+   *   called outside a gesture, `DEVICE_MISMATCH` when the chosen port is not the configured
+   *   device, or `PERMISSION_REQUIRED` when another tab owns the configuration and must be the one
+   *   to ask, or this tab is `queued`.
    * @example
    * ```ts
    * connectButton.addEventListener('click', async () => {

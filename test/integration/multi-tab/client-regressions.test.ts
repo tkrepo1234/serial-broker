@@ -1,18 +1,17 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
-import { SerialBrokerClient } from '../../../src/client/serial-broker-client.js';
 import { SerialBrokerErrorCode } from '../../../src/core/error-codes.js';
 import type { ErrorEvent } from '../../../src/core/types.js';
 import {
   ANNOUNCEMENT_CHANNEL_NAME,
   versionAnnouncement,
 } from '../../../src/protocol/announcement.js';
-import type { ProtocolMessage } from '../../../src/protocol/messages.js';
-import { PROTOCOL_VERSION } from '../../../src/protocol/version.js';
+import { ownerLockName, PROTOCOL_VERSION } from '../../../src/protocol/version.js';
 import { storageKey } from '../../../src/storage/configuration-store.js';
 import { BrowserHarness } from '../../harness/browser-harness.js';
 import { READER, READER_OPTIONS } from '../../harness/devices.js';
 import type { TransportMode } from '../../harness/fake-bus.js';
+import { openHoldingClient } from '../../harness/holding-client.js';
 
 /**
  * Defects in the client found in the bug hunt of 2026-09-13, each pinned by the behaviour it broke.
@@ -36,31 +35,11 @@ describe.each(TRANSPORTS)('a write issued during an owner change (%s)', (transpo
       const second = harness.openTab();
       await second.setup('Reader', READER_OPTIONS);
 
-      // A tab whose incoming messages can be held back, as a busy main thread holds them back.
-      const held: ProtocolMessage[] = [];
-      let isHolding = false;
-      let deliver: (message: ProtocolMessage) => void = () => undefined;
-      const environment = harness.createEnvironment('busy');
-      const busy = new SerialBrokerClient({
-        ...environment,
-        createTransport: (request) => {
-          deliver = request.onMessage;
-          return environment.createTransport({
-            ...request,
-            onMessage: (message) => {
-              if (isHolding) {
-                held.push(message);
-              } else {
-                request.onMessage(message);
-              }
-            },
-          });
-        },
-      });
-      await busy.setup('Reader', READER_OPTIONS);
+      const busy = openHoldingClient(harness);
+      await busy.client.setup('Reader', READER_OPTIONS);
       await harness.settle();
 
-      isHolding = true;
+      busy.hold();
       if (how === 'closes') {
         await first.close();
       } else {
@@ -71,12 +50,9 @@ describe.each(TRANSPORTS)('a write issued during an owner change (%s)', (transpo
       // The busy tab still believes the port is open with the first tab, and sends: the write
       // reaches the second tab, which holds the port now. Then the busy tab catches up, and
       // learns only afterwards that ownership moved.
-      const sending = busy.send('Reader', 'PING');
+      const sending = busy.client.send('Reader', 'PING');
       await harness.settle();
-      isHolding = false;
-      for (const message of held.splice(0)) {
-        deliver(message);
-      }
+      busy.deliverHeld();
       await harness.settle();
 
       await expect(sending).resolves.toBeUndefined();
@@ -126,6 +102,58 @@ describe.each(TRANSPORTS)(
     });
   },
 );
+
+describe.each(TRANSPORTS)('releasing and setting up in quick succession (%s)', (transport) => {
+  it('leaves the configuration released when release() follows a setup() that waits', async () => {
+    const harness = new BrowserHarness({ transport });
+    harness.serial.grant(harness.serial.addDevice(READER.vendorId, READER.productId));
+    const tab = harness.openTab();
+    await tab.setup('Reader', READER_OPTIONS);
+
+    const releasing = tab.client.release('Reader');
+    const settingUp = tab.client.setup('Reader', READER_OPTIONS);
+    const releasingAgain = tab.client.release('Reader');
+    await Promise.all([releasing, settingUp, releasingAgain]);
+    await harness.settle();
+
+    expect(tab.client.exists('Reader')).toBe(false);
+    expect(harness.locks.holderOf(ownerLockName('Reader'))).toBeUndefined();
+  });
+
+  it('keeps a listener registered on the new session when an earlier registration is removed', async () => {
+    const harness = new BrowserHarness({ transport });
+    const device = harness.serial.addDevice(READER.vendorId, READER.productId);
+    harness.serial.grant(device);
+    const tab = harness.openTab();
+    await tab.setup('Reader', READER_OPTIONS);
+    const listener = vi.fn();
+    const stopEarlier = tab.client.subscribe('Reader', 'onReceive', listener);
+    await tab.client.release('Reader');
+    await tab.setup('Reader', READER_OPTIONS);
+    tab.client.subscribe('Reader', 'onReceive', listener);
+
+    stopEarlier();
+    device.emit('HELLO');
+    await harness.settle();
+
+    expect(listener).toHaveBeenCalledTimes(1);
+  });
+
+  it('lets dispose() finish only once a release still in progress has closed the port', async () => {
+    const harness = new BrowserHarness({ transport });
+    const device = harness.serial.addDevice(READER.vendorId, READER.productId);
+    harness.serial.grant(device);
+    const tab = harness.openTab();
+    await tab.setup('Reader', READER_OPTIONS);
+
+    const releasing = tab.client.release('Reader');
+    await tab.client.dispose();
+
+    expect(device.isOpen).toBe(false);
+    expect(harness.locks.holderOf(ownerLockName('Reader'))).toBeUndefined();
+    await releasing;
+  });
+});
 
 describe.each(TRANSPORTS)('a listener that releases on the status it hears (%s)', (transport) => {
   it('does not leave the other tabs with the status it superseded', async () => {
