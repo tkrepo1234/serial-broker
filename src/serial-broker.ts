@@ -110,11 +110,12 @@ export interface SerialBrokerApi {
    *   terminator. What you pass is what the device receives.
    * @returns A promise that resolves once the bytes have been handed to the device - not once
    *   the device has acted on them, which a serial port cannot report.
-   * @throws A `SerialBrokerError` with code `UNKNOWN_CONFIGURATION`, `NOT_CONNECTED`,
-   *   `WRITE_FAILED`, `WRITE_TIMEOUT`, `CONFIGURATION_RELEASED` when the configuration is
-   *   released while the write waits, or `OWNER_LOST_DURING_WRITE` when the owning tab closed
-   *   mid-write and it is unknowable whether the device received the bytes. The library never
-   *   retries that last case on its own.
+   * @throws A `SerialBrokerError` with code `UNKNOWN_CONFIGURATION`, `INVALID_ARGUMENT` for a
+   *   string while an `encoding` other than UTF-8 is configured, `NOT_CONNECTED`, `WRITE_FAILED`,
+   *   `WRITE_TIMEOUT`, `CONFIGURATION_RELEASED` when the configuration is released while the
+   *   write waits, or `OWNER_LOST_DURING_WRITE` when the owning tab closed mid-write and it is
+   *   unknowable whether the device received the bytes. The library never retries that last
+   *   case on its own.
    * @example
    * ```ts
    * await SerialBroker.send('Printer', 'INIT');
@@ -257,7 +258,8 @@ export interface SerialBrokerApi {
    * Must be called **before any other method**: the settings are read when the internal client
    * is built, by the first call that needs one. Called afterwards, it logs a warning
    * (`facade.late-configure`), and its settings apply only after {@link SerialBrokerApi.dispose}.
-   * `exists`, `names`, `release` and `releaseAll` build no client while nothing is set up.
+   * `exists`, `names`, `unsubscribe`, `release` and `releaseAll` build no client while nothing is
+   * set up.
    *
    * @param options - Merged into the current settings; omitted fields are left alone.
    * @example
@@ -374,7 +376,13 @@ export const SerialBroker: SerialBrokerApi = {
 
   /** {@inheritDoc SerialBrokerApi.unsubscribe} */
   unsubscribe(name, event, listener) {
-    client().unsubscribe(name, event, listener);
+    if (instance === undefined) {
+      // Nothing is set up, so no listener can be registered - and building a client to find
+      // that out would throw in a browser without Web Serial.
+      validateName(name);
+      return;
+    }
+    instance.unsubscribe(name, event, listener);
   },
 
   /** {@inheritDoc SerialBrokerApi.getStatus} */

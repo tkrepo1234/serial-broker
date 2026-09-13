@@ -183,3 +183,5 @@ in a real browser, with real or emulated hardware [ADR-0017].
 | 0019 | Ship the debugging surface in the package, as static content                        |
 | 0020 | Build the developer documentation with Sphinx, MyST and a TSDoc-generated reference |
 | 0021 | Forget tabs that stop sending heartbeats                                            |
+| 0022 | Version stored configurations separately from the protocol                          |
+| 0023 | Announce the protocol version on an unversioned channel                             |

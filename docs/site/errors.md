@@ -131,22 +131,28 @@ options make the second `setup()` a no-op.
 for the typical case of a remembered configuration from an older version of the application.
 
 `CONFIGURATION_RELEASED`
-: **Raised** for writes still pending when their configuration is released in this tab, and for
-every call after `dispose()`. A diagnostics observer raises it after `close()`.
+: **Raised** for writes still pending when their configuration is released in this tab, by
+`release()`, `releaseAll()` or `dispose()`. A diagnostics observer raises it after `close()`.
+Calls made after `dispose()` do not raise it: they start afresh, so a name raises
+`UNKNOWN_CONFIGURATION` until it is set up again.
 **Do:** nothing, if the release was intended. Otherwise set the configuration up again.
 
 ### The browser environment
 
 `WEB_SERIAL_UNAVAILABLE`
-: **Raised by** `setup()` when the browser has no Web Serial API: not a Chromium-based browser, not
-a secure context, or disabled by policy. Also delivered through `onError` when the browser
-refuses to open a port because of a permissions policy.
+: **Raised by** `setup()`, `send()`, `subscribe()`, `getStatus()`, `requestAccess()`, `restore()`
+and `openDiagnostics()` when the browser has no Web Serial API: not a Chromium-based browser, not
+a secure context, or disabled by policy. Each of these builds serial-broker's internal client if
+there is none yet, and that is where the check happens. `exists()`, `names()`, `unsubscribe()`,
+`release()` and `releaseAll()` build nothing while nothing is set up, and raise nothing. Also
+delivered through `onError` when the browser refuses to open a port because of a permissions
+policy.
 **Do:** check `isSupported()` before `setup()`, and tell the user which browsers work. Nothing
 can be done from the page itself.
 
 `WEB_LOCKS_UNAVAILABLE`
-: **Raised by** `setup()` when the Web Locks API is missing. Every browser with Web Serial has it,
-so this means a restricted context.
+: **Raised by** the same calls when the Web Locks API is missing. Every browser with Web Serial has
+it, so this means a restricted context.
 **Do:** as above.
 
 `TRANSPORT_UNAVAILABLE`
