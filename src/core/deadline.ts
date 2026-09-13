@@ -7,8 +7,6 @@ export interface Deferred<T> {
   readonly promise: Promise<T>;
   resolve(value: T | PromiseLike<T>): void;
   reject(reason: unknown): void;
-  /** `true` once `resolve` or `reject` has been called. */
-  readonly isSettled: boolean;
 }
 
 /**
@@ -16,6 +14,7 @@ export interface Deferred<T> {
  *
  * Needed wherever a promise is settled by an event arriving later from another context - a
  * write acknowledged by the owning tab, a lock being granted - which is most of this library.
+ * Only the first `resolve` or `reject` counts; later ones do nothing.
  */
 export function createDeferred<T>(): Deferred<T> {
   let resolve!: (value: T | PromiseLike<T>) => void;
@@ -50,9 +49,6 @@ export function createDeferred<T>(): Deferred<T> {
     reject: (reason) => {
       reject(reason);
     },
-    get isSettled() {
-      return isSettled;
-    },
   };
 }
 
@@ -67,8 +63,6 @@ export interface Signal {
   readonly promise: Promise<void>;
   resolve(): void;
   reject(reason: unknown): void;
-  /** `true` once `resolve` or `reject` has been called. */
-  readonly isSettled: boolean;
 }
 
 /** Creates a {@link Signal}. */
@@ -82,9 +76,6 @@ export function createSignal(): Signal {
     },
     reject: (reason) => {
       deferred.reject(reason);
-    },
-    get isSettled() {
-      return deferred.isSettled;
     },
   };
 }
@@ -101,23 +92,24 @@ export interface DeadlineOptions {
   readonly configName?: string | undefined;
   /** Extra structured detail for the timeout error. */
   readonly context?: Readonly<Record<string, unknown>> | undefined;
-  /**
-   * Runs when the deadline expires, to release whatever the abandoned operation holds.
-   *
-   * The underlying promise is *not* cancellable - `port.open()` has no abort signal - so the
-   * operation may still settle later. This hook exists to discard what it produces.
-   */
-  readonly onTimeout?: (() => void) | undefined;
 }
 
 /**
  * Rejects if `operation` has not settled within the deadline.
  *
- * Every call into Web Serial goes through this. A yanked device can leave `open()`,
- * `close()`, `read()` or `write()` pending forever, and an await that never returns would
- * wedge the state machine with no way out. See docs/guidelines/defensive-programming.md.
+ * Every call into Web Serial that has to finish goes through this: listing the ports, `open()`,
+ * `close()`, each `write()`, and ending the streams. A yanked device can leave any of them pending
+ * forever, and an await that never returns would wedge the state machine with no way out. See
+ * docs/guidelines/defensive-programming.md.
+ *
+ * `read()` is the exception, because waiting for the device to send something is what it is for.
+ * A read left pending ends when its reader is cancelled, and that cancellation is bounded.
  *
  * @remarks
+ * The operation itself is not cancelled - `port.open()` has no abort signal - and may settle
+ * later. A late rejection is not reported as unhandled, because the race below has already
+ * attached a handler to it; whatever a late success produced is the caller's to clean up.
+ *
  * The timer is always cleared, including on the failure path, so a fast rejection does not
  * leave a pending timer behind.
  */
@@ -136,7 +128,6 @@ export async function withDeadline<T>(
         timestamp: clock.now(),
       }),
     );
-    options.onTimeout?.();
   }, options.timeoutMs);
 
   try {
@@ -144,18 +135,4 @@ export async function withDeadline<T>(
   } finally {
     clock.clearTimer(handle);
   }
-}
-
-/**
- * Prevents an unhandled rejection from a promise that is deliberately not awaited.
- *
- * Used where an operation is abandoned after its deadline expired: the original promise may
- * still reject much later, and an unhandled rejection would surface in the application's
- * console as a spurious error it can do nothing about.
- */
-export function ignoreRejection(promise: Promise<unknown>): void {
-  void promise.catch(() => {
-    // Deliberately empty: the caller has already reported the timeout through the error
-    // channel, and this rejection is the abandoned operation finally giving up.
-  });
 }

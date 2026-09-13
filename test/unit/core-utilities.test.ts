@@ -2,19 +2,14 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { assertNever } from '../../src/core/assert.js';
 import { toHex } from '../../src/core/bytes.js';
-import {
-  createDeferred,
-  createSignal,
-  ignoreRejection,
-  withDeadline,
-} from '../../src/core/deadline.js';
+import { createDeferred, createSignal, withDeadline } from '../../src/core/deadline.js';
 import { DisposalStack } from '../../src/core/disposable.js';
 import { SerialBrokerErrorCode } from '../../src/core/error-codes.js';
 import { SerialBrokerError } from '../../src/core/errors.js';
 import { NOOP_LOGGER, ScopedLogger } from '../../src/core/logger.js';
 import type { Logger } from '../../src/core/types.js';
 import { WriteQueue } from '../../src/owner/write-queue.js';
-import { FakeClock } from '../harness/fake-clock.js';
+import { FakeClock, flushMicrotasks } from '../harness/fake-clock.js';
 import { recordingLogger } from '../harness/recording-logger.js';
 
 describe('assertNever', () => {
@@ -110,7 +105,6 @@ describe('createDeferred', () => {
     deferred.resolve(42);
 
     await expect(deferred.promise).resolves.toBe(42);
-    expect(deferred.isSettled).toBe(true);
   });
 
   it('ignores a second settlement', async () => {
@@ -172,24 +166,6 @@ describe('withDeadline', () => {
     expect(error.context['timeoutMs']).toBe(1_000);
   });
 
-  it('runs the timeout hook so an abandoned operation can be cleaned up', async () => {
-    const clock = new FakeClock();
-    const onTimeout = vi.fn();
-
-    const settled = withDeadline(new Promise<never>(() => undefined), clock, {
-      timeoutMs: 10,
-      code: SerialBrokerErrorCode.OPEN_TIMEOUT,
-      message: 'x',
-      onTimeout,
-    }).catch(() => undefined);
-    await clock.advance(10);
-    await settled;
-
-    // `port.open()` has no abort signal, so it may still settle later; the hook is what
-    // discards whatever it produces.
-    expect(onTimeout).toHaveBeenCalledOnce();
-  });
-
   it('clears its timer when the operation rejects first', async () => {
     const clock = new FakeClock();
 
@@ -204,13 +180,27 @@ describe('withDeadline', () => {
     expect(clock.pendingTimerCount).toBe(0);
   });
 
-  it('silences a rejection from an abandoned operation', async () => {
-    // An operation abandoned after its deadline still rejects later. Without this, it would
-    // surface in the application's console as an error it can do nothing about.
-    expect(() => {
-      ignoreRejection(Promise.reject(new Error('late')));
-    }).not.toThrow();
-    await new Promise((resolve) => setTimeout(resolve, 1));
+  it('leaves no unhandled rejection behind when the operation fails after its deadline', async () => {
+    const clock = new FakeClock();
+    let failLate!: (reason: unknown) => void;
+    const operation = new Promise<never>((_, reject) => {
+      failLate = reject;
+    });
+
+    const settled = withDeadline(operation, clock, {
+      timeoutMs: 10,
+      code: SerialBrokerErrorCode.OPEN_TIMEOUT,
+      message: 'x',
+    }).catch((error: unknown) => error as SerialBrokerError);
+    await clock.advance(10);
+    const error = await settled;
+    failLate(new Error('late'));
+    await flushMicrotasks();
+
+    // `port.open()` has no abort signal and may give up long after the deadline. Its rejection
+    // would surface in the application's console as an error it can do nothing about - and the
+    // test runner fails the run on an unhandled rejection.
+    expect(error.code).toBe(SerialBrokerErrorCode.OPEN_TIMEOUT);
   });
 });
 
