@@ -302,7 +302,7 @@ Enough to know whether it will do what you need; the full reasoning is in
 
 ```sh
 npm install
-npm test          # 437 tests, ~1s
+npm test          # 475 tests, ~1s
 npm run verify    # format, lint, types, tests with coverage gates, build
 ```
 
