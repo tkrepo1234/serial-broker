@@ -70,6 +70,19 @@ this is not. The signature is valid — it is simply not the kind of signature W
 Tested on: Windows 11 Home, build 26200. Uninstalled completely afterwards; nothing was left
 behind.
 
+**Update 2026-09-13: no public com0com build can be expected to load any more.** The April 2026
+Windows update removed default trust for every kernel driver signed through the cross-signed
+root program, on Windows 11 24H2, 25H2 and 26H1 and all later versions; Microsoft keeps only an
+explicit allow list of "a limited number of widely used" drivers. That covers the signed 2.2.2.0
+build from 2011 as well — the one a SourceForge user reported working in September 2024, before
+the change. Not tried here, because the result is foreseeable: this machine's Code Integrity log
+shows the cross-certificate exceptions policy active on every boot, Secure Boot, memory
+integrity and the vulnerable-driver blocklist all on, and `com0com.sys` rejected on 2026-09-12
+(event 3004). Getting it to load would mean disabling Secure Boot, memory integrity or signature
+enforcement, which is not a reasonable price for a test. Avoid third-party "signature patch"
+downloads for it: an unofficial re-signed kernel driver is a far larger risk than the test is
+worth.
+
 **What to use instead:** a USB-serial adapter with its TX and RX pins bridged. The vendor
 drivers (CH340, FTDI, CP2102) are WHQL-signed, there is no signature problem, and the test is
 more honest anyway — only real hardware can be unplugged mid-write, which is the case this
