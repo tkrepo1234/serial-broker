@@ -24,7 +24,8 @@ interface HeldLock {
  *
  * This fake carries more weight than any other in the suite: ownership *is* the lock
  * (ADR-0005), so if this lies, every failover test lies with it. It implements the parts of
- * the specification the library depends on:
+ * the specification the library depends on, and refuses shared mode, which the library does not
+ * use and this fake does not model:
  *
  * - exclusive mode, granted to one holder at a time;
  * - FIFO queueing, so the longest-waiting context succeeds a departing holder;
@@ -101,6 +102,11 @@ export class FakeLockManager {
     callback: (lock: LockLike | null) => Promise<T>,
   ): Promise<T> {
     const mode = options.mode ?? 'exclusive';
+    if (mode === 'shared') {
+      // One holder per name is all this fake models. Granting a shared request as if it were
+      // exclusive would pass a test that a browser fails, so it refuses instead.
+      throw new Error('FakeLockManager does not model shared locks');
+    }
 
     if (options.signal?.aborted === true) {
       throw abortError();

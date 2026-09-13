@@ -42,6 +42,13 @@ export class FakeDevice {
   isOpen = false;
   /** `true` while the device is physically attached. */
   isAttached = true;
+  /**
+   * The port object that opened the device, while it is open.
+   *
+   * Only that object can release the device again. An unplug clears it, so a port object left
+   * over from before cannot close a connection another context has opened since.
+   */
+  holder: FakeSerialPort | undefined;
 
   readonly faults: DeviceFaults = {};
 
@@ -168,6 +175,7 @@ export class FakeSerialPort {
 
     this.#isOpen = true;
     this.device.isOpen = true;
+    this.device.holder = this;
     this.device.openCount += 1;
 
     this.#readable = new ReadableStream<Uint8Array>({
@@ -245,12 +253,13 @@ export class FakeSerialPort {
 
   /** Releases the device whatever its streams' state, as the browser does when a tab goes away. */
   forceClose(): void {
-    // Only the port object that opened the device releases it. Another context's port object for
-    // the same device has no hold on it, and releasing the device from there would let a second
-    // context open it while the first still has it - hiding exactly the ownership bugs this
-    // harness exists to catch.
-    if (this.#isOpen) {
+    // Only the port object that holds the device releases it. Another context's port object for
+    // the same device has no hold on it, nor has one whose device was unplugged and opened again
+    // since. Releasing the device from there would let a second context open it while the first
+    // still has it - hiding exactly the ownership bugs this harness exists to catch.
+    if (this.#isOpen && this.device.holder === this) {
       this.device.isOpen = false;
+      this.device.holder = undefined;
       this.device.detachStreamControls();
     }
     this.#isOpen = false;
@@ -325,6 +334,7 @@ export class FakeSerialRegistry {
   unplug(device: FakeDevice): void {
     device.isAttached = false;
     device.isOpen = false;
+    device.holder = undefined;
     device.breakStream(domException('NetworkError', 'The device has been lost'));
     this.#dispatch('disconnect', device);
   }

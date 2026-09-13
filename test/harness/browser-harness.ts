@@ -13,11 +13,21 @@ import type {
   KeyValueStorage,
   SerialBrokerEnvironment,
 } from '../../src/environment/environment.js';
+import type { ProtocolMessage } from '../../src/protocol/messages.js';
 
 import { FakeBus, type TransportMode, type WorkerScript } from './fake-bus.js';
 import { FakeClock, flushMicrotasks } from './fake-clock.js';
 import { FakeLockManager } from './fake-locks.js';
 import { FakeSerialRegistry } from './fake-serial.js';
+
+/**
+ * What every simulated `Math.random()` returns: the top of its range.
+ *
+ * Not 1, which `Math.random()` never returns - code that treated 1 specially would pass here and
+ * misbehave in a browser - but close enough that every backoff delay rounds to the full delay, so
+ * a schedule stays a sequence of round numbers a test can name.
+ */
+export const JITTER_DRAW = 1 - Number.EPSILON;
 
 /** Everything a test wants to observe about one simulated tab. */
 export interface RecordedEvents {
@@ -85,6 +95,11 @@ export class VirtualTab {
     return this.recordFor(name).statuses.map((event) => event.status);
   }
 
+  /** The codes of the errors this tab was told about, in order. */
+  errorCodes(name: string): string[] {
+    return this.recordFor(name).errors.map((event) => event.error.code);
+  }
+
   /** Everything this tab received, decoded as UTF-8 and concatenated. */
   receivedText(name: string): string {
     return this.recordFor(name)
@@ -135,8 +150,6 @@ export interface HarnessOptions {
    * until `bus.failWorkerScripts()` reports the failure, as a browser does for a missing script.
    */
   readonly workerScript?: WorkerScript;
-  /** Fixed value returned for reconnect jitter, so backoff delays are exact. */
-  readonly randomValue?: number;
   /** Receives the library's diagnostics. Useful when a scenario test misbehaves. */
   readonly logger?: Logger;
   /** Whether `debug` records may carry payload bytes. Off, as in production. */
@@ -200,6 +213,52 @@ export class BrowserHarness {
     return new DiagnosticsObserver(
       this.createEnvironment(`observer${String(this.#nextTabNumber)}`),
     );
+  }
+
+  /**
+   * Opens a tab whose incoming messages can be held back, as a busy main thread holds them back.
+   *
+   * `hold()` keeps every message that arrives from then on; `deliverHeld()` hands them to the tab
+   * in order, and lets later ones through again. What the tab sends is never held. The tab records
+   * nothing, so a test asserts on the device and on what its calls return.
+   */
+  openBusyTab(id = 'busy'): {
+    readonly client: SerialBrokerClient;
+    readonly hold: () => void;
+    readonly deliverHeld: () => void;
+  } {
+    const held: ProtocolMessage[] = [];
+    let isHolding = false;
+    let deliver: (message: ProtocolMessage) => void = () => undefined;
+    const environment = this.createEnvironment(id);
+    const client = new SerialBrokerClient({
+      ...environment,
+      createTransport: (request) => {
+        deliver = request.onMessage;
+        return environment.createTransport({
+          ...request,
+          onMessage: (message) => {
+            if (isHolding) {
+              held.push(message);
+            } else {
+              request.onMessage(message);
+            }
+          },
+        });
+      },
+    });
+    return {
+      client,
+      hold: () => {
+        isHolding = true;
+      },
+      deliverHeld: () => {
+        isHolding = false;
+        for (const message of held.splice(0)) {
+          deliver(message);
+        }
+      },
+    };
   }
 
   /** Every tab still open. */
@@ -271,7 +330,7 @@ export class BrowserHarness {
       },
       // Fixed rather than seeded: backoff delays become exactly predictable, so a test can
       // assert "the third attempt happens 1000 ms later" instead of "roughly a second".
-      random: () => this.options.randomValue ?? 1,
+      random: () => JITTER_DRAW,
       newId: (prefix) => {
         this.#nextIdNumber += 1;
         return `${prefix}-${contextId}-${String(this.#nextIdNumber)}`;
