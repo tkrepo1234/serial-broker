@@ -10,11 +10,11 @@ step.
 
 ## Status
 
-|                          |                                                         |
-| ------------------------ | ------------------------------------------------------- |
-| **Browser, no hardware** | **run 2026-09-12 on Edge 153 / Windows 11** — see below |
-| **With real hardware**   | _never run_                                             |
-| **Blocking for**         | the first published release                             |
+|                          |                                                                              |
+| ------------------------ | ---------------------------------------------------------------------------- |
+| **Browser, no hardware** | **run 2026-09-12, repeated 2026-09-13 on Edge 153 / Windows 11** — see below |
+| **With real hardware**   | _never run_                                                                  |
+| **Blocking for**         | the first published release                                                  |
 
 ### 2026-09-12 — Edge 153.0.0.0, Windows 11 Home 26200, no device attached
 
@@ -42,6 +42,11 @@ awaiting-permission` and stops there, as designed. No prompt is attempted.
   two ports attached, and a message from one was delivered to the other and **not** echoed
   back to its sender.
 - **Console** — no errors, no unhandled rejections.
+
+**Repeated 2026-09-13** against the build after the refactor in `dc934d0`, same browser:
+the state machine, the single lock holder with one pending request, restoring from
+`localStorage` and taking the status over the bus all behaved exactly as above, with no console
+errors. Failover and the broker were not re-run; the refactor did not touch either.
 
 What this run does **not** cover, and what the checklist below is still for: opening a port,
 reading, writing, chunking, text decoding across chunk boundaries, unplugging a device
