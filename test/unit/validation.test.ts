@@ -127,6 +127,67 @@ describe('normalizeConfiguration', () => {
     expect(config.connection.maxAttempts).toBe(Number.POSITIVE_INFINITY);
   });
 
+  it.each([
+    ['options.connection.maxAttempts', { ...VALID, connection: { maxAttempts: -1 } }],
+    ['options.connection.maxAttempts', { ...VALID, connection: { maxAttempts: 2.5 } }],
+    ['options.maxTabs', { ...VALID, maxTabs: 0 }],
+    ['options.maxTabs', { ...VALID, maxTabs: 'many' }],
+  ])('says that %s also accepts Infinity when it rejects a value', (argumentName, options) => {
+    // Infinity is the documented default of both; a message that leaves it out contradicts it.
+    expect(() => normalizeConfiguration('Reader', options)).toThrow(
+      expect.objectContaining({
+        context: expect.objectContaining({
+          argumentName,
+          expected: expect.stringMatching(/, or Infinity$/) as unknown,
+        }) as unknown,
+      }),
+    );
+  });
+
+  it('rejects -Infinity where Infinity means no limit', () => {
+    expect(
+      argumentOf(() =>
+        normalizeConfiguration('R', {
+          ...VALID,
+          connection: { maxAttempts: Number.NEGATIVE_INFINITY },
+        }),
+      ),
+    ).toBe('options.connection.maxAttempts');
+  });
+
+  it('rejects a device that asks for any port and names one as well', () => {
+    expect(
+      argumentOf(() =>
+        normalizeConfiguration('R', { ...VALID, device: { any: true, vendorId: 0x1a86 } }),
+      ),
+    ).toBe('options.device');
+    expect(
+      argumentOf(() => normalizeConfiguration('R', { ...VALID, device: { any: false } })),
+    ).toBe('options.device.any');
+  });
+
+  it('describes a rejected encoding label like any other invalid argument', () => {
+    try {
+      normalizeConfiguration('Reader', { ...VALID, encoding: { encoding: 'utf-99' } });
+      expect.unreachable();
+    } catch (error) {
+      // docs/site/errors.md promises these fields for every INVALID_ARGUMENT.
+      expect((error as SerialBrokerError).context).toEqual({
+        argumentName: 'options.encoding.encoding',
+        expected: 'an encoding label that TextDecoder accepts',
+        actualType: 'string',
+        actualValue: 'utf-99',
+      });
+      expect((error as SerialBrokerError).cause).toBeInstanceOf(RangeError);
+    }
+  });
+
+  it('keeps the canonical name of an encoding label', () => {
+    const config = normalizeConfiguration('Reader', { ...VALID, encoding: { encoding: 'Latin1' } });
+
+    expect(config.encoding.encoding).toBe('windows-1252');
+  });
+
   it('rejects an encoding the browser cannot provide', () => {
     // Checked here rather than at first use, where it would surface as a RangeError from
     // inside the owning tab's read loop, long after the mistake was made.

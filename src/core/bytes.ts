@@ -1,5 +1,7 @@
-import { SerialBrokerErrorCode } from './error-codes.js';
-import { SerialBrokerError } from './errors.js';
+import { invalidArgument } from './validation.js';
+
+/** What `send()` accepts as data, for the error that rejects anything else. */
+const EXPECTED_DATA = 'a string, an ArrayBuffer or an ArrayBufferView';
 
 /**
  * Copies a `BufferSource` into a fresh `Uint8Array`.
@@ -8,8 +10,8 @@ import { SerialBrokerError } from './errors.js';
  * a `Uint8Array` handed to the application may be retained or mutated by it, and a view onto
  * a pooled buffer would change underneath both sides. See docs/guidelines/defensive-programming.md.
  *
- * @throws A {@link SerialBrokerError} with code `INVALID_ARGUMENT` if `source` is not a
- *   `BufferSource`.
+ * @throws A `SerialBrokerError` with code `INVALID_ARGUMENT` if `source` is not a
+ *   `BufferSource`, or its buffer has been detached.
  */
 export function copyBytes(source: BufferSource, argumentName = 'data'): Uint8Array {
   let bytes: Uint8Array | undefined;
@@ -24,11 +26,10 @@ export function copyBytes(source: BufferSource, argumentName = 'data'): Uint8Arr
     }
   } catch (error) {
     // A view of a buffer that was transferred elsewhere cannot even be looked at.
-    throw new SerialBrokerError(
-      SerialBrokerErrorCode.INVALID_ARGUMENT,
-      `${argumentName} cannot be read: its buffer has been transferred or detached`,
-      { context: { argumentName, detached: true }, cause: error },
-    );
+    throw invalidArgument(argumentName, `${EXPECTED_DATA} whose buffer is not detached`, source, {
+      cause: error,
+      context: { detached: true },
+    });
   }
 
   if (bytes !== undefined) {
@@ -38,11 +39,7 @@ export function copyBytes(source: BufferSource, argumentName = 'data'): Uint8Arr
     return bytes.slice();
   }
 
-  throw new SerialBrokerError(
-    SerialBrokerErrorCode.INVALID_ARGUMENT,
-    `${argumentName} must be a string, an ArrayBuffer or an ArrayBufferView`,
-    { context: { argumentName, actualType: typeof source } },
-  );
+  throw invalidArgument(argumentName, EXPECTED_DATA, source);
 }
 
 function isBuffer(value: unknown): value is ArrayBufferLike {
