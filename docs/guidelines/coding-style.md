@@ -45,8 +45,8 @@ Additional rules:
 Every source file follows this order, top to bottom:
 
 1. Licence/file header comment (only where it carries information — no boilerplate banners).
-2. `import` statements: Node/Web standard first, then internal, then type-only imports.
-   Sorted alphabetically inside each group; enforced by `eslint-plugin-import`.
+2. `import` statements in groups — built-in, external, internal, parent, sibling — separated by a
+   blank line and sorted alphabetically inside each group; enforced by `import-x/order`.
 3. Module constants.
 4. Types and interfaces.
 5. The primary export (one concept per file).
@@ -64,15 +64,19 @@ Every source file follows this order, top to bottom:
   direction is strictly downward:
 
   ```
-  public facade  ->  client  ->  protocol  ->  core
-                     owner    ->  protocol  ->  core
-                     worker   ->  protocol  ->  core
-                     storage  ->  core
+  public facade  ->  client  ->  owner | storage | protocol  ->  core
+                     owner   ->  protocol  ->  core
+                     worker  ->  protocol  ->  core
+                     storage ->  core
   ```
 
-  `core/` imports nothing from the layers above it. A circular import is a build failure.
+  `environment/` holds the platform interfaces that client, owner and storage import, and
+  `environment/browser.ts` is the composition root that builds the client's transports. `core/`
+  imports nothing from the layers above it. A circular import is a lint failure
+  (`import-x/no-cycle`); the direction itself is kept in review.
 
-- No deep imports across layers: a layer exposes its surface through its own `index.ts`.
+- Import a module by its file. `src/index.ts` and `src/diagnostics.ts` gather exports for the
+  package's consumers only; nothing inside the library imports through them.
 
 ## Language rules
 

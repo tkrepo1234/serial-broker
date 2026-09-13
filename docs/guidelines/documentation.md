@@ -8,14 +8,15 @@ short sentences, no marketing language, no "simply"/"just"/"obviously".
 
 ## Layers
 
-| Artefact                 | Audience                                        | Rule                                                |
-| ------------------------ | ----------------------------------------------- | --------------------------------------------------- |
-| **TSDoc in source**      | Developers via IDE and generated API docs       | Every exported symbol.                              |
-| **README.md**            | Someone deciding whether to use this            | Working example within the first screen.            |
-| **docs/architecture.md** | Someone modifying the library                   | Explains the mechanism, not the API.                |
-| **docs/adr/**            | Future maintainers asking "why is it like this" | One decision per record, immutable once accepted.   |
-| **CHANGELOG.md**         | Upgraders                                       | Keep a Changelog format, every user-visible change. |
-| **debug/**               | Someone operating or testing a deployment       | Ships in `dist/debug/`; type-checked and linted.    |
+| Artefact                 | Audience                                        | Rule                                                                                                          |
+| ------------------------ | ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| **TSDoc in source**      | Developers via IDE and generated API docs       | Every exported symbol.                                                                                        |
+| **README.md**            | Someone deciding whether to use this            | Working example within the first screen.                                                                      |
+| **docs/architecture.md** | Someone modifying the library                   | Explains the mechanism, not the API.                                                                          |
+| **docs/adr/**            | Future maintainers asking "why is it like this" | One decision per record, immutable once accepted.                                                             |
+| **CHANGELOG.md**         | Upgraders                                       | Keep a Changelog format, every user-visible change.                                                           |
+| **docs/site/**           | Application developers                          | Chapters and examples, built by `npm run docs`, which fails on any warning; the example code is type-checked. |
+| **debug/**               | Someone operating or testing a deployment       | Ships in `dist/debug/`; type-checked and linted.                                                              |
 
 ## TSDoc rules
 
@@ -33,19 +34,20 @@ Every exported symbol carries a doc comment with:
 
 ````ts
 /**
- * Sends data to the device associated with a configuration.
+ * Sends data to the device.
  *
- * The write is performed by whichever tab currently owns the port; the caller does not need
- * to be that tab. Writes from a single tab preserve their order; writes from different tabs
- * are interleaved in the order the owning tab receives them.
+ * The write is performed by whichever tab currently owns the port; the caller does not have
+ * to be that tab and cannot tell whether it is. Writes issued by one tab reach the device in
+ * the order that tab issued them; writes from different tabs have no defined relative order.
  *
- * @param name - The configuration name passed to {@link setup}.
- * @param data - Text (encoded with the configured encoding, UTF-8 by default) or raw bytes.
- * @returns A promise that settles once the bytes have been handed to the device, not once
- *   the device has processed them.
- * @throws A {@link SerialBrokerError} with code `UNKNOWN_CONFIGURATION` if `name` was never
- *   set up, `NOT_CONNECTED` if no connection could be established before the write deadline,
- *   or `WRITE_FAILED` if the device rejected the write.
+ * @param name - The configuration name passed to {@link SerialBrokerApi.setup}.
+ * @param data - Text, encoded as UTF-8, or raw bytes. Nothing is appended.
+ * @returns A promise that resolves once the bytes have been handed to the device - not once
+ *   the device has acted on them, which a serial port cannot report.
+ * @throws A {@link SerialBrokerError} with code `UNKNOWN_CONFIGURATION` if `name` is not set
+ *   up in this tab, `INVALID_ARGUMENT` for a string while an encoding other than UTF-8 is
+ *   configured, `WRITE_TIMEOUT` if no connection took the write within
+ *   `connection.writeTimeoutMs`, or `WRITE_FAILED` if the device rejected it.
  * @example
  * ```ts
  * await SerialBroker.send('CardReader', 'STATUS?\r\n');
@@ -72,8 +74,8 @@ Use these words and only these words, in code, comments and prose:
 
 Banned: "master/slave" in code and documentation — the role is **owner**, the others are
 **participants**. ([ADR-0005](../adr/0005-owner-election-via-web-locks.md) explains the
-mechanism; the user-facing request used the word "master", the implementation uses "owner"
-consistently, and the README notes the equivalence once.)
+mechanism; the user-facing request used the word "master", and the implementation uses "owner"
+consistently. Application-facing documentation says "the tab that holds the port".)
 
 ## ADRs
 

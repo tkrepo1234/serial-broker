@@ -21,11 +21,14 @@ behaviour of the Web platform APIs this library wraps.
    incorrectly, or leak internals through its prototype. The name is the capability.
 
 3. **Idempotent, declarative setup.** `setup()` declares a desired state. Calling it twice
-   with equal options is a no-op, not an error and not a reconnect. Calling it with different
-   options for an existing name is an explicit, reported reconfiguration.
+   with equal options is a no-op, not an error and not a reconnect. Calling it with options that
+   would open the port differently, or with a different `maxTabs`, rejects with
+   `CONFIGURATION_CONFLICT`: nothing is reconfigured silently, because the port may be open in
+   another tab with the old settings.
 
 4. **Everything async that touches the world.** `setup`, `send`, `release`, `releaseAll`,
-   `requestAccess` return promises. Pure inspection (`getStatus`, `exists`) is synchronous
+   `requestAccess`, `restore` and `dispose` return promises. Pure inspection (`getStatus`,
+   `exists`, `names`) is synchronous
    and reads a locally cached snapshot — it never blocks and never lies about being current
    (the snapshot carries the timestamp of its last update).
 

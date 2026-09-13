@@ -23,15 +23,21 @@ decisions that look replaceable and are not.
 
 ```sh
 npm install
-npm test          # ~1s
-npm run verify    # what CI runs
+npm test          # a few seconds
+npm run verify    # format, lint, type-check, tests with coverage gates, build: CI's first job
+npm run docs      # the documentation site: CI's second job
 ```
 
-Node 20.11 or newer. The library itself never runs in Node — that is only the toolchain.
+Node 22.13 or newer on the 22 line, or 24 or newer: that is what Vitest and ESLint require. CI
+runs Node 24. The library itself never runs in Node — that is only the toolchain.
 
 The [device emulator](./emulator/README.md) (`npm run emulator`) is the exception: it runs its
 TypeScript sources directly, on Node's built-in type stripping, and so needs a Node that has it
-switched on by default — 22.18 or newer, or 23.6 or newer on the 23 line.
+switched on by default — 22.18 or newer on the 22 line.
+
+`npm run docs` also needs Python, in a virtual environment at `docs/.venv`. Create it once with
+`python -m venv docs/.venv`, then install `docs/site/requirements.txt` with that environment's
+`pip`. The build fails on any warning, in CI as locally.
 
 ## Making a change
 
@@ -40,7 +46,8 @@ switched on by default — 22.18 or newer, or 23.6 or newer on the 23 line.
    `src/owner/`, that test belongs in `test/integration/multi-tab/` and must run against both
    transports.
 3. Make it pass.
-4. `npm run verify` must be green, including the coverage gates.
+4. `npm run verify` must be green, including the coverage gates — and `npm run docs`, if the
+   change touches documentation or TSDoc.
 5. Commit with [Conventional Commits](./docs/guidelines/git-workflow.md). The body explains
    _why_; the diff already shows _what_.
 6. Update `CHANGELOG.md` if the change is user-visible, and TSDoc on every touched export.

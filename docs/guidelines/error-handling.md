@@ -24,7 +24,7 @@ class SerialBrokerError extends Error {
 Rules:
 
 - **`code` is API.** Codes are `SCREAMING_SNAKE_CASE`, listed in `src/core/error-codes.ts`
-  and documented in the README. Renaming or repurposing a code is a breaking change; adding
+  and documented in the errors chapter of the documentation site (`docs/site/errors.md`). Renaming or repurposing a code is a breaking change; adding
   one is not.
 - **`message` is for humans, `code` is for machines.** Never parse a message. Message text
   may change in a patch release.
@@ -38,12 +38,12 @@ Rules:
 
 ## Throw vs. report
 
-| Situation                                                                                                                          | Mechanism                                                                                                                 |
-| ---------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| The caller made a mistake (bad arguments, unknown name, calling before `setup`)                                                    | **Throw** synchronously or reject the returned promise. Fail fast and loudly.                                             |
-| The environment is missing a feature (no Web Serial, no `SharedWorker`)                                                            | **Throw** from `setup()` with a code the caller can branch on.                                                            |
-| Something went wrong asynchronously and the library is handling it (device unplugged, reconnect attempt failed, peer tab vanished) | **Report** through the `onError` event. Never throw into the void — an unhandled rejection in a background task is a bug. |
-| An internal invariant is violated                                                                                                  | Throw `InternalInvariantError` _and_ report it. This is a library bug and must be loud in both channels.                  |
+| Situation                                                                                                                          | Mechanism                                                                                                                                                                  |
+| ---------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| The caller made a mistake (bad arguments, unknown name, calling before `setup`)                                                    | **Throw** synchronously or reject the returned promise. Fail fast and loudly.                                                                                              |
+| The environment is missing a feature (no Web Serial, no `SharedWorker`)                                                            | **Throw** from `setup()` with a code the caller can branch on.                                                                                                             |
+| Something went wrong asynchronously and the library is handling it (device unplugged, reconnect attempt failed, peer tab vanished) | **Report** through the `onError` event. Never throw into the void — an unhandled rejection in a background task is a bug.                                                  |
+| An internal invariant is violated                                                                                                  | Throw a `SerialBrokerError` with code `INTERNAL_INVARIANT`, built by `internalInvariantError()`, _and_ report it. This is a library bug and must be loud in both channels. |
 
 A failure that is both caller-visible and background-relevant (a `send()` that fails because
 the device is gone) does both: the returned promise rejects **and** an `onError` event fires,
@@ -56,8 +56,8 @@ so that other tabs learn about it too.
 - Errors from application event listeners are caught, wrapped with code
   `LISTENER_THREW`, and reported in the listener's own tab only — but never rethrown into the
   library's own control flow.
-- Errors during disposal are collected and reported as a single `AggregateError`-shaped
-  context. Disposal never fails.
+- Errors during disposal are collected: `DisposalStack.disposeAll()` runs every disposer and
+  returns a description of each failure, which the caller reports together. Disposal never fails.
 
 ## Logging
 

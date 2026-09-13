@@ -19,7 +19,7 @@ device at the same time.
 │ SerialBrokerClient      │  │ SerialBrokerClient      │  │ SerialBrokerClient      │
 │  └ ConfigurationSession │  │  └ ConfigurationSession │  │  └ ConfigurationSession │
 │      ├ OwnershipElection│  │      ├ OwnershipElection│  │      ├ OwnershipElection│
-│      └ PortSupervisor ● │  │        (queued)         │  │        (queued)         │
+│      └ PortSupervisor ● │  │   (waits for the lock)  │  │   (waits for the lock)  │
 └──────────┬──────────────┘  └──────────┬──────────────┘  └──────────┬──────────────┘
            │                            │                            │
            └────────────┬───────────────┴────────────────────────────┘
@@ -45,27 +45,37 @@ failure degrades nothing but efficiency.
 
 ```
 public facade        src/serial-broker.ts      the zero-argument singleton
+diagnostics          src/diagnostics.ts        the observer's entry point, for operators
   │
 client               src/client/               one context's view of every configuration
   ├ session          configuration-session.ts  one configuration: events, writes, role
+  ├ tab slot         tab-slot.ts               a place among the maxTabs tabs
+  ├ pending writes   pending-writes.ts         the writes this context issued, until they settle
+  ├ observer         diagnostics-observer.ts   the diagnostics observer
   └ transport        transport/                the message bus, two implementations
   │
 owner                src/owner/                what a context does while it holds the port
   ├ election         election.ts               the Web Lock
   ├ supervisor       port-supervisor.ts        open, read, write, reconnect
+  ├ write queue      write-queue.ts            one write to the device at a time
+  ├ serial errors    serial-errors.ts          the browser's exceptions, mapped to error codes
   └ matcher          port-matcher.ts           which granted port is the configured device
   │
 worker               src/worker/               the broker, and its SharedWorker entry point
 storage              src/storage/              configuration persistence
-protocol             src/protocol/             the wire format and its validator
-core                 src/core/                 errors, types, time, bytes, events
-environment          src/environment/          the platform, injected
+protocol             src/protocol/             messages and their validator, heartbeats, the
+                                               worker handshake, the version announcement
+core                 src/core/                 errors, types, validation, time, bytes, events
+environment          src/environment/          the platform's interfaces, and the composition
+                                               root that builds the real ones
 ```
 
-Imports run strictly downward. `core/` imports from nothing above it, and a cycle is a build
-failure.
+Imports run downward: the facade uses the client, the client uses owner, storage and protocol,
+and everything uses core. `environment/` is the exception: client, owner and storage import its
+interfaces, and its composition root, `browser.ts`, builds the client's transports. `core/`
+imports from nothing above it, and an import cycle fails the lint.
 
-## The five things worth understanding
+## The six things worth understanding
 
 ### 1. Ownership is a lock, not an agreement
 
@@ -120,11 +130,30 @@ timeout is a normal, reported outcome, not an exception to the design.
 
 ### 5. The platform is injected
 
-No module outside `src/environment/` touches `navigator`, `window`, `Date`, `Math.random` or
-`setTimeout`; a lint rule enforces it and the test environment has no browser globals at all.
-That is what lets one test process run a dozen independent tabs, kill any of them at a chosen
-instruction boundary, and assert a backoff schedule exactly. See
+No module outside the two composition roots — `src/environment/browser.ts` and the worker's entry
+point, `src/worker/serial-broker.worker.ts` — touches `navigator`, `window`, `localStorage` or the
+timer functions; `no-restricted-globals` enforces it. By convention none reads `Date` or
+`Math.random` either: time and randomness come from the environment too. The test environment
+has no browser globals at all. That is what lets one test process run a dozen independent tabs,
+kill any of them at a chosen instruction boundary, and assert a backoff schedule exactly. See
 [ADR-0014](./adr/0014-dependency-injection-of-the-environment.md).
+
+### 6. The worker is replaceable
+
+A `MessagePort` reports nothing when the context at its other end dies, in either direction. So
+every tab sends the worker a heartbeat every 15 seconds, naming the configurations it takes part
+in, and the worker forgets a tab it has not heard from for three minutes, looking every 30
+seconds ([ADR-0021](./adr/0021-forget-silent-participants.md)). A tab whose last three heartbeats
+went unanswered takes the worker for dead — crashed, ended for memory, terminated from
+`chrome://inspect` — reports `BROKER_UNAVAILABLE`, starts a new worker, and hands on what it had
+sent into the old one.
+
+A worker script that does not load, or that runs another protocol version, sends no welcome in
+this version, and the tabs move to a `BroadcastChannel`
+([ADR-0007](./adr/0007-broadcastchannel-fallback-transport.md),
+[ADR-0024](./adr/0024-keep-the-worker-handshake-version-independent.md)). Tabs on different
+protocol versions never share a lock, a worker or a bus; they learn of each other only through an
+unversioned announcement channel ([ADR-0023](./adr/0023-announce-the-protocol-version.md)).
 
 ## Connection lifecycle
 
@@ -132,6 +161,11 @@ instruction boundary, and assert a backoff schedule exactly. See
         setup()
            │
            ▼
+       ┌──────┐  maxTabs other tabs use it   ┌────────┐
+       │ idle │ ───────────────────────────▶ │ queued │
+       └──┬───┘ ◀───── a place frees up ──── └────────┘
+          │
+          ▼
   ┌──────────────────┐  no granted port matches   ┌──────────────────────┐
   │   (not owner)    │ ─────────────────────────▶ │ awaiting-permission  │
   │  waits for lock  │                            └──────────┬───────────┘
@@ -151,8 +185,14 @@ instruction boundary, and assert a backoff schedule exactly. See
                                                              ▲───────────────────────────┘
 ```
 
-Every way a connection can be lost — a failed open, a failed write, a dead read stream, a
-`disconnect` event — funnels into one handler, so there is exactly one backoff policy and one
+`released` follows from any state once the configuration is released in this tab, and nothing
+follows it. `queued` exists only with a `maxTabs` limit
+([ADR-0025](./adr/0025-limit-the-tabs-using-a-configuration.md)). A tab that does not hold the port
+does not walk the lower part itself: it shows the status the tab holding the port reports, and
+`reconnecting` while ownership moves.
+
+Every way a connection can be lost — a failed open, a failed write, a dead or ended read stream,
+a `disconnect` event — funnels into one handler, so there is exactly one backoff policy and one
 place to test it. See [ADR-0010](./adr/0010-reconnect-supervision-and-backoff.md).
 
 ## Diagnostics
@@ -165,7 +205,7 @@ configuration and no place in any election, so observing never moves a port.
 observer ──diagnostics-request──▶ every context on the bus (the broker delivers to all)
          ◀─diagnostics-report──── each context with a configuration: role, status, settings,
                                    listeners, pending writes; the owner adds its connection
-observer ──LockManager.query()──▶ the browser: who holds and who waits for each owner lock
+observer ──LockManager.query()──▶ the browser: who holds and who waits for each lock it uses
 ```
 
 A collection listens for a fixed window, because nothing says how many contexts exist. See

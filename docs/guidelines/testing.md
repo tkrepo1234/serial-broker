@@ -11,7 +11,6 @@ that matter, and they must be **deterministic**.
 | **Unit**            | `test/unit/`                  | One module in isolation: backoff maths, validation, codecs, protocol encode/decode.                                                | No fakes beyond the module's own dependencies. Fast (< 5 ms each).                       |
 | **Integration**     | `test/integration/`           | Several real modules against the simulated browser harness: a single tab end-to-end, reconnect, write queueing.                    | Uses the harness, never the real DOM.                                                    |
 | **Multi-context**   | `test/integration/multi-tab/` | The actual product claim: N simulated tabs sharing one port, ownership failover, broadcast fan-out, interlocking under contention. | Mandatory for every change to `owner/`, `worker/` or `client/`.                          |
-| **Type**            | `test/types/`                 | The public surface type-checks as documented and rejects misuse.                                                                   | `expectTypeOf` assertions; failures are compile errors.                                  |
 | **Emulated device** | `emulator/`                   | Real Chromium and the real Windows serial stack against a USB device whose failures are scriptable.                                | Its own tests live in `emulator/test/`; runs are recorded in `docs/manual-test-plan.md`. |
 | **Manual**          | `debug/`                      | Real Chromium, real hardware. Documented, checklisted, never a substitute for the above.                                           | Recorded in `docs/manual-test-plan.md`.                                                  |
 
@@ -19,13 +18,20 @@ that matter, and they must be **deterministic**.
 
 No test may depend on wall-clock time, real timers, real randomness or real task ordering.
 
-- **Time** is injected (`Clock`) and controlled with Vitest's fake timers. A test that calls
-  `await sleep(100)` to "let things settle" is rejected in review.
-- **Randomness** is injected. Reconnect jitter is seeded, so backoff schedules are asserted
-  exactly.
-- **IDs** come from an injected generator, so assertions can name `client-1`, `request-3`.
-- **Task ordering** in the multi-tab harness is explicit: the harness has a message pump that
-  the test advances step-by-step, so interleavings are _chosen_, not hoped for.
+- **Time** is injected (`Clock`) and driven by the harness's `FakeClock`, which moves only when a
+  test advances it. `harness.settle()` lets pending promise chains run without moving time. A test
+  that calls `await sleep(100)` to "let things settle" is rejected in review.
+- **Randomness** is injected. The harness draws the top of the jitter range every time, so backoff
+  schedules are asserted exactly.
+- **IDs** come from an injected generator, so they are predictable within a test.
+- **Task ordering** in the multi-tab harness is explicit. Messages are delivered asynchronously and
+  structurally cloned, as `postMessage` delivers them, and an interleaving is _chosen_ by where a
+  test settles, holds a tab's incoming messages back (`openBusyTab()`), kills a tab or crashes the
+  worker — not hoped for.
+- **A setup is not a connection.** `SerialBrokerClient.setup()` returns before the port opens;
+  `VirtualTab.setup()` settles for you. A test that emits data or asserts that something was _not_
+  delivered straight after `client.setup()` passes for the wrong reason. Every negative assertion
+  needs a positive control showing that the event did happen somewhere.
 
 A flaky test is treated as a failing test and is fixed or deleted within the same change.
 Never retried, never `.skip`ped with a TODO.
@@ -34,18 +40,21 @@ Never retried, never `.skip`ped with a TODO.
 
 `test/harness/` provides in-memory implementations with the _documented_ semantics of:
 
-- `navigator.serial` — including `requestPort` gesture rules, `getPorts` persistence,
-  `connect`/`disconnect` events, and a `SerialPort` whose streams can be made to stall,
-  error, or vanish mid-write.
-- `navigator.locks` — full Web Locks semantics: exclusive/shared modes, FIFO queueing,
-  `ifAvailable`, `steal`, `signal`, and automatic release on context death.
-- `SharedWorker` / `MessagePort` — a real bidirectional message graph between simulated
-  contexts, with controllable delivery ordering and the ability to kill a context abruptly.
-- `BroadcastChannel`, `localStorage`.
+- `navigator.serial` — per-origin permission and `getPorts` persistence, a picker that honours
+  the request's filters, `connect`/`disconnect` events, one `SerialPort` object per context, and
+  devices whose opens and writes can be made to fail or hang and whose read stream can error or
+  end. User activation is not modelled.
+- `navigator.locks` — exclusive mode: FIFO queueing, `ifAvailable`, `signal`, `query()`, and
+  automatic release on context death. Shared mode and `steal` are not modelled, and the library
+  uses neither; a shared request is refused rather than granted as if it were exclusive.
+- `SharedWorker` / `MessagePort` — the real broker behind a message graph between simulated
+  contexts, with the ability to kill a context abruptly, crash the worker, or have its script
+  fail to load or run another protocol version.
+- `BroadcastChannel`, and a `localStorage` that can be made unavailable.
 
 The harness is the most important asset in the test suite. It has its own tests
-(`test/harness/*.test.ts`) proving it matches the specified browser behaviour — **a fake that
-lies produces tests that lie.**
+(`test/harness/harness-conformance.test.ts`) proving it matches the specified browser behaviour —
+**a fake that lies produces tests that lie.**
 
 ## Writing tests
 
@@ -68,7 +77,7 @@ Enforced in CI; the build fails below them.
 | Statements | 90%    | 95%           | 94%           | 88%          |
 | Branches   | 85%    | 85%           | 80%           | 70%          |
 | Functions  | 90%    | 95%           | 95%           | 82%          |
-| Lines      | 90%    | 95%           | 94%           | 90%          |
+| Lines      | 90%    | 95%           | 94%           | 88%          |
 
 The coordination layer's **branch** bars are lower than the global one, which looks backwards
 and is not. Those modules are dense with guards against races that cannot be produced on
