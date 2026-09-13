@@ -200,8 +200,9 @@ reach that client; it logs the warning `facade.late-configure`, and its options 
 `dispose()`. Options passed in several calls are merged.
 
 `workerUrl`
-: The URL of `serial-broker.worker.js`. Needed only when the bundler does not emit the script by
-itself. Every tab must use the same URL; see [The worker script](installing.md#the-worker-script).
+: The URL of `serial-broker.worker.js`. Needed when the bundler does not emit the script by itself,
+and always with the CommonJS build. Every tab must use the same URL; see
+[The worker script](installing.md#the-worker-script).
 
 `transport`
 : `'auto'` (the default) uses a `SharedWorker`, and a `BroadcastChannel` where the browser has no

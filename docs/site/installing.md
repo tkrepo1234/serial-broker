@@ -42,6 +42,18 @@ instead and keeps working; see [The message bus](shared-ports.md#the-message-bus
 `environment.transport-fallback` at `warn` level. Check the log once after deploying: the fallback
 works, but a missing script is usually a mistake.
 
+### CommonJS
+
+The CommonJS build, which `require('serial-broker')` loads, cannot find the script by itself:
+CommonJS has no `import.meta.url` to resolve it against, and no bundler emits the script for it.
+An application that loads this build **must** copy the script as described above and set
+`workerUrl`, and pass the same URL to `openDiagnostics()`.
+
+Without `workerUrl`, the CommonJS build does not guess a location. It creates no `SharedWorker`:
+with the default `transport: 'auto'` it uses a `BroadcastChannel` and logs
+`environment.transport-fallback` with a `reason` that names `workerUrl`, and with
+`transport: 'sharedworker'`, `setup()` fails with `BROKER_UNAVAILABLE`.
+
 ## Content security policy
 
 A strict policy has to allow the worker script:

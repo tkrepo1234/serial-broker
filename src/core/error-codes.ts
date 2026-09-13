@@ -51,7 +51,12 @@ export const SerialBrokerErrorCode = {
   READ_FAILED: 'READ_FAILED',
 
   // --- Writing ---------------------------------------------------------------------------
-  /** No connection was available before the write deadline. */
+  /**
+   * The tab holding the port lost the connection between accepting a write and handing it to
+   * the device, so nothing was written. Such a write is normally sent again once a connection
+   * is available, which is why this rarely reaches the application. A write still waiting for
+   * a connection at its deadline fails with `WRITE_TIMEOUT` instead.
+   */
   NOT_CONNECTED: 'NOT_CONNECTED',
   /** The device rejected the write. `context.bytesWritten` says how far it got. */
   WRITE_FAILED: 'WRITE_FAILED',
@@ -132,7 +137,7 @@ export const REMEDIATION: Record<SerialBrokerErrorCode, string> = {
   READ_FAILED:
     'The read stream failed. The library reopens the port automatically; if this repeats, the adapter or cable is likely faulty.',
   NOT_CONNECTED:
-    'No connection was available before the deadline. Wait for status "open" via subscribe(name, "onStatusChange", ...) before sending, or raise connection.writeTimeoutMs.',
+    'The connection was lost before the write was handed to the device, so nothing was written and sending it again is safe. To avoid it, wait for status "open" via subscribe(name, "onStatusChange", ...) before sending.',
   WRITE_FAILED:
     'The device rejected the write. `context.bytesWritten` shows how many bytes were handed over before the failure; decide whether your command is safe to repeat.',
   WRITE_TIMEOUT:

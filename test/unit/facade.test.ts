@@ -216,6 +216,24 @@ describe('SerialBroker', () => {
     await expect(SerialBroker.releaseAll()).resolves.toBeUndefined();
   });
 
+  it('removes a listener without building anything, even without Web Serial', async () => {
+    await SerialBroker.dispose();
+    vi.stubGlobal('navigator', {});
+    const listener = vi.fn();
+
+    expect(() => {
+      SerialBroker.unsubscribe('Reader', 'onReceive', listener);
+    }).not.toThrow();
+    // The name is still checked, exactly as it would be with a client.
+    expect(() => {
+      SerialBroker.unsubscribe('', 'onReceive', listener);
+    }).toThrow(expect.objectContaining({ code: SerialBrokerErrorCode.INVALID_ARGUMENT }));
+    // A call that does need a client still builds one, and says why it cannot.
+    expect(() => SerialBroker.getStatus('Reader')).toThrow(
+      expect.objectContaining({ code: SerialBrokerErrorCode.WEB_SERIAL_UNAVAILABLE }),
+    );
+  });
+
   it('rebuilds itself after being disposed', async () => {
     await SerialBroker.setup('Reader', READER_OPTIONS);
     await SerialBroker.dispose();

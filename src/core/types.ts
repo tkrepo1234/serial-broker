@@ -122,7 +122,17 @@ export interface ConnectionSettings {
  * a streaming decoder so that multi-byte characters split across chunks survive.
  */
 export interface EncodingSettings {
-  /** Encoding used for string payloads passed to `send()`. @defaultValue 'utf-8' */
+  /**
+   * The encoding received text is decoded with, when `decodeText` is on: any label `TextDecoder`
+   * accepts. Labels are normalised to their canonical name, so `'UTF8'` becomes `'utf-8'`.
+   *
+   * It does not apply to sending. `TextEncoder` only produces UTF-8, so strings passed to
+   * `send()` are always encoded as UTF-8, and with any other encoding configured `send()`
+   * rejects a string with `INVALID_ARGUMENT` rather than send bytes the device does not expect.
+   * Pass the encoded bytes instead.
+   *
+   * @defaultValue 'utf-8'
+   */
   readonly encoding?: string;
   /** Also deliver `text` on `onReceive`, decoded across chunk boundaries. @defaultValue false */
   readonly decodeText?: boolean;

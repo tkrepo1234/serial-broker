@@ -68,8 +68,13 @@ export interface SerialBrokerErrorOptions {
  * try {
  *   await SerialBroker.send('CardReader', 'PING');
  * } catch (error) {
- *   if (error instanceof SerialBrokerError && error.code === 'NOT_CONNECTED') {
- *     showOfflineBadge(error.remediation);
+ *   if (!(error instanceof SerialBrokerError)) throw error;
+ *
+ *   if (error.code === 'WRITE_TIMEOUT' && error.context['started'] === false) {
+ *     // The write never began, so the device received nothing: it can be sent again later.
+ *     retryWhenOpen('CardReader', 'PING');
+ *   } else {
+ *     showMessage(error.remediation);
  *   }
  * }
  * ```

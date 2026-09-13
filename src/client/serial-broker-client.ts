@@ -669,8 +669,11 @@ export class SerialBrokerClient {
   /**
    * Fails early and specifically when the platform cannot support the library.
    *
-   * Checked at `setup()` rather than at construction, so that merely importing the library in
-   * a non-Chromium browser does not throw.
+   * Checked at `setup()` rather than at construction, so that a client over an incomplete
+   * environment can still be built and asked what is set up. Importing the library never throws
+   * either way: the facade builds its client lazily. When it does, `createBrowserEnvironment()`
+   * already throws these same codes for a missing `navigator.serial` or `navigator.locks`, so on
+   * the facade path this check only guards an environment whose objects lack the methods.
    */
   #requireSupport(): void {
     if (typeof this.environment.serial.getPorts !== 'function') {

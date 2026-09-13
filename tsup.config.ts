@@ -1,4 +1,19 @@
-import { defineConfig } from 'tsup';
+import { defineConfig, type Options } from 'tsup';
+
+/** Settings every published file is built with. */
+const common = {
+  target: 'es2022',
+  platform: 'browser',
+  // Declarations come from `tsc` rather than from the bundler: tsup's dts step runs its own
+  // TypeScript configuration, and emitting them from the real one keeps the published types
+  // identical to the ones the test suite type-checks against.
+  dts: false,
+  sourcemap: true,
+  splitting: false,
+  // No `treeshake`: it runs Rollup over esbuild's output, which appends a second
+  // `sourceMappingURL` comment to every file and rewrites `import.meta.url` for CommonJS into a
+  // guess relative to the page. esbuild already drops unused code when it bundles.
+} satisfies Options;
 
 /**
  * Three entry points, deliberately:
@@ -10,23 +25,35 @@ import { defineConfig } from 'tsup';
  * - `serial-broker.worker` is the broker script. It must be a separately addressable file,
  *   because a `SharedWorker` is identified by its script URL: a bundled-in `Blob` URL would
  *   differ per tab and each tab would get its own, unshared worker. See ADR-0006.
+ *
+ * The worker is built as an ES module only: it is started with `type: 'module'`, and a CommonJS
+ * copy would be a file nothing can load.
  */
-export default defineConfig({
-  entry: {
-    index: 'src/index.ts',
-    diagnostics: 'src/diagnostics.ts',
-    'serial-broker.worker': 'src/worker/serial-broker.worker.ts',
+export default defineConfig([
+  {
+    ...common,
+    entry: {
+      index: 'src/index.ts',
+      diagnostics: 'src/diagnostics.ts',
+    },
+    format: ['esm', 'cjs'],
+    outExtension: ({ format }) => ({ js: format === 'cjs' ? '.cjs' : '.js' }),
+    // tsup runs both configurations at once, so this clean spares the worker's output rather
+    // than racing to delete it.
+    clean: ['!serial-broker.worker.js', '!serial-broker.worker.js.map'],
+    esbuildOptions(options, { format }) {
+      if (format === 'cjs') {
+        // CommonJS has no `import.meta.url` to find the worker script with. See
+        // scripts/cjs-import-meta.mjs for why the replacement throws instead of guessing.
+        options.define = { ...options.define, 'import.meta.url': 'cjsImportMeta.url' };
+        options.inject = [...(options.inject ?? []), 'scripts/cjs-import-meta.mjs'];
+      }
+    },
   },
-  format: ['esm', 'cjs'],
-  outExtension: ({ format }) => ({ js: format === 'cjs' ? '.cjs' : '.js' }),
-  target: 'es2022',
-  platform: 'browser',
-  // Declarations come from `tsc` rather than from the bundler: tsup's dts step runs its own
-  // TypeScript configuration, and emitting them from the real one keeps the published types
-  // identical to the ones the test suite type-checks against.
-  dts: false,
-  sourcemap: true,
-  clean: true,
-  treeshake: true,
-  splitting: false,
-});
+  {
+    ...common,
+    entry: { 'serial-broker.worker': 'src/worker/serial-broker.worker.ts' },
+    format: ['esm'],
+    clean: false,
+  },
+]);

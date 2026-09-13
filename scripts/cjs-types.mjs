@@ -35,7 +35,6 @@ function copyDeclarations(directory) {
         copyDeclarations(path);
       }
     } else if (entry.name.endsWith('.d.ts')) {
-      // Declaration maps are left out: their source paths are relative to where tsc wrote them.
       const destination = join(target, relative(dist, path));
       mkdirSync(dirname(destination), { recursive: true });
       copyFileSync(path, destination);
