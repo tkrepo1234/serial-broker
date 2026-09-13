@@ -55,7 +55,7 @@ export interface UsbDeviceFilter {
  *
  * The cost is that the library cannot tell two such ports apart. With more than one granted,
  * it uses the first and reports the ambiguity at `warn` level. Use the USB filter whenever
- * the device has IDs. See [ADR-0016](../../docs/adr/0016-non-usb-devices.md).
+ * the device has IDs. See ADR-0016.
  */
 export interface AnyDeviceFilter {
   /** Must be `true`. Spelled as a field so the intent is explicit at the call site. */

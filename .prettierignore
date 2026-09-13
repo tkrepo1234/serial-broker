@@ -3,3 +3,6 @@ coverage
 node_modules
 package-lock.json
 docs/api
+docs/.venv
+docs/site/api/reference
+docs/site/_build

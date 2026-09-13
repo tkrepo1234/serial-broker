@@ -31,6 +31,7 @@ export {
   type EffectiveSettings,
   type LockDiagnostics,
   type ObservedEvent,
+  type ObservedEventBase,
   type ParticipantDiagnostics,
   type PendingWritesDiagnostics,
 } from './core/diagnostics.js';

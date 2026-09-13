@@ -138,7 +138,7 @@ function requireObject(value: unknown, argumentName: string): Record<string, unk
  * Two shapes, kept apart rather than merged into one with optional IDs: a configuration
  * either identifies a USB device or accepts whatever the user granted, and code downstream
  * must not be able to read a vendor ID from the second kind. See
- * [ADR-0016](../../docs/adr/0016-non-usb-devices.md).
+ * ADR-0016.
  *
  * Mixing them - passing `any` *and* IDs - is rejected rather than silently resolved, because
  * either interpretation would be a guess about what the caller meant.

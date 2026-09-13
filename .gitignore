@@ -23,3 +23,8 @@ tools/
 
 # Generated API reference (reproduce with: npm run docs:api)
 docs/api/
+
+# Documentation site: Python environment, generated reference, build output (ADR-0020)
+docs/.venv/
+docs/site/api/reference/
+docs/site/_build/

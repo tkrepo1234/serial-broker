@@ -9,7 +9,16 @@ import tseslint from 'typescript-eslint';
  */
 export default defineConfig(
   {
-    ignores: ['dist/**', 'coverage/**', 'node_modules/**', 'docs/api/**'],
+    ignores: [
+      'dist/**',
+      'coverage/**',
+      'node_modules/**',
+      'docs/api/**',
+      // The documentation site's Python environment and build output (ADR-0020).
+      'docs/.venv/**',
+      'docs/site/_build/**',
+      'docs/site/api/reference/**',
+    ],
   },
 
   js.configs.recommended,
@@ -128,6 +137,14 @@ export default defineConfig(
       '@typescript-eslint/unbound-method': 'off',
       'no-restricted-globals': 'off',
     },
+  },
+
+  // The documentation build script is plain Node JavaScript with no TypeScript program behind it,
+  // so rules that need type information cannot apply to it (ADR-0020).
+  {
+    files: ['docs/site/build.mjs'],
+    extends: [tseslint.configs.disableTypeChecked],
+    languageOptions: { globals: { process: 'readonly' } },
   },
 
   // Config files are Node-side and use default exports by convention.

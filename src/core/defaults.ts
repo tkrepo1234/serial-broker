@@ -19,7 +19,7 @@ export type NormalizedEncodingSettings = Required<EncodingSettings>;
  * A validated device filter.
  *
  * Discriminated rather than "optional IDs", so that no code can read a vendor ID that a
- * configuration does not have. See [ADR-0016](../../docs/adr/0016-non-usb-devices.md).
+ * configuration does not have. See ADR-0016.
  */
 export type NormalizedDeviceFilter =
   | { readonly kind: 'usb'; readonly vendorId: number; readonly productId: number }

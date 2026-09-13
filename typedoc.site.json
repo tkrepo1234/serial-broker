@@ -1,0 +1,16 @@
+{
+  "$schema": "https://typedoc-plugin-markdown.org/schema.json",
+  "extends": ["./typedoc.json"],
+  "plugin": ["typedoc-plugin-markdown"],
+  "entryPoints": ["src/index.ts", "src/diagnostics.ts"],
+  "out": "docs/site/api/reference",
+  "entryFileName": "index.md",
+  "disableSources": true,
+  "hidePageHeader": true,
+  "hideBreadcrumbs": true,
+  "useCodeBlocks": true,
+  "parametersFormat": "table",
+  "interfacePropertiesFormat": "table",
+  "enumMembersFormat": "table",
+  "typeDeclarationFormat": "table"
+}

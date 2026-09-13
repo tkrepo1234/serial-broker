@@ -6,7 +6,22 @@ Work that is agreed but not yet started. Ordered by when it becomes relevant, no
 
 ## After beta: a full developer documentation site
 
-**Requested by Tim, 2026-09-12. Explicitly scheduled for after the beta phase.**
+**Requested by Tim, 2026-09-12. Explicitly scheduled for after the beta phase — then started early
+at Tim's request on 2026-09-13.**
+
+### Status
+
+Started 2026-09-13. The toolchain questions below are decided in
+[ADR-0020](./docs/adr/0020-documentation-toolchain.md): Sphinx with the Read the Docs theme,
+chapters in Markdown (MyST), the API reference generated from TSDoc, Python in `docs/.venv`.
+`npm run docs` builds `docs/site/`.
+
+| Done                                                 | Still to write                                         |
+| ---------------------------------------------------- | ------------------------------------------------------ |
+| Site skeleton, full outline, generated API reference | Examples in all four tiers                             |
+| Introduction, Installing, Quickstart                 | Configuration, Errors, Diagnostics, Internals          |
+| How shared ports behave (the core chapter)           | Completing TSDoc where the generated reference is thin |
+|                                                      | A CI step that builds the site; hosting                |
 
 Build a product-grade documentation site for developers, modelled on
 [open62541 1.3](https://open62541.org/doc/1.3/).

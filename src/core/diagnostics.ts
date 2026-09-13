@@ -37,12 +37,29 @@ export type ConnectionStateName = (typeof CONNECTION_STATES)[number];
 
 /** The settings a configuration is actually running with, every default applied. */
 export interface EffectiveSettings {
-  /** USB IDs, or `{ any: true }` for a configuration that accepts any granted port. */
+  /**
+   * USB IDs, or `{ any: true }` for a configuration that accepts any granted port.
+   *
+   * Either shape can be passed back to `setup()` unchanged.
+   */
   readonly device:
-    { readonly vendorId: number; readonly productId: number } | { readonly any: true };
+    | {
+        /** USB vendor ID, `0x0000`-`0xffff`. */
+        readonly vendorId: number;
+        /** USB product ID, `0x0000`-`0xffff`. */
+        readonly productId: number;
+      }
+    | {
+        /** Always `true`: the configuration accepts whatever port the user granted. */
+        readonly any: true;
+      };
+  /** Line settings the port is opened with, including the defaults that were applied. */
   readonly serial: Required<SerialSettings>;
+  /** Reconnect and timeout behaviour, including the defaults that were applied. */
   readonly connection: Required<ConnectionSettings>;
+  /** Text encoding and decoding, including the defaults that were applied. */
   readonly encoding: Required<EncodingSettings>;
+  /** Whether the configuration is remembered across reloads. */
   readonly persist: boolean;
 }
 
@@ -76,9 +93,11 @@ export interface PendingWritesDiagnostics {
 
 /** One configuration, as one context sees it. */
 export interface ConfigurationDiagnostics {
+  /** The configuration name, as passed to `setup()`. */
   readonly name: string;
   /** Whether this context holds the ownership lock right now. */
   readonly role: 'owner' | 'participant';
+  /** The connection status as this context last learned it. */
   readonly status: SerialBrokerStatus;
   /** Epoch milliseconds at which the current status was entered in this context. */
   readonly statusSince: number;
@@ -89,9 +108,11 @@ export interface ConfigurationDiagnostics {
    * newer build may know a code this one does not.
    */
   readonly lastErrorCode: string | undefined;
+  /** The settings this context runs the configuration with. */
   readonly settings: EffectiveSettings;
   /** Listeners the application has registered in this context, per event. */
   readonly listeners: Readonly<Record<SerialBrokerEventName, number>>;
+  /** Writes this context has issued that have not settled yet. */
   readonly pendingWrites: PendingWritesDiagnostics;
   /** Present only in the context that owns the port. */
   readonly connection: ConnectionDiagnostics | undefined;
@@ -103,21 +124,25 @@ export interface ParticipantDiagnostics {
   readonly clientId: string;
   /** Which message bus this context ended up on. */
   readonly transport: 'sharedworker' | 'broadcastchannel';
+  /** The version of the message protocol between tabs that this context speaks. */
   readonly protocolVersion: number;
   /** Epoch milliseconds at which the context produced this report. */
   readonly reportedAt: number;
+  /** Every configuration this context has set up, in registration order. */
   readonly configurations: readonly ConfigurationDiagnostics[];
 }
 
 /** A Web Lock this library holds or is waiting for. */
 export interface LockDiagnostics {
+  /** The lock name, `serial-broker/owner/v<protocol version>/<configuration name>`. */
   readonly name: string;
+  /** The lock mode. Ownership locks are always exclusive. */
   readonly mode: 'exclusive' | 'shared';
   /**
    * The browser's identifier for the context, from `LockManager.query()`.
    *
-   * Not the same identifier as {@link ParticipantDiagnostics.clientId}: the browser and this
-   * library name contexts independently, and nothing maps one onto the other.
+   * Not the same identifier as `ParticipantDiagnostics.clientId`: the browser and this library
+   * name contexts independently, and nothing maps one onto the other.
    */
   readonly browserClientId: string | undefined;
 }
@@ -135,12 +160,18 @@ export interface DiagnosticsSnapshot {
    * them. The holder of `serial-broker/owner/…/<name>` is the owner of that configuration.
    */
   readonly locks:
-    | { readonly held: readonly LockDiagnostics[]; readonly pending: readonly LockDiagnostics[] }
+    | {
+        /** Locks granted to a context right now. */
+        readonly held: readonly LockDiagnostics[];
+        /** Requests queued behind a holder, longest-waiting first. */
+        readonly pending: readonly LockDiagnostics[];
+      }
     | undefined;
 }
 
 /** Fields every observed event carries. */
-interface ObservedEventBase {
+export interface ObservedEventBase {
+  /** The configuration the event concerns, or `undefined` for a failure tied to none. */
   readonly configName: string | undefined;
   /** The context that put the event on the bus. */
   readonly from: string;
@@ -151,19 +182,37 @@ interface ObservedEventBase {
 /** Something that happened to a watched configuration, somewhere on the origin. */
 export type ObservedEvent =
   | (ObservedEventBase & {
+      /** The device sent data. */
       readonly kind: 'received';
+      /** The bytes exactly as the device produced them. */
       readonly data: Uint8Array;
+      /** The decoded text, when the owner's configuration decodes text. */
       readonly text: string | undefined;
     })
   | (ObservedEventBase & {
+      /** Bytes were handed to the device. */
       readonly kind: 'sent';
+      /** The bytes that were written. */
       readonly data: Uint8Array;
       /** The context whose write this was. */
       readonly originClientId: string;
     })
-  | (ObservedEventBase & { readonly kind: 'status'; readonly status: SerialBrokerStatus })
-  | (ObservedEventBase & { readonly kind: 'error'; readonly error: SerialBrokerError })
-  | (ObservedEventBase & { readonly kind: 'owner-claimed' | 'owner-released' });
+  | (ObservedEventBase & {
+      /** The connection status changed. */
+      readonly kind: 'status';
+      /** The status now in effect. */
+      readonly status: SerialBrokerStatus;
+    })
+  | (ObservedEventBase & {
+      /** Something went wrong. */
+      readonly kind: 'error';
+      /** The error, rebuilt with its code, context and remediation. */
+      readonly error: SerialBrokerError;
+    })
+  | (ObservedEventBase & {
+      /** A context took the port, or gave it up. */
+      readonly kind: 'owner-claimed' | 'owner-released';
+    });
 
 /**
  * Describes a normalised configuration as the settings it runs with.

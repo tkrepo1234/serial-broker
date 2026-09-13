@@ -50,7 +50,7 @@ export async function findGrantedPort(
  *
  * An `any` filter matches every granted port, including ports that report no identifying
  * information at all — a built-in RS-232 interface, a virtual COM port pair, a Bluetooth
- * serial profile. See [ADR-0016](../../docs/adr/0016-non-usb-devices.md).
+ * serial profile. See ADR-0016.
  */
 export function matchesDevice(port: SerialPort, configuration: NormalizedConfiguration): boolean {
   if (configuration.device.kind === 'any') {
