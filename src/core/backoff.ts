@@ -57,10 +57,22 @@ export function computeBackoffDelayMs(
 export class BackoffState {
   #attempt = 0;
   #connectedAt: number | undefined;
+  #losses = 0;
 
-  /** The zero-based number of the attempt about to be made. */
+  /** Attempts made since the counter last started over. `maxAttempts` limits this. */
   get attempt(): number {
     return this.#attempt;
+  }
+
+  /**
+   * Which delay the next retry waits: 0 for the first retry after the count started over, which
+   * is immediate, then growing with every further loss.
+   *
+   * Counted from losses rather than from attempts, so that a connection that held long enough and
+   * then dropped gets one immediate retry, exactly as a fresh start does, not two.
+   */
+  get retryIndex(): number {
+    return Math.max(this.#losses - 1, 0);
   }
 
   /** `true` once the attempt about to be made would exceed `maxAttempts`. */
@@ -88,13 +100,16 @@ export class BackoffState {
     const connectedAt = this.#connectedAt;
     if (connectedAt !== undefined && now - connectedAt >= stableAfterMs) {
       this.#attempt = 0;
+      this.#losses = 0;
     }
+    this.#losses += 1;
     this.#connectedAt = undefined;
   }
 
   /** Clears all state, as on an explicit reconnect request. */
   reset(): void {
     this.#attempt = 0;
+    this.#losses = 0;
     this.#connectedAt = undefined;
   }
 }

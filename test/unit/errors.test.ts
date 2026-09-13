@@ -116,6 +116,15 @@ describe('error serialization', () => {
     expect(isSerializedError(structuredClone(serialized))).toBe(true);
     expect(isSerializedError({ code: 'UNKNOWN' })).toBe(false);
     expect(isSerializedError(null)).toBe(false);
+    // Everything deserializeError reads is checked, so a bad message is dropped, not thrown on.
+    expect(isSerializedError({ ...structuredClone(serialized), cause: null })).toBe(false);
+    expect(isSerializedError({ ...structuredClone(serialized), message: undefined })).toBe(false);
+
+    const wrapped = new SerialBrokerError(SerialBrokerErrorCode.RECONNECT_EXHAUSTED, 'gave up', {
+      cause: new SerialBrokerError(SerialBrokerErrorCode.DEVICE_DISCONNECTED, 'gone'),
+    });
+    // This library's own error has an own `code` as well, and is still not a DOMException.
+    expect(wrapped.toJSON().cause).not.toHaveProperty('domExceptionName');
   });
 
   it('is JSON-serialisable for a logging pipeline', () => {

@@ -82,9 +82,12 @@ export class ConfigurationStore {
       return;
     }
 
-    const all = this.#readRecord();
-    all[configuration.name] = toStorable(configuration);
-    this.#write(all);
+    // Rebuilt rather than assigned to: assigning to a key such as `__proto__` on a plain object
+    // sets its prototype instead of adding an entry, and the configuration would silently vanish.
+    const others = Object.entries(this.#readRecord()).filter(
+      ([name]) => name !== configuration.name,
+    );
+    this.#write(Object.fromEntries([...others, [configuration.name, toStorable(configuration)]]));
   }
 
   /** Removes one configuration. */

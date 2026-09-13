@@ -70,7 +70,7 @@ failure.
 ### 1. Ownership is a lock, not an agreement
 
 Every context with a configuration set up keeps a request outstanding for the Web Lock
-`serial-broker/owner/v1/<name>`. Whoever is granted it is the owner and holds it by keeping
+`serial-broker/owner/v<protocol version>/<name>`. Whoever is granted it is the owner and holds it by keeping
 its callback's promise pending.
 
 When the owning context dies — closed, crashed, out of memory, laptop lid — **the browser

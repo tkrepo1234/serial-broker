@@ -177,10 +177,13 @@ export class SerialBrokerClient {
     }
 
     this.#sessions.delete(validName);
-    await session.release();
+    // Removed before the wait, not after it: a `setup()` of the same name while the port closes
+    // saves the new configuration, which removing afterwards would delete.
     this.#store.remove(validName);
+    await session.release();
 
-    if (options.forgetDevice === true) {
+    // For the same reason, a configuration set up again meanwhile keeps its device permission.
+    if (options.forgetDevice === true && !this.#sessions.has(validName)) {
       await this.#forgetDevice(session.definition);
     }
 

@@ -202,6 +202,22 @@ export class PortSupervisor {
       );
     }
 
+    // The picker stays open for as long as the user likes, and what happened meanwhile decides
+    // what the grant still means.
+    const current = this.#state;
+    if (current.kind === 'stopped') {
+      // This context stopped holding the port while the picker was open.
+      return;
+    }
+    if (current.kind === 'open' || current.kind === 'opening') {
+      // The browser has recorded the grant. Connecting again would throw away a connection that
+      // works, or race the one being made.
+      return;
+    }
+    if (current.kind === 'reconnecting' && current.timer !== undefined) {
+      this.environment.clock.clearTimer(current.timer);
+    }
+
     this.#backoff.reset();
     this.#state = { kind: 'idle' };
     await this.#connect(0);
@@ -261,7 +277,11 @@ export class PortSupervisor {
                   },
                 );
 
-          this.#handleConnectionLoss('write-failed', failure);
+          // Only while this is still the connection the write started on: a write that outlived
+          // its connection must not tear down the one that replaced it.
+          if (this.#state === state) {
+            this.#handleConnectionLoss('write-failed', failure);
+          }
           throw failure;
         }
 
@@ -570,11 +590,10 @@ export class PortSupervisor {
       return;
     }
 
-    // `attempt` counts attempts *made*, so after the first failure it is already 1. The
-    // retry index is one less, which is what makes the first retry immediate: a power-cycled
-    // device is usually back within one event-loop turn (ADR-0010).
+    // The first retry after a loss is immediate: a power-cycled device is usually back within
+    // one event-loop turn (ADR-0010).
     const delayMs = computeBackoffDelayMs(
-      this.#backoff.attempt - 1,
+      this.#backoff.retryIndex,
       this.configuration.connection,
       this.environment.random,
     );

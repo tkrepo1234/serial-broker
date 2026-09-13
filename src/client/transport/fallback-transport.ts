@@ -4,11 +4,13 @@ import type { WorkerStartup } from './shared-worker-transport.js';
 import type { Transport, TransportRequest } from './transport.js';
 
 /**
- * Most messages kept for replay while the worker has not answered.
+ * Most traffic messages - data received and data sent - kept for replay while the worker has
+ * not answered.
  *
  * A worker script normally answers within milliseconds, and a missing one is reported about as
- * fast. The bound only matters for a fetch that hangs while the tab keeps sending - an owner
- * streaming data, say - and there it trades completeness of the replay for bounded memory.
+ * fast. The bound only matters for a fetch that hangs while the tab holds a port that streams
+ * data, and there it trades completeness of the traffic for bounded memory. Every other message
+ * is always kept: dropping an ownership claim or a write result would leave other tabs waiting.
  */
 export const MAX_REPLAYED_MESSAGES = 1000;
 
@@ -30,7 +32,8 @@ type Operation =
  *
  * So until the broker's `welcome` proves the script runs, everything asked of the bus is kept.
  * If the script fails first, none of it reached anyone, and replaying it over a
- * `BroadcastChannel` delivers each message exactly once, in the order it was sent. Once the
+ * `BroadcastChannel` delivers each message exactly once, in the order it was sent - except traffic
+ * beyond {@link MAX_REPLAYED_MESSAGES}, which is counted and dropped. Once the
  * welcome arrives the record is dropped, and a later worker error is an ordinary transport error.
  */
 export class FallbackTransport implements Transport {
@@ -41,7 +44,7 @@ export class FallbackTransport implements Transport {
   #active: Transport;
   /** `undefined` once the outcome is known: the worker answered, or the fallback took over. */
   #pending: Operation[] | undefined = [];
-  #keptMessages = 0;
+  #keptTraffic = 0;
   #droppedMessages = 0;
   #isClosed = false;
 
@@ -110,15 +113,13 @@ export class FallbackTransport implements Transport {
     if (pending === undefined) {
       return;
     }
-    if (operation.kind === 'send') {
-      if (this.#keptMessages >= MAX_REPLAYED_MESSAGES) {
+    if (operation.kind === 'send' && isTraffic(operation.message)) {
+      if (this.#keptTraffic >= MAX_REPLAYED_MESSAGES) {
         this.#droppedMessages += 1;
         return;
       }
-      this.#keptMessages += 1;
+      this.#keptTraffic += 1;
     }
-    // Attach, detach and ownership are always kept: they are few, and without them the fallback
-    // would discard every message addressed to this tab.
     pending.push(operation);
   }
 
@@ -163,8 +164,13 @@ export class FallbackTransport implements Transport {
     this.#request.logger.warn('the SharedWorker script did not load; using BroadcastChannel', {
       event: 'environment.transport-fallback',
       reason: 'worker-script-failed',
-      replayedMessages: this.#keptMessages,
+      replayedMessages: pending.filter((operation) => operation.kind === 'send').length,
       droppedMessages: this.#droppedMessages,
     });
   }
+}
+
+/** Data the device sent or was sent: plentiful, and the only messages the replay may drop. */
+function isTraffic(message: ProtocolMessage): boolean {
+  return message.type === 'data-received' || message.type === 'data-sent';
 }

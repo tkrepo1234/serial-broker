@@ -118,7 +118,7 @@ await SerialBroker.setup('Scale', {
     maxWriteChunkBytes: 4096,
   },
   encoding: {
-    encoding: 'utf-8', // used for string payloads
+    encoding: 'utf-8', // how received text is decoded; strings are always sent as UTF-8
     decodeText: true, // also deliver `text` on onReceive
   },
   persist: true, // restore this configuration after a reload
@@ -199,7 +199,7 @@ Treat the list as extensible: handle an unrecognised status gracefully rather th
 | `requestAccess(name)`      | Show the port picker. Returns `false` if the user dismissed it.                                                                       |
 | `restore()`                | Set up everything persisted by an earlier visit. Returns the names.                                                                   |
 | `exists(name)` / `names()` | What is set up in this tab.                                                                                                           |
-| `configure(options)`       | `workerUrl`, `transport`, `logger`. Before the first `setup()`.                                                                       |
+| `configure(options)`       | `workerUrl`, `transport`, `logger`, `logPayloads`. Before any other call.                                                             |
 | `isSupported()`            | Whether this browser can support the library at all.                                                                                  |
 | `dispose()`                | Release everything. Rarely needed; a closing tab does it anyway.                                                                      |
 
@@ -239,8 +239,8 @@ SerialBroker.configure({
 });
 ```
 
-Every record carries `clientId` and `configName`, so records from several tabs can be
-correlated in one console. Payload bytes never appear above `debug` level — serial traffic
+Records about a configuration carry `clientId` and `configName`, so records from several tabs
+can be correlated in one console. Payload bytes never appear above `debug` level — serial traffic
 routinely carries card numbers and PINs.
 
 ## Diagnostics
@@ -307,8 +307,9 @@ on would break every guarantee above.
   strictly ordered and never interleaved. Across tabs, whoever gets there first wins — if you
   need command atomicity across tabs, build it on top.
 - **Mixed library versions partition.** Tabs running different wire protocol versions do not
-  coordinate with each other; both groups report `PROTOCOL_VERSION_MISMATCH`. Reload all tabs
-  after deploying a version that changes the protocol.
+  coordinate with each other and cannot see each other: the group that comes second cannot open
+  the device and keeps reconnecting. Reload all tabs after deploying a version that changes the
+  protocol.
 
 ## How it works
 

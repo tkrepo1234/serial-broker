@@ -82,6 +82,14 @@ try {
 const cardTemplate = byId('cardTemplate') as HTMLTemplateElement;
 const cards = new Map<string, { card: ConfigurationCard; stopWatching: Unsubscribe | undefined }>();
 let snapshot: DiagnosticsSnapshot | undefined;
+/**
+ * The configurations remembered in this browser, read when they may have changed rather than on
+ * every refresh: reading reports an invalid entry each time, which would flood the log.
+ */
+let rememberedCache: RememberedConfiguration[] | undefined;
+window.addEventListener('storage', () => {
+  rememberedCache = undefined;
+});
 
 const host: CardHost = {
   join(name, joined) {
@@ -185,14 +193,22 @@ window.addEventListener('pagehide', () => {
 // --- Helpers ----------------------------------------------------------------------------------
 
 async function refreshLoop(): Promise<void> {
-  await refresh();
-  setTimeout(() => {
-    void refreshLoop();
-  }, REFRESH_INTERVAL_MS);
+  try {
+    await refresh();
+  } catch (error) {
+    // One failed redraw must not stop the page from ever refreshing again.
+    logFailure('refresh the page', error);
+  } finally {
+    setTimeout(() => {
+      void refreshLoop();
+    }, REFRESH_INTERVAL_MS);
+  }
 }
 
 /** Redraws from this tab's fresh state at once, then again when the other tabs have answered. */
 function refreshNow(): void {
+  // An action may have set something up or released it, which changes what is remembered.
+  rememberedCache = undefined;
   render();
   void refresh();
 }
@@ -277,6 +293,11 @@ function act(name: string, action: string, work: () => Promise<void>): void {
 }
 
 function remembered(): RememberedConfiguration[] {
+  rememberedCache ??= readRemembered();
+  return rememberedCache;
+}
+
+function readRemembered(): RememberedConfiguration[] {
   if (environment === undefined) {
     return [];
   }

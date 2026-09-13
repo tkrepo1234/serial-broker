@@ -52,6 +52,19 @@ function statusRequest(): ProtocolMessage {
   };
 }
 
+function dataReceived(): ProtocolMessage {
+  return {
+    type: 'data-received',
+    v: PROTOCOL_VERSION,
+    from: SELF,
+    to: 'all',
+    configName: 'Reader',
+    payload: new Uint8Array([1]),
+    text: undefined,
+    timestamp: 0,
+  };
+}
+
 const LOAD_ERROR = { type: 'error' };
 
 function setUp(options: { fallbackThrows?: boolean } = {}): {
@@ -185,19 +198,20 @@ describe('FallbackTransport', () => {
     expect(transportErrors).toEqual([LOAD_ERROR]);
   });
 
-  it('keeps a bounded number of messages, and every attach, and says how many it dropped', () => {
+  it('bounds the traffic it keeps, never the messages other tabs wait for', () => {
     const { transport, fallback, logs, failToLoad } = setUp();
     for (let index = 0; index < MAX_REPLAYED_MESSAGES + 5; index += 1) {
-      transport.send(statusRequest());
+      transport.send(dataReceived());
     }
+    transport.send(statusRequest());
     transport.attach('Reader');
 
     failToLoad();
 
-    expect(fallback.operations.filter((operation) => operation.startsWith('send'))).toHaveLength(
-      MAX_REPLAYED_MESSAGES,
-    );
-    expect(fallback.operations.at(-1)).toBe('attach Reader');
+    expect(
+      fallback.operations.filter((operation) => operation === 'send data-received'),
+    ).toHaveLength(MAX_REPLAYED_MESSAGES);
+    expect(fallback.operations.slice(-2)).toEqual(['send status-request', 'attach Reader']);
     expect(logs.at(-1)?.fields).toMatchObject({ droppedMessages: 5 });
   });
 

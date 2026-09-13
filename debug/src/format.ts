@@ -33,13 +33,24 @@ export function toHex(data: Uint8Array): string {
 /**
  * Parses hex bytes as an operator types them: `02 FF 03`, `02ff03`, `0x02,0xff`.
  *
- * @throws An `Error` naming the input when it is not a whole number of hex bytes.
+ * Every group between spaces, commas or colons has to hold whole bytes: `0x1 0x2` is a typing
+ * mistake, not the byte `0x12`.
+ *
+ * @throws An `Error` naming the input when it is not a sequence of whole hex bytes.
  */
 export function parseHexBytes(input: string): Uint8Array<ArrayBuffer> {
-  const compact = input.replace(/0x/gi, '').replace(/[\s,:]/g, '');
-  if (compact.length % 2 !== 0 || !/^[0-9a-fA-F]*$/.test(compact)) {
-    throw new Error(`"${input}" is not a sequence of hex bytes, such as 02 FF 03.`);
+  const groups: string[] = [];
+  for (const group of input.split(/[\s,:]+/)) {
+    if (group === '') {
+      continue;
+    }
+    const digits = group.replace(/^0x/i, '');
+    if (digits.length === 0 || digits.length % 2 !== 0 || !/^[0-9a-fA-F]+$/.test(digits)) {
+      throw new Error(`"${input}" is not a sequence of hex bytes, such as 02 FF 03.`);
+    }
+    groups.push(digits);
   }
+  const compact = groups.join('');
   const bytes = new Uint8Array(compact.length / 2);
   for (let index = 0; index < bytes.length; index += 1) {
     bytes[index] = Number.parseInt(compact.slice(index * 2, index * 2 + 2), 16);

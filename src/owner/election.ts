@@ -1,3 +1,4 @@
+import type { Clock, TimerHandle } from '../core/clock.js';
 import { createSignal, type Signal } from '../core/deadline.js';
 import type { ScopedLogger } from '../core/logger.js';
 import type { LockManagerLike } from '../environment/environment.js';
@@ -34,17 +35,22 @@ export interface ElectionCallbacks {
  *
  * See ADR-0005.
  */
+/** How long to wait before requesting the lock again after a request failed. */
+export const ELECTION_RETRY_DELAY_MS = 1_000;
+
 export class OwnershipElection {
   #abort: AbortController | undefined;
   #release: Signal | undefined;
   #isOwner = false;
   #isStopped = false;
+  #retryTimer: TimerHandle | undefined;
 
   constructor(
     private readonly locks: LockManagerLike,
     private readonly configName: string,
     private readonly callbacks: ElectionCallbacks,
     private readonly logger: ScopedLogger,
+    private readonly clock: Clock,
   ) {}
 
   /** `true` while this context holds the lock. */
@@ -121,6 +127,10 @@ export class OwnershipElection {
       return;
     }
     this.#isStopped = true;
+    if (this.#retryTimer !== undefined) {
+      this.clock.clearTimer(this.#retryTimer);
+      this.#retryTimer = undefined;
+    }
 
     // Order matters: resolving the release lets the lock go, aborting only affects a request
     // still queued. Doing both covers either state without having to know which we are in.
@@ -147,7 +157,12 @@ export class OwnershipElection {
     // the election entirely, which would silently make it ineligible to ever own the port.
     // Rejoining is the only safe response; `start` is a no-op if we have been stopped.
     if (reason === 'failed' && !this.#isStopped) {
-      this.start();
+      // After a pause: a request the browser refuses outright would otherwise be repeated in an
+      // endless chain of microtasks that freezes the tab.
+      this.#retryTimer = this.clock.setTimer(() => {
+        this.#retryTimer = undefined;
+        this.start();
+      }, ELECTION_RETRY_DELAY_MS);
     }
   }
 }

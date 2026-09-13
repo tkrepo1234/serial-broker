@@ -259,6 +259,9 @@ describe('debugging surface: formatting', () => {
     expect(toHex(parseHexBytes('a1b2'))).toBe('A1 B2');
     expect(() => parseHexBytes('0 2F')).toThrow(/not a sequence of hex bytes/);
     expect(() => parseHexBytes('ZZ')).toThrow(/not a sequence of hex bytes/);
+    // Each separated group holds whole bytes; single digits are a typing mistake, not glued.
+    expect(() => parseHexBytes('0x1 0x2')).toThrow(/not a sequence of hex bytes/);
+    expect(() => parseHexBytes('1 2 3 4')).toThrow(/not a sequence of hex bytes/);
   });
 
   it('says how far away a moment is, in both directions', () => {

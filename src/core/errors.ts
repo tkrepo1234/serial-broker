@@ -203,10 +203,31 @@ export function deserializeError(serialized: SerializedSerialBrokerError): Seria
 
 /** Narrows an unknown value to a serialized error, for use at message boundaries. */
 export function isSerializedError(value: unknown): value is SerializedSerialBrokerError {
+  if (typeof value !== 'object' || value === null) {
+    return false;
+  }
+  // Every field `deserializeError` reads is checked: a message from another tab is untrusted,
+  // and a missing cause or message must be dropped here rather than throw there.
+  const record = value as Record<string, unknown>;
+  const { cause, context } = record;
+  return (
+    record['$type'] === 'SerialBrokerError' &&
+    typeof record['code'] === 'string' &&
+    typeof record['message'] === 'string' &&
+    typeof record['remediation'] === 'string' &&
+    typeof record['isRetryable'] === 'boolean' &&
+    typeof record['timestamp'] === 'number' &&
+    (context === undefined || (typeof context === 'object' && context !== null)) &&
+    (cause === undefined || isSerializedCause(cause))
+  );
+}
+
+function isSerializedCause(value: unknown): boolean {
   return (
     typeof value === 'object' &&
     value !== null &&
-    (value as { $type?: unknown }).$type === 'SerialBrokerError'
+    typeof (value as { name?: unknown }).name === 'string' &&
+    typeof (value as { message?: unknown }).message === 'string'
   );
 }
 
@@ -245,5 +266,9 @@ export function describeUnknown(value: unknown): string {
  * `instanceof DOMException` would throw a `ReferenceError` rather than return `false`.
  */
 function isDomException(error: Error): boolean {
-  return error.constructor.name === 'DOMException' || Object.hasOwn(error, 'code');
+  // This library's own error also has an own `code`, and is not a DOMException.
+  return (
+    !(error instanceof SerialBrokerError) &&
+    (error.constructor.name === 'DOMException' || Object.hasOwn(error, 'code'))
+  );
 }

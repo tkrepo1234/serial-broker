@@ -125,6 +125,16 @@ function requireBoolean(value: unknown, argumentName: string): boolean {
   return value;
 }
 
+/**
+ * An option's value, or its default when it is absent.
+ *
+ * Only `undefined` means absent. `null` is passed on, and fails validation like any other value
+ * of the wrong type: nothing is coerced silently.
+ */
+function orDefault(value: unknown, fallback: unknown): unknown {
+  return value === undefined ? fallback : value;
+}
+
 function requireObject(value: unknown, argumentName: string): Record<string, unknown> {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) {
     throw invalid(argumentName, 'an object', value);
@@ -188,7 +198,10 @@ export function normalizeConfiguration(name: unknown, options: unknown): Normali
   const encoding =
     raw.encoding === undefined ? {} : requireObject(raw.encoding, 'options.encoding');
 
-  const maxAttemptsRaw = connection['maxAttempts'] ?? DEFAULT_CONNECTION_SETTINGS.maxAttempts;
+  const maxAttemptsRaw = orDefault(
+    connection['maxAttempts'],
+    DEFAULT_CONNECTION_SETTINGS.maxAttempts,
+  );
 
   return Object.freeze({
     name: validName,
@@ -199,53 +212,53 @@ export function normalizeConfiguration(name: unknown, options: unknown): Normali
       // rate would be worse than letting `open()` report it.
       baudRate: requireInteger(serial['baudRate'], 'options.serial.baudRate', 1, 20_000_000),
       dataBits: requireOneOf(
-        serial['dataBits'] ?? DEFAULT_SERIAL_SETTINGS.dataBits,
+        orDefault(serial['dataBits'], DEFAULT_SERIAL_SETTINGS.dataBits),
         'options.serial.dataBits',
         VALID_DATA_BITS,
       ) as 7 | 8,
       stopBits: requireOneOf(
-        serial['stopBits'] ?? DEFAULT_SERIAL_SETTINGS.stopBits,
+        orDefault(serial['stopBits'], DEFAULT_SERIAL_SETTINGS.stopBits),
         'options.serial.stopBits',
         VALID_STOP_BITS,
       ) as 1 | 2,
       parity: requireOneOf(
-        serial['parity'] ?? DEFAULT_SERIAL_SETTINGS.parity,
+        orDefault(serial['parity'], DEFAULT_SERIAL_SETTINGS.parity),
         'options.serial.parity',
         VALID_PARITY,
       ) as 'none' | 'even' | 'odd',
       bufferSize: requireInteger(
-        serial['bufferSize'] ?? DEFAULT_SERIAL_SETTINGS.bufferSize,
+        orDefault(serial['bufferSize'], DEFAULT_SERIAL_SETTINGS.bufferSize),
         'options.serial.bufferSize',
         1,
         16 * 1024 * 1024,
       ),
       flowControl: requireOneOf(
-        serial['flowControl'] ?? DEFAULT_SERIAL_SETTINGS.flowControl,
+        orDefault(serial['flowControl'], DEFAULT_SERIAL_SETTINGS.flowControl),
         'options.serial.flowControl',
         VALID_FLOW_CONTROL,
       ) as 'none' | 'hardware',
     }),
     connection: Object.freeze({
       initialDelayMs: requireInteger(
-        connection['initialDelayMs'] ?? DEFAULT_CONNECTION_SETTINGS.initialDelayMs,
+        orDefault(connection['initialDelayMs'], DEFAULT_CONNECTION_SETTINGS.initialDelayMs),
         'options.connection.initialDelayMs',
         0,
         3_600_000,
       ),
       factor: requireFiniteNumber(
-        connection['factor'] ?? DEFAULT_CONNECTION_SETTINGS.factor,
+        orDefault(connection['factor'], DEFAULT_CONNECTION_SETTINGS.factor),
         'options.connection.factor',
         1,
         100,
       ),
       maxDelayMs: requireInteger(
-        connection['maxDelayMs'] ?? DEFAULT_CONNECTION_SETTINGS.maxDelayMs,
+        orDefault(connection['maxDelayMs'], DEFAULT_CONNECTION_SETTINGS.maxDelayMs),
         'options.connection.maxDelayMs',
         0,
         3_600_000,
       ),
       jitter: requireFiniteNumber(
-        connection['jitter'] ?? DEFAULT_CONNECTION_SETTINGS.jitter,
+        orDefault(connection['jitter'], DEFAULT_CONNECTION_SETTINGS.jitter),
         'options.connection.jitter',
         0,
         1,
@@ -257,25 +270,25 @@ export function normalizeConfiguration(name: unknown, options: unknown): Normali
           ? Number.POSITIVE_INFINITY
           : requireInteger(maxAttemptsRaw, 'options.connection.maxAttempts', 0, 1_000_000),
       stableAfterMs: requireInteger(
-        connection['stableAfterMs'] ?? DEFAULT_CONNECTION_SETTINGS.stableAfterMs,
+        orDefault(connection['stableAfterMs'], DEFAULT_CONNECTION_SETTINGS.stableAfterMs),
         'options.connection.stableAfterMs',
         0,
         3_600_000,
       ),
       openTimeoutMs: requireInteger(
-        connection['openTimeoutMs'] ?? DEFAULT_CONNECTION_SETTINGS.openTimeoutMs,
+        orDefault(connection['openTimeoutMs'], DEFAULT_CONNECTION_SETTINGS.openTimeoutMs),
         'options.connection.openTimeoutMs',
         1,
         600_000,
       ),
       writeTimeoutMs: requireInteger(
-        connection['writeTimeoutMs'] ?? DEFAULT_CONNECTION_SETTINGS.writeTimeoutMs,
+        orDefault(connection['writeTimeoutMs'], DEFAULT_CONNECTION_SETTINGS.writeTimeoutMs),
         'options.connection.writeTimeoutMs',
         1,
         600_000,
       ),
       maxWriteChunkBytes: requireInteger(
-        connection['maxWriteChunkBytes'] ?? DEFAULT_CONNECTION_SETTINGS.maxWriteChunkBytes,
+        orDefault(connection['maxWriteChunkBytes'], DEFAULT_CONNECTION_SETTINGS.maxWriteChunkBytes),
         'options.connection.maxWriteChunkBytes',
         1,
         16 * 1024 * 1024,
@@ -283,15 +296,15 @@ export function normalizeConfiguration(name: unknown, options: unknown): Normali
     }),
     encoding: Object.freeze({
       encoding: validateEncodingLabel(
-        encoding['encoding'] ?? DEFAULT_ENCODING_SETTINGS.encoding,
+        orDefault(encoding['encoding'], DEFAULT_ENCODING_SETTINGS.encoding),
         'options.encoding.encoding',
       ),
       decodeText: requireBoolean(
-        encoding['decodeText'] ?? DEFAULT_ENCODING_SETTINGS.decodeText,
+        orDefault(encoding['decodeText'], DEFAULT_ENCODING_SETTINGS.decodeText),
         'options.encoding.decodeText',
       ),
     }),
-    persist: requireBoolean(raw.persist ?? true, 'options.persist'),
+    persist: requireBoolean(orDefault(raw.persist, true), 'options.persist'),
   });
 }
 

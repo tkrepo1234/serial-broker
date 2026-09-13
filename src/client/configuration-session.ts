@@ -79,6 +79,7 @@ export class ConfigurationSession {
         },
       },
       logger,
+      environment.clock,
     );
 
     this.#writes = new PendingWrites({
@@ -270,7 +271,11 @@ export class ConfigurationSession {
 
     switch (message.type) {
       case 'owner-claimed':
-        this.#writes.handleOwnerChanged();
+        // While this context holds the lock, any other claim is stale - the lock cannot be held
+        // twice (ADR-0005) - and acting on it would hand this context's own writes out again.
+        if (!this.#election.isOwner) {
+          this.#writes.handleOwnerChanged();
+        }
         return;
 
       case 'owner-released':
@@ -297,14 +302,7 @@ export class ConfigurationSession {
         // says so rather than failing it. The write never started, so handing it to whoever
         // owns the port now is not a repeat - and failing the caller because two tabs swapped
         // roles mid-request would be an error about nothing.
-        if (
-          error?.code === SerialBrokerErrorCode.NOT_CONNECTED &&
-          this.#writes.redispatch(message.requestId)
-        ) {
-          return;
-        }
-
-        this.#writes.settle(message.requestId, error);
+        this.#settleWrite(message.requestId, error);
         return;
       }
 
@@ -392,6 +390,11 @@ export class ConfigurationSession {
       this.configuration,
       {
         onStatus: (status) => {
+          // A supervisor being stopped still reports its last statuses. They describe a
+          // connection this context has already given up, so no tab should see them.
+          if (this.#supervisor !== supervisor) {
+            return;
+          }
           this.#setStatus(status);
           this.#broadcastStatus(status);
         },
@@ -490,9 +493,22 @@ export class ConfigurationSession {
           this.#writes.settle(requestId, undefined);
         },
         (error: unknown) => {
-          this.#writes.settle(requestId, toSerialBrokerError(error, this.configuration.name));
+          this.#settleWrite(requestId, toSerialBrokerError(error, this.configuration.name));
         },
       );
+  }
+
+  /**
+   * Settles a write this context issued, wherever it was performed.
+   *
+   * A write that found no open connection never started, so it goes back to wait for the next
+   * connection instead of failing - in the tab holding the port exactly as in any other.
+   */
+  #settleWrite(requestId: RequestId, error: SerialBrokerError | undefined): void {
+    if (error?.code === SerialBrokerErrorCode.NOT_CONNECTED && this.#writes.redispatch(requestId)) {
+      return;
+    }
+    this.#writes.settle(requestId, error);
   }
 
   /** The owner path for someone else's write. */
@@ -582,7 +598,8 @@ export class ConfigurationSession {
   // --- Status and errors -----------------------------------------------------------------------
 
   #setStatus(status: SerialBrokerStatus): void {
-    if (this.#status === status || this.#isReleased) {
+    // `released` is the one status a released configuration still reports, and the last.
+    if (this.#status === status || (this.#isReleased && status !== SerialBrokerStatus.Released)) {
       return;
     }
 

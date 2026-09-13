@@ -510,6 +510,23 @@
       .help-text .actions {
         margin-top: 0.75rem;
       }
+      /* A label with its "?" beside it. The button sits outside the label, so the label names
+         only its own control. */
+      .label-row {
+        display: flex;
+        align-items: center;
+        gap: 0.3rem;
+        margin-bottom: 0.2rem;
+      }
+      .label-row label {
+        margin: 0;
+      }
+      .label-row button.help {
+        margin-left: 0;
+      }
+      .send button.help {
+        margin: 0 0 0.65rem;
+      }
     </style>
   </head>
   <body>
@@ -533,8 +550,8 @@
       <legend>Settings</legend>
       <div class="row">
         <div class="wide">
-          <label for="workerUrl"
-            >Worker URL
+          <div class="label-row">
+            <label for="workerUrl">Worker URL</label>
             <button
               type="button"
               class="help"
@@ -542,13 +559,13 @@
               aria-label="About the worker URL"
             >
               ?
-            </button></label
-          >
+            </button>
+          </div>
           <input id="workerUrl" spellcheck="false" />
         </div>
         <div>
-          <label for="transport"
-            >Transport
+          <div class="label-row">
+            <label for="transport">Transport</label>
             <button
               type="button"
               class="help"
@@ -556,8 +573,8 @@
               aria-label="About the transport"
             >
               ?
-            </button></label
-          >
+            </button>
+          </div>
           <select id="transport">
             <option value="auto">auto</option>
             <option value="sharedworker">SharedWorker</option>
@@ -566,8 +583,8 @@
         </div>
       </div>
       <div class="row" style="margin-top: 0.75rem; align-items: center">
-        <label class="check"
-          ><input id="logPayloads" type="checkbox" /> Log payload bytes
+        <div class="fixed label-row">
+          <label class="check"><input id="logPayloads" type="checkbox" /> Log payload bytes</label>
           <button
             type="button"
             class="help"
@@ -575,8 +592,8 @@
             aria-label="About logging payload bytes"
           >
             ?
-          </button></label
-        >
+          </button>
+        </div>
         <div></div>
         <div class="fixed">
           <button id="copyLink" type="button" class="secondary">Copy link</button>
@@ -979,14 +996,6 @@
           <div class="fixed">
             <label
               >As
-              <button
-                type="button"
-                class="help"
-                popovertarget="help-send"
-                aria-label="About sending"
-              >
-                ?
-              </button>
               <select data-part="mode">
                 <option value="text">text</option>
                 <option value="hex">hex bytes</option>
@@ -1005,6 +1014,11 @@
             </label>
           </div>
           <div class="fixed"><button type="submit">Send</button></div>
+          <div class="fixed">
+            <button type="button" class="help" popovertarget="help-send" aria-label="About sending">
+              ?
+            </button>
+          </div>
         </form>
 
         <div data-part="trafficTitle" class="section-title">
@@ -1048,8 +1062,8 @@
             <input id="name" name="name" required />
           </div>
           <div>
-            <label for="device"
-              >Device
+            <div class="label-row">
+              <label for="device">Device</label>
               <button
                 type="button"
                 class="help"
@@ -1057,13 +1071,13 @@
                 aria-label="About the device"
               >
                 ?
-              </button></label
-            >
+              </button>
+            </div>
             <select id="device" name="device"></select>
           </div>
           <div>
-            <label for="baudRate"
-              >Baud rate
+            <div class="label-row">
+              <label for="baudRate">Baud rate</label>
               <button
                 type="button"
                 class="help"
@@ -1071,8 +1085,8 @@
                 aria-label="About the line settings"
               >
                 ?
-              </button></label
-            >
+              </button>
+            </div>
             <input id="baudRate" name="baudRate" list="baudRates" />
             <datalist id="baudRates">
               <option value="9600"></option>

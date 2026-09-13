@@ -264,6 +264,7 @@ export class ConfigurationCard {
   /** Shows an outcome that is not a failure, such as a dismissed picker. */
   showNotice(text: string): void {
     this.#parts.message.textContent = text;
+    this.#parts.message.title = '';
     this.#parts.message.className = 'message notice';
     this.#parts.message.hidden = false;
   }

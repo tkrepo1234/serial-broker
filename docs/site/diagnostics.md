@@ -29,8 +29,8 @@ A logger must not throw. If it does, the record is dropped and the operation car
 
 ### What a record carries
 
-Every record has a level (`debug`, `info`, `warn`, `error`), a message, and fields. The fields
-always include:
+Every record has a level (`debug`, `info`, `warn`, `error`), a message, and fields. Records about
+a configuration include:
 
 `clientId`
 : The tab that wrote the record. Records collected from several tabs can be told apart by it.

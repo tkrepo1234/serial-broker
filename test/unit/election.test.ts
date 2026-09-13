@@ -1,0 +1,42 @@
+import { describe, expect, it } from 'vitest';
+
+import { NOOP_LOGGER, ScopedLogger } from '../../src/core/logger.js';
+import type { LockManagerLike } from '../../src/environment/environment.js';
+import { ELECTION_RETRY_DELAY_MS, OwnershipElection } from '../../src/owner/election.js';
+import { FakeClock, flushMicrotasks } from '../harness/fake-clock.js';
+
+describe('OwnershipElection', () => {
+  it('pauses before requesting the lock again after a request failed', async () => {
+    let requests = 0;
+    // A browser that refuses the request outright, as a restrictive policy can.
+    const locks = {
+      request: async () => {
+        requests += 1;
+        await Promise.resolve();
+        throw new Error('The request was denied');
+      },
+    } as unknown as LockManagerLike;
+    const clock = new FakeClock();
+    const election = new OwnershipElection(
+      locks,
+      'Reader',
+      { onAcquired: () => undefined, onLost: () => undefined },
+      new ScopedLogger(NOOP_LOGGER, {}),
+      clock,
+    );
+
+    election.start();
+    await flushMicrotasks(20);
+    // Asking again at once would repeat in an endless chain of microtasks.
+    expect(requests).toBe(1);
+
+    await clock.advance(ELECTION_RETRY_DELAY_MS);
+    await flushMicrotasks(20);
+    expect(requests).toBe(2);
+
+    election.stop();
+    await clock.advance(ELECTION_RETRY_DELAY_MS * 5);
+    await flushMicrotasks(20);
+    expect(requests).toBe(2);
+  });
+});
