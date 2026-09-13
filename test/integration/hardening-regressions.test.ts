@@ -36,7 +36,7 @@ describe('text encoding labels', () => {
 
 describe('configuration names', () => {
   it('rejects C1 control characters and unpaired surrogates, which would corrupt lock names', () => {
-    for (const name of ['a0085b', 'a\uD800', '\uDC00a', 'a\uDC00\uD800']) {
+    for (const name of ['a\u0085b', 'a\uD800', '\uDC00a', 'a\uDC00\uD800']) {
       expect(() => validateName(name)).toThrow(
         expect.objectContaining({ code: SerialBrokerErrorCode.INVALID_ARGUMENT }),
       );

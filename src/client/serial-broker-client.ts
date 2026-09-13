@@ -40,6 +40,9 @@ import { ConfigurationSession } from './configuration-session.js';
 import type { BroadcastChannelLike } from './transport/broadcast-channel-transport.js';
 import type { Transport } from './transport/transport.js';
 
+/** How many errors nobody listened for are kept for the first `onError` listener: the latest. */
+const MAX_UNHEARD_ERRORS = 16;
+
 /**
  * One browsing context's view of every configuration it participates in.
  *
@@ -49,6 +52,18 @@ import type { Transport } from './transport/transport.js';
  */
 export class SerialBrokerClient {
   readonly #sessions = new Map<string, ConfigurationSession>();
+  /** Releases still closing the port, by name. A `setup()` of the same name waits for them. */
+  readonly #releasing = new Map<string, Promise<void>>();
+  /** Names set up again while their release was still running: they keep the device permission. */
+  readonly #setUpDuringRelease = new Set<string>();
+  /**
+   * Errors not tied to a configuration that arrived while nothing listened for `onError`.
+   *
+   * A fresh tab restoring a corrupt entry, or a tab on another protocol version noticed while no
+   * configuration was set up, would otherwise only reach the log. They are handed to the first
+   * `onError` listener registered afterwards.
+   */
+  readonly #unheardErrors: SerialBrokerError[] = [];
   readonly #store: ConfigurationStore;
   readonly #disposal = new DisposalStack();
   readonly #clientId: ClientId;
@@ -114,6 +129,20 @@ export class SerialBrokerClient {
     this.#assertUsable();
 
     const configuration = normalizeConfiguration(name, options);
+
+    const releasing = this.#releasing.get(configuration.name);
+    if (releasing !== undefined) {
+      // The session being released detaches the name from the bus, and gives up ownership, only
+      // when it has finished. A session set up before then would be cut off by exactly that.
+      this.#setUpDuringRelease.add(configuration.name);
+      try {
+        await releasing;
+      } finally {
+        this.#setUpDuringRelease.delete(configuration.name);
+      }
+      this.#assertUsable();
+    }
+
     const existing = this.#sessions.get(configuration.name);
 
     if (existing !== undefined) {
@@ -200,15 +229,36 @@ export class SerialBrokerClient {
     // Removed before the wait, not after it: a `setup()` of the same name while the port closes
     // saves the new configuration, which removing afterwards would delete.
     this.#store.remove(validName);
+
+    const releasing = this.#finishRelease(validName, session, options);
+    this.#releasing.set(validName, releasing);
+    try {
+      await releasing;
+    } finally {
+      if (this.#releasing.get(validName) === releasing) {
+        this.#releasing.delete(validName);
+      }
+    }
+  }
+
+  async #finishRelease(
+    name: string,
+    session: ConfigurationSession,
+    options: ReleaseOptions,
+  ): Promise<void> {
     await session.release();
 
     // For the same reason, a configuration set up again meanwhile keeps its device permission.
-    if (options.forgetDevice === true && !this.#sessions.has(validName)) {
+    if (
+      options.forgetDevice === true &&
+      !this.#sessions.has(name) &&
+      !this.#setUpDuringRelease.has(name)
+    ) {
       await this.#forgetDevice(session.definition);
     }
 
     this.#logger.info('configuration released', {
-      configName: validName,
+      configName: name,
       event: 'client.release',
     });
   }
@@ -245,6 +295,16 @@ export class SerialBrokerClient {
     }
 
     session.subscribe(event, listener);
+
+    if (event === 'onError' && this.#unheardErrors.length > 0) {
+      const unheard = this.#unheardErrors.splice(0);
+      // After `subscribe()` has returned, as every other event is delivered.
+      void Promise.resolve().then(() => {
+        for (const error of unheard) {
+          this.#sessions.get(validName)?.reportExternalError(error);
+        }
+      });
+    }
 
     return () => {
       this.#sessions.get(validName)?.unsubscribe(event, listener);
@@ -526,8 +586,17 @@ export class SerialBrokerClient {
   #reportGlobal(error: SerialBrokerError): void {
     this.#logger.error(error.message, { event: 'client.error', code: error.code });
 
+    let isHeard = false;
     for (const session of this.#sessions.values()) {
+      isHeard ||= session.hasListener('onError');
       session.reportExternalError(error);
+    }
+
+    if (!isHeard) {
+      this.#unheardErrors.push(error);
+      if (this.#unheardErrors.length > MAX_UNHEARD_ERRORS) {
+        this.#unheardErrors.shift();
+      }
     }
   }
 

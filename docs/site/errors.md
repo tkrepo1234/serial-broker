@@ -25,8 +25,9 @@ Where such an event is delivered depends on where it arose:
 - **A listener that threw** is delivered only in the tab whose listener it was: no other tab can do
   anything about it.
 - **A failure of one tab's environment** — its message bus, its storage, a tab on another protocol
-  version — is delivered only in that tab, to each of its configurations. If the tab has none set
-  up yet, it only reaches the [log](diagnostics.md#logging).
+  version — is delivered only in that tab, to each of its configurations. If nothing in the tab
+  listens for `onError` yet, the latest such errors, up to 16, are kept and delivered to the first
+  `onError` listener registered afterwards. They also reach the [log](diagnostics.md#logging).
 
 A listener registered for `onError` that throws is not reported again, to avoid an endless loop.
 

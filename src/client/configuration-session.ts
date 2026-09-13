@@ -21,6 +21,14 @@ import { PendingWrites } from './pending-writes.js';
 import type { Transport } from './transport/transport.js';
 
 /**
+ * How many writes from peers the owner remembers having accepted.
+ *
+ * A repeat can only come from the moments around an owner change, when a participant hands on
+ * the writes it has not yet seen start; a few hundred covers any realistic burst there.
+ */
+const MAX_REMEMBERED_PEER_WRITES = 1_024;
+
+/**
  * One configuration, in one browsing context.
  *
  * This is where the pieces meet: the election that may make this context the owner, the
@@ -43,6 +51,19 @@ export class ConfigurationSession {
   readonly #emitter: EventEmitter;
   readonly #election: OwnershipElection;
   readonly #writes: PendingWrites;
+  /**
+   * Writes this context has accepted from peers while holding the port, keyed by origin and
+   * request, with their outcome once known.
+   *
+   * A participant can hand the same write to this owner twice. It sends to whoever holds the port,
+   * and may learn only afterwards - from `owner-claimed` - that ownership moved, whereupon it hands
+   * on every write it has not seen start. Recognising the request is what keeps the write at most
+   * once (ADR-0013); answering the repeat with the known outcome lets the participant settle.
+   */
+  readonly #acceptedPeerWrites = new Map<
+    string,
+    { isDone: boolean; error: SerialBrokerError | undefined }
+  >();
 
   #supervisor: PortSupervisor | undefined;
   #status: SerialBrokerStatus = SerialBrokerStatus.Idle;
@@ -179,6 +200,11 @@ export class ConfigurationSession {
    */
   reportExternalError(error: SerialBrokerError): void {
     this.#emitError(error, { broadcast: false });
+  }
+
+  /** `true` if the application listens for `event` on this configuration. */
+  hasListener(event: SerialBrokerEventName): boolean {
+    return this.#emitter.has(event);
   }
 
   /** A point-in-time view of this configuration. */
@@ -436,12 +462,19 @@ export class ConfigurationSession {
   async #stopBeingOwner(): Promise<void> {
     const supervisor = this.#supervisor;
     this.#supervisor = undefined;
-
-    this.transport.setOwnership(this.configuration.name, false);
+    // A later term as owner starts with its own record: a write accepted now is either finished or
+    // failed by the time this context could hold the port again.
+    this.#acceptedPeerWrites.clear();
 
     if (supervisor === undefined) {
+      // Not holding the port, so there is no ownership to give up. This matters: the election
+      // reports the lock lost after `release()` has already stopped being owner, and by then a
+      // session set up again under the same name may hold the port - clearing the transport's
+      // ownership for the name here would cut that session off from every write.
       return;
     }
+
+    this.transport.setOwnership(this.configuration.name, false);
 
     this.transport.send({
       type: 'owner-released',
@@ -505,8 +538,16 @@ export class ConfigurationSession {
    * connection instead of failing - in the tab holding the port exactly as in any other.
    */
   #settleWrite(requestId: RequestId, error: SerialBrokerError | undefined): void {
-    if (error?.code === SerialBrokerErrorCode.NOT_CONNECTED && this.#writes.redispatch(requestId)) {
-      return;
+    if (error?.code === SerialBrokerErrorCode.NOT_CONNECTED) {
+      if (this.#writes.redispatch(requestId)) {
+        return;
+      }
+      // `NOT_CONNECTED` means its sender never began the write. If it has begun all the same, it did
+      // so with another owner - this answer came late from a former one - and that owner's answer
+      // is what settles it.
+      if (this.#writes.isStarted(requestId)) {
+        return;
+      }
     }
     this.#writes.settle(requestId, error);
   }
@@ -529,6 +570,27 @@ export class ConfigurationSession {
       return;
     }
 
+    const key = `${origin} ${requestId}`;
+    const accepted = this.#acceptedPeerWrites.get(key);
+    if (accepted !== undefined) {
+      // A repeat of a write already accepted. While it is still being written, its own answer is
+      // on the way; once done, the known outcome is sent again for a participant that may have
+      // missed it. Writing it a second time is never the answer (ADR-0013).
+      if (accepted.isDone) {
+        this.#sendWriteResult(origin, requestId, accepted.error);
+      }
+      return;
+    }
+    const record = { isDone: false, error: undefined as SerialBrokerError | undefined };
+    this.#acceptedPeerWrites.set(key, record);
+    if (this.#acceptedPeerWrites.size > MAX_REMEMBERED_PEER_WRITES) {
+      // Maps iterate in insertion order, so the first key is the oldest.
+      const oldest = this.#acceptedPeerWrites.keys().next().value;
+      if (oldest !== undefined) {
+        this.#acceptedPeerWrites.delete(oldest);
+      }
+    }
+
     void supervisor
       .write(payload, () => {
         this.transport.send({
@@ -542,15 +604,15 @@ export class ConfigurationSession {
       })
       .then(
         () => {
+          record.isDone = true;
           this.#announceSent(payload, origin);
           this.#sendWriteResult(origin, requestId, undefined);
         },
         (error: unknown) => {
-          this.#sendWriteResult(
-            origin,
-            requestId,
-            toSerialBrokerError(error, this.configuration.name),
-          );
+          const failure = toSerialBrokerError(error, this.configuration.name);
+          record.isDone = true;
+          record.error = failure;
+          this.#sendWriteResult(origin, requestId, failure);
         },
       );
   }

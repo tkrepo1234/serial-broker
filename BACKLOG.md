@@ -31,10 +31,8 @@ Checking every statement against the source turned up behaviour worth deciding o
 that fails to load now falls back to `BroadcastChannel` too (ADR-0007, amended). Fixed at once:
 `SerialBroker.configure({ logPayloads })` was never passed on and did nothing, and the remediation
 for `RECONNECT_EXHAUSTED` advised a second `setup()`, which is a no-op. Open, and documented as
-they are:
-
-- **`STORAGE_CORRUPT` during `restore()` in a fresh tab only reaches the log**, because no
-  configuration exists yet to deliver `onError` to.
+they were: `STORAGE_CORRUPT` during `restore()` in a fresh tab only reached the log. Since the
+bug hunt of 2026-09-13 such errors are kept for the first `onError` listener.
 
 Build a product-grade documentation site for developers, modelled on
 [open62541 1.3](https://open62541.org/doc/1.3/).
