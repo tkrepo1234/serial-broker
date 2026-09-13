@@ -196,6 +196,26 @@ describe('SerialBroker', () => {
     SerialBroker.configure({});
   });
 
+  it('passes logPayloads through, so traffic records carry the bytes', async () => {
+    const records: LogFields[] = [];
+    const logger: Logger = {
+      log: (_level, _message, fields) => records.push(fields),
+    };
+
+    SerialBroker.configure({ logger, logPayloads: true });
+    await SerialBroker.setup('Reader', OPTIONS);
+    await settle();
+    platform.emit(new TextEncoder().encode('PONG'));
+    await settle();
+
+    expect(records.find((fields) => fields.event === 'supervisor.received')).toMatchObject({
+      byteLength: 4,
+      hex: '50 4F 4E 47',
+    });
+
+    SerialBroker.configure({ logPayloads: false });
+  });
+
   it('rebuilds itself after being disposed', async () => {
     await SerialBroker.setup('Reader', OPTIONS);
     await SerialBroker.dispose();

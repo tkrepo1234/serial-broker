@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>serial-broker: the smallest page</title>
+  </head>
+  <body>
+    <p>
+      Status: <strong id="status">idle</strong>
+      <button id="connect" hidden>Choose device…</button>
+    </p>
+    <form id="send">
+      <input id="line" placeholder="Line to send" />
+      <button>Send</button>
+    </form>
+    <pre id="output"></pre>
+    <script type="module" src="./main.js"></script>
+  </body>
+</html>

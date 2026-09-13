@@ -1,15 +1,22 @@
 # API reference
 
-This reference is generated from the documentation comments in the source, so it always matches
-the version it was built from. Two entry points are documented:
+Everything an application imports from `serial-broker`, generated from the documentation comments
+in the source, so it always matches the version it was built from.
 
-- **[`serial-broker`](reference/index/index.md)** — the library an application uses.
-- **[`serial-broker/diagnostics`](reference/diagnostics/index.md)** — the read-only view of every
-  tab, for operators.
+Start with **[`SerialBrokerApi`](reference/index/interfaces/SerialBrokerApi.md)**: every method of
+`SerialBroker`, with its parameters, what it returns, and what it throws. The options it takes are
+explained with their reasoning in [Configuration](../configuration.md), and every error code in
+[Errors](../errors.md).
+
+The read-only view for operators, `serial-broker/diagnostics`, has a
+[reference of its own](diagnostics.md). Application code does not need it.
+
+- **[All exports of `serial-broker`](reference/index/index.md)**
 
 ```{toctree}
 :hidden:
 :glob:
 
-reference/**
+reference/index/index
+reference/index/*/*
 ```

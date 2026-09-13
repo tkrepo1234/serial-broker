@@ -301,6 +301,7 @@ function client(): SerialBrokerClient {
       workerUrl: globalOptions.workerUrl,
       transport: globalOptions.transport,
       logger: globalOptions.logger,
+      logPayloads: globalOptions.logPayloads,
     }),
   );
   return instance;

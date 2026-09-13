@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Scale panel</title>
+  </head>
+  <body>
+    <header>
+      <h1>Scale</h1>
+      <p><span id="status">idle</span> <button id="choose" hidden>Choose device…</button></p>
+      <label>
+        Baud rate
+        <select id="baudRate">
+          <option>9600</option>
+          <option>19200</option>
+          <option>38400</option>
+        </select>
+      </label>
+      <button id="disconnect">Disconnect this window</button>
+    </header>
+    <p id="problem" role="alert" hidden></p>
+    <form id="console">
+      <input id="command" placeholder="Command, such as W for weight" />
+      <button id="sendButton">Send</button>
+    </form>
+    <ol id="log"></ol>
+    <script type="module" src="./main.js"></script>
+  </body>
+</html>

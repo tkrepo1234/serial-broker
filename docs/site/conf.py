@@ -21,7 +21,13 @@ extensions = ["myst_parser"]
 
 source_suffix = {".md": "markdown"}
 root_doc = "index"
-exclude_patterns = ["_build", "README.md"]
+exclude_patterns = [
+    "_build",
+    "README.md",
+    "examples/code",
+    # TypeDoc's list of both entry points. The site presents them in separate sections instead.
+    "api/reference/index.md",
+]
 
 # typedoc links to headings inside its generated pages; MyST needs anchors for them.
 myst_heading_anchors = 4

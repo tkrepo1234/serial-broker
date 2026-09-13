@@ -191,8 +191,9 @@ either.
 
 Tabs exchange messages through a `SharedWorker` by default. The worker only routes messages: it
 does not open the port, decide who owns it, or hold writes. If a `SharedWorker` is not available —
-on Chrome for Android, under a policy that disables it, or when its script cannot be loaded —
-serial-broker uses a `BroadcastChannel` instead.
+or when the browser refuses to create one — serial-broker uses a `BroadcastChannel` instead. A
+worker that is created but whose script cannot be loaded is not replaced; it is reported as
+`BROKER_UNAVAILABLE`, and the tab cannot coordinate until the script is served correctly.
 
 Behaviour is identical on both. The fallback costs a little more work per message, because every
 tab receives every message and ignores those not meant for it; at the rates a serial device
@@ -205,8 +206,10 @@ connected to different workers, cannot see each other, and will compete for the 
 
 Tabs that run different versions of serial-broker's internal message protocol do not coordinate
 with each other: they use different lock names and different workers, and each group behaves as if
-it were alone. Both groups report `PROTOCOL_VERSION_MISMATCH`. After deploying a version that
-changes the protocol, reload every open tab. The changelog says when that is necessary.
+it were alone. Because they never exchange a message, they cannot notice each other either. What
+shows is the consequence: each group has a tab trying to hold the device, and the group that comes
+second cannot open it and keeps reconnecting. After deploying a version that changes the protocol,
+reload every open tab. The changelog says when that is necessary.
 
 ## What to watch out for
 
@@ -216,8 +219,9 @@ changes the protocol, reload every open tab. The changelog says when that is nec
 - Assume data sent by the device during a handover may be lost.
 - Call `requestAccess()` directly inside a click handler, in response to `awaiting-permission`.
 - Serve the worker script from one URL, and set `workerUrl` before the first `setup()`.
-- Use the same device and line settings for a configuration name in every tab. A tab that sets
-  the same name up with different ones gets `CONFIGURATION_CONFLICT`.
+- Use the same options for a configuration name in every tab. serial-broker does not compare them
+  between tabs: the tab holding the port opens it with its own. See
+  [Whose settings apply](configuration.md#whose-settings-apply).
 - Handle status values you do not recognise gracefully: the list may grow.
 
 [web-locks]: https://developer.mozilla.org/en-US/docs/Web/API/Web_Locks_API

@@ -38,7 +38,6 @@ shared-ports
 examples/index
 configuration
 errors
-diagnostics
 ```
 
 ```{toctree}
@@ -46,6 +45,20 @@ diagnostics
 :caption: Reference
 
 api/index
+```
+
+```{toctree}
+:maxdepth: 2
+:caption: Operating and diagnosing
+
+diagnostics
+api/diagnostics
+```
+
+```{toctree}
+:maxdepth: 2
+:caption: Working on serial-broker
+
 internals
 ```
 

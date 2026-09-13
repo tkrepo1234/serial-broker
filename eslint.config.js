@@ -147,6 +147,13 @@ export default defineConfig(
     languageOptions: { globals: { process: 'readonly' } },
   },
 
+  // The documentation's examples are application code shown to readers: they log to the
+  // console and use browser globals directly, as the applications they stand for would.
+  {
+    files: ['docs/site/examples/code/**/*.ts'],
+    rules: { 'no-console': 'off', 'no-restricted-globals': 'off' },
+  },
+
   // Config files are Node-side and use default exports by convention.
   {
     files: ['*.config.ts', '*.config.js', 'eslint.config.js'],

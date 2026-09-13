@@ -16,12 +16,34 @@ Started 2026-09-13. The toolchain questions below are decided in
 chapters in Markdown (MyST), the API reference generated from TSDoc, Python in `docs/.venv`.
 `npm run docs` builds `docs/site/`.
 
-| Done                                                 | Still to write                                         |
-| ---------------------------------------------------- | ------------------------------------------------------ |
-| Site skeleton, full outline, generated API reference | Examples in all four tiers                             |
-| Introduction, Installing, Quickstart                 | Configuration, Errors, Diagnostics, Internals          |
-| How shared ports behave (the core chapter)           | Completing TSDoc where the generated reference is thin |
-|                                                      | A CI step that builds the site; hosting                |
+| Done                                                                | Still to do                                            |
+| ------------------------------------------------------------------- | ------------------------------------------------------ |
+| Site skeleton, full outline, generated API reference                | Completing TSDoc where the generated reference is thin |
+| Introduction, Installing, Quickstart                                | A CI step that builds the site; hosting                |
+| How shared ports behave (the core chapter)                          |                                                        |
+| Examples in all four tiers, type-checked by `npm run typecheck`     |                                                        |
+| Configuration, Errors, Diagnostics, Internals                       |                                                        |
+| Application API and Diagnostics API referenced in separate sections |                                                        |
+
+### Found while writing the chapters
+
+Checking every statement against the source turned up behaviour worth deciding on. Fixed at once:
+`SerialBroker.configure({ logPayloads })` was never passed on and did nothing, and the remediation
+for `RECONNECT_EXHAUSTED` advised a second `setup()`, which is a no-op. Open, and documented as
+they are:
+
+- **A worker script that fails to load does not fall back.** `SharedWorker` construction succeeds
+  and the failure arrives later as an `error` event, reported as `BROKER_UNAVAILABLE`. The tab is
+  then cut off from the others, and two such tabs would both try to hold the device. Falling back
+  to `BroadcastChannel` at that point would make a mis-served worker script harmless.
+- **Tabs on different protocol versions cannot detect each other.** The version is part of every
+  lock and bus name, so `PROTOCOL_VERSION_MISMATCH` is practically never raised; the symptom is a
+  tab that cannot open the device. A version-independent announcement channel would make the
+  mismatch visible.
+- **Codes that are never raised:** `MALFORMED_MESSAGE`, `OWNERSHIP_TRANSFER_TIMEOUT`, `UNKNOWN`.
+  Either raise them where they apply or remove them before 1.0, while that is still cheap.
+- **`STORAGE_CORRUPT` during `restore()` in a fresh tab only reaches the log**, because no
+  configuration exists yet to deliver `onError` to.
 
 Build a product-grade documentation site for developers, modelled on
 [open62541 1.3](https://open62541.org/doc/1.3/).

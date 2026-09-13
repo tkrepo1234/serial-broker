@@ -36,9 +36,12 @@ import { SerialBroker } from 'serial-broker';
 SerialBroker.configure({ workerUrl: '/assets/serial-broker.worker.js' });
 ```
 
-If the worker cannot be loaded at all, serial-broker falls back to a `BroadcastChannel` and keeps
-working. Behaviour is the same; the only difference is a little more message traffic between
-tabs. See [The message bus](shared-ports.md#the-message-bus).
+Where the browser has no `SharedWorker`, or refuses to create one, serial-broker uses a
+`BroadcastChannel` instead and keeps working; see [The message bus](shared-ports.md#the-message-bus).
+A worker whose script cannot be found is different: the browser creates it and only then fails
+to load the script. serial-broker reports that as `BROKER_UNAVAILABLE` through `onError`, and the
+tab cannot coordinate with the others until the script is served. Check for it once after
+deploying.
 
 ## Content security policy
 
@@ -48,8 +51,10 @@ A strict policy has to allow the worker script:
 worker-src 'self';
 ```
 
-Without it, construction of the worker fails and the fallback transport is used — which works,
-but is probably not what you intended. The library log records the fallback at `warn` level.
+Without it, the browser blocks the worker. Depending on how the browser reports the block,
+serial-broker either falls back to a `BroadcastChannel`, logged as
+`environment.transport-fallback` at `warn` level, or reports `BROKER_UNAVAILABLE` as described
+above. Neither is what you intended, so allow the script.
 
 ## Checking support at run time
 

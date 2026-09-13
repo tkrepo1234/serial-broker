@@ -127,7 +127,7 @@ export const REMEDIATION: Record<SerialBrokerErrorCode, string> = {
   DEVICE_DISCONNECTED:
     'No action required: the library reconnects automatically when the device reappears. Use onStatusChange to reflect the state in your UI.',
   RECONNECT_EXHAUSTED:
-    'Reconnection stopped after connection.maxAttempts. It resumes automatically if the device is plugged in again, or call setup() to restart it now.',
+    'Reconnection stopped after connection.maxAttempts. It resumes automatically if the device is plugged in again; to retry sooner, release the configuration and set it up again.',
   READ_FAILED:
     'The read stream failed. The library reopens the port automatically; if this repeats, the adapter or cable is likely faulty.',
   NOT_CONNECTED:

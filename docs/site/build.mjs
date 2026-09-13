@@ -6,7 +6,7 @@
  */
 
 import { spawnSync } from 'node:child_process';
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -35,9 +35,17 @@ run(process.execPath, [
   '--options',
   'typedoc.site.json',
 ]);
+// TypeDoc names each module page after its entry file. Readers know them by the import path.
+retitle('docs/site/api/reference/index/index.md', 'serial-broker');
+retitle('docs/site/api/reference/diagnostics/index.md', 'serial-broker/diagnostics');
 run(python, ['-m', 'sphinx', '-b', 'html', '--keep-going', 'docs/site', 'docs/site/_build/html']);
 
 process.stdout.write('\nBuilt docs/site/_build/html/index.html\n');
+
+function retitle(path, title) {
+  const file = join(root, path);
+  writeFileSync(file, readFileSync(file, 'utf8').replace(/^# .*$/m, `# ${title}`));
+}
 
 function run(command, args) {
   const result = spawnSync(command, args, { cwd: root, stdio: 'inherit' });
