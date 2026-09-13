@@ -218,6 +218,13 @@ export class FakeSerialPort {
   }
 
   async close(): Promise<void> {
+    // As in the browser: a port that is not open cannot be closed. Without this, closing another
+    // context's port object - or one whose open failed - would pass silently here and fail only on
+    // real hardware.
+    if (!this.#isOpen) {
+      await Promise.resolve();
+      throw domException('InvalidStateError', 'The port is already closed');
+    }
     // As in the browser: a port whose streams are still locked by a reader or writer refuses to
     // close. Code that forgets to release them fails here instead of only on real hardware.
     if (this.#readable?.locked === true || this.#writable?.locked === true) {
@@ -238,9 +245,15 @@ export class FakeSerialPort {
 
   /** Releases the device whatever its streams' state, as the browser does when a tab goes away. */
   forceClose(): void {
+    // Only the port object that opened the device releases it. Another context's port object for
+    // the same device has no hold on it, and releasing the device from there would let a second
+    // context open it while the first still has it - hiding exactly the ownership bugs this
+    // harness exists to catch.
+    if (this.#isOpen) {
+      this.device.isOpen = false;
+      this.device.detachStreamControls();
+    }
     this.#isOpen = false;
-    this.device.isOpen = false;
-    this.device.detachStreamControls();
     this.#readable = null;
     this.#writable = null;
   }
