@@ -25,7 +25,6 @@ await SerialBroker.send('CardReader', 'STATUS?\r\n');
 :maxdepth: 2
 :caption: Getting started
 
-at-a-glance
 introduction
 installing
 quickstart

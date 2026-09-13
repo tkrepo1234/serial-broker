@@ -6,11 +6,6 @@
  * page wider than the window.
  */
 
-/* A wider column: example code is formatted at 100 characters, which 800px cannot hold. */
-.wy-nav-content {
-  max-width: 1100px;
-}
-
 /* Table cells wrap like text, instead of widening the table past the column. */
 .wy-table-responsive table td,
 .wy-table-responsive table th {
@@ -25,12 +20,4 @@
 
 .rst-content code.literal {
   overflow-wrap: anywhere;
-}
-
-/* The at-a-glance illustration, embedded inline so it uses the theme's fonts. */
-.rst-content svg.ssg {
-  display: block;
-  width: 100%;
-  height: auto;
-  margin: 0 0 24px;
 }

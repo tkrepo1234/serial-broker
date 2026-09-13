@@ -81,3 +81,14 @@ prose sprinkled on top.
 The current `README.md`, `docs/architecture.md` and the ADRs are the raw material and are
 accurate. They are not a substitute: the README is a decision aid for someone evaluating the
 library, and the ADRs record reasoning rather than teach use.
+
+---
+
+## Rework the at-a-glance illustration
+
+**Requested by Tim, 2026-09-13.** One page showing what serial-broker achieves and how it fits into
+an application's landscape: not marketing for its own sake, but the picture that lets a developer
+facing the serial-broker problem recognise this as the solution, whichever feature they need.
+
+A first draft is in `design/at-a-glance.svg`. It was taken out of the documentation until it has
+been reworked; the rework has to match the documentation's colours and style.
