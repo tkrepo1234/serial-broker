@@ -18,6 +18,7 @@ import type { ClientId, ProtocolMessage, RequestId } from '../protocol/messages.
 import { PROTOCOL_VERSION } from '../protocol/version.js';
 
 import { PendingWrites } from './pending-writes.js';
+import { TabSlot } from './tab-slot.js';
 import type { Transport } from './transport/transport.js';
 
 /**
@@ -70,6 +71,12 @@ export class ConfigurationSession {
   #statusSince: number;
   #lastErrorCode: SerialBrokerErrorCode | undefined;
   #isReleased = false;
+  /** This tab's place among the `maxTabs` tabs, or `undefined` without a limit (ADR-0025). */
+  readonly #slot: TabSlot | undefined;
+  /** On the bus and in the election: at once without a limit, once a place is held with one. */
+  #isJoined = false;
+  /** Gave up because the tab holding the port runs a different tab limit (ADR-0025). */
+  #isWithdrawn = false;
 
   constructor(
     private readonly environment: SerialBrokerEnvironment,
@@ -114,6 +121,19 @@ export class ConfigurationSession {
       // rather than tracking it in two places keeps one source of truth for the answer.
       canDispatch: () => this.#status === SerialBrokerStatus.Open,
     });
+
+    this.#slot = Number.isFinite(configuration.maxTabs)
+      ? new TabSlot(
+          environment.locks,
+          configuration.name,
+          configuration.maxTabs,
+          () => {
+            this.#join();
+          },
+          logger,
+          environment.clock,
+        )
+      : undefined;
   }
 
   /** The configuration this session serves. */
@@ -121,8 +141,29 @@ export class ConfigurationSession {
     return this.configuration;
   }
 
-  /** Joins the bus and the election. */
+  /**
+   * Joins the bus and the election - at once, or, with a tab limit, once this tab holds one of the
+   * places (ADR-0025). Until then the status is `queued`.
+   */
   start(): void {
+    const slot = this.#slot;
+    if (slot === undefined) {
+      this.#join();
+      return;
+    }
+    this.#setStatus(SerialBrokerStatus.Queued);
+    slot.start();
+  }
+
+  #join(): void {
+    if (this.#isReleased || this.#isJoined) {
+      return;
+    }
+    this.#isJoined = true;
+    if (this.#status === SerialBrokerStatus.Queued) {
+      this.#setStatus(SerialBrokerStatus.Idle);
+    }
+
     this.transport.attach(this.configuration.name);
 
     // Ask whoever owns the port to restate its status. Without this, a tab joining an
@@ -142,7 +183,7 @@ export class ConfigurationSession {
    * other tab asks for it. Hearing `open` from the owner hands on writes that have not started.
    */
   handleBusReconnected(): void {
-    if (this.#isReleased) {
+    if (this.#isReleased || !this.#isJoined || this.#isWithdrawn) {
       return;
     }
     if (this.#election.isOwner) {
@@ -179,7 +220,11 @@ export class ConfigurationSession {
     await this.#stopBeingOwner();
     this.#election.stop();
 
-    this.transport.detach(this.configuration.name);
+    if (this.#isJoined && !this.#isWithdrawn) {
+      this.transport.detach(this.configuration.name);
+    }
+    // The place goes last: the next tab joins only once this one has left the bus and the port.
+    this.#slot?.stop();
     this.#setStatus(SerialBrokerStatus.Released);
     this.#emitter.clear();
   }
@@ -286,7 +331,9 @@ export class ConfigurationSession {
       }
       throw new SerialBrokerError(
         SerialBrokerErrorCode.PERMISSION_REQUIRED,
-        'Another tab currently owns this configuration and must be the one to request access',
+        this.#status === SerialBrokerStatus.Queued
+          ? 'This tab is queued behind the tabs using this configuration and cannot use the device yet'
+          : 'Another tab currently owns this configuration and must be the one to request access',
         {
           configName: this.configuration.name,
           context: { status: this.#status },
@@ -302,7 +349,7 @@ export class ConfigurationSession {
 
   /** Handles a message addressed to this context. */
   handleMessage(message: ProtocolMessage): void {
-    if (this.#isReleased) {
+    if (this.#isReleased || !this.#isJoined || this.#isWithdrawn) {
       return;
     }
 
@@ -362,6 +409,10 @@ export class ConfigurationSession {
         return;
 
       case 'status':
+        if (message.maxTabs !== this.configuration.maxTabs && !this.#election.isOwner) {
+          this.#withdraw(message.maxTabs);
+          return;
+        }
         if (message.status === SerialBrokerStatus.Open && !this.#election.isOwner) {
           // The owner states `open` when the port opens, and again after reaching a new broker. A
           // write request lost on the way in between is handed on here; one the owner already has,
@@ -714,6 +765,40 @@ export class ConfigurationSession {
     }
   }
 
+  /**
+   * Gives the configuration up in this tab, because the tab holding the port runs it with a
+   * different tab limit (ADR-0025).
+   *
+   * Two limits cannot both be kept, and silently keeping the looser one would defeat the point of
+   * a limit. The tab holding the port decides; this one reports the conflict to every tab, leaves
+   * the bus, the election and its place, and stays `failed` until the application releases the
+   * configuration and sets it up with the same limit.
+   */
+  #withdraw(holdingTabMaxTabs: number): void {
+    this.#isWithdrawn = true;
+    const conflict = new SerialBrokerError(
+      SerialBrokerErrorCode.CONFIGURATION_CONFLICT,
+      `"${this.configuration.name}" is used with maxTabs ${String(holdingTabMaxTabs)} by the tab holding the port, and with maxTabs ${String(this.configuration.maxTabs)} in this tab`,
+      {
+        configName: this.configuration.name,
+        context: { maxTabs: this.configuration.maxTabs, holdingTabMaxTabs },
+        timestamp: this.environment.clock.now(),
+      },
+    );
+    this.logger.warn('withdrew from a configuration run with a different tab limit', {
+      event: 'session.tab-limit-conflict',
+      maxTabs: this.configuration.maxTabs,
+      holdingTabMaxTabs,
+    });
+    // Told to every tab, the one holding the port included, before this tab leaves the bus.
+    this.#emitError(conflict);
+    this.#writes.failAll(conflict);
+    this.#election.stop();
+    this.transport.detach(this.configuration.name);
+    this.#slot?.stop();
+    this.#setStatus(SerialBrokerStatus.Failed);
+  }
+
   #requestStatus(): void {
     this.transport.send({
       type: 'status-request',
@@ -732,6 +817,7 @@ export class ConfigurationSession {
       to: 'all',
       configName: this.configuration.name,
       status,
+      maxTabs: this.configuration.maxTabs,
       timestamp: this.environment.clock.now(),
     });
   }

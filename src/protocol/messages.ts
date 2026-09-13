@@ -157,6 +157,11 @@ export interface StatusMessage extends Envelope {
   readonly type: 'status';
   readonly configName: string;
   readonly status: SerialBrokerStatus;
+  /**
+   * The tab limit of the tab sending the status - the one holding the port. A tab running the
+   * configuration with a different limit withdraws when it hears this (ADR-0025).
+   */
+  readonly maxTabs: number;
   readonly timestamp: number;
 }
 

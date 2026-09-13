@@ -32,6 +32,8 @@ export interface NormalizedConfiguration {
   readonly connection: NormalizedConnectionSettings;
   readonly encoding: NormalizedEncodingSettings;
   readonly persist: boolean;
+  /** How many tabs may use the configuration at once; `Infinity` for no limit (ADR-0025). */
+  readonly maxTabs: number;
 }
 
 /** Defaults for {@link SerialSettings}, matching the Web Serial dictionary defaults. */
@@ -61,6 +63,9 @@ export const DEFAULT_ENCODING_SETTINGS: NormalizedEncodingSettings = {
   encoding: 'utf-8',
   decodeText: false,
 };
+
+/** Default for {@link SerialBrokerOptions.maxTabs}: no limit, as before the option existed. */
+export const DEFAULT_MAX_TABS = Number.POSITIVE_INFINITY;
 
 /** Longest accepted configuration name. Long enough for any real name, short enough to bound
  * the storage key and every log record. */

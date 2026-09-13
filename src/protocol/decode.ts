@@ -2,7 +2,7 @@ import { assertNever } from '../core/assert.js';
 import { isSerializedError } from '../core/errors.js';
 
 import { isParticipantDiagnostics } from './decode-diagnostics.js';
-import { isFiniteNumber, isNonEmptyString, isRecord, isStatus } from './guards.js';
+import { isFiniteNumber, isNonEmptyString, isRecord, isStatus, isTabLimit } from './guards.js';
 import type { ClientId, MessageTarget, ProtocolMessage, RequestId } from './messages.js';
 import { PROTOCOL_VERSION } from './version.js';
 
@@ -234,6 +234,9 @@ function decodeChecked(raw: unknown): DecodeResult {
       }
       if (!isStatus(raw['status'])) {
         return malformed(type, 'status');
+      }
+      if (!isTabLimit(raw['maxTabs'])) {
+        return malformed(type, 'maxTabs');
       }
       return isFiniteNumber(raw['timestamp'])
         ? { ok: true, message: raw as unknown as ProtocolMessage }

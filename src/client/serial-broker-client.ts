@@ -149,7 +149,7 @@ export class SerialBrokerClient {
       if (!isDeviceCompatible(existing.definition, configuration)) {
         throw new SerialBrokerError(
           SerialBrokerErrorCode.CONFIGURATION_CONFLICT,
-          `"${configuration.name}" is already set up with different device or line settings`,
+          `"${configuration.name}" is already set up with different device or line settings, or a different tab limit`,
           {
             configName: configuration.name,
             context: {

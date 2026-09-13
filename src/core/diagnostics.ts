@@ -75,6 +75,8 @@ export interface EffectiveSettings {
   readonly encoding: Required<EncodingSettings>;
   /** Whether the configuration is remembered across reloads. */
   readonly persist: boolean;
+  /** How many tabs may use the configuration at once; `Infinity` for no limit (ADR-0025). */
+  readonly maxTabs: number;
 }
 
 /** The physical connection, as the context holding the port sees it. */

@@ -1,4 +1,5 @@
 import {
+  DEFAULT_MAX_TABS,
   DEFAULT_CONNECTION_SETTINGS,
   DEFAULT_ENCODING_SETTINGS,
   DEFAULT_SERIAL_SETTINGS,
@@ -327,6 +328,7 @@ export function normalizeConfiguration(name: unknown, options: unknown): Normali
       ),
     }),
     persist: requireBoolean(orDefault(raw.persist, true), 'options.persist'),
+    maxTabs: normalizeTabLimit(orDefault(raw.maxTabs, DEFAULT_MAX_TABS)),
   });
 }
 
@@ -352,7 +354,23 @@ export function toSetupOptions(configuration: NormalizedConfiguration): Effectiv
     connection: { ...configuration.connection },
     encoding: { ...configuration.encoding },
     persist: configuration.persist,
+    maxTabs: configuration.maxTabs,
   };
+}
+
+/**
+ * The largest limit other than `Infinity`.
+ *
+ * A tab waiting for a place requests every place at once (ADR-0025), so the limit is a number of
+ * Web Lock requests. A hundred tabs is more than any application uses one device from.
+ */
+const MAX_TAB_LIMIT = 100;
+
+function normalizeTabLimit(value: unknown): number {
+  // Infinity is the documented default and must stay accepted, as for `maxAttempts`.
+  return value === Number.POSITIVE_INFINITY
+    ? Number.POSITIVE_INFINITY
+    : requireInteger(value, 'options.maxTabs', 1, MAX_TAB_LIMIT);
 }
 
 /**
@@ -396,7 +414,10 @@ export function isDeviceCompatible(
     a.serial.dataBits === b.serial.dataBits &&
     a.serial.stopBits === b.serial.stopBits &&
     a.serial.parity === b.serial.parity &&
-    a.serial.flowControl === b.serial.flowControl
+    a.serial.flowControl === b.serial.flowControl &&
+    // Not a hardware setting, but a second `setup()` cannot change it either: the tab already
+    // holds, or waits for, a place among a set of that size (ADR-0025).
+    a.maxTabs === b.maxTabs
   );
 }
 

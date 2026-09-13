@@ -30,6 +30,14 @@ export function isFiniteNumber(value: unknown): value is number {
   return typeof value === 'number' && Number.isFinite(value);
 }
 
+/** `true` for a tab limit: an integer of at least 1, or `Infinity` for none (ADR-0025). */
+export function isTabLimit(value: unknown): value is number {
+  return (
+    value === Number.POSITIVE_INFINITY ||
+    (typeof value === 'number' && Number.isInteger(value) && value >= 1)
+  );
+}
+
 /**
  * `true` for one of the public statuses.
  *

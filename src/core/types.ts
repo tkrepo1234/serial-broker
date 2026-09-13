@@ -17,6 +17,11 @@ import type { SerialBrokerError } from './errors.js';
 export const SerialBrokerStatus = {
   /** Registered, but not yet trying to connect. */
   Idle: 'idle',
+  /**
+   * Waiting for a place: `maxTabs` other tabs use the configuration. The tab joins, and moves
+   * on from here, as soon as one of them releases it, closes or crashes. See ADR-0025.
+   */
+  Queued: 'queued',
   /** No granted port matches the device. Call `requestAccess()` from a user gesture. */
   AwaitingPermission: 'awaiting-permission',
   /** A port is being opened, for the first time or after a loss. */
@@ -153,6 +158,21 @@ export interface SerialBrokerOptions {
    * @defaultValue true
    */
   readonly persist?: boolean;
+  /**
+   * How many tabs of this origin may use the configuration at the same time, the tab holding the
+   * port included: an integer from 1 to 100, or `Infinity`.
+   *
+   * A tab beyond the limit waits with the status `queued` - it receives nothing and its writes
+   * wait - and joins as soon as another tab releases the configuration, closes or crashes, in the
+   * order the tabs arrived. `1` gives one tab exclusive use of the device.
+   *
+   * Every tab has to pass the same limit. A tab that finds the tab holding the port running a
+   * different one reports `CONFIGURATION_CONFLICT`, withdraws, and shows the status `failed`.
+   * See ADR-0025.
+   *
+   * @defaultValue Infinity
+   */
+  readonly maxTabs?: number;
 }
 
 /** Options for {@link SerialBrokerApi.release}. */

@@ -11,7 +11,7 @@
  * announcement, whose channel carries no version, and report `PROTOCOL_VERSION_MISMATCH`
  * (ADR-0023).
  */
-export const PROTOCOL_VERSION = 5;
+export const PROTOCOL_VERSION = 6;
 
 /** Prefix for every name this library claims in a shared namespace. */
 const NAMESPACE = 'serial-broker';
@@ -24,6 +24,22 @@ const NAMESPACE = 'serial-broker';
  */
 export function ownerLockName(configName: string): string {
   return `${NAMESPACE}/owner/v${String(PROTOCOL_VERSION)}/${configName}`;
+}
+
+/**
+ * Name of the Web Lock that is place `place` of a configuration's `maxTabs` places (ADR-0025).
+ *
+ * The limit is part of the name, so tabs that disagree about it never share places; they find out
+ * from the status of the tab holding the port instead. The configuration name comes last, so that a
+ * name containing `/` cannot be mistaken for a limit or a place.
+ */
+export function tabSlotLockName(configName: string, maxTabs: number, place: number): string {
+  return `${NAMESPACE}/tab-slot/v${String(PROTOCOL_VERSION)}/${String(maxTabs)}/${String(place)}/${configName}`;
+}
+
+/** Name of the Web Lock tabs queue at before competing for one of the places (ADR-0025). */
+export function tabSlotGateLockName(configName: string, maxTabs: number): string {
+  return `${NAMESPACE}/tab-slot-gate/v${String(PROTOCOL_VERSION)}/${String(maxTabs)}/${configName}`;
 }
 
 /** Name of the `SharedWorker` instance, and of the `BroadcastChannel` in the fallback. */

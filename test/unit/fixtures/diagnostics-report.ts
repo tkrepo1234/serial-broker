@@ -38,6 +38,7 @@ export function sampleReport(): ParticipantDiagnostics {
           },
           encoding: { encoding: 'utf-8', decodeText: false },
           persist: true,
+          maxTabs: Number.POSITIVE_INFINITY,
         },
         listeners: { onReceive: 1, onSend: 0, onError: 0, onStatusChange: 2 },
         pendingWrites: { total: 0, dispatched: 0, started: 0 },

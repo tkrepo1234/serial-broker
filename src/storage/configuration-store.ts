@@ -274,6 +274,8 @@ function toStorable(configuration: NormalizedConfiguration): unknown {
           ? undefined
           : options.connection.maxAttempts,
     },
+    // `Infinity` does not survive JSON either; omitted, the default applies, which is the same.
+    maxTabs: options.maxTabs === Number.POSITIVE_INFINITY ? undefined : options.maxTabs,
     // Only a persisted configuration is ever stored, so this is always `true`.
     persist: true,
   };

@@ -1,7 +1,7 @@
 import { CONNECTION_STATES } from '../core/diagnostics.js';
 import type { ParticipantDiagnostics } from '../core/diagnostics.js';
 
-import { isFiniteNumber, isNonEmptyString, isRecord, isStatus } from './guards.js';
+import { isFiniteNumber, isNonEmptyString, isRecord, isStatus, isTabLimit } from './guards.js';
 
 /**
  * Validation of a diagnostics report arriving from another context (ADR-0018).
@@ -106,7 +106,8 @@ function isSettings(value: unknown): boolean {
     isRecord(encoding) &&
     isNonEmptyString(encoding['encoding']) &&
     typeof encoding['decodeText'] === 'boolean' &&
-    typeof value['persist'] === 'boolean'
+    typeof value['persist'] === 'boolean' &&
+    isTabLimit(value['maxTabs'])
   );
 }
 

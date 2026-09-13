@@ -124,8 +124,11 @@ describe('encapsulation', () => {
     const { owner } = await twoTabs();
     const allStatuses: string[] = Object.values(SerialBrokerStatus);
 
+    // `queued` says only that the tab limit the application itself set is reached (ADR-0025);
+    // which tab holds the port stays unsayable.
     expect(allStatuses).toEqual([
       'idle',
+      'queued',
       'awaiting-permission',
       'connecting',
       'open',

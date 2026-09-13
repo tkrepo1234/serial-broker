@@ -176,7 +176,7 @@ export class OwnershipElection {
 }
 
 /** Recognises the `AbortError` a cancelled lock request rejects with. */
-function isAbortError(error: unknown): boolean {
+export function isAbortError(error: unknown): boolean {
   return (
     typeof error === 'object' &&
     error !== null &&
