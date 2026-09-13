@@ -82,6 +82,8 @@ export class SharedWorkerTransport implements Transport {
   #port: MessagePortLike;
   /** A broker of this protocol version has answered at least once. */
   #isReady = false;
+  /** A new worker was started, and its broker has not answered yet. */
+  #isRestarting = false;
   /** A valid message arrived from the broker since the last heartbeat went out. */
   #heardSinceHeartbeat = false;
   #unansweredHeartbeats = 0;
@@ -313,6 +315,7 @@ export class SharedWorkerTransport implements Transport {
       return;
     }
 
+    this.#isRestarting = true;
     this.#request.logger.info('started a new SharedWorker', {
       event: 'transport.worker-restarted',
     });
@@ -363,6 +366,12 @@ export class SharedWorkerTransport implements Transport {
       if (!this.#isReady) {
         this.#isReady = true;
         this.#startup?.onReady();
+      }
+      if (this.#isRestarting) {
+        // The new broker has heard this context. Told only now, so that what the client sends in
+        // answer reaches a broker that knows it - hello and the heartbeat went out first.
+        this.#isRestarting = false;
+        this.#request.onReconnected?.();
       }
       return;
     }

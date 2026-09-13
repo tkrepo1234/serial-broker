@@ -166,6 +166,8 @@ privacy configurations, and in sandboxed iframes without `allow-same-origin`.
 created. **Delivered through `onError`** when the message bus reports a failure while running —
 with `transport: 'sharedworker'`, also when the worker script fails to load. With the default
 `'auto'`, a script that fails to load is replaced by a `BroadcastChannel` and raises nothing.
+Also delivered, once per tab, when the worker stops answering the tabs' heartbeats because it crashed
+or was ended; the tabs then connect to a new worker on their own.
 **Do:** check that `serial-broker.worker.js` is served from the application's origin, at the URL
 every tab uses; see [The worker script](installing.md#the-worker-script).
 

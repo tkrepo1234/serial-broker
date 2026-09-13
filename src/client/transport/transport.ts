@@ -61,6 +61,12 @@ export interface TransportRequest {
   readonly onDecodeFailure: (failure: DecodeFailure) => void;
   /** Receives transport-level failures, such as the worker script failing to load. */
   readonly onTransportError: (error: unknown) => void;
+  /**
+   * Called when the transport has reached a new broker after the old one stopped answering
+   * (ADR-0021, amended). Whatever was sent or broadcast in between may be lost, so the client asks
+   * again for what it needs. Only a `SharedWorker` transport ever reconnects.
+   */
+  readonly onReconnected?: (() => void) | undefined;
   readonly logger: ScopedLogger;
   /** Time, for the heartbeats a `SharedWorker` participant sends (ADR-0021). */
   readonly clock: Clock;

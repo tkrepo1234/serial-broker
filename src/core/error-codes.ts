@@ -25,7 +25,7 @@ export const SerialBrokerErrorCode = {
   WEB_LOCKS_UNAVAILABLE: 'WEB_LOCKS_UNAVAILABLE',
   /** Neither `SharedWorker` nor `BroadcastChannel` could be used for the message bus. */
   TRANSPORT_UNAVAILABLE: 'TRANSPORT_UNAVAILABLE',
-  /** The broker script could not be loaded. */
+  /** The broker script could not be loaded, or the worker running it stopped answering. */
   BROKER_UNAVAILABLE: 'BROKER_UNAVAILABLE',
 
   // --- Permission ------------------------------------------------------------------------
@@ -117,7 +117,7 @@ export const REMEDIATION: Record<SerialBrokerErrorCode, string> = {
   TRANSPORT_UNAVAILABLE:
     'Neither SharedWorker nor BroadcastChannel is available. Both are blocked in some privacy configurations and in sandboxed iframes without the allow-same-origin token.',
   BROKER_UNAVAILABLE:
-    'The broker script could not be loaded. Ensure serial-broker.worker.js is served from the same origin, or pass its URL with SerialBroker.configure({ workerUrl }).',
+    'The broker script could not be loaded, or the worker running it stopped answering. If it did not load, ensure serial-broker.worker.js is served from the same origin, or pass its URL with SerialBroker.configure({ workerUrl }). If it stopped answering, the tabs connect to a new worker on their own; nothing needs to be done unless it keeps happening.',
   PERMISSION_REQUIRED:
     'Call SerialBroker.requestAccess(name) from inside a click or keypress handler. The browser only shows the serial port picker during a user gesture.',
   PERMISSION_DENIED:

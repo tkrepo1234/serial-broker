@@ -129,15 +129,27 @@ export class ConfigurationSession {
     // already-open configuration would sit at `idle` until the next status change, which on a
     // healthy connection could be hours away. Asking here rather than letting the broker do it
     // keeps both transports on one code path - the fallback has no broker to ask (ADR-0007).
-    this.transport.send({
-      type: 'status-request',
-      v: PROTOCOL_VERSION,
-      from: this.transport.clientId,
-      to: 'owner',
-      configName: this.configuration.name,
-    });
+    this.#requestStatus();
 
     this.#election.start();
+  }
+
+  /**
+   * The bus reached a new broker after the old one died (ADR-0021, amended).
+   *
+   * Statuses and write requests sent through the dead one may be lost. The tab holding the port
+   * restates its status, which a tab that reached the new broker first could not ask for yet; any
+   * other tab asks for it. Hearing `open` from the owner hands on writes that have not started.
+   */
+  handleBusReconnected(): void {
+    if (this.#isReleased) {
+      return;
+    }
+    if (this.#election.isOwner) {
+      this.#broadcastStatus(this.#status);
+    } else {
+      this.#requestStatus();
+    }
   }
 
   /**
@@ -350,6 +362,13 @@ export class ConfigurationSession {
         return;
 
       case 'status':
+        if (message.status === SerialBrokerStatus.Open && !this.#election.isOwner) {
+          // The owner states `open` when the port opens, and again after reaching a new broker. A
+          // write request lost on the way in between is handed on here; one the owner already has,
+          // it recognises. Before the status is set, so that a write only now allowed out is sent
+          // once, by the status change.
+          this.#writes.resendUnstarted();
+        }
         this.#setStatus(message.status);
         return;
 
@@ -619,6 +638,11 @@ export class ConfigurationSession {
         },
         (error: unknown) => {
           const failure = toSerialBrokerError(error, this.configuration.name);
+          if (failure.code === SerialBrokerErrorCode.NOT_CONNECTED) {
+            // Never started here, so it is not remembered: the participant hands it on again once
+            // the port is open, and then it has to be written, not answered with this again.
+            this.#acceptedPeerWrites.delete(key);
+          }
           record.isDone = true;
           record.error = failure;
           this.#sendWriteResult(origin, requestId, failure);
@@ -688,6 +712,16 @@ export class ConfigurationSession {
     if (status === SerialBrokerStatus.Open) {
       this.#writes.dispatchWaiting();
     }
+  }
+
+  #requestStatus(): void {
+    this.transport.send({
+      type: 'status-request',
+      v: PROTOCOL_VERSION,
+      from: this.transport.clientId,
+      to: 'owner',
+      configName: this.configuration.name,
+    });
   }
 
   #broadcastStatus(status: SerialBrokerStatus): void {

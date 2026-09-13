@@ -85,5 +85,27 @@ describe('tabs whose worker dies', () => {
     expect(late.receivedText('Reader')).toBe('TOGETHER');
     expect(other.receivedText('Reader')).toBe('TOGETHER');
     expect(harness.bus.workerHost.clientCount).toBe(3);
+
+    // It set up while the new worker knew no owner to ask for the status, and learns it all the
+    // same: the owner restates it on reaching the new worker.
+    expect(late.client.getStatus('Reader').status).toBe('open');
+    const writing = late.client.send('Reader', 'LATE');
+    await harness.settle();
+    await expect(writing).resolves.toBeUndefined();
+    expect(device.writtenText()).toBe('LATE');
+  });
+
+  it('hand on a write that was lost with the dead worker, and write it once', async () => {
+    const { harness, device, other } = await twoTabs();
+
+    harness.bus.crashWorker();
+    // Sent into the dead worker: nothing tells the tab that it went nowhere.
+    const writing = other.client.send('Reader', 'LOST');
+    await harness.settle();
+    await harness.busClock.advance(DETECTION_MS);
+    await harness.settle();
+
+    await expect(writing).resolves.toBeUndefined();
+    expect(device.writtenText()).toBe('LOST');
   });
 });

@@ -392,6 +392,11 @@ export class SerialBrokerClient {
       onDecodeFailure: (failure) => {
         this.#handleDecodeFailure(failure);
       },
+      onReconnected: () => {
+        for (const session of this.#sessions.values()) {
+          session.handleBusReconnected();
+        }
+      },
       onTransportError: (error) => {
         this.#reportGlobal(
           new SerialBrokerError(
@@ -576,7 +581,7 @@ export class SerialBrokerClient {
     this.#reportGlobal(
       new SerialBrokerError(
         SerialBrokerErrorCode.PROTOCOL_VERSION_MISMATCH,
-        `Another tab runs an incompatible version of this library: ${detail}`,
+        `Another tab or the shared worker runs an incompatible version of this library: ${detail}`,
         { context: { theirVersion }, timestamp: this.environment.clock.now() },
       ),
     );

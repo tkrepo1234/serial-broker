@@ -194,6 +194,22 @@ export class PendingWrites {
     }
   }
 
+  /**
+   * Hands on every write that has not started, including those already handed to an owner.
+   *
+   * For when a request may have been lost on its way: the broker it went through died
+   * (ADR-0021, amended). The owner recognises a request it has already accepted, so handing one on
+   * again cannot write it twice (ADR-0013).
+   */
+  resendUnstarted(): void {
+    for (const pending of [...this.#writes.values()]) {
+      if (!pending.started) {
+        pending.isDispatched = false;
+        this.#dispatch(pending);
+      }
+    }
+  }
+
   /** Dispatches everything that has been waiting for a connection. */
   dispatchWaiting(): void {
     for (const pending of [...this.#writes.values()]) {
