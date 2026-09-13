@@ -32,6 +32,10 @@ coordinate with each other. See
   settings, and a configuration's traffic can be watched - without the observing page taking part
   in ownership. The main entry point is unchanged and still reveals nothing of the kind.
 
+- A debugging surface, shipped as static content in `dist/debug/`: every `setup()` and
+  `configure()` option, every status field, all events and log records for its own tab, and every
+  tab of the origin through the diagnostics observer. It sets nothing up on its own.
+
 ### Notes
 
 - Wire protocol version: **2**. Version 1 was never released; 2 adds the diagnostics request and

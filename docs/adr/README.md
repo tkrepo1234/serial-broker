@@ -29,5 +29,6 @@ because of a decision references it in a comment (`// See ADR-0005.`).
 | [0014](./0014-dependency-injection-of-the-environment.md)    | Inject the browser environment for testability                                 | Accepted        |
 | [0015](./0015-text-and-binary-payloads.md)                   | Deliver bytes, offer text as a configured convenience                          | Accepted        |
 | [0016](./0016-non-usb-devices.md)                            | Support ports that are not USB devices                                         | Accepted        |
+| [0019](./0019-ship-the-debugging-surface.md)                 | Ship the debugging surface in the package, as static content                   | Accepted        |
 | [0018](./0018-diagnostics-observer.md)                       | Expose coordination internals to operators through a diagnostics observer      | Accepted        |
 | [0017](./0017-usbip-device-emulator.md)                      | Emulate a USB serial device over USB/IP for testing without hardware           | Accepted        |

@@ -1,0 +1,742 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>serial-broker · debugging surface</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        --bg: #f4f6f9;
+        --card: #ffffff;
+        --fg: #16181d;
+        --muted: #5c6370;
+        --line: #d8dce3;
+        --accent: #1b57c4;
+        --accent-soft: #e3ecfb;
+        --ok: #1a7f4b;
+        --ok-soft: #e1f3e9;
+        --warn: #a2660a;
+        --warn-soft: #fbf0dc;
+        --bad: #b3261e;
+        --bad-soft: #fbe4e2;
+        --panel: #f6f7f9;
+        --mono: ui-monospace, SFMono-Regular, Consolas, monospace;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg: #101216;
+          --card: #171a20;
+          --fg: #e8eaed;
+          --muted: #9aa0a9;
+          --line: #2c3038;
+          --accent: #79a6ff;
+          --accent-soft: #1d2a44;
+          --ok: #5ac48b;
+          --ok-soft: #173427;
+          --warn: #e0b050;
+          --warn-soft: #3a2e14;
+          --bad: #ff8a80;
+          --bad-soft: #3d1c1a;
+          --panel: #1b1e24;
+        }
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        padding: 1.5rem clamp(1rem, 3vw, 2.5rem) 3rem;
+        background: var(--bg);
+        color: var(--fg);
+        font:
+          14px/1.5 system-ui,
+          -apple-system,
+          'Segoe UI',
+          sans-serif;
+      }
+      header {
+        max-width: 90rem;
+        margin: 0 auto 1.25rem;
+      }
+      h1 {
+        font-size: 1.45rem;
+        margin: 0 0 0.25rem;
+      }
+      h2 {
+        font-size: 1.05rem;
+        margin: 0 0 0.25rem;
+      }
+      h3 {
+        font-size: 0.95rem;
+        margin: 1rem 0 0.5rem;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.4rem;
+        align-items: center;
+      }
+      .lede,
+      .hint,
+      .muted {
+        color: var(--muted);
+      }
+      .lede {
+        margin: 0;
+        max-width: 60rem;
+      }
+      .hint {
+        font-size: 0.85rem;
+        margin: 0.25rem 0 0.75rem;
+      }
+      main {
+        max-width: 90rem;
+        margin: 0 auto;
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(min(100%, 38rem), 1fr));
+        gap: 1rem;
+        align-items: start;
+      }
+      .card {
+        background: var(--card);
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        padding: 1rem 1.25rem 1.25rem;
+        min-width: 0;
+      }
+      .card.wide {
+        grid-column: 1 / -1;
+      }
+      .banner {
+        max-width: 90rem;
+        margin: 0 auto 1rem;
+        padding: 0.75rem 1rem;
+        border-radius: 8px;
+        background: var(--bad-soft);
+        color: var(--bad);
+      }
+      fieldset {
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 0.75rem 1rem 1rem;
+        margin: 0 0 0.75rem;
+        min-width: 0;
+      }
+      legend {
+        font-weight: 600;
+        padding: 0 0.35rem;
+      }
+      label {
+        display: block;
+        font-size: 0.8rem;
+        color: var(--muted);
+        margin-bottom: 0.15rem;
+      }
+      label.inline {
+        display: inline-flex;
+        gap: 0.35rem;
+        align-items: center;
+        color: var(--fg);
+        font-size: 0.9rem;
+        margin-right: 1rem;
+      }
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(9.5rem, 1fr));
+        gap: 0.6rem 0.75rem;
+      }
+      .row {
+        display: flex;
+        gap: 0.5rem;
+        flex-wrap: wrap;
+        align-items: end;
+      }
+      .row > .grow {
+        flex: 1 1 12rem;
+      }
+      input,
+      select,
+      button {
+        font: inherit;
+        padding: 0.4rem 0.55rem;
+        border-radius: 6px;
+        border: 1px solid var(--line);
+        background: var(--card);
+        color: var(--fg);
+        width: 100%;
+      }
+      input[type='checkbox'],
+      input[type='radio'] {
+        width: auto;
+      }
+      button {
+        background: var(--accent);
+        color: #fff;
+        border-color: transparent;
+        cursor: pointer;
+        font-weight: 600;
+        width: auto;
+        padding-inline: 0.9rem;
+      }
+      button.secondary {
+        background: transparent;
+        color: var(--fg);
+        border-color: var(--line);
+      }
+      button.danger {
+        background: transparent;
+        color: var(--bad);
+        border-color: var(--bad);
+      }
+      button.small {
+        padding: 0.2rem 0.55rem;
+        font-size: 0.8rem;
+      }
+      #actionResult {
+        min-height: 1.4rem;
+        margin: 0.6rem 0 0;
+        font-weight: 600;
+        color: var(--ok);
+      }
+      #actionResult.failure {
+        color: var(--bad);
+      }
+      dl#platform {
+        display: grid;
+        grid-template-columns: max-content 1fr;
+        gap: 0.2rem 1rem;
+        margin: 0.5rem 0 0;
+      }
+      dt {
+        color: var(--muted);
+      }
+      dd {
+        margin: 0;
+        font-family: var(--mono);
+        overflow-wrap: anywhere;
+      }
+      table {
+        border-collapse: collapse;
+        width: 100%;
+        font-size: 0.85rem;
+      }
+      th,
+      td {
+        text-align: left;
+        vertical-align: top;
+        padding: 0.35rem 0.5rem;
+        border-bottom: 1px solid var(--line);
+      }
+      thead td {
+        color: var(--muted);
+        font-weight: 600;
+        white-space: nowrap;
+      }
+      tr.own td {
+        background: var(--accent-soft);
+      }
+      .table-scroll {
+        overflow-x: auto;
+      }
+      .badge {
+        display: inline-block;
+        padding: 0.05rem 0.45rem;
+        border-radius: 999px;
+        font-size: 0.75rem;
+        font-weight: 600;
+        margin-left: 0.3rem;
+        white-space: nowrap;
+      }
+      .badge.ok {
+        background: var(--ok-soft);
+        color: var(--ok);
+      }
+      .badge.warn {
+        background: var(--warn-soft);
+        color: var(--warn);
+      }
+      .badge.bad {
+        background: var(--bad-soft);
+        color: var(--bad);
+      }
+      .badge.neutral {
+        background: var(--panel);
+        color: var(--muted);
+      }
+      .badge.accent {
+        background: var(--accent-soft);
+        color: var(--accent);
+      }
+      .log {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 0.5rem 0.75rem;
+        height: 22rem;
+        overflow-y: auto;
+        font: 12.5px/1.45 var(--mono);
+      }
+      .entry {
+        display: grid;
+        grid-template-columns: 6.5rem 5.5rem 1fr;
+        gap: 0.5rem;
+        padding: 0.05rem 0;
+      }
+      .entry .time {
+        color: var(--muted);
+      }
+      .entry .label {
+        font-weight: 600;
+      }
+      .entry .text {
+        overflow-wrap: anywhere;
+      }
+      .kind-received .label {
+        color: var(--ok);
+      }
+      .kind-sent .label {
+        color: var(--accent);
+      }
+      .kind-sent-peer .label,
+      .kind-ownership .label,
+      .kind-log-warn .label {
+        color: var(--warn);
+      }
+      .kind-error .label,
+      .kind-log-error .label {
+        color: var(--bad);
+      }
+      .kind-log-debug,
+      .kind-log-info,
+      .kind-note {
+        color: var(--muted);
+      }
+      details summary {
+        cursor: pointer;
+        color: var(--muted);
+      }
+      pre {
+        margin: 0.25rem 0 0.5rem;
+        white-space: pre-wrap;
+        font: 12px/1.4 var(--mono);
+      }
+      .filters {
+        margin: 0.5rem 0;
+      }
+      .settings-list {
+        display: grid;
+        gap: 0.25rem;
+        margin-top: 0.5rem;
+      }
+      .settings {
+        display: flex;
+        gap: 0.5rem;
+        align-items: start;
+        justify-content: space-between;
+      }
+      section.configuration + section.configuration {
+        border-top: 1px dashed var(--line);
+        margin-top: 0.75rem;
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>serial-broker <span class="muted">· debugging surface</span></h1>
+      <p class="lede">
+        Every setting and every piece of status the library has. <strong>This tab</strong> uses the
+        library the way an application does. <strong>The origin</strong> shows what every tab is
+        doing, through the diagnostics observer, which takes no part in ownership: looking never
+        moves a port. The page sets nothing up on its own.
+      </p>
+    </header>
+
+    <div id="supportBanner" class="banner" hidden>
+      The library could not start in this browser. Web Serial needs Chrome, Edge or Opera, in a
+      secure context: HTTPS, or <code>localhost</code>. The platform panel says what is missing.
+    </div>
+
+    <main>
+      <section class="card">
+        <h2>Platform</h2>
+        <dl id="platform"></dl>
+      </section>
+
+      <section class="card">
+        <h2>Library settings</h2>
+        <p class="hint">
+          What <code>SerialBroker.configure()</code> takes. The library reads them once, so applying
+          reloads the page. The worker URL and transport must match the application's, or this page
+          is on a different bus and sees nobody.
+        </p>
+        <div class="row">
+          <div class="grow">
+            <label for="workerUrl">Worker URL</label>
+            <input id="workerUrl" spellcheck="false" />
+          </div>
+        </div>
+        <div class="row" style="margin-top: 0.6rem">
+          <div>
+            <label for="transport">Transport</label>
+            <select id="transport">
+              <option value="auto">auto</option>
+              <option value="sharedworker">sharedworker</option>
+              <option value="broadcastchannel">broadcastchannel</option>
+            </select>
+          </div>
+          <div>
+            <label for="logLevel">Log level shown</label>
+            <select id="logLevel">
+              <option value="debug">debug</option>
+              <option value="info" selected>info</option>
+              <option value="warn">warn</option>
+              <option value="error">error</option>
+            </select>
+          </div>
+          <label class="inline"><input id="logPayloads" type="checkbox" /> logPayloads</label>
+        </div>
+        <div class="row" style="margin-top: 0.75rem">
+          <button id="applySettings" type="button">Apply and reload</button>
+          <button id="settingsLink" type="button" class="secondary">Make a link</button>
+          <div class="grow">
+            <input id="settingsLinkText" readonly placeholder="link with these settings" />
+          </div>
+        </div>
+      </section>
+
+      <section class="card wide">
+        <h2>Configuration</h2>
+        <p class="hint">
+          Every option <code>setup()</code> accepts. Blank means the library's default. The page
+          does not validate: it passes what you type and shows the library's verdict.
+        </p>
+        <form id="setupForm" autocomplete="off">
+          <fieldset>
+            <legend>Device</legend>
+            <div class="grid">
+              <div>
+                <label for="name">Configuration name</label>
+                <input id="name" name="name" />
+              </div>
+              <div>
+                <label for="preset">Preset</label>
+                <select id="preset">
+                  <option value="">choose…</option>
+                </select>
+              </div>
+              <div>
+                <label>Filter</label>
+                <label class="inline"
+                  ><input type="radio" name="deviceKind" value="usb" /> USB IDs</label
+                >
+                <label class="inline"
+                  ><input type="radio" name="deviceKind" value="any" /> any port</label
+                >
+              </div>
+              <div>
+                <label for="vendorId">Vendor ID</label>
+                <input id="vendorId" name="vendorId" placeholder="0x1a86" />
+              </div>
+              <div>
+                <label for="productId">Product ID</label>
+                <input id="productId" name="productId" placeholder="0x7523" />
+              </div>
+            </div>
+          </fieldset>
+
+          <fieldset>
+            <legend>Line (serial)</legend>
+            <div class="grid">
+              <div>
+                <label for="baudRate">baudRate</label>
+                <input id="baudRate" name="baudRate" placeholder="required" />
+              </div>
+              <div>
+                <label for="dataBits">dataBits</label>
+                <select id="dataBits" name="dataBits">
+                  <option value="">default (8)</option>
+                  <option value="7">7</option>
+                  <option value="8">8</option>
+                </select>
+              </div>
+              <div>
+                <label for="stopBits">stopBits</label>
+                <select id="stopBits" name="stopBits">
+                  <option value="">default (1)</option>
+                  <option value="1">1</option>
+                  <option value="2">2</option>
+                </select>
+              </div>
+              <div>
+                <label for="parity">parity</label>
+                <select id="parity" name="parity">
+                  <option value="">default (none)</option>
+                  <option value="none">none</option>
+                  <option value="even">even</option>
+                  <option value="odd">odd</option>
+                </select>
+              </div>
+              <div>
+                <label for="bufferSize">bufferSize (bytes)</label>
+                <input id="bufferSize" name="bufferSize" placeholder="default 255" />
+              </div>
+              <div>
+                <label for="flowControl">flowControl</label>
+                <select id="flowControl" name="flowControl">
+                  <option value="">default (none)</option>
+                  <option value="none">none</option>
+                  <option value="hardware">hardware</option>
+                </select>
+              </div>
+            </div>
+          </fieldset>
+
+          <fieldset>
+            <legend>Connection</legend>
+            <div class="grid">
+              <div>
+                <label for="initialDelayMs">initialDelayMs</label>
+                <input
+                  id="initialDelayMs"
+                  name="connection.initialDelayMs"
+                  placeholder="default 250"
+                />
+              </div>
+              <div>
+                <label for="factor">factor</label>
+                <input id="factor" name="connection.factor" placeholder="default 2" />
+              </div>
+              <div>
+                <label for="maxDelayMs">maxDelayMs</label>
+                <input id="maxDelayMs" name="connection.maxDelayMs" placeholder="default 30000" />
+              </div>
+              <div>
+                <label for="jitter">jitter (0–1)</label>
+                <input id="jitter" name="connection.jitter" placeholder="default 0.5" />
+              </div>
+              <div>
+                <label for="maxAttempts">maxAttempts</label>
+                <input
+                  id="maxAttempts"
+                  name="connection.maxAttempts"
+                  placeholder="default Infinity"
+                />
+              </div>
+              <div>
+                <label for="stableAfterMs">stableAfterMs</label>
+                <input
+                  id="stableAfterMs"
+                  name="connection.stableAfterMs"
+                  placeholder="default 5000"
+                />
+              </div>
+              <div>
+                <label for="openTimeoutMs">openTimeoutMs</label>
+                <input
+                  id="openTimeoutMs"
+                  name="connection.openTimeoutMs"
+                  placeholder="default 10000"
+                />
+              </div>
+              <div>
+                <label for="writeTimeoutMs">writeTimeoutMs</label>
+                <input
+                  id="writeTimeoutMs"
+                  name="connection.writeTimeoutMs"
+                  placeholder="default 5000"
+                />
+              </div>
+              <div>
+                <label for="maxWriteChunkBytes">maxWriteChunkBytes</label>
+                <input
+                  id="maxWriteChunkBytes"
+                  name="connection.maxWriteChunkBytes"
+                  placeholder="default 4096"
+                />
+              </div>
+            </div>
+          </fieldset>
+
+          <fieldset>
+            <legend>Encoding and persistence</legend>
+            <div class="row">
+              <div>
+                <label for="encoding">encoding</label>
+                <input id="encoding" name="encoding" placeholder="default utf-8" />
+              </div>
+              <label class="inline"><input type="checkbox" name="decodeText" /> decodeText</label>
+              <label class="inline"><input type="checkbox" name="persist" /> persist</label>
+            </div>
+          </fieldset>
+
+          <div class="row">
+            <button id="setupButton" type="submit">Set up</button>
+            <button id="grantButton" type="button" class="secondary">Choose device…</button>
+            <button id="releaseButton" type="button" class="secondary">Release</button>
+            <button id="forgetButton" type="button" class="danger">
+              Release and forget device
+            </button>
+            <button id="resetForm" type="button" class="secondary">Reset form</button>
+          </div>
+          <p id="actionResult" role="status"></p>
+        </form>
+      </section>
+
+      <section class="card wide">
+        <h2>This tab</h2>
+        <p class="hint">
+          Exactly what <code>getStatus()</code> reports to an application - nothing about which tab
+          owns the port, by design.
+        </p>
+        <div class="row">
+          <button id="restoreButton" type="button" class="secondary">Restore remembered</button>
+          <button id="releaseAllButton" type="button" class="secondary">Release all</button>
+          <button id="disposeButton" type="button" class="danger">Dispose</button>
+        </div>
+        <div class="table-scroll">
+          <table>
+            <thead>
+              <tr>
+                <td>name</td>
+                <td>status</td>
+                <td>vendorId : productId</td>
+                <td>serialOptions</td>
+                <td>since</td>
+                <td>observedAt</td>
+                <td>lastErrorCode</td>
+              </tr>
+            </thead>
+            <tbody id="tabRows"></tbody>
+          </table>
+        </div>
+
+        <h3>Send</h3>
+        <div class="row">
+          <div>
+            <label for="sendTarget">Configuration</label>
+            <select id="sendTarget"></select>
+          </div>
+          <div class="grow">
+            <label for="payload">Payload</label>
+            <input id="payload" value="STATUS?" spellcheck="false" />
+          </div>
+          <div>
+            <label for="payloadMode">As</label>
+            <select id="payloadMode">
+              <option value="text">text (UTF-8)</option>
+              <option value="hex">hex bytes</option>
+            </select>
+          </div>
+          <div>
+            <label for="terminator">Append (text only)</label>
+            <select id="terminator">
+              <option value="">nothing</option>
+              <option value="&#13;&#10;" selected>CR LF</option>
+              <option value="&#10;">LF</option>
+              <option value="&#13;">CR</option>
+            </select>
+          </div>
+          <button id="sendButton" type="button">Send</button>
+        </div>
+        <p class="hint">The library appends nothing; the terminator is this page's.</p>
+
+        <h3>Events and log</h3>
+        <div id="tabLogFilters" class="filters">
+          <label class="inline"
+            ><input type="checkbox" checked data-kinds="received" /> received</label
+          >
+          <label class="inline"
+            ><input type="checkbox" checked data-kinds="sent sent-peer" /> sent</label
+          >
+          <label class="inline"><input type="checkbox" checked data-kinds="status" /> status</label>
+          <label class="inline"><input type="checkbox" checked data-kinds="error" /> errors</label>
+          <label class="inline"
+            ><input type="checkbox" checked data-kinds="log-debug log-info log-warn log-error" />
+            library log</label
+          >
+          <label class="inline"><input type="checkbox" checked data-kinds="note" /> notes</label>
+          <button id="clearTabLog" type="button" class="secondary small">Clear</button>
+        </div>
+        <div id="tabLog" class="log" role="log"></div>
+      </section>
+
+      <section class="card wide">
+        <h2>The origin</h2>
+        <p class="hint">
+          Every tab of this origin that has set something up, as it describes itself (ADR-0018). A
+          collection listens for a fixed window, because nothing says how many tabs exist.
+        </p>
+        <div class="row">
+          <button id="collectButton" type="button">Collect</button>
+          <div>
+            <label for="windowMs">Window (ms)</label>
+            <input id="windowMs" value="500" />
+          </div>
+          <label class="inline"><input id="autoRefresh" type="checkbox" /> refresh every</label>
+          <div>
+            <select id="refreshInterval">
+              <option value="2000">2 s</option>
+              <option value="5000" selected>5 s</option>
+              <option value="15000">15 s</option>
+            </select>
+          </div>
+        </div>
+        <p id="diagnosticsSummary" class="hint">Not collected yet.</p>
+        <div id="diagnosticsConfigurations"></div>
+
+        <h3>Web Locks</h3>
+        <div id="diagnosticsLocks" class="table-scroll"></div>
+
+        <h3>Watch a configuration</h3>
+        <p class="hint">
+          Traffic, status, errors and ownership changes from every tab, as they cross the bus.
+        </p>
+        <div class="row">
+          <div class="grow">
+            <label for="watchName">Configuration name</label>
+            <input id="watchName" list="knownNames" value="Device" />
+            <datalist id="knownNames"></datalist>
+          </div>
+          <button id="watchButton" type="button">Watch</button>
+          <button id="clearWatchLog" type="button" class="secondary">Clear</button>
+        </div>
+        <div id="watchLog" class="log" role="log" style="margin-top: 0.6rem"></div>
+      </section>
+
+      <section class="card">
+        <h2>Granted ports</h2>
+        <p class="hint">
+          Ports this origin has permission for. Identical adapters cannot be told apart.
+        </p>
+        <button id="refreshPorts" type="button" class="secondary small">Refresh</button>
+        <div class="table-scroll">
+          <table>
+            <thead>
+              <tr>
+                <td>#</td>
+                <td>USB identity</td>
+                <td>in this tab</td>
+                <td>getInfo()</td>
+              </tr>
+            </thead>
+            <tbody id="portRows"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>Remembered configurations</h2>
+        <p class="hint">
+          What <code>restore()</code> would set up, from this origin's storage. Shown, never
+          restored on its own.
+        </p>
+        <div class="table-scroll">
+          <table>
+            <tbody id="rememberedRows"></tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+
+    <script type="module" src="./debug.js"></script>
+  </body>
+</html>

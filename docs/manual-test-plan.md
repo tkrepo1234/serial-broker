@@ -108,10 +108,12 @@ it proves the software path, not the electrical one.
 
 ## Setup
 
-1. `npm run build && npm run demo:build`
+1. `npm run build`
 2. Serve the repository root over `http://localhost` — Web Serial refuses anything that is not
    a secure context, so a LAN address over plain HTTP will not do.
-3. Open `http://localhost:<port>/examples/demo/` in Chrome.
+3. Open `http://localhost:<port>/debug/` in Chrome — the debugging surface. Its _The origin_
+   panel shows which tab owns the port; use it to confirm the failover steps rather than
+   inferring them.
 4. Attach a USB-serial device. A CH340 adapter (`0x1a86` / `0x7523`) with its TX and RX pins
    bridged is ideal: everything sent comes straight back, so send and receive are visible in
    one window.
@@ -136,7 +138,7 @@ they are left unticked because the checklist is about a run **with** hardware.
 
 ### Several tabs
 
-- [ ] **5.** Open the demo in a second and third tab. Each reaches `open` without prompting.
+- [ ] **5.** Open the debugging surface in a second and third tab, and set up the same configuration. Each reaches `open` without prompting.
 - [ ] **6.** Send from tab 2. All three tabs log it: `sent` in tab 2, `sent (peer)` in the
       others. The device receives it **once**.
 - [ ] **7.** Send from tab 3 while tab 1 is in the background. It still works.
@@ -168,7 +170,7 @@ they are left unticked because the checklist is about a run **with** hardware.
 - [ ] **18.** Revoke the device in Chrome's site settings while connected. The tabs report the
       loss; after a reload the status is `awaiting-permission` again.
 - [ ] **19.** Click _Release_ with `forgetDevice` — verify the next `setup()` prompts again.
-      (The demo's Release button does not pass it; test through the console.)
+      (Use _Release and forget device_.)
 
 ### Data
 
@@ -176,8 +178,7 @@ they are left unticked because the checklist is about a run **with** hardware.
 - [ ] **21.** Send non-ASCII text (`Grüße, 温度`). It round-trips correctly, including across a
       chunk boundary — send it repeatedly and quickly to make the split likely.
 - [ ] **22.** Send binary through the console:
-      `SerialBroker.send('DemoDevice', new Uint8Array([0x02, 0xff, 0x03]))`. The demo shows it
-      as hex.
+      send `02 FF 03` with _As: hex bytes_. The log shows it as hex.
 
 ### Diagnostics
 
@@ -192,7 +193,7 @@ they are left unticked because the checklist is about a run **with** hardware.
 
 - [ ] **25.** Force it with `SerialBroker.configure({ transport: 'broadcastchannel' })` before
       `setup()`, then repeat steps 5, 6, 9 and 13. Behaviour must be indistinguishable.
-- [ ] **26.** If an Android device is available, open the demo on Chrome for Android with an
+- [ ] **26.** If an Android device is available, open the debugging surface on Chrome for Android with an
       OTG adapter. `SharedWorker` is absent there, so the fallback is what runs.
 
 ## Recording a run
@@ -204,3 +205,24 @@ Append to this file:
 Steps 1–26: pass / fail with notes.
 Observations worth keeping.
 ```
+
+### 2026-09-13 — Edge 153.0.0.0, Windows 11 Home 26200, no device: the debugging surface
+
+The debugging surface from `dist/debug/`, served over `http://localhost`, on protocol version 2.
+No device, so every configuration stays at `awaiting-permission`; what was checked is the
+coordination and what the page shows of it.
+
+- **Setting up from the page** reports `awaiting-permission` in _This tab_, with every
+  `getStatus()` field, and the library's own log records in the event log.
+- **The origin panel, through a real `SharedWorker`**, lists the tab as owner, marks it _this
+  page_, and shows its connection state, attempt count and counters; _Web Locks_ shows
+  `serial-broker/owner/v2/Device` held.
+- **Observing does not participate.** A second tab that only collected saw the first tab as owner,
+  and `navigator.locks.query()` showed one holder and **no** pending request. After it set the
+  configuration up, it appeared as a participant, "held by another tab", and as one pending request.
+- **Failover, seen from outside.** With the first tab closed, a fresh tab that only observed saw
+  the remaining tab as the sole owner, holding the lock, with nothing pending.
+- **Console:** no errors in any tab.
+
+Not covered: anything that needs a device to answer, and the _Watch_ panel's ownership events
+across the handover, because the tab that was watching was the one closed.

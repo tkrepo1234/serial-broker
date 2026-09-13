@@ -262,6 +262,18 @@ observer takes no part in ownership, so looking never moves the port. Pass the s
 `transport` as the application, or it will be looking at an empty bus. See
 [ADR-0018](./docs/adr/0018-diagnostics-observer.md).
 
+## Debugging surface
+
+The package ships a page that shows every setting and every piece of status, in `dist/debug/`:
+this tab's configurations exactly as the API reports them, and next to them every tab of the
+origin through the diagnostics observer — which tab owns each port, reconnect timing, pending
+writes, settings, locks, and live traffic. It sets nothing up on its own, so opening it never
+moves a port.
+
+It is static content. Nothing serves it unless you do, and whether to is your decision: it can send
+bytes to devices and revoke device permissions. Serve it on the application's origin, next to the
+worker or pointed at the application's worker URL. See [debug/README.md](./debug/README.md).
+
 ## What this library does not do
 
 It wraps the transport and nothing else. It delivers byte chunks exactly as they arrive, with

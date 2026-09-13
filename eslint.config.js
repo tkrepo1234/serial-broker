@@ -9,14 +9,7 @@ import tseslint from 'typescript-eslint';
  */
 export default defineConfig(
   {
-    ignores: [
-      'dist/**',
-      'coverage/**',
-      'node_modules/**',
-      'docs/api/**',
-      // The demo's bundled output, which is built from the sources next to it.
-      'examples/demo/main.js',
-    ],
+    ignores: ['dist/**', 'coverage/**', 'node_modules/**', 'docs/api/**'],
   },
 
   js.configs.recommended,
@@ -100,6 +93,14 @@ export default defineConfig(
   // The composition root is the single place allowed to touch browser globals (ADR-0014).
   {
     files: ['src/environment/browser.ts', 'src/worker/serial-broker.worker.ts'],
+    rules: { 'no-restricted-globals': 'off' },
+  },
+
+  // The debugging surface is an application page, and like any application it is its own
+  // composition root: it reads navigator, storage and timers directly, as src/environment/browser.ts
+  // does for the library (ADR-0019).
+  {
+    files: ['debug/**/*.ts'],
     rules: { 'no-restricted-globals': 'off' },
   },
 

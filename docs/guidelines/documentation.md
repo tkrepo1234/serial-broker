@@ -15,7 +15,7 @@ short sentences, no marketing language, no "simply"/"just"/"obviously".
 | **docs/architecture.md** | Someone modifying the library                   | Explains the mechanism, not the API.                |
 | **docs/adr/**            | Future maintainers asking "why is it like this" | One decision per record, immutable once accepted.   |
 | **CHANGELOG.md**         | Upgraders                                       | Keep a Changelog format, every user-visible change. |
-| **examples/**            | Someone integrating                             | Must run; CI type-checks them.                      |
+| **debug/**               | Someone operating or testing a deployment       | Ships in `dist/debug/`; type-checked and linted.    |
 
 ## TSDoc rules
 
