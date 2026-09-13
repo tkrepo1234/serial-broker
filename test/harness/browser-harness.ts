@@ -166,6 +166,8 @@ export class BrowserHarness {
   readonly storage = new FakeStorage();
 
   readonly #tabs = new Map<string, VirtualTab>();
+  /** Contexts that were killed. Their timers are dropped instead of fired. */
+  readonly #killedContexts = new Set<string>();
   #nextTabNumber = 0;
   #nextIdNumber = 0;
 
@@ -230,6 +232,7 @@ export class BrowserHarness {
 
   /** @internal Used by {@link VirtualTab.kill}. */
   destroyTab(id: string, clientId: string): void {
+    this.#killedContexts.add(id);
     this.#tabs.delete(id);
     this.serial.removeContext(id);
     this.locks.killContext(id);
@@ -251,7 +254,20 @@ export class BrowserHarness {
       storage: this.storage,
       createTransport: (request) => this.bus.createTransport(contextId, request),
       logPayloads: this.options.logPayloads ?? false,
-      clock: this.clock,
+      // A killed tab runs no code: its timers are dropped rather than fired, as the browser
+      // drops them with the tab.
+      clock: {
+        now: () => this.clock.now(),
+        setTimer: (callback, delayMs) =>
+          this.clock.setTimer(() => {
+            if (!this.#killedContexts.has(contextId)) {
+              callback();
+            }
+          }, delayMs),
+        clearTimer: (handle) => {
+          this.clock.clearTimer(handle);
+        },
+      },
       // Fixed rather than seeded: backoff delays become exactly predictable, so a test can
       // assert "the third attempt happens 1000 ms later" instead of "roughly a second".
       random: () => this.options.randomValue ?? 1,

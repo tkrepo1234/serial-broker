@@ -64,6 +64,10 @@ type ConnectionState =
 export class PortSupervisor {
   #state: ConnectionState = { kind: 'idle' };
   #status: SerialBrokerStatus = SerialBrokerStatus.Idle;
+  /** `true` while the granted ports are being listed. */
+  #isListingPorts = false;
+  /** A device was plugged in while the ports were being listed, possibly too late to be listed. */
+  #deviceConnectedWhileListing = false;
   readonly #backoff = new BackoffState();
   readonly #writes = new WriteQueue();
   /** Incremented on every connection attempt, so a stale async continuation can be ignored. */
@@ -300,6 +304,12 @@ export class PortSupervisor {
    * so the pending timer is cancelled and the attempt is made now. See ADR-0010.
    */
   handleDeviceConnected(): void {
+    if (this.#isListingPorts) {
+      // Too late, perhaps, to be in the list being taken; the attempt looks again if so.
+      this.#deviceConnectedWhileListing = true;
+      return;
+    }
+
     if (this.#state.kind === 'reconnecting') {
       if (this.#state.timer !== undefined) {
         this.environment.clock.clearTimer(this.#state.timer);
@@ -348,9 +358,29 @@ export class PortSupervisor {
     this.#setStatus(SerialBrokerStatus.Connecting);
 
     let port: SerialPort | undefined;
+    this.#isListingPorts = true;
+    this.#deviceConnectedWhileListing = false;
     try {
-      port = await findGrantedPort(this.environment.serial, this.configuration, this.logger);
+      port = await withDeadline(
+        findGrantedPort(this.environment.serial, this.configuration, this.logger),
+        this.environment.clock,
+        {
+          timeoutMs: this.configuration.connection.openTimeoutMs,
+          code: SerialBrokerErrorCode.OPEN_TIMEOUT,
+          message: 'Listing the granted ports did not complete in time',
+          configName: this.configuration.name,
+          context: { attempt },
+        },
+      );
     } catch (error) {
+      if (this.#isStale(generation)) {
+        return;
+      }
+      if (error instanceof SerialBrokerError && error.code === SerialBrokerErrorCode.OPEN_TIMEOUT) {
+        // A browser that never answers is a failed attempt, like a port that never opens.
+        this.#handleConnectionLoss('listing-timed-out', error);
+        return;
+      }
       this.#report(
         new SerialBrokerError(
           SerialBrokerErrorCode.WEB_SERIAL_UNAVAILABLE,
@@ -358,9 +388,18 @@ export class PortSupervisor {
           { configName: this.configuration.name, cause: error },
         ),
       );
+    } finally {
+      this.#isListingPorts = false;
     }
 
     if (this.#isStale(generation)) {
+      return;
+    }
+
+    if (port === undefined && this.#takeDeviceConnectedWhileListing()) {
+      // The list was taken before the device arrived. Look again, rather than wait for a
+      // connect event that has already happened.
+      void this.#connect(attempt);
       return;
     }
 
@@ -451,6 +490,18 @@ export class PortSupervisor {
     // Deliberately not awaited: the read loop runs for the life of the connection and ends by
     // calling the loss handler. It never rejects - every failure inside it is handled there.
     void this.#readUntilClosed(this.#state, generation);
+  }
+
+  /**
+   * Whether a device was plugged in while the ports were being listed, clearing the note.
+   *
+   * A method rather than a field read: the note is set by `handleDeviceConnected` while the
+   * listing is awaited, which the compiler's narrowing of the field cannot see.
+   */
+  #takeDeviceConnectedWhileListing(): boolean {
+    const connected = this.#deviceConnectedWhileListing;
+    this.#deviceConnectedWhileListing = false;
+    return connected;
   }
 
   #openOptions(): SerialOptions {
@@ -629,10 +680,13 @@ export class PortSupervisor {
     // settle, so a device that has stopped answering mid-write leaves all three pending
     // forever - and with them, whatever asked for the teardown.
     //
-    // `cancel` comes first because it stops the read loop and releases the reader's lock in
-    // one step; `releaseLock` on a reader with a pending read throws instead.
+    // `cancel()` and `abort()` end the streams but leave them locked, and a port whose streams
+    // are still locked refuses to close. So each lock is released before `close()`; otherwise the
+    // port stays open and the next `open()`, here or in the tab taking over, fails.
     await this.#closeStep(state.reader.cancel(), 'cancelling the reader');
+    releaseLock(state.reader);
     await this.#closeStep(state.writer.abort(), 'aborting the writer');
+    releaseLock(state.writer);
     await this.#closeStep(Promise.resolve(state.port.close()), 'closing the port');
   }
 
@@ -679,5 +733,19 @@ export class PortSupervisor {
 
   #report(error: SerialBrokerError): void {
     this.callbacks.onError(error);
+  }
+}
+
+/**
+ * Releases a stream reader's or writer's lock.
+ *
+ * Can throw while an operation is still pending - a read or write whose deadline gave up on it.
+ * The port then cannot be closed cleanly anyway, and the close step that follows says so.
+ */
+function releaseLock(holder: { releaseLock(): void }): void {
+  try {
+    holder.releaseLock();
+  } catch {
+    // Nothing more can be done here; see above.
   }
 }

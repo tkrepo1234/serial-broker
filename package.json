@@ -29,14 +29,24 @@
   "types": "./dist/index.d.ts",
   "exports": {
     ".": {
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.js",
-      "require": "./dist/index.cjs"
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "require": {
+        "types": "./dist/cjs/index.d.ts",
+        "default": "./dist/index.cjs"
+      }
     },
     "./diagnostics": {
-      "types": "./dist/diagnostics.d.ts",
-      "import": "./dist/diagnostics.js",
-      "require": "./dist/diagnostics.cjs"
+      "import": {
+        "types": "./dist/diagnostics.d.ts",
+        "default": "./dist/diagnostics.js"
+      },
+      "require": {
+        "types": "./dist/cjs/diagnostics.d.ts",
+        "default": "./dist/diagnostics.cjs"
+      }
     },
     "./debug/*": "./dist/debug/*",
     "./worker": "./dist/serial-broker.worker.js",
@@ -44,7 +54,7 @@
     "./package.json": "./package.json"
   },
   "scripts": {
-    "build": "tsup && tsup --config tsup.debug.config.ts && tsc -p tsconfig.build.json",
+    "build": "tsup && tsup --config tsup.debug.config.ts && tsc -p tsconfig.build.json && node scripts/cjs-types.mjs",
     "typecheck": "tsc --noEmit && tsc -p emulator && tsc -p docs/site/examples/code",
     "emulator": "node emulator/src/main.ts",
     "lint": "eslint .",

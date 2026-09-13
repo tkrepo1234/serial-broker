@@ -139,10 +139,10 @@ export default defineConfig(
     },
   },
 
-  // The documentation build script is plain Node JavaScript with no TypeScript program behind it,
-  // so rules that need type information cannot apply to it (ADR-0020).
+  // Build scripts are plain Node JavaScript with no TypeScript program behind them, so rules that
+  // need type information cannot apply to them (ADR-0020).
   {
-    files: ['docs/site/build.mjs'],
+    files: ['docs/site/build.mjs', 'scripts/*.mjs'],
     extends: [tseslint.configs.disableTypeChecked],
     languageOptions: { globals: { process: 'readonly' } },
   },

@@ -334,7 +334,7 @@ Enough to know whether it will do what you need; the full reasoning is in
 
 ```sh
 npm install
-npm test          # 475 tests, ~1s
+npm test          # unit and integration tests
 npm run verify    # format, lint, types, tests with coverage gates, build
 ```
 

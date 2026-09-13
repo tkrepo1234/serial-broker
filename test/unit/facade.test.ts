@@ -216,6 +216,16 @@ describe('SerialBroker', () => {
     SerialBroker.configure({ logPayloads: false });
   });
 
+  it('answers what is set up without building anything, even without Web Serial', async () => {
+    await SerialBroker.dispose();
+    vi.stubGlobal('navigator', {});
+
+    expect(SerialBroker.exists('Reader')).toBe(false);
+    expect(SerialBroker.names()).toEqual([]);
+    await expect(SerialBroker.release('Reader')).resolves.toBeUndefined();
+    await expect(SerialBroker.releaseAll()).resolves.toBeUndefined();
+  });
+
   it('rebuilds itself after being disposed', async () => {
     await SerialBroker.setup('Reader', OPTIONS);
     await SerialBroker.dispose();

@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { SerialBrokerErrorCode } from '../../src/core/error-codes.js';
 import { SerialBrokerStatus } from '../../src/core/types.js';
 import { normalizeConfiguration } from '../../src/core/validation.js';
-import { storageKey } from '../../src/protocol/version.js';
+import { brokerChannelName, PROTOCOL_VERSION, storageKey } from '../../src/protocol/version.js';
 import { BrowserHarness } from '../harness/browser-harness.js';
 
 const READER = { vendorId: 0x1a86, productId: 0x7523 };
@@ -112,5 +112,96 @@ describe('options and names', () => {
     const later = harness.openTab();
 
     await expect(later.client.restore()).resolves.toContain('__proto__');
+  });
+});
+
+describe('a device plugged in while the ports are being listed', () => {
+  it('is found by listing again, instead of waiting for permission', async () => {
+    const harness = new BrowserHarness();
+    const device = harness.serial.addDevice(READER.vendorId, READER.productId);
+    harness.serial.grant(device);
+    harness.serial.unplug(device);
+    harness.serial.onListingPorts = () => {
+      harness.serial.onListingPorts = undefined;
+      harness.serial.plug(device);
+    };
+
+    const tab = harness.openTab();
+    await tab.setup('Reader', OPTIONS);
+
+    expect(tab.client.getStatus('Reader').status).toBe(SerialBrokerStatus.Open);
+  });
+});
+
+describe('setting a configuration up again', () => {
+  it('conflicts when only the buffer size differs, since the port opens with it', async () => {
+    const { tab } = await connectedTab();
+
+    await expect(
+      tab.client.setup('Reader', { ...OPTIONS, serial: { baudRate: 9600, bufferSize: 4096 } }),
+    ).rejects.toMatchObject({ code: SerialBrokerErrorCode.CONFIGURATION_CONFLICT });
+  });
+});
+
+describe('a killed tab', () => {
+  it('runs none of its timers any more', async () => {
+    const reconnects: unknown[] = [];
+    const harness = new BrowserHarness({
+      logger: {
+        log: (_level, _message, fields) => {
+          if (fields.event === 'supervisor.reconnect') {
+            reconnects.push(fields);
+          }
+        },
+      },
+    });
+    const device = harness.serial.addDevice(READER.vendorId, READER.productId);
+    harness.serial.grant(device);
+    device.faults.failOpenWith = 'NetworkError';
+    const tab = harness.openTab();
+    await tab.setup('Reader', OPTIONS);
+    await harness.advance(1_000);
+    const before = reconnects.length;
+    expect(before).toBeGreaterThan(0);
+
+    await tab.kill();
+    await harness.advance(60_000);
+
+    expect(reconnects).toHaveLength(before);
+  });
+});
+
+describe('a mixed deployment', () => {
+  it('is reported once per foreign protocol version, not once per message', async () => {
+    const harness = new BrowserHarness({ transport: 'broadcastchannel' });
+    const tab = harness.openTab();
+    await tab.setup('Reader', OPTIONS);
+    const foreign = { v: PROTOCOL_VERSION + 1, from: 'old-tab', to: 'all', type: 'hello' };
+
+    harness.bus.broadcastHub.injectForeign(brokerChannelName(), foreign);
+    harness.bus.broadcastHub.injectForeign(brokerChannelName(), foreign);
+    await harness.settle();
+
+    const mismatches = tab
+      .recordFor('Reader')
+      .errors.filter(
+        (event) => event.error.code === SerialBrokerErrorCode.PROTOCOL_VERSION_MISMATCH,
+      );
+    expect(mismatches).toHaveLength(1);
+  });
+});
+
+describe('handing the port over by releasing it', () => {
+  it('lets the next tab open the port while the releasing tab stays open', async () => {
+    const { harness, device, tab: owner } = await connectedTab();
+    const other = harness.openTab();
+    await other.setup('Reader', OPTIONS);
+
+    // The releasing tab lives on, so nothing but its own close() can free the device.
+    await owner.client.release('Reader');
+    await harness.settle();
+
+    expect(other.client.getStatus('Reader').status).toBe(SerialBrokerStatus.Open);
+    expect(device.openCount).toBe(2);
   });
 });

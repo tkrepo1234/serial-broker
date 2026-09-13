@@ -30,7 +30,7 @@ This is possible only because ownership is decided by the Web Locks API and the 
 lifecycle belongs to the context that issued the write (ADR-0005, ADR-0013). Neither depends
 on a central authority, so the fallback is a change of delivery mechanism and nothing else.
 
-Selection is automatic, reported at `info` level, and can be forced with
+Selection is automatic, reported at `warn` level, and can be forced with
 `configure({ transport: 'sharedworker' | 'broadcastchannel' | 'auto' })` — the explicit
 setting exists for testing and for applications that know their environment.
 

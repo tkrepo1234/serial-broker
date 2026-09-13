@@ -22,8 +22,8 @@ interface PendingWrite {
    * Set while the request sits with an owner that has not answered yet.
    *
    * Stops the same command being queued twice at the owner when a status change or an
-   * ownership announcement retriggers dispatch. Cleared only when the owner it was handed to
-   * is known to be gone.
+   * ownership announcement retriggers dispatch. Cleared when the owner it was handed to is
+   * known to be gone, or hands the write back because it no longer holds the port.
    */
   isDispatched: boolean;
   timer: TimerHandle | undefined;

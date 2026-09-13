@@ -489,3 +489,24 @@ describe('SharedWorkerTransport heartbeats', () => {
     expect(clock.pendingTimerCount).toBe(0);
   });
 });
+
+describe('SharedWorkerTransport once closed', () => {
+  it('reports nothing the worker or its port says any more', () => {
+    const rec = recorder();
+    const fake = fakePort();
+    let workerError: (event: unknown) => void = () => undefined;
+    const worker: SharedWorkerLike = {
+      port: fake.port,
+      addEventListener: (_type, listener) => {
+        workerError = listener;
+      },
+    };
+    const transport = new SharedWorkerTransport(rec.request, () => worker, 'fake://worker');
+
+    transport.close();
+    workerError({ type: 'error' });
+    fake.fail('messageerror');
+
+    expect(rec.transportErrors).toEqual([]);
+  });
+});

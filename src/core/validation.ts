@@ -344,6 +344,7 @@ export function isDeviceCompatible(
   return (
     isSameDevice(a.device, b.device) &&
     a.serial.baudRate === b.serial.baudRate &&
+    a.serial.bufferSize === b.serial.bufferSize &&
     a.serial.dataBits === b.serial.dataBits &&
     a.serial.stopBits === b.serial.stopBits &&
     a.serial.parity === b.serial.parity &&

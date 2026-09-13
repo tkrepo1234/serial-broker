@@ -10,12 +10,6 @@ export type NormalizedConnectionSettings = Required<ConnectionSettings>;
 export type NormalizedEncodingSettings = Required<EncodingSettings>;
 
 /**
- * A validated, fully resolved configuration.
- *
- * Everything past the validation boundary works with this shape: no optional fields, no
- * defaults to re-apply, nothing to re-validate. See docs/guidelines/defensive-programming.md.
- */
-/**
  * A validated device filter.
  *
  * Discriminated rather than "optional IDs", so that no code can read a vendor ID that a
@@ -25,6 +19,12 @@ export type NormalizedDeviceFilter =
   | { readonly kind: 'usb'; readonly vendorId: number; readonly productId: number }
   | { readonly kind: 'any' };
 
+/**
+ * A validated, fully resolved configuration.
+ *
+ * Everything past the validation boundary works with this shape: no optional fields, no
+ * defaults to re-apply, nothing to re-validate. See docs/guidelines/defensive-programming.md.
+ */
 export interface NormalizedConfiguration {
   readonly name: string;
   readonly device: NormalizedDeviceFilter;

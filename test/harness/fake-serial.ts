@@ -218,17 +218,31 @@ export class FakeSerialPort {
   }
 
   async close(): Promise<void> {
+    // As in the browser: a port whose streams are still locked by a reader or writer refuses to
+    // close. Code that forgets to release them fails here instead of only on real hardware.
+    if (this.#readable?.locked === true || this.#writable?.locked === true) {
+      await Promise.resolve();
+      throw new TypeError(
+        "Failed to execute 'close' on 'SerialPort': Cannot cancel a locked stream",
+      );
+    }
+    this.forceClose();
+    await Promise.resolve();
+  }
+
+  async forget(): Promise<void> {
+    this.forceClose();
+    this.onDeviceForgotten();
+    await Promise.resolve();
+  }
+
+  /** Releases the device whatever its streams' state, as the browser does when a tab goes away. */
+  forceClose(): void {
     this.#isOpen = false;
     this.device.isOpen = false;
     this.device.detachStreamControls();
     this.#readable = null;
     this.#writable = null;
-    await Promise.resolve();
-  }
-
-  async forget(): Promise<void> {
-    await this.close();
-    this.onDeviceForgotten();
   }
 
   /** `true` while this port object holds the device open. */
@@ -252,6 +266,20 @@ export class FakeSerialRegistry {
 
   /** What the port picker will return, in order. Empty means the user dismisses it. */
   readonly pickerQueue: FakeDevice[] = [];
+
+  /**
+   * Simulates a browser that offers ports regardless of the filters it was given.
+   *
+   * A real picker only lists ports matching a filter. This exists to exercise the check the
+   * library still makes behind it.
+   */
+  ignoresFilters = false;
+
+  /**
+   * Called while a `getPorts()` call is pending, after its list was taken: the window in which
+   * a device that arrives is not in the answer.
+   */
+  onListingPorts: (() => void) | undefined;
 
   /** Adds a device to the machine. Not granted, and not visible to `getPorts()` yet. */
   addDevice(vendorId: number, productId: number): FakeDevice {
@@ -298,16 +326,21 @@ export class FakeSerialRegistry {
   forContext(contextId: string): SerialLike {
     return {
       getPorts: async () => {
+        // Like the browser, only granted ports that are connected right now, listed when the
+        // call is made.
+        const listed = [...this.#granted]
+          .filter((device) => device.isAttached)
+          .map((device) => this.#portFor(contextId, device) as unknown as SerialPort);
+        this.onListingPorts?.();
         await Promise.resolve();
-        return [...this.#granted].map(
-          (device) => this.#portFor(contextId, device) as unknown as SerialPort,
-        );
+        return listed;
       },
 
-      requestPort: async () => {
+      requestPort: async (options) => {
         await Promise.resolve();
         const chosen = this.pickerQueue.shift();
-        if (chosen === undefined) {
+        // A device the filters exclude is not in the picker, so the user cannot choose it.
+        if (chosen === undefined || (!this.ignoresFilters && !isOffered(chosen, options))) {
           throw domException('NotFoundError', 'No port selected by the user');
         }
         this.#granted.add(chosen);
@@ -345,7 +378,7 @@ export class FakeSerialRegistry {
     if (ports !== undefined) {
       for (const port of ports.values()) {
         if (port.isOpen) {
-          void port.close();
+          port.forceClose();
         }
       }
     }
@@ -382,6 +415,22 @@ export class FakeSerialRegistry {
       }
     }
   }
+}
+
+/** `true` if the picker lists a device for these request options, as the browser decides it. */
+function isOffered(device: FakeDevice, options: SerialPortRequestOptions | undefined): boolean {
+  const filters = options?.filters;
+  if (filters === undefined || filters.length === 0) {
+    return true;
+  }
+  return (
+    device.isUsb &&
+    filters.some(
+      (filter) =>
+        (filter.usbVendorId === undefined || filter.usbVendorId === device.vendorId) &&
+        (filter.usbProductId === undefined || filter.usbProductId === device.productId),
+    )
+  );
 }
 
 /** Builds something indistinguishable from a `DOMException` for the code under test. */

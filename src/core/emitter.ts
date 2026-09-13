@@ -68,7 +68,7 @@ export class EventEmitter {
    *
    * Never throws: a listener's exception is reported through the error channel instead. The
    * one exception is a listener that throws while handling an `onError` event - reporting
-   * that through `onError` again would recurse, so it is dropped after one report attempt.
+   * that through `onError` again would recurse, so it is dropped without being reported.
    */
   emit<TEvent extends SerialBrokerEventName>(
     event: TEvent,

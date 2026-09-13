@@ -61,11 +61,26 @@ describe('permission and persistence', () => {
 
     const tab = harness.openTab();
     await tab.setup('Reader', OPTIONS);
+    // A browser applies the filters and would not offer this device. The check behind them
+    // still has to hold, should one offer it anyway.
+    harness.serial.ignoresFilters = true;
     harness.serial.pickerQueue.push(wrongDevice);
 
     await expect(tab.client.requestAccess('Reader')).rejects.toMatchObject({
       code: SerialBrokerErrorCode.DEVICE_MISMATCH,
     });
+  });
+
+  it('offers only the configured device in the picker', async () => {
+    const harness = new BrowserHarness();
+    const wrongDevice = harness.serial.addDevice(0x0403, 0x6001);
+
+    const tab = harness.openTab();
+    await tab.setup('Reader', OPTIONS);
+    harness.serial.pickerQueue.push(wrongDevice);
+
+    // The picker filters by the configured USB IDs, so the user can only dismiss it.
+    await expect(tab.client.requestAccess('Reader')).resolves.toBe(false);
   });
 
   it('connects with no prompt on a later visit', async () => {

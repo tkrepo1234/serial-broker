@@ -256,6 +256,10 @@ function render(): void {
   }
 
   byId('empty').hidden = views.length > 0 || client === undefined;
+  // Port locks and granted ports change while the panel is open.
+  if (!byId('settingsPanel').hidden) {
+    void renderFacts();
+  }
 
   const tabCount = snapshot?.participants.length;
   byId('busStatus').textContent =

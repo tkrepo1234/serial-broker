@@ -55,13 +55,14 @@ export class DisposalStack implements Disposable {
    * Runs every disposer in reverse order.
    *
    * Never throws. Failures are collected and returned so the caller can report them through
-   * the error channel rather than losing them.
+   * the error channel rather than losing them. Once disposed, each further call returns the
+   * failures of disposers registered since - which {@link add} ran at once.
    *
    * @returns Descriptions of every disposer that threw; empty when all succeeded.
    */
   disposeAll(): readonly string[] {
     if (this.#isDisposed) {
-      return [];
+      return this.#failures.splice(0).map(describeUnknown);
     }
     this.#isDisposed = true;
 

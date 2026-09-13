@@ -79,6 +79,18 @@ describe('DisposalStack', () => {
     expect(late).toHaveBeenCalledOnce();
   });
 
+  it('reports the failure of a disposer registered after teardown on the next call', () => {
+    const stack = new DisposalStack();
+    stack.disposeAll();
+
+    stack.add(() => {
+      throw new Error('late');
+    });
+
+    expect(stack.disposeAll()).toEqual(['Error: late']);
+    expect(stack.disposeAll()).toEqual([]);
+  });
+
   it('accepts a Disposable as well as a function', () => {
     const stack = new DisposalStack();
     const disposable = { dispose: vi.fn() };

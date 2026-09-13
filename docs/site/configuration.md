@@ -27,8 +27,8 @@ does. The [debugging surface](diagnostics.md) marks a configuration whose tabs r
 settings.
 
 Within one tab, calling `setup()` again for a name with the same device and line settings does
-nothing. Calling it with a different `device`, `baudRate`, `dataBits`, `stopBits`, `parity` or
-`flowControl` fails with `CONFIGURATION_CONFLICT`; release the configuration first. Other options
+nothing. Calling it with a different `device`, `baudRate`, `dataBits`, `stopBits`, `parity`,
+`flowControl` or `bufferSize` fails with `CONFIGURATION_CONFLICT`; release the configuration first. Other options
 passed to a second `setup()` in the same tab are ignored.
 
 ## `name`

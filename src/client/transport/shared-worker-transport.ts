@@ -78,6 +78,10 @@ export class SharedWorkerTransport implements Transport {
     this.#port = worker.port;
 
     worker.addEventListener('error', (event) => {
+      if (this.#disposal.isDisposed) {
+        // Nobody is listening for this transport any more, and it may already have been replaced.
+        return;
+      }
       // The browser fires this when the script cannot be fetched or evaluated, and a port to
       // such a worker silently delivers nothing. Before the broker has answered, that also means
       // nothing sent so far arrived anywhere - which is what makes sending it again elsewhere safe.
@@ -93,6 +97,9 @@ export class SharedWorkerTransport implements Transport {
     });
 
     this.#port.addEventListener('messageerror', (event: unknown) => {
+      if (this.#disposal.isDisposed) {
+        return;
+      }
       // Structured cloning failed on the way in. The message is unrecoverable; reporting it
       // is all that can be done, and dropping it silently would hide a real bug.
       request.onTransportError(event);
@@ -127,8 +134,8 @@ export class SharedWorkerTransport implements Transport {
     try {
       this.#port.postMessage(message);
     } catch (error) {
-      // `postMessage` throws on a closed port and on a payload that cannot be cloned. The
-      // first is a race with teardown and is uninteresting; the second is a bug worth seeing.
+      // `postMessage` throws on a closed port and on a payload that cannot be cloned. Sending
+      // stops once this transport is closed, so either is worth reporting.
       this.#request.onTransportError(error);
     }
   }

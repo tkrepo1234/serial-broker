@@ -121,7 +121,7 @@ tab does not count. `release()` of a name that is not set up does nothing and ra
 
 `CONFIGURATION_CONFLICT`
 : **Raised by** `setup()` for a name already set up in this tab with a different device, baud rate,
-data bits, stop bits, parity or flow control. Other differences are ignored, and identical
+data bits, stop bits, parity, flow control or buffer size. Other differences are ignored, and identical
 options make the second `setup()` a no-op.
 **Context:** `existing` and `requested` device filters.
 **Do:** `release()` the configuration first, then set it up with the new options. See

@@ -103,9 +103,9 @@ The verified defects were fixed in `6d31c59`. What remains needs a decision or i
 
 - **Saved configurations are keyed by the protocol version**, so every protocol change discards
   them although their format did not change. Give storage its own schema version.
-- **`configure()` only takes effect before the first call of any kind**, and `exists()` /
-  `names()` build the client (and throw in unsupported browsers). Decide whether read-only calls
-  should build it, and whether a late `configure()` should warn.
+- **`configure()` only takes effect before the first call that builds the client.** Decide whether
+  a late `configure()` should warn. (`exists`, `names`, `release` and `releaseAll` no longer build
+  one while nothing is set up.)
 - **Error codes that are never raised:** `MALFORMED_MESSAGE`, `OWNERSHIP_TRANSFER_TIMEOUT`,
   `UNKNOWN`. Raise or remove before 1.0.
 - **A listener that throws is reported in every tab** (`LISTENER_THREW` is broadcast).
@@ -114,11 +114,7 @@ The verified defects were fixed in `6d31c59`. What remains needs a decision or i
 
 ### Risks
 
-- A device plugged in while ports are being enumerated is missed; `getPorts()` has no deadline.
-- `bufferSize` is not part of the settings compared for `CONFIGURATION_CONFLICT`.
-- The harness diverges from browsers in ways that hide bugs: killed tabs keep their timers, the fake picker ignores filters, and the fake `close()` always succeeds.
-- Packaging: the emulator needs Node's type stripping (newer than `engines` says), and CommonJS
-  consumers get ES-module type definitions.
+- Packaging: the emulator needs Node's type stripping (newer than `engines` says).
 - Emulator: `attachedPort` is never cleared, bytes sent while no host is attached are queued and
   then dropped, OUT transfers have no length cap, the server's error listener is removed once
   listening, and the USB/IP version is not checked.

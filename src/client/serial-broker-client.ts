@@ -408,12 +408,19 @@ export class SerialBrokerClient {
     });
   }
 
+  /** Peer protocol versions already reported: a mixed deployment is reported once per version. */
+  readonly #reportedPeerVersions = new Set<unknown>();
+
   #handleDecodeFailure(failure: DecodeFailure): void {
     const description = describeDecodeFailure(failure);
 
     if (failure.reason === 'version-mismatch') {
       // Loud, and exactly once per distinct peer version: a mixed deployment is a real
       // problem the application has to fix, and two groups may both try to own the device.
+      if (this.#reportedPeerVersions.has(failure.theirVersion)) {
+        return;
+      }
+      this.#reportedPeerVersions.add(failure.theirVersion);
       this.#reportGlobal(
         new SerialBrokerError(
           SerialBrokerErrorCode.PROTOCOL_VERSION_MISMATCH,

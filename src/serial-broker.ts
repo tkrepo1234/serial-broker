@@ -9,6 +9,7 @@ import type {
   SerialBrokerStatusSnapshot,
   Unsubscribe,
 } from './core/types.js';
+import { validateName } from './core/validation.js';
 import { createBrowserEnvironment, isSupported } from './environment/browser.js';
 
 /**
@@ -110,7 +111,8 @@ export interface SerialBrokerApi {
    * @returns A promise that resolves once the bytes have been handed to the device - not once
    *   the device has acted on them, which a serial port cannot report.
    * @throws A `SerialBrokerError` with code `UNKNOWN_CONFIGURATION`, `NOT_CONNECTED`,
-   *   `WRITE_FAILED`, `WRITE_TIMEOUT`, or `OWNER_LOST_DURING_WRITE` when the owning tab closed
+   *   `WRITE_FAILED`, `WRITE_TIMEOUT`, `CONFIGURATION_RELEASED` when the configuration is
+   *   released while the write waits, or `OWNER_LOST_DURING_WRITE` when the owning tab closed
    *   mid-write and it is unknowable whether the device received the bytes. The library never
    *   retries that last case on its own.
    * @example
@@ -252,9 +254,9 @@ export interface SerialBrokerApi {
   /**
    * Applies library-wide settings.
    *
-   * Must be called **before the first {@link SerialBrokerApi.setup}**: the settings are read
-   * when the internal client is built, and calling it afterwards has no effect on an existing
-   * one.
+   * Must be called **before any other method**: the settings are read when the internal client
+   * is built, by the first call that needs one, and calling this afterwards has no effect on it.
+   * `exists`, `names`, `release` and `releaseAll` build no client while nothing is set up.
    *
    * @param options - Merged into the current settings; omitted fields are left alone.
    * @example
@@ -345,12 +347,18 @@ export const SerialBroker: SerialBrokerApi = {
 
   /** {@inheritDoc SerialBrokerApi.release} */
   async release(name, options) {
-    await client().release(name, options);
+    if (instance === undefined) {
+      // Nothing is set up, so there is nothing to release - and no reason to build a client,
+      // which would throw in a browser without Web Serial.
+      validateName(name);
+      return;
+    }
+    await instance.release(name, options);
   },
 
   /** {@inheritDoc SerialBrokerApi.releaseAll} */
   async releaseAll(options) {
-    await client().releaseAll(options);
+    await instance?.releaseAll(options);
   },
 
   /** {@inheritDoc SerialBrokerApi.send} */
@@ -375,12 +383,16 @@ export const SerialBroker: SerialBrokerApi = {
 
   /** {@inheritDoc SerialBrokerApi.exists} */
   exists(name) {
-    return client().exists(name);
+    if (instance === undefined) {
+      validateName(name);
+      return false;
+    }
+    return instance.exists(name);
   },
 
   /** {@inheritDoc SerialBrokerApi.names} */
   names() {
-    return client().names();
+    return instance?.names() ?? [];
   },
 
   /** {@inheritDoc SerialBrokerApi.requestAccess} */
