@@ -208,6 +208,32 @@ describe('mapping platform failures', () => {
     expect(error.message).toContain('the port exploded');
   });
 
+  it('does not take a name every object inherits for a mapped one', () => {
+    const error = mapOpenError(domException('constructor', 'x'), context);
+
+    expect(error.code).toBe(SerialBrokerErrorCode.OPEN_FAILED);
+    expect(error.context['domExceptionName']).toBe('constructor');
+  });
+
+  it('falls back for an error whose name is not a string or cannot be read', () => {
+    const symbolName = domException('x', 'x');
+    Object.defineProperty(symbolName, 'name', { value: Symbol('NetworkError') });
+    const throwingName = domException('x', 'x');
+    Object.defineProperty(throwingName, 'name', {
+      get: () => {
+        throw new Error('no name for you');
+      },
+    });
+
+    // A Symbol cannot cross postMessage, and a throw here would escape the supervisor's failure
+    // handling and leave the attempt stuck.
+    for (const hostile of [symbolName, throwingName]) {
+      const error = mapOpenError(hostile, context);
+      expect(error.code).toBe(SerialBrokerErrorCode.OPEN_FAILED);
+      expect(error.context['domExceptionName']).toBeUndefined();
+    }
+  });
+
   it('keeps the original as the cause', () => {
     const underlying = domException('NetworkError', 'the device has been lost');
 

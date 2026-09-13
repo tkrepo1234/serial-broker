@@ -39,4 +39,38 @@ describe('OwnershipElection', () => {
     await flushMicrotasks(20);
     expect(requests).toBe(2);
   });
+
+  it('requests the lock again after a failure whose error cannot be printed', async () => {
+    let requests = 0;
+    const unprintable = new Error('denied');
+    Object.defineProperty(unprintable, 'name', {
+      get: () => {
+        throw new Error('no name for you');
+      },
+    });
+    const locks = {
+      request: async () => {
+        requests += 1;
+        await Promise.resolve();
+        throw unprintable;
+      },
+    } as unknown as LockManagerLike;
+    const clock = new FakeClock();
+    const election = new OwnershipElection(
+      locks,
+      'Reader',
+      { onAcquired: () => undefined, onLost: () => undefined },
+      new ScopedLogger(NOOP_LOGGER, {}),
+      clock,
+    );
+
+    election.start();
+    await flushMicrotasks(20);
+    await clock.advance(ELECTION_RETRY_DELAY_MS);
+    await flushMicrotasks(20);
+
+    // Describing the failure for the log must not be what takes the context out of the election.
+    expect(requests).toBe(2);
+    election.stop();
+  });
 });
