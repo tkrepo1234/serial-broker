@@ -30,7 +30,10 @@ export const SerialBrokerStatus = {
   Open: 'open',
   /** The connection was lost and is being re-established automatically. */
   Reconnecting: 'reconnecting',
-  /** Reconnection gave up. Revived automatically if the device is plugged in again. */
+  /**
+   * Reconnection gave up, which is revived automatically if the device is plugged in again; or
+   * this tab withdrew because the tab holding the port runs a different `maxTabs` (ADR-0025).
+   */
   Failed: 'failed',
   /** The configuration was released. No further events will be delivered. */
   Released: 'released',
@@ -114,7 +117,11 @@ export interface ConnectionSettings {
   readonly stableAfterMs?: number;
   /** Deadline for `port.open()` and `port.close()`. @defaultValue 10000 */
   readonly openTimeoutMs?: number;
-  /** Deadline for a single `send()`, including time spent waiting for a connection. @defaultValue 5000 */
+  /**
+   * Deadline for a single `send()`, including time spent waiting for a connection; and, in the tab
+   * holding the port, for each chunk handed to the device.
+   * @defaultValue 5000
+   */
   readonly writeTimeoutMs?: number;
   /** Largest chunk handed to the device in one `write()`. @defaultValue 4096 */
   readonly maxWriteChunkBytes?: number;
@@ -311,7 +318,8 @@ export interface SerialBrokerGlobalOptions {
    * URL of the broker script.
    *
    * Needed when the default resolution via `import.meta.url` does not match how the
-   * application serves its assets. A `SharedWorker` is identified by its script URL, so this
+   * application serves its assets, and always with the CommonJS build, which has no
+   * `import.meta.url`. A `SharedWorker` is identified by its script URL, so this
    * URL must be identical in every tab - a `Blob` URL will not work. See ADR-0006.
    */
   readonly workerUrl?: string | URL;
