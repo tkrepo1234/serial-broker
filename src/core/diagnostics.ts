@@ -41,9 +41,9 @@ export const CONNECTION_STATES = [
  * | --- | --- |
  * | `'idle'` | Not trying to connect. |
  * | `'awaiting-permission'` | No granted port matches the device; waiting for `requestAccess()`. |
- * | `'opening'` | Opening the port is in progress. |
+ * | `'opening'` | An attempt is in progress: finding the granted port, or opening it. |
  * | `'open'` | The port is open and being read. |
- * | `'reconnecting'` | The connection was lost, and the next attempt is scheduled. |
+ * | `'reconnecting'` | The last attempt or connection failed, and the next attempt is scheduled. |
  * | `'failed'` | `maxAttempts` attempts failed; revived when the device is plugged in again. |
  * | `'stopped'` | This tab stopped holding the port. |
  */

@@ -486,8 +486,8 @@ export class SerialBrokerClient {
     };
 
     const onDisconnect = (event: { readonly target: EventTarget | null }): void => {
-      this.#forEachMatchingSession(event, (session) => {
-        session.handleDeviceDisconnected();
+      this.#forEachMatchingSession(event, (session, port) => {
+        session.handleDeviceDisconnected(port);
       });
     };
 
@@ -502,7 +502,7 @@ export class SerialBrokerClient {
 
   #forEachMatchingSession(
     event: { readonly target: EventTarget | null },
-    action: (session: ConfigurationSession) => void,
+    action: (session: ConfigurationSession, port: SerialPort | null) => void,
   ): void {
     const port = event.target as SerialPort | null;
 
@@ -510,7 +510,7 @@ export class SerialBrokerClient {
       // A null target should not happen, but a device event with no port is better treated as
       // "might concern anything" than dropped: a missed disconnect stalls a connection.
       if (port === null || matchesDevice(port, session.definition)) {
-        action(session);
+        action(session, port);
       }
     }
   }

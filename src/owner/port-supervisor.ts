@@ -1,7 +1,7 @@
 import { BackoffState, computeBackoffDelayMs } from '../core/backoff.js';
 import { chunkBytes, toHex } from '../core/bytes.js';
 import type { TimerHandle } from '../core/clock.js';
-import { ignoreRejection, withDeadline } from '../core/deadline.js';
+import { withDeadline } from '../core/deadline.js';
 import type { NormalizedConfiguration } from '../core/defaults.js';
 import type { ConnectionDiagnostics } from '../core/diagnostics.js';
 import { SerialBrokerErrorCode } from '../core/error-codes.js';
@@ -28,7 +28,18 @@ export interface SupervisorCallbacks {
 type ConnectionState =
   | { readonly kind: 'idle' }
   | { readonly kind: 'awaiting-permission' }
-  | { readonly kind: 'opening'; readonly port: SerialPort }
+  /**
+   * An attempt has begun and is looking for the port: waiting for the previous connection to
+   * finish closing, then listing the granted ports. A state of its own, so that nothing mistakes
+   * an attempt in progress for one that is merely scheduled.
+   */
+  | { readonly kind: 'listing' }
+  | {
+      readonly kind: 'opening';
+      readonly port: SerialPort;
+      /** The platform's `open()`, which may outlive the attempt that started it. */
+      readonly opened: Promise<void>;
+    }
   | {
       readonly kind: 'open';
       readonly port: SerialPort;
@@ -36,7 +47,8 @@ type ConnectionState =
       readonly writer: WritableStreamDefaultWriter<Uint8Array>;
       readonly decoder: TextDecoder | undefined;
     }
-  | { readonly kind: 'reconnecting'; readonly timer: TimerHandle | undefined }
+  /** The connection was lost and the next attempt is scheduled - there is always a timer. */
+  | { readonly kind: 'reconnecting'; readonly timer: TimerHandle }
   | { readonly kind: 'failed' }
   | { readonly kind: 'stopped' };
 
@@ -64,10 +76,35 @@ type ConnectionState =
 export class PortSupervisor {
   #state: ConnectionState = { kind: 'idle' };
   #status: SerialBrokerStatus = SerialBrokerStatus.Idle;
-  /** `true` while the granted ports are being listed. */
-  #isListingPorts = false;
   /** A device was plugged in while the ports were being listed, possibly too late to be listed. */
   #deviceConnectedWhileListing = false;
+  /**
+   * The port the most recent attempt found, whether or not it went on to open.
+   *
+   * Device events name a port, and only an event for this one concerns this connection: an
+   * `any` filter, or two identical adapters, match ports this supervisor has nothing to do with.
+   */
+  #foundPort: SerialPort | undefined;
+  /**
+   * The platform reported {@link #foundPort} unplugged, and has not reported a device plugged in
+   * since.
+   *
+   * This is what tells an absent device from a withdrawn permission. `getPorts()` lists neither,
+   * but only an unplugged device is announced by a `disconnect` event - so while this is set, a
+   * port missing from the list is a device that has not come back, and the attempt has failed.
+   * See the ADR-0010 amendment.
+   */
+  #foundPortDetached = false;
+  /**
+   * Closing whatever lost connections left open, while that is still in progress.
+   *
+   * The next attempt waits for it, and so does {@link stop}: in Chromium `close()` is a round
+   * trip to the browser process, and the device stays open - to this context and to the one
+   * taking over - until it returns.
+   */
+  #teardown: Promise<void> | undefined;
+  /** The one teardown {@link stop} runs, so a second call waits for the same one. */
+  #stopping: Promise<void> | undefined;
   readonly #backoff = new BackoffState();
   readonly #writes = new WriteQueue();
   /** Incremented on every connection attempt, so a stale async continuation can be ignored. */
@@ -94,7 +131,10 @@ export class PortSupervisor {
    */
   diagnostics(): ConnectionDiagnostics {
     return {
-      state: this.#state.kind,
+      // Looking for the port and opening it are one step of an attempt to an operator, and one
+      // state in the report: a new state value would change what peers on this protocol version
+      // accept.
+      state: this.#state.kind === 'listing' ? 'opening' : this.#state.kind,
       attempt: this.#backoff.attempt,
       nextAttemptAt: this.#nextAttemptAt,
       openedAt: this.#openedAt,
@@ -122,21 +162,27 @@ export class PortSupervisor {
   /**
    * Stops and releases the port.
    *
+   * Resolves only once the device is closed, because the caller releases the ownership lock
+   * next and the tab that is granted it opens the device at once (ADR-0005). That includes a
+   * port whose `open()` is still pending - it is closed when the open settles - and a lost
+   * connection still being closed. Every wait is bounded by `openTimeoutMs`.
+   *
    * Waits for an in-flight write to finish rather than cutting it off, so a command already
    * on its way to the device is not truncated. Never throws.
    */
   async stop(): Promise<void> {
-    if (this.#state.kind === 'stopped') {
-      return;
-    }
+    this.#stopping ??= this.#stop();
+    await this.#stopping;
+  }
 
+  async #stop(): Promise<void> {
     this.#generation += 1;
     const previous = this.#state;
     this.#state = { kind: 'stopped' };
     this.#nextAttemptAt = undefined;
     this.#openedAt = undefined;
 
-    if (previous.kind === 'reconnecting' && previous.timer !== undefined) {
+    if (previous.kind === 'reconnecting') {
       this.environment.clock.clearTimer(previous.timer);
     }
 
@@ -144,9 +190,12 @@ export class PortSupervisor {
       // Draining first means a write that has already reached the device completes rather than
       // being truncated; the deadline stops a wedged device from holding teardown open forever.
       await this.#closeStep(this.#writes.drain(), 'draining writes');
-      await this.#closeConnection(previous);
+      this.#trackTeardown(this.#closeConnection(previous));
+    } else if (previous.kind === 'opening') {
+      this.#trackTeardown(this.#closeWhenOpened(previous));
     }
 
+    await this.#teardown;
     this.#setStatus(SerialBrokerStatus.Idle);
   }
 
@@ -208,10 +257,12 @@ export class PortSupervisor {
       // works, or race the one being made.
       return;
     }
-    if (current.kind === 'reconnecting' && current.timer !== undefined) {
+    if (current.kind === 'reconnecting') {
       this.environment.clock.clearTimer(current.timer);
     }
 
+    // A listing in progress may have been taken before the grant, so it is started over rather
+    // than awaited.
     this.#backoff.reset();
     this.#state = { kind: 'idle' };
     await this.#connect(0);
@@ -294,16 +345,19 @@ export class PortSupervisor {
    * so the pending timer is cancelled and the attempt is made now. See ADR-0010.
    */
   handleDeviceConnected(): void {
-    if (this.#isListingPorts) {
+    // A device came back, and whether it is the one that was unplugged cannot be told: the port
+    // object of a replugged device is not the one it had. From here on, a port missing from the
+    // list means what it means without a disconnect - no permission.
+    this.#foundPortDetached = false;
+
+    if (this.#state.kind === 'listing') {
       // Too late, perhaps, to be in the list being taken; the attempt looks again if so.
       this.#deviceConnectedWhileListing = true;
       return;
     }
 
     if (this.#state.kind === 'reconnecting') {
-      if (this.#state.timer !== undefined) {
-        this.environment.clock.clearTimer(this.#state.timer);
-      }
+      this.environment.clock.clearTimer(this.#state.timer);
       this.logger.info('device reappeared; reconnecting immediately', {
         configName: this.configuration.name,
         event: 'supervisor.device-connected',
@@ -321,17 +375,38 @@ export class PortSupervisor {
     }
   }
 
-  /** Reacts to the device being unplugged. */
-  handleDeviceDisconnected(): void {
-    if (this.#state.kind === 'open' || this.#state.kind === 'opening') {
-      this.#handleConnectionLoss(
-        'device-disconnected',
-        new SerialBrokerError(
-          SerialBrokerErrorCode.DEVICE_DISCONNECTED,
-          'The device was disconnected',
-          { configName: this.configuration.name, timestamp: this.environment.clock.now() },
-        ),
-      );
+  /**
+   * Reacts to a port being unplugged.
+   *
+   * @param port - The event's target. Only the port this supervisor found concerns it; a
+   *   `null` target, which the platform should never produce, is taken to be that port, because
+   *   a missed disconnect stalls a connection and a spurious one costs a reconnect.
+   */
+  handleDeviceDisconnected(port: SerialPort | null): void {
+    const found = this.#foundPort;
+    if (found === undefined || (port !== null && port !== found)) {
+      return;
+    }
+    this.#foundPortDetached = true;
+
+    const state = this.#state;
+    const error = new SerialBrokerError(
+      SerialBrokerErrorCode.DEVICE_DISCONNECTED,
+      'The device was disconnected',
+      { configName: this.configuration.name, timestamp: this.environment.clock.now() },
+    );
+
+    if (state.kind === 'open' || state.kind === 'opening') {
+      this.#handleConnectionLoss('device-disconnected', error);
+      return;
+    }
+
+    if (state.kind === 'awaiting-permission') {
+      // The event arrived after a retry had already found the port missing - the read error
+      // and the event reach the page separately. The attempt that concluded "no permission"
+      // was wrong; it failed because the device is away, and backoff takes over. The loss
+      // itself was reported when the connection broke.
+      this.#recordFailedAttempt('device-disconnected', error);
     }
   }
 
@@ -345,11 +420,21 @@ export class PortSupervisor {
     const generation = (this.#generation += 1);
     this.#backoff.recordAttempt();
     this.#nextAttemptAt = undefined;
+    this.#state = { kind: 'listing' };
+    this.#deviceConnectedWhileListing = false;
     this.#setStatus(SerialBrokerStatus.Connecting);
 
+    const teardown = this.#teardown;
+    if (teardown !== undefined) {
+      // Opening before the lost connection has finished closing fails with InvalidStateError:
+      // an error about nothing, reported to every tab, and an attempt spent on it.
+      await teardown;
+      if (this.#isStale(generation)) {
+        return;
+      }
+    }
+
     let port: SerialPort | undefined;
-    this.#isListingPorts = true;
-    this.#deviceConnectedWhileListing = false;
     try {
       port = await withDeadline(
         findGrantedPort(this.environment.serial, this.configuration, this.logger),
@@ -378,8 +463,6 @@ export class PortSupervisor {
           { configName: this.configuration.name, cause: error },
         ),
       );
-    } finally {
-      this.#isListingPorts = false;
     }
 
     if (this.#isStale(generation)) {
@@ -393,28 +476,47 @@ export class PortSupervisor {
       return;
     }
 
+    if (port === undefined && this.#isFoundPortDetached()) {
+      // The browser does not list a detached port. The device is away, not the permission, so
+      // this is a failed attempt like any other and backoff continues (ADR-0010 amendment).
+      this.#recordFailedAttempt(
+        'device-absent',
+        new SerialBrokerError(
+          SerialBrokerErrorCode.DEVICE_DISCONNECTED,
+          'The device has not been plugged in again',
+          {
+            configName: this.configuration.name,
+            context: { attempt },
+            timestamp: this.environment.clock.now(),
+          },
+        ),
+      );
+      return;
+    }
+
     if (port === undefined) {
-      // Not an error: the user has simply never granted this device. The application has to
-      // ask, from a gesture, and until then there is nothing to retry.
+      // Not an error: the user has never granted this device, or has taken the permission
+      // away. The application has to ask, from a gesture, and until then there is nothing to
+      // retry.
       this.#state = { kind: 'awaiting-permission' };
       this.#setStatus(SerialBrokerStatus.AwaitingPermission);
       return;
     }
 
-    this.#state = { kind: 'opening', port };
+    this.#foundPort = port;
+    this.#foundPortDetached = false;
+    const opened = Promise.resolve(port.open(this.#openOptions()));
+    this.#state = { kind: 'opening', port, opened };
 
     try {
-      await withDeadline(port.open(this.#openOptions()), this.environment.clock, {
+      // No `onTimeout` close: an open that outlives its deadline is closed by the loss handler,
+      // or by `stop()`, once it settles - closing while it is pending does not stop it opening.
+      await withDeadline(opened, this.environment.clock, {
         timeoutMs: this.configuration.connection.openTimeoutMs,
         code: SerialBrokerErrorCode.OPEN_TIMEOUT,
         message: 'Opening the port did not complete in time',
         configName: this.configuration.name,
         context: { attempt },
-        onTimeout: () => {
-          // The open may still settle later and would then leave an open port nobody
-          // tracks. Closing it is best-effort; failing to is not actionable.
-          ignoreRejection(Promise.resolve(port.close()).catch(() => undefined));
-        },
       });
     } catch (error) {
       if (this.#isStale(generation)) {
@@ -432,9 +534,8 @@ export class PortSupervisor {
     }
 
     if (this.#isStale(generation)) {
-      // Ownership or the configuration went away while the port was opening. Close what was
-      // just opened rather than leaking it.
-      ignoreRejection(Promise.resolve(port.close()).catch(() => undefined));
+      // Ownership or the connection went away while the port was opening. Whatever moved on -
+      // `stop()` or the loss handler - found the attempt in `opening` and closes what it opened.
       return;
     }
 
@@ -492,6 +593,11 @@ export class PortSupervisor {
     const connected = this.#deviceConnectedWhileListing;
     this.#deviceConnectedWhileListing = false;
     return connected;
+  }
+
+  /** {@link #foundPortDetached}, read through a method for the same reason as above. */
+  #isFoundPortDetached(): boolean {
+    return this.#foundPortDetached;
   }
 
   #openOptions(): SerialOptions {
@@ -595,6 +701,8 @@ export class PortSupervisor {
    */
   #handleConnectionLoss(reason: string, error: SerialBrokerError): void {
     const previous = this.#state;
+    // `reconnecting` always has its retry scheduled, so a second report of the same loss has
+    // nothing left to do. An attempt in progress is `listing` or `opening`, never this.
     if (previous.kind === 'stopped' || previous.kind === 'reconnecting') {
       return;
     }
@@ -602,18 +710,30 @@ export class PortSupervisor {
     this.#generation += 1;
     this.#openedAt = undefined;
     this.#report(error);
+
+    if (previous.kind === 'open') {
+      this.#trackTeardown(this.#closeConnection(previous));
+    } else if (previous.kind === 'opening') {
+      this.#trackTeardown(this.#closeWhenOpened(previous));
+    }
+
+    this.#recordFailedAttempt(reason, error);
+  }
+
+  /**
+   * Counts an attempt, or a connection, as failed and schedules the next attempt - or gives up.
+   *
+   * Reports nothing about the failure itself: a lost connection has been reported by the loss
+   * handler, and a device that is still away was reported when it went.
+   */
+  #recordFailedAttempt(reason: string, cause: SerialBrokerError): void {
     this.#backoff.recordDisconnected(
       this.environment.clock.now(),
       this.configuration.connection.stableAfterMs,
     );
 
-    if (previous.kind === 'open') {
-      ignoreRejection(this.#closeConnection(previous));
-    } else if (previous.kind === 'opening') {
-      ignoreRejection(Promise.resolve(previous.port.close()).catch(() => undefined));
-    }
-
     if (this.#backoff.hasExhausted(this.configuration.connection)) {
+      this.#nextAttemptAt = undefined;
       this.#state = { kind: 'failed' };
       this.#setStatus(SerialBrokerStatus.Failed);
       this.#report(
@@ -624,7 +744,7 @@ export class PortSupervisor {
             configName: this.configuration.name,
             context: { attempts: this.#backoff.attempt, reason },
             timestamp: this.environment.clock.now(),
-            cause: error,
+            cause,
           },
         ),
       );
@@ -656,6 +776,51 @@ export class PortSupervisor {
     this.#nextAttemptAt = this.environment.clock.now() + delayMs;
     this.#state = { kind: 'reconnecting', timer };
     this.#setStatus(SerialBrokerStatus.Reconnecting);
+  }
+
+  /**
+   * Adds a close to {@link #teardown}.
+   *
+   * Never rejects, because every close step swallows its failure, so waiting for it is safe
+   * anywhere.
+   */
+  #trackTeardown(close: Promise<void>): void {
+    const previous = this.#teardown;
+    const combined =
+      previous === undefined ? close : Promise.all([previous, close]).then(() => undefined);
+    this.#teardown = combined;
+    void combined.then(() => {
+      if (this.#teardown === combined) {
+        this.#teardown = undefined;
+      }
+    });
+  }
+
+  /**
+   * Closes a port whose attempt was abandoned while `open()` was pending, once it settles.
+   *
+   * Closing while it is pending does not stop the open from succeeding afterwards, and a port
+   * that opens after it was closed stays open with nobody to close it - held against every other
+   * tab. An open that failed opened nothing, and closing it could only disturb whoever does hold
+   * the device.
+   */
+  async #closeWhenOpened(state: Extract<ConnectionState, { kind: 'opening' }>): Promise<void> {
+    try {
+      await withDeadline(state.opened, this.environment.clock, {
+        timeoutMs: this.configuration.connection.openTimeoutMs,
+        code: SerialBrokerErrorCode.OPEN_TIMEOUT,
+        message: 'Timed out while waiting for the port to open',
+        configName: this.configuration.name,
+      });
+    } catch (error) {
+      const isStillPending =
+        error instanceof SerialBrokerError && error.code === SerialBrokerErrorCode.OPEN_TIMEOUT;
+      if (!isStillPending) {
+        return;
+      }
+      // Still pending: close anyway, for whatever that is worth to a driver that has hung.
+    }
+    await this.#closeStep(Promise.resolve(state.port.close()), 'closing the port');
   }
 
   /**

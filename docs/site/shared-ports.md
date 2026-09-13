@@ -158,9 +158,23 @@ way: the status becomes `reconnecting` in every tab, and the owner tries again.
 - **The attempt counter resets** only after a connection has held for
   `connection.stableAfterMs` (5 s), so a device that opens and immediately drops does not retry in
   a tight loop.
+- **While an unplugged device stays away**, the status stays `reconnecting`. The browser does not
+  list a port whose device is unplugged, so every retry that does not find it counts as a failed
+  attempt, backs off, and counts towards `connection.maxAttempts`.
 - **After `connection.maxAttempts`** (unlimited by default) the status becomes `failed`, and the
   error `RECONNECT_EXHAUSTED` is reported once. A failed configuration comes back by itself when the
   device is plugged in again.
+- **Only the port the tab holds counts.** Unplugging another port leaves the connection alone,
+  even when the configuration matches that port too — with `device: { any: true }`, or with two
+  identical adapters.
+- **A new attempt waits for the lost connection to be closed**, and so does handing the port to
+  another tab: until the browser has closed the port, opening it again fails.
+
+The status becomes `awaiting-permission` rather than `reconnecting` when the port disappears
+without the browser reporting the device unplugged: the user took the permission away in the site
+settings, or it was revoked with `forgetDevice`. serial-broker tells the two apart by whether the
+browser reported the port it holds as disconnected. If that report arrives after a retry already
+found the port missing, the status moves on from `awaiting-permission` to `reconnecting`.
 
 A device that is switched off while its USB adapter stays plugged in is the hardest case: the port
 stays open and simply stops answering. Reads wait; a write does not complete and fails after

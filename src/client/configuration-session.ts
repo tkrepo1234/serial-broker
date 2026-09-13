@@ -390,9 +390,15 @@ export class ConfigurationSession {
     this.#supervisor?.handleDeviceConnected();
   }
 
-  /** The configured device was unplugged. */
-  handleDeviceDisconnected(): void {
-    this.#supervisor?.handleDeviceDisconnected();
+  /**
+   * A port matching the configured device was unplugged.
+   *
+   * @param port - The event's target. The supervisor decides whether it is the port it holds:
+   *   matching the filter is not enough, since an `any` filter or two identical adapters match
+   *   ports this configuration never opened.
+   */
+  handleDeviceDisconnected(port: SerialPort | null): void {
+    this.#supervisor?.handleDeviceDisconnected(port);
   }
 
   // --- Ownership ----------------------------------------------------------------------------
