@@ -135,8 +135,14 @@ export class FallbackTransport implements Transport {
   }
 
   #fallBack(event: unknown, reason: WorkerLoadFailure): void {
+    if (this.#isClosed) {
+      // Whoever closed the transport has stopped listening, and nothing is left to move. Reachable
+      // from inside the worker transport's own report: a listener that hears the worker's other
+      // protocol version can close the bus before the worker transport goes on to fall back.
+      return;
+    }
     const pending = this.#pending;
-    if (pending === undefined || this.#isClosed) {
+    if (pending === undefined) {
       this.#request.onTransportError(event);
       return;
     }

@@ -225,15 +225,17 @@ describe('FallbackTransport', () => {
     expect(records.at(-1)?.[2]).toMatchObject({ droppedMessages: 5 });
   });
 
-  it('does not fall back once closed', () => {
+  it('neither falls back nor reports anything once closed', () => {
     const { transport, worker, fallback, transportErrors, failToLoad } = setUp();
 
     transport.close();
     failToLoad();
 
+    // Whoever closed the bus has stopped listening: a failure reported now would reach a client
+    // that is already disposed.
     expect(worker.isClosed).toBe(true);
     expect(fallback.operations).toEqual([]);
-    expect(transportErrors).toEqual([LOAD_ERROR]);
+    expect(transportErrors).toEqual([]);
   });
 
   it('reports the worker failure when BroadcastChannel cannot be created either', () => {
