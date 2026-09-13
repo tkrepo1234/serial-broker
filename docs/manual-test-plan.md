@@ -170,7 +170,7 @@ they are left unticked because the checklist is about a run **with** hardware.
 
 - [ ] **18.** Revoke the device in Chrome's site settings while connected. The tabs report the
       loss; after a reload the status is `awaiting-permission` again.
-- [ ] **19.** Click _Forget device_ on the card — verify the next
+- [ ] **19.** Choose _Disconnect and forget device_ from the configuration's ⋯ menu — verify the next
       setup prompts again.
 
 ### Data

@@ -8,6 +8,8 @@ import {
   formatValue,
   parseHexBytes,
   shortClientId,
+  statusLabel,
+  summarizeSettings,
   toHex,
 } from '../../debug/src/format.js';
 import { linkWithSettings, resolveLibrarySettings } from '../../debug/src/library-settings.js';
@@ -16,6 +18,7 @@ import {
   buildSetupOptions,
   defaultFormValues,
   deviceChoiceFor,
+  formValuesFor,
 } from '../../debug/src/setup-form.js';
 import type {
   ConfigurationDiagnostics,
@@ -47,8 +50,8 @@ function snapshotOf(...participants: ParticipantDiagnostics[]): DiagnosticsSnaps
  * Its promise is that every card offers exactly what can be done from here, and that what it
  * sends is what was typed. Both are easy to break quietly, so they are pinned here.
  */
-describe('debugging surface: cards', () => {
-  it('offers to join a configuration only another tab runs, using that tab settings', () => {
+describe('debugging surface: configurations', () => {
+  it('offers to connect to a configuration only another tab runs, with that tab settings', () => {
     const [view] = buildConfigurationViews({
       thisTab: undefined,
       snapshot: snapshotOf(tab('c-2')),
@@ -57,7 +60,7 @@ describe('debugging surface: cards', () => {
 
     expect(view?.owner?.clientId).toBe('c-2');
     expect(view?.isSetUpHere).toBe(false);
-    expect([...(view?.actions ?? [])]).toEqual(['join']);
+    expect([...(view?.actions ?? [])]).toEqual(['connect']);
     expect(view?.settings).toEqual(sampleReport().configurations[0]?.settings);
   });
 
@@ -77,8 +80,8 @@ describe('debugging surface: cards', () => {
       remembered: [],
     });
 
-    expect([...(owning[0]?.actions ?? [])].sort()).toEqual(['choose-device', 'release']);
-    expect([...(waiting[0]?.actions ?? [])]).toEqual(['release']);
+    expect([...(owning[0]?.actions ?? [])].sort()).toEqual(['choose-device', 'disconnect', 'edit']);
+    expect([...(waiting[0]?.actions ?? [])].sort()).toEqual(['disconnect', 'edit']);
   });
 
   it("uses this tab's own fresh report over its entry in an older collection, and lists it first", () => {
@@ -98,7 +101,7 @@ describe('debugging surface: cards', () => {
     expect(view?.tabs[0]?.isThisTab).toBe(true);
   });
 
-  it('shows a remembered configuration nobody runs, ready to start', () => {
+  it('shows a remembered configuration nobody runs, ready to connect to', () => {
     const settings = sampleReport().configurations[0]!.settings;
 
     const [view] = buildConfigurationViews({
@@ -109,7 +112,7 @@ describe('debugging surface: cards', () => {
 
     expect(view).toMatchObject({ name: 'Scale', status: undefined, isRemembered: true, settings });
     expect(view?.tabs).toEqual([]);
-    expect([...(view?.actions ?? [])]).toEqual(['join']);
+    expect([...(view?.actions ?? [])]).toEqual(['connect']);
   });
 
   it('flags tabs that run the same configuration with different settings', () => {
@@ -131,7 +134,7 @@ describe('debugging surface: cards', () => {
     expect(view?.settingsDiffer).toBe(true);
   });
 
-  it('can join with reported settings as they are, because setup accepts them unchanged', () => {
+  it('can connect with reported settings as they are, because setup accepts them unchanged', () => {
     const running = normalizeConfiguration('Scale', {
       device: { vendorId: 0x0403, productId: 0x6001 },
       serial: { baudRate: 19_200, parity: 'odd', stopBits: 2 },
@@ -144,7 +147,34 @@ describe('debugging surface: cards', () => {
   });
 });
 
-describe('debugging surface: new configuration', () => {
+describe('debugging surface: new and edited configurations', () => {
+  it('fills the form with the settings a configuration runs with, so saving changes nothing', () => {
+    const running = normalizeConfiguration('Scale', {
+      device: { vendorId: 0x0403, productId: 0x6001 },
+      serial: { baudRate: 19_200, parity: 'odd', stopBits: 2, flowControl: 'hardware' },
+      connection: { maxDelayMs: 1_000 },
+      encoding: { decodeText: false, encoding: 'windows-1252' },
+      persist: false,
+    });
+
+    const values = formValuesFor('Scale', describeSettings(running));
+
+    expect(deviceChoiceFor(values)).toBe('1');
+    expect(normalizeConfiguration('Scale', buildSetupOptions(values))).toEqual(running);
+  });
+
+  it('fills the form for a port without USB identity', () => {
+    const running = normalizeConfiguration('Panel', {
+      device: { any: true },
+      serial: { baudRate: 115_200 },
+    });
+
+    const values = formValuesFor('Panel', describeSettings(running));
+
+    expect(deviceChoiceFor(values)).toBe('any');
+    expect(normalizeConfiguration('Panel', buildSetupOptions(values))).toEqual(running);
+  });
+
   it('leaves blank optional fields out, so the library applies its own defaults', () => {
     expect(buildSetupOptions(defaultFormValues())).toEqual({
       device: { vendorId: 0x1a86, productId: 0x7523 },
@@ -268,6 +298,24 @@ describe('debugging surface: formatting', () => {
     expect(formatRelative(1_400, 0)).toBe('in 1.4 s');
     expect(formatRelative(0, 320)).toBe('320 ms ago');
     expect(formatRelative(0, 125_000)).toBe('2 min 5 s ago');
+  });
+
+  it('names statuses in words, and a configuration no tab runs as not running', () => {
+    expect(statusLabel('open')).toBe('Port open');
+    expect(statusLabel('awaiting-permission')).toBe('Waiting for device');
+    expect(statusLabel(undefined)).toBe('Not running');
+    expect(statusLabel('some-future-status')).toBe('some-future-status');
+  });
+
+  it('summarizes device and line settings on one line', () => {
+    const settings = describeSettings(
+      normalizeConfiguration('Scale', {
+        device: { vendorId: 0x0403, productId: 0x6001 },
+        serial: { baudRate: 19_200, parity: 'even', stopBits: 2 },
+      }),
+    );
+
+    expect(summarizeSettings(settings)).toBe('0x0403:6001 · 19200 8E2');
   });
 
   it('renders values the way an operator reads them', () => {

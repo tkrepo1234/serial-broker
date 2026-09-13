@@ -136,12 +136,12 @@ Watching does not set the configuration up.
 
 ## The debugging surface
 
-The package ships a page in `dist/debug/` that shows every configuration on the origin as a card:
-its status, the tabs using it and which one holds the port, reconnect timing, pending writes, all
-of its settings, and the traffic of every tab. Each card offers what can be done from there —
-join a configuration other tabs use, choose the device, release it, send to it. _New
-configuration_ sets one up with every option available.
-
+The package ships a page in `dist/debug/` that lists every configuration on the origin, with its
+status, its device, how many tabs use it, and whether the page itself is connected to it. Choosing
+one shows the tabs using it and which one holds the port, reconnect timing, pending writes, the
+traffic of every tab, and all of its settings. From there the page can connect to it, choose the
+device, send to it, edit its settings or disconnect. _New configuration_ sets one up with every
+option available.
 The page sets nothing up by itself, so opening it to look never makes it take a port.
 
 ### Serving it

@@ -20,10 +20,10 @@ export interface TabView {
   readonly configuration: ConfigurationDiagnostics;
 }
 
-/** What the user can do with a configuration from this tab. */
-export type CardAction = 'join' | 'release' | 'choose-device';
+/** What the user can do with a configuration from this page. */
+export type ConfigurationAction = 'connect' | 'disconnect' | 'choose-device' | 'edit';
 
-/** A configuration as one card shows it. */
+/** A configuration as the list and its detail view show it. */
 export interface ConfigurationView {
   readonly name: string;
   /** The settings it runs with, or would be started with. */
@@ -37,7 +37,7 @@ export interface ConfigurationView {
   readonly isRemembered: boolean;
   /** `true` when the tabs running it do not all run the same settings. */
   readonly settingsDiffer: boolean;
-  readonly actions: ReadonlySet<CardAction>;
+  readonly actions: ReadonlySet<ConfigurationAction>;
 }
 
 /** A configuration kept in storage from an earlier visit. */
@@ -59,7 +59,7 @@ export interface ViewSources {
  * Builds one view per configuration, sorted by name.
  *
  * This tab's entry always comes from its own fresh report rather than from the snapshot, so a
- * button pressed here changes the card at once instead of on the next collection.
+ * button pressed here changes the page at once instead of on the next collection.
  */
 export function buildConfigurationViews(sources: ViewSources): ConfigurationView[] {
   const thisTabId = sources.thisTab?.clientId;
@@ -110,9 +110,10 @@ function describeConfiguration(
     tabs[0]?.configuration.settings ??
     rememberedSettings;
 
-  const actions = new Set<CardAction>();
+  const actions = new Set<ConfigurationAction>();
   if (here !== undefined) {
-    actions.add('release');
+    actions.add('disconnect');
+    actions.add('edit');
     // Only the owner can act on the picker's result, so the button belongs in its tab alone.
     if (
       here.configuration.role === 'owner' &&
@@ -121,7 +122,7 @@ function describeConfiguration(
       actions.add('choose-device');
     }
   } else if (settings !== undefined) {
-    actions.add('join');
+    actions.add('connect');
   }
 
   return {

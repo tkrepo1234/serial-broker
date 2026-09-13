@@ -5,6 +5,8 @@
  * rather than eyeballed.
  */
 
+import type { EffectiveSettings } from '../../src/diagnostics.js';
+
 /** Control characters that still count as printable text in serial traffic. */
 const PRINTABLE_CONTROLS = new Set([0x09, 0x0a, 0x0d]);
 
@@ -86,6 +88,55 @@ export function formatRelative(targetMs: number, nowMs: number): string {
   }
   return delta > 0 ? `in ${text}` : `${text} ago`;
 }
+
+/**
+ * A status in the words an operator reads at a glance.
+ *
+ * "Port open" rather than "Connected", so the device's state is not confused with this page being
+ * connected to the configuration.
+ *
+ * @param status - A status as the library reports it, or `undefined` when no tab runs it.
+ */
+export function statusLabel(status: string | undefined): string {
+  switch (status) {
+    case undefined:
+      return 'Not running';
+    case 'idle':
+      return 'Idle';
+    case 'awaiting-permission':
+      return 'Waiting for device';
+    case 'connecting':
+      return 'Opening port';
+    case 'open':
+      return 'Port open';
+    case 'reconnecting':
+      return 'Reconnecting';
+    case 'failed':
+      return 'Failed';
+    case 'released':
+      return 'Released';
+    default:
+      // A status a later version of the library adds is shown as it is, not hidden.
+      return status;
+  }
+}
+
+/** A configuration's device as `0x1a86:7523`, or `any port`. */
+export function summarizeDevice(settings: EffectiveSettings): string {
+  const { device } = settings;
+  return 'any' in device
+    ? 'any port'
+    : `${formatUsbId(device.vendorId)}:${formatUsbId(device.productId).slice(2)}`;
+}
+
+/** A configuration's device and line settings on one line: `0x1a86:7523 · 9600 8N1`. */
+export function summarizeSettings(settings: EffectiveSettings): string {
+  const { serial } = settings;
+  const parity = PARITY_LETTERS[serial.parity] ?? '?';
+  return `${summarizeDevice(settings)} · ${String(serial.baudRate)} ${String(serial.dataBits)}${parity}${String(serial.stopBits)}`;
+}
+
+const PARITY_LETTERS: Readonly<Record<string, string>> = { none: 'N', even: 'E', odd: 'O' };
 
 /** Renders a USB vendor or product ID as `0x1a86`, or a dash when there is none. */
 export function formatUsbId(value: number | undefined): string {

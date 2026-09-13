@@ -15,27 +15,37 @@ import {
   formatValue,
   parseHexBytes,
   shortClientId,
+  statusLabel,
+  summarizeSettings,
 } from './format.js';
 import type { ConfigurationView, TabView } from './model.js';
 
-/** What a card asks the page to do. Each call runs inside the click that caused it. */
-export interface CardHost {
-  join(name: string, settings: EffectiveSettings): void;
-  release(name: string, forgetDevice: boolean): void;
+/** What the detail view asks the page to do. Each call runs inside the click that caused it. */
+export interface DetailHost {
+  /** Sets the configuration up in this page, with these settings. */
+  connect(name: string, settings: EffectiveSettings): void;
+  /** Releases it in this page, and with `forgetDevice` revokes the device permission too. */
+  disconnect(name: string, forgetDevice: boolean): void;
   /** Must call `requestAccess` synchronously: the browser only shows the picker in a click. */
   chooseDevice(name: string): void;
+  /** Opens the settings dialog for a configuration this page is connected to. */
+  edit(name: string, settings: EffectiveSettings): void;
   send(name: string, data: Uint8Array<ArrayBuffer>): void;
 }
 
-const PARITY_LETTERS: Readonly<Record<string, string>> = { none: 'N', even: 'E', odd: 'O' };
+/** The three sections of the detail view. */
+type Section = 'overview' | 'traffic' | 'settings';
+
+const SECTIONS: readonly Section[] = ['overview', 'traffic', 'settings'];
 
 /**
- * One configuration, with everything about it and everything that can be done with it.
+ * Everything about one configuration, and everything that can be done with it from this page.
  *
- * Built once and updated in place on every refresh, so what the user is typing into the send
- * box, the traffic already logged and an open settings section survive the page redrawing.
+ * Built once per configuration and updated in place on every refresh. It is kept while another
+ * configuration is shown, so its traffic, what is typed into its send box and the section that
+ * was open survive switching back and forth.
  */
-export class ConfigurationCard {
+export class ConfigurationDetail {
   readonly element: HTMLElement;
   readonly #name: string;
   readonly #log: EventLog;
@@ -46,34 +56,37 @@ export class ConfigurationCard {
     readonly summary: HTMLElement;
     readonly hint: HTMLElement;
     readonly message: HTMLElement;
+    readonly connect: HTMLButtonElement;
+    readonly choose: HTMLButtonElement;
+    readonly menuButton: HTMLButtonElement;
+    readonly menu: HTMLElement;
     readonly tabs: HTMLElement;
+    readonly tabsTable: HTMLElement;
+    readonly noTabs: HTMLElement;
     readonly send: HTMLFormElement;
+    readonly sendNote: HTMLElement;
     readonly payload: HTMLInputElement;
     readonly mode: HTMLSelectElement;
     readonly terminator: HTMLSelectElement;
+    readonly traffic: HTMLElement;
+    readonly trafficCount: HTMLElement;
     readonly settings: HTMLElement;
     readonly settingsNote: HTMLElement;
-    readonly traffic: HTMLElement;
-    readonly trafficTitle: HTMLElement;
-    readonly trafficCount: HTMLElement;
-    readonly choose: HTMLButtonElement;
-    readonly join: HTMLButtonElement;
-    readonly release: HTMLButtonElement;
-    readonly forget: HTMLButtonElement;
+    readonly editSettings: HTMLButtonElement;
   };
   #view: ConfigurationView | undefined;
   #settingsKey = '';
   #eventCount = 0;
 
-  constructor(name: string, template: HTMLTemplateElement, host: CardHost) {
+  constructor(name: string, template: HTMLTemplateElement, host: DetailHost) {
     const root = template.content.firstElementChild?.cloneNode(true);
     if (!(root instanceof HTMLElement)) {
-      throw new Error('The card template is empty');
+      throw new Error('The detail template is empty');
     }
     const part = (key: string): HTMLElement => {
       const found = root.querySelector(`[data-part="${key}"]`);
       if (!(found instanceof HTMLElement)) {
-        throw new Error(`The card template is missing data-part="${key}"`);
+        throw new Error(`The detail template is missing data-part="${key}"`);
       }
       return found;
     };
@@ -86,69 +99,116 @@ export class ConfigurationCard {
       summary: part('summary'),
       hint: part('hint'),
       message: part('message'),
+      connect: part('connect') as HTMLButtonElement,
+      choose: part('choose') as HTMLButtonElement,
+      menuButton: part('menuButton') as HTMLButtonElement,
+      menu: part('menu'),
       tabs: part('tabs'),
+      tabsTable: part('tabsTable'),
+      noTabs: part('noTabs'),
       send: part('send') as HTMLFormElement,
+      sendNote: part('sendNote'),
       payload: part('payload') as HTMLInputElement,
       mode: part('mode') as HTMLSelectElement,
       terminator: part('terminator') as HTMLSelectElement,
+      traffic: part('traffic'),
+      trafficCount: part('trafficCount'),
       settings: part('settings'),
       settingsNote: part('settingsNote'),
-      traffic: part('traffic'),
-      trafficTitle: part('trafficTitle'),
-      trafficCount: part('trafficCount'),
-      choose: part('choose') as HTMLButtonElement,
-      join: part('join') as HTMLButtonElement,
-      release: part('release') as HTMLButtonElement,
-      forget: part('forget') as HTMLButtonElement,
+      editSettings: part('editSettings') as HTMLButtonElement,
     };
     part('name').textContent = name;
     this.#log = new EventLog(this.#parts.traffic, 500);
 
-    this.#parts.choose.addEventListener('click', () => {
-      this.clearMessage();
-      host.chooseDevice(name);
-    });
-    this.#parts.join.addEventListener('click', () => {
+    for (const section of SECTIONS) {
+      root.querySelector(`[data-section="${section}"]`)?.addEventListener('click', () => {
+        this.#show(section);
+      });
+    }
+    this.#show('overview');
+
+    const parts = this.#parts;
+    parts.connect.addEventListener('click', () => {
       const settings = this.#view?.settings;
       if (settings !== undefined) {
         this.clearMessage();
-        host.join(name, settings);
+        host.connect(name, settings);
       }
     });
-    this.#parts.release.addEventListener('click', () => {
+    parts.choose.addEventListener('click', () => {
       this.clearMessage();
-      host.release(name, false);
+      host.chooseDevice(name);
     });
-    this.#parts.forget.addEventListener('click', () => {
+
+    parts.menuButton.addEventListener('click', () => {
+      parts.menu.togglePopover();
+    });
+    parts.menu.addEventListener('toggle', () => {
+      // Opened as a popover, the menu is placed beneath its button rather than in the middle of
+      // the page.
+      if (parts.menu.matches(':popover-open')) {
+        const anchor = parts.menuButton.getBoundingClientRect();
+        parts.menu.style.top = `${String(anchor.bottom + 4)}px`;
+        parts.menu.style.left = `${String(Math.max(8, anchor.right - parts.menu.offsetWidth))}px`;
+      }
+    });
+    const fromMenu = (action: () => void): (() => void) => {
+      return () => {
+        parts.menu.hidePopover();
+        this.clearMessage();
+        action();
+      };
+    };
+    const edit = (): void => {
+      const settings = this.#view?.settings;
+      if (settings !== undefined) {
+        host.edit(name, settings);
+      }
+    };
+    part('menuEdit').addEventListener('click', fromMenu(edit));
+    part('menuDisconnect').addEventListener(
+      'click',
+      fromMenu(() => {
+        host.disconnect(name, false);
+      }),
+    );
+    part('menuForget').addEventListener(
+      'click',
+      fromMenu(() => {
+        host.disconnect(name, true);
+      }),
+    );
+    parts.editSettings.addEventListener('click', () => {
       this.clearMessage();
-      host.release(name, true);
+      edit();
     });
-    this.#parts.send.addEventListener('submit', (event) => {
+
+    parts.send.addEventListener('submit', (event) => {
       event.preventDefault();
       this.clearMessage();
       let data: Uint8Array<ArrayBuffer>;
       try {
         data =
-          this.#parts.mode.value === 'hex'
-            ? parseHexBytes(this.#parts.payload.value)
-            : this.#encoder.encode(this.#parts.payload.value + this.#parts.terminator.value);
+          parts.mode.value === 'hex'
+            ? parseHexBytes(parts.payload.value)
+            : this.#encoder.encode(parts.payload.value + parts.terminator.value);
       } catch (error) {
         this.showError(error);
         return;
       }
       host.send(name, data);
     });
-    this.#parts.mode.addEventListener('change', () => {
-      this.#parts.terminator.disabled = this.#parts.mode.value === 'hex';
+    parts.mode.addEventListener('change', () => {
+      parts.terminator.disabled = parts.mode.value === 'hex';
     });
     part('clear').addEventListener('click', () => {
       this.#log.clear();
       this.#eventCount = 0;
-      this.#parts.trafficCount.textContent = '';
+      parts.trafficCount.textContent = '';
     });
   }
 
-  /** The configuration this card shows. */
+  /** The configuration this view shows. */
   get name(): string {
     return this.#name;
   }
@@ -157,24 +217,26 @@ export class ConfigurationCard {
   update(view: ConfigurationView, now: number): void {
     this.#view = view;
     const parts = this.#parts;
+    const actions = view.actions;
 
     parts.dot.className = `dot ${view.status ?? ''}`;
-    parts.status.textContent = view.status ?? 'not running';
-    parts.summary.textContent = view.settings === undefined ? '' : summarize(view.settings);
+    parts.status.textContent = statusLabel(view.status);
+    parts.summary.textContent = summaryLine(view);
 
-    parts.choose.hidden = !view.actions.has('choose-device');
-    parts.join.hidden = !view.actions.has('join');
-    parts.join.textContent = view.tabs.length === 0 ? 'Start here' : 'Join';
-    parts.release.hidden = !view.actions.has('release');
-    parts.forget.hidden = parts.release.hidden;
+    parts.connect.hidden = !actions.has('connect');
+    parts.choose.hidden = !actions.has('choose-device');
+    parts.menuButton.hidden = !actions.has('disconnect');
+    parts.editSettings.hidden = !actions.has('edit');
+    if (parts.menuButton.hidden && parts.menu.matches(':popover-open')) {
+      parts.menu.hidePopover();
+    }
 
     parts.hint.textContent = hintFor(view, now);
     parts.tabs.replaceChildren(...view.tabs.map((tab) => tabRow(tab, now)));
+    parts.tabsTable.hidden = view.tabs.length === 0;
+    parts.noTabs.hidden = view.tabs.length > 0;
     parts.send.hidden = !view.isSetUpHere;
-    // A configuration no tab runs has no traffic to show; an empty box would only take room.
-    const hasNoTraffic = view.tabs.length === 0 && this.#eventCount === 0;
-    parts.traffic.hidden = hasNoTraffic;
-    parts.trafficTitle.hidden = hasNoTraffic;
+    parts.sendNote.hidden = view.isSetUpHere;
 
     const settingsKey = view.settings === undefined ? '' : JSON.stringify(view.settings);
     if (settingsKey !== this.#settingsKey && view.settings !== undefined) {
@@ -213,7 +275,7 @@ export class ConfigurationCard {
         );
         break;
       case 'status':
-        this.#log.add('status', 'status', event.status, undefined, event.timestamp);
+        this.#log.add('status', 'status', statusLabel(event.status), undefined, event.timestamp);
         break;
       case 'error':
         this.#log.add(
@@ -244,7 +306,7 @@ export class ConfigurationCard {
         break;
     }
     this.#eventCount += 1;
-    this.#parts.trafficCount.textContent = `(${String(this.#eventCount)})`;
+    this.#parts.trafficCount.textContent = String(this.#eventCount);
   }
 
   /** Shows why an action failed, with the remediation serial-broker gives for it. */
@@ -272,15 +334,27 @@ export class ConfigurationCard {
   clearMessage(): void {
     this.#parts.message.hidden = true;
   }
+
+  #show(section: Section): void {
+    for (const candidate of SECTIONS) {
+      const isShown = candidate === section;
+      this.element
+        .querySelector(`[data-section="${candidate}"]`)
+        ?.setAttribute('aria-selected', String(isShown));
+      const panel = this.element.querySelector(`[data-panel="${candidate}"]`);
+      if (panel instanceof HTMLElement) {
+        panel.hidden = !isShown;
+      }
+    }
+  }
 }
 
-function summarize(settings: EffectiveSettings): string {
-  const { device, serial } = settings;
-  const deviceText =
-    'any' in device
-      ? 'any port'
-      : `${formatUsbId(device.vendorId)}:${formatUsbId(device.productId).slice(2)}`;
-  return `${deviceText} · ${String(serial.baudRate)} ${String(serial.dataBits)}${PARITY_LETTERS[serial.parity] ?? '?'}${String(serial.stopBits)}`;
+function summaryLine(view: ConfigurationView): string {
+  const tabs = `${String(view.tabs.length)} tab${view.tabs.length === 1 ? '' : 's'}`;
+  const here = view.isSetUpHere ? 'this page connected' : 'this page not connected';
+  return view.settings === undefined
+    ? `${tabs} · ${here}`
+    : `${summarizeSettings(view.settings)} · ${tabs} · ${here}`;
 }
 
 function hintFor(view: ConfigurationView, now: number): string {
@@ -288,7 +362,9 @@ function hintFor(view: ConfigurationView, now: number): string {
   const others = view.tabs.filter((tab) => !tab.isThisTab).length;
 
   if (view.tabs.length === 0) {
-    return view.isRemembered ? 'Remembered from an earlier visit; not running in any tab.' : '';
+    return view.isRemembered
+      ? 'Remembered from an earlier visit, and running in no tab. Connect to start it here.'
+      : '';
   }
   if (view.status === 'awaiting-permission') {
     return owner?.isThisTab === true
@@ -305,7 +381,7 @@ function hintFor(view: ConfigurationView, now: number): string {
     return 'Reconnecting gave up. It starts again when the device is plugged back in.';
   }
   if (!view.isSetUpHere) {
-    return `Running in ${String(others)} other tab${others === 1 ? '' : 's'}.`;
+    return `Running in ${String(others)} other tab${others === 1 ? '' : 's'}. Connect to use it from this page too.`;
   }
   return '';
 }
@@ -315,7 +391,7 @@ function tabRow(tab: TabView, now: number): HTMLTableRowElement {
   return element('tr', {}, [
     element('td', {
       className: tab.isThisTab ? 'this-tab' : '',
-      text: tab.isThisTab ? 'This tab' : `Tab ${shortClientId(tab.clientId)}`,
+      text: tab.isThisTab ? 'This page' : `Tab ${shortClientId(tab.clientId)}`,
       title: tab.clientId,
     }),
     element('td', {
@@ -325,15 +401,15 @@ function tabRow(tab: TabView, now: number): HTMLTableRowElement {
     element('td', {}, [
       element('span', { className: 'status' }, [
         element('span', { className: `dot ${configuration.status}` }),
-        configuration.status,
+        statusLabel(configuration.status),
       ]),
     ]),
-    element('td', { className: 'detail', text: tabDetail(configuration, now) }),
+    element('td', { className: 'detail-cell', text: activity(configuration, now) }),
     element('td', { className: 'error-code', text: configuration.lastErrorCode ?? '' }),
   ]);
 }
 
-function tabDetail(configuration: ConfigurationDiagnostics, now: number): string {
+function activity(configuration: ConfigurationDiagnostics, now: number): string {
   const parts: string[] = [];
   const connection = configuration.connection;
   if (connection !== undefined) {

@@ -1,14 +1,13 @@
 /**
- * The debugging surface: every configuration on this origin, as one card each, with what can be
- * done about it right on the card.
+ * The debugging surface: every configuration on this origin in one list, and the selected one in
+ * detail, with what can be done about it from this page.
  *
  * It ships in the package as static content under `dist/debug/`. Nothing serves it unless an
  * operator does. See debug/README.md and ADR-0019.
  *
- * Cards are built from two sources: this tab's own client, which acts the way an application
- * does, and the diagnostics observer, which sees every other tab without taking part in
- * ownership (ADR-0018). The page never sets anything up on its own - opening it to look must not
- * move a port.
+ * What it shows comes from two sources: this page's own client, which acts the way an application
+ * does, and the diagnostics observer, which sees every other tab without taking part in ownership
+ * (ADR-0018). The page never sets anything up on its own - opening it to look must not move a port.
  */
 
 import { SerialBrokerClient } from '../../src/client/serial-broker-client.js';
@@ -22,7 +21,7 @@ import type { SerialBrokerEnvironment } from '../../src/environment/environment.
 import { PROTOCOL_VERSION } from '../../src/protocol/version.js';
 import { ConfigurationStore } from '../../src/storage/configuration-store.js';
 
-import { ConfigurationCard, type CardHost } from './card.js';
+import { ConfigurationDetail, type DetailHost } from './detail.js';
 import { byId, element } from './dom.js';
 import { EventLog } from './event-log.js';
 import { formatUsbId, shortClientId } from './format.js';
@@ -32,6 +31,7 @@ import {
   resolveLibrarySettings,
   type LibrarySettings,
 } from './library-settings.js';
+import { ConfigurationList } from './list.js';
 import { buildConfigurationViews, type RememberedConfiguration } from './model.js';
 import { SetupDialog } from './setup-dialog.js';
 
@@ -77,11 +77,16 @@ try {
   byId('newButton').hidden = true;
 }
 
-// --- Cards ----------------------------------------------------------------------------------
+// --- Configurations ---------------------------------------------------------------------------
 
-const cardTemplate = byId('cardTemplate') as HTMLTemplateElement;
-const cards = new Map<string, { card: ConfigurationCard; stopWatching: Unsubscribe | undefined }>();
+const detailTemplate = byId('detailTemplate') as HTMLTemplateElement;
+const details = new Map<
+  string,
+  { detail: ConfigurationDetail; stopWatching: Unsubscribe | undefined }
+>();
 let snapshot: DiagnosticsSnapshot | undefined;
+/** The configuration shown in detail. The first one in the list when nothing was chosen. */
+let selectedName: string | undefined;
 /**
  * The configurations remembered in this browser, read when they may have changed rather than on
  * every refresh: reading reports an invalid entry each time, which would flood the log.
@@ -91,38 +96,46 @@ window.addEventListener('storage', () => {
   rememberedCache = undefined;
 });
 
-const host: CardHost = {
-  join(name, joined) {
-    act(name, `set up "${name}"`, async () => {
-      await requireClient().setup(name, joined);
+const list = new ConfigurationList(byId('configurationRows'), (name) => {
+  selectedName = name;
+  render();
+});
+
+const host: DetailHost = {
+  connect(name, connectWith) {
+    act(name, `connect to "${name}"`, async () => {
+      await requireClient().setup(name, connectWith);
     });
   },
-  release(name, forgetDevice) {
-    act(name, `release "${name}"`, async () => {
+  disconnect(name, forgetDevice) {
+    act(name, `disconnect from "${name}"`, async () => {
       await requireClient().release(name, { forgetDevice });
     });
   },
   chooseDevice(name) {
-    const card = cards.get(name)?.card;
+    const detail = details.get(name)?.detail;
     let pending: Promise<boolean>;
     try {
       pending = requireClient().requestAccess(name);
     } catch (error) {
-      card?.showError(error);
+      detail?.showError(error);
       return;
     }
     void pending.then(
       (granted) => {
         if (!granted) {
-          card?.showNotice('The picker was dismissed; nothing changed.');
+          detail?.showNotice('The picker was dismissed; nothing changed.');
         }
         refreshNow();
       },
       (error: unknown) => {
-        card?.showError(error);
+        detail?.showError(error);
         logFailure(`choose a device for "${name}"`, error);
       },
     );
+  },
+  edit(name, current) {
+    dialog.edit(name, current);
   },
   send(name, data) {
     act(name, `send to "${name}"`, async () => {
@@ -131,16 +144,22 @@ const host: CardHost = {
   },
 };
 
-const dialog = new SetupDialog(byId('setupDialog') as HTMLDialogElement, async (name, options) => {
-  await requireClient().setup(name, options);
+const dialog = new SetupDialog(byId('setupDialog') as HTMLDialogElement, async (request) => {
+  const page = requireClient();
+  if (request.replaces !== undefined && page.exists(request.replaces)) {
+    // Settings only change by connecting again: this page disconnects, and connects with the new
+    // ones. Other tabs keep theirs.
+    await page.release(request.replaces);
+  }
+  await page.setup(request.name, request.options);
+  selectedName = request.name;
   refreshNow();
 });
-byId('newButton').addEventListener('click', () => {
-  dialog.open();
-});
-byId('emptyNewButton').addEventListener('click', () => {
-  dialog.open();
-});
+for (const id of ['newButton', 'emptyNewButton']) {
+  byId(id).addEventListener('click', () => {
+    dialog.open();
+  });
+}
 
 void refreshLoop();
 
@@ -205,7 +224,7 @@ async function refreshLoop(): Promise<void> {
   }
 }
 
-/** Redraws from this tab's fresh state at once, then again when the other tabs have answered. */
+/** Redraws from this page's fresh state at once, then again when the other tabs have answered. */
 function refreshNow(): void {
   // An action may have set something up or released it, which changes what is remembered.
   rememberedCache = undefined;
@@ -232,29 +251,39 @@ function render(): void {
     remembered: remembered(),
   });
 
-  const container = byId('cards');
-  const shown = new Set<string>();
-  views.forEach((view, index) => {
-    shown.add(view.name);
-    let entry = cards.get(view.name);
+  if (!views.some((view) => view.name === selectedName)) {
+    selectedName = views[0]?.name;
+  }
+
+  list.update(views, selectedName);
+
+  const shown = new Set(views.map((view) => view.name));
+  for (const view of views) {
+    let entry = details.get(view.name);
     if (entry === undefined) {
-      const card = new ConfigurationCard(view.name, cardTemplate, host);
-      entry = { card, stopWatching: watch(card) };
-      cards.set(view.name, entry);
+      const detail = new ConfigurationDetail(view.name, detailTemplate, host);
+      entry = { detail, stopWatching: watch(detail) };
+      details.set(view.name, entry);
     }
-    entry.card.update(view, now);
-    if (container.children[index] !== entry.card.element) {
-      container.insertBefore(entry.card.element, container.children[index] ?? null);
-    }
-  });
-  for (const [name, entry] of cards) {
+    entry.detail.update(view, now);
+  }
+  for (const [name, entry] of details) {
     if (!shown.has(name)) {
       entry.stopWatching?.();
-      entry.card.element.remove();
-      cards.delete(name);
+      entry.detail.element.remove();
+      details.delete(name);
     }
   }
 
+  const container = byId('detail');
+  const selected = selectedName === undefined ? undefined : details.get(selectedName)?.detail;
+  if (selected === undefined) {
+    container.replaceChildren();
+  } else if (container.firstElementChild !== selected.element) {
+    container.replaceChildren(selected.element);
+  }
+
+  byId('overview').hidden = views.length === 0;
   byId('empty').hidden = views.length > 0 || client === undefined;
   // Port locks and granted ports change while the panel is open.
   if (!byId('settingsPanel').hidden) {
@@ -272,25 +301,25 @@ function transportName(transport: 'sharedworker' | 'broadcastchannel'): string {
   return transport === 'sharedworker' ? 'SharedWorker' : 'BroadcastChannel';
 }
 
-/** Streams a configuration's traffic from every tab into its card. */
-function watch(card: ConfigurationCard): Unsubscribe | undefined {
+/** Streams a configuration's traffic from every tab into its detail view. */
+function watch(detail: ConfigurationDetail): Unsubscribe | undefined {
   if (diagnostics === undefined) {
     return undefined;
   }
   try {
-    return diagnostics.watch(card.name, (event) => {
-      card.addEvent(event, client?.clientId);
+    return diagnostics.watch(detail.name, (event) => {
+      detail.addEvent(event, client?.clientId);
     });
   } catch (error) {
-    logFailure(`watch "${card.name}"`, error);
+    logFailure(`watch "${detail.name}"`, error);
     return undefined;
   }
 }
 
-/** Runs a card's action, and shows a failure on that card. */
+/** Runs an action on a configuration, and shows a failure in its detail view. */
 function act(name: string, action: string, work: () => Promise<void>): void {
   void work().then(refreshNow, (error: unknown) => {
-    cards.get(name)?.card.showError(error);
+    details.get(name)?.detail.showError(error);
     logFailure(action, error);
     render();
   });
@@ -381,7 +410,7 @@ async function renderFacts(): Promise<void> {
       'This tab',
       client === undefined
         ? '—'
-        : `${shortClientId(client.clientId)}, ${client.transportKind === undefined ? 'connects with its first configuration' : transportName(client.transportKind)}`,
+        : `${shortClientId(client.clientId)}, ${client.transportKind === undefined ? 'joins the bus with its first configuration' : transportName(client.transportKind)}`,
     ],
     ['Protocol version', String(PROTOCOL_VERSION)],
     ['Port locks', describeLocks()],

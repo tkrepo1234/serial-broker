@@ -1,4 +1,5 @@
 import { DEFAULT_CONNECTION_SETTINGS } from '../../src/core/defaults.js';
+import type { EffectiveSettings } from '../../src/core/diagnostics.js';
 import type { ConnectionSettings } from '../../src/core/types.js';
 
 /**
@@ -82,6 +83,36 @@ export function deviceChoiceFor(values: SetupFormValues): string {
       preset.productId === values.productId.trim().toLowerCase(),
   );
   return index === -1 ? 'custom' : String(index);
+}
+
+/**
+ * The form values that describe the settings a configuration runs with, for editing them.
+ *
+ * Every field is filled, defaults included, so what the dialog shows is exactly what runs.
+ */
+export function formValuesFor(name: string, settings: EffectiveSettings): SetupFormValues {
+  const { device, serial, connection, encoding } = settings;
+  const connectionText = blankConnection();
+  for (const field of CONNECTION_FIELDS) {
+    connectionText[field] = String(connection[field]);
+  }
+  const hex = (value: number): string => `0x${value.toString(16).padStart(4, '0')}`;
+  return {
+    name,
+    deviceKind: 'any' in device ? 'any' : 'usb',
+    vendorId: 'any' in device ? '' : hex(device.vendorId),
+    productId: 'any' in device ? '' : hex(device.productId),
+    baudRate: String(serial.baudRate),
+    dataBits: String(serial.dataBits),
+    stopBits: String(serial.stopBits),
+    parity: serial.parity,
+    bufferSize: String(serial.bufferSize),
+    flowControl: serial.flowControl,
+    connection: connectionText,
+    encoding: encoding.encoding,
+    decodeText: encoding.decodeText,
+    persist: settings.persist,
+  };
 }
 
 /**

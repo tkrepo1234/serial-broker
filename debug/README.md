@@ -6,23 +6,26 @@ someone serves it.
 
 ## What it looks like
 
-Every configuration is a **card** — whether it runs in this tab, in other tabs, or is only
-remembered from an earlier visit. A card shows:
+The page lists **every configuration** on the origin — whether it runs in this page, in other tabs,
+or is only remembered from an earlier visit — with its status, its device, how many tabs use it,
+and whether this page is connected to it.
 
-- its status and device, and a line saying what is going on: waiting for a device, reconnecting
-  and when the next try is, running in other tabs;
-- **the button that fits the situation**: _Join_ a configuration other tabs run, _Start here_ a
-  remembered one, _Choose device…_ when this tab holds the port but has no device yet, _Release_
-  when it runs here, and _Forget device_ to also revoke the browser's permission;
-- every tab that runs it — which one holds the port, which are waiting, bytes in and out,
-  writes still pending, the last error;
-- a send box, when it runs in this tab;
-- the traffic of every tab, and all of its settings, one click away.
+Choosing one shows it in detail, with **one button for the next step**: _Connect_ to use a
+configuration from this page, or _Choose device…_ when this page holds the port but has no device
+yet. The **⋯** menu holds the rest: _Edit settings…_, _Disconnect_, and _Disconnect and forget
+device_, which also revokes the browser's permission. The detail has three sections:
 
-_New configuration_ opens a short dialog: name, device, baud rate. Every other option of
-`setup()` is under _More options_. A **?** beside a setting or a section opens a short explanation of it. Settings — worker URL, transport, payload logging — and the
-browser checks, port locks and granted ports are behind the _Settings_ button. The log
-is at the bottom.
+- **Overview** — every tab that uses it, which one holds the port and which are waiting, when the
+  port opened, the next reconnect attempt, bytes in and out, pending writes, the last error;
+- **Traffic** — the traffic of every tab, and a send box while this page is connected;
+- **Settings** — every setting, grouped as the dialog asks for them, and _Edit settings…_.
+
+_New configuration_ opens a short dialog: name, device, baud rate. Every other option of `setup()` is
+under _More options_. Editing opens the same dialog on the settings in use; saving disconnects this
+page and connects again with the new settings, while other tabs keep theirs. A **?** beside a
+setting or a section opens a short explanation of it. Settings of the page itself — worker URL,
+transport, payload logging — and the browser checks, port locks and granted ports are behind the
+_Settings_ button. The log is at the bottom.
 
 The page refreshes on its own and **sets nothing up on its own**: opening it to look never makes
 it a participant, so it never ends up owning a port.
@@ -69,5 +72,5 @@ production, do not serve `dist/debug/` there.
 ## Developing it
 
 The sources are `debug/src/` and `debug/public/`. `npm run build` bundles them into `dist/debug/`
-along with the library; `npm run debug` builds and serves `dist/` on a local port. Which card shows
-which button is decided in `debug/src/model.ts`, which is unit-tested.
+along with the library; `npm run debug` builds and serves `dist/` on a local port. Which configuration
+offers which action is decided in `debug/src/model.ts`, which is unit-tested.
