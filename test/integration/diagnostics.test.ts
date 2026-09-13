@@ -201,14 +201,35 @@ describe('error reporting', () => {
 });
 
 describe('logging', () => {
-  it('writes nothing unless an application asks for it', async () => {
-    const harness = new BrowserHarness();
-    harness.serial.grant(harness.serial.addDevice(READER.vendorId, READER.productId));
-    const tab = harness.openTab();
+  it('writes nothing to the console unless an application asks for it', async () => {
+    const console_ = ['debug', 'info', 'log', 'warn', 'error'].map((method) =>
+      vi.spyOn(console, method as 'log').mockImplementation(() => undefined),
+    );
+    try {
+      const harness = new BrowserHarness();
+      const device = harness.serial.addDevice(READER.vendorId, READER.productId);
+      harness.serial.grant(device);
+      const tab = harness.openTab();
 
-    // No logger configured. A library that writes to the host console uninvited is a bad
-    // citizen, and the absence of output is the behaviour being asserted.
-    await expect(tab.setup('Reader', READER_OPTIONS)).resolves.toBeUndefined();
+      // No logger configured, and a run that would log at every level: setup, traffic, a lost
+      // device and a reconnect. A library that writes to the host console uninvited is a bad
+      // citizen, and the absence of output is the behaviour being asserted.
+      await tab.setup('Reader', READER_OPTIONS);
+      await tab.client.send('Reader', 'PING');
+      harness.serial.unplug(device);
+      await harness.advance(1_000);
+      harness.serial.plug(device);
+      await harness.settle();
+
+      expect(tab.client.getStatus('Reader').status).toBe(SerialBrokerStatus.Open);
+      for (const spy of console_) {
+        expect(spy).not.toHaveBeenCalled();
+      }
+    } finally {
+      for (const spy of console_) {
+        spy.mockRestore();
+      }
+    }
   });
 
   it('records lifecycle milestones with correlating fields', async () => {

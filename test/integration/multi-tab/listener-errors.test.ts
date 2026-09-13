@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { SerialBrokerErrorCode } from '../../../src/core/error-codes.js';
-import { BrowserHarness, type VirtualTab } from '../../harness/browser-harness.js';
+import { BrowserHarness, TRANSPORT_MODES, type VirtualTab } from '../../harness/browser-harness.js';
 import { READER, READER_OPTIONS } from '../../harness/devices.js';
 import type { TransportMode } from '../../harness/fake-bus.js';
 
@@ -25,38 +25,33 @@ async function twoTabs(transport: TransportMode): Promise<{
   return { harness, device, owner, other };
 }
 
-function codes(tab: VirtualTab): string[] {
-  return tab.recordFor('Reader').errors.map((event) => event.error.code);
-}
-
-describe.each<TransportMode>(['sharedworker', 'broadcastchannel'])(
-  'a listener that throws (%s)',
-  (transport) => {
-    it('is reported in its own tab, not in the tab holding the port', async () => {
-      const { harness, device, owner, other } = await twoTabs(transport);
-      other.client.subscribe('Reader', 'onReceive', () => {
-        throw new Error('application bug');
-      });
-
-      device.emit('x');
-      await harness.settle();
-
-      expect(codes(other)).toContain(SerialBrokerErrorCode.LISTENER_THREW);
-      expect(codes(owner)).not.toContain(SerialBrokerErrorCode.LISTENER_THREW);
-      expect(other.receivedText('Reader')).toBe('x');
+describe.each(TRANSPORT_MODES)('a listener that throws (%s)', (transport) => {
+  it('is reported in its own tab, not in the tab holding the port', async () => {
+    const { harness, device, owner, other } = await twoTabs(transport);
+    other.client.subscribe('Reader', 'onReceive', () => {
+      throw new Error('application bug');
     });
 
-    it('is reported in the tab holding the port, not in the others', async () => {
-      const { harness, device, owner, other } = await twoTabs(transport);
-      owner.client.subscribe('Reader', 'onReceive', () => {
-        throw new Error('application bug');
-      });
+    device.emit('x');
+    await harness.settle();
 
-      device.emit('x');
-      await harness.settle();
+    expect(other.errorCodes('Reader')).toContain(SerialBrokerErrorCode.LISTENER_THREW);
+    expect(owner.errorCodes('Reader')).not.toContain(SerialBrokerErrorCode.LISTENER_THREW);
+    expect(other.receivedText('Reader')).toBe('x');
+  });
 
-      expect(codes(owner)).toContain(SerialBrokerErrorCode.LISTENER_THREW);
-      expect(codes(other)).not.toContain(SerialBrokerErrorCode.LISTENER_THREW);
+  it('is reported in the tab holding the port, not in the others', async () => {
+    const { harness, device, owner, other } = await twoTabs(transport);
+    owner.client.subscribe('Reader', 'onReceive', () => {
+      throw new Error('application bug');
     });
-  },
-);
+
+    device.emit('x');
+    await harness.settle();
+
+    // The other tab heard the chunk too, so it had every chance to report something.
+    expect(other.receivedText('Reader')).toBe('x');
+    expect(owner.errorCodes('Reader')).toContain(SerialBrokerErrorCode.LISTENER_THREW);
+    expect(other.errorCodes('Reader')).not.toContain(SerialBrokerErrorCode.LISTENER_THREW);
+  });
+});

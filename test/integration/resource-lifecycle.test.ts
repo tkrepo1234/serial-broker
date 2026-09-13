@@ -75,11 +75,15 @@ describe('resource lifecycle', () => {
     await tab.client.release('Reader');
     await tab.client.setup('Reader', READER_OPTIONS);
     await harness.settle();
+    const fresh: unknown[] = [];
+    tab.client.subscribe('Reader', 'onReceive', (event) => fresh.push(event));
     device.emit('after the churn');
     await harness.settle();
 
     // The listener belonged to the released configuration. A fresh setup is a fresh
-    // configuration, and the old subscription must not survive into it.
+    // configuration, and the old subscription must not survive into it - while one registered on
+    // the fresh configuration hears the chunk.
+    expect(fresh).toHaveLength(1);
     expect(received).toHaveLength(0);
   });
 

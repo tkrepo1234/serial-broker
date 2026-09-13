@@ -100,10 +100,6 @@ function openSlowTab(
   return { tab: new VirtualTab(id, client, harness), timing };
 }
 
-function errorCodes(tab: VirtualTab): string[] {
-  return tab.recordFor('Reader').errors.map((event) => event.error.code);
-}
-
 function connectionState(tab: VirtualTab): string | undefined {
   return tab.client.diagnostics()?.configurations[0]?.connection?.state;
 }
@@ -126,7 +122,7 @@ describe('listing the granted ports', () => {
     // A browser that never answers is a failed attempt, and a failed attempt is followed by
     // another one - not by a connection that stays `connecting` with nothing scheduled.
     expect(
-      errorCodes(tab).filter((code) => code === SerialBrokerErrorCode.OPEN_TIMEOUT).length,
+      tab.errorCodes('Reader').filter((code) => code === SerialBrokerErrorCode.OPEN_TIMEOUT).length,
     ).toBeGreaterThan(1);
 
     timing.listingHangs = false;
@@ -182,7 +178,7 @@ describe('retrying after a lost connection', () => {
 
     // Opening while the old connection is still closing fails with InvalidStateError: an error
     // about nothing in every tab, and one attempt used up - with two allowed, the last one.
-    expect(errorCodes(tab)).toEqual([SerialBrokerErrorCode.READ_FAILED]);
+    expect(tab.errorCodes('Reader')).toEqual([SerialBrokerErrorCode.READ_FAILED]);
     expect(tab.statusTrail('Reader').at(-1)).toBe(SerialBrokerStatus.Open);
   });
 });
@@ -246,7 +242,7 @@ describe('handing the port over', () => {
     // Releasing before the port is closed hands the lock to a tab that then finds the device
     // still held, and every tab hears about an OPEN_FAILED that describes nothing (ADR-0005).
     expect(second.client.getStatus('Reader').status).toBe(SerialBrokerStatus.Open);
-    expect(errorCodes(second)).toEqual([]);
+    expect(second.errorCodes('Reader')).toEqual([]);
     expect(device.openCount).toBe(2);
   });
 
@@ -269,7 +265,7 @@ describe('handing the port over', () => {
     await harness.settle();
 
     expect(second.client.getStatus('Reader').status).toBe(SerialBrokerStatus.Open);
-    expect(errorCodes(second)).toEqual([SerialBrokerErrorCode.READ_FAILED]);
+    expect(second.errorCodes('Reader')).toEqual([SerialBrokerErrorCode.READ_FAILED]);
   });
 });
 
@@ -317,7 +313,7 @@ describe('an unplugged device', () => {
 
     expect(delays).toEqual([0, 250, 500]);
     expect(tab.client.getStatus('Reader').status).toBe(SerialBrokerStatus.Failed);
-    expect(errorCodes(tab)).toEqual([
+    expect(tab.errorCodes('Reader')).toEqual([
       SerialBrokerErrorCode.DEVICE_DISCONNECTED,
       SerialBrokerErrorCode.RECONNECT_EXHAUSTED,
     ]);

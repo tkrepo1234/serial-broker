@@ -4,6 +4,7 @@ import { SerialBrokerErrorCode } from '../../src/core/error-codes.js';
 import { SerialBrokerStatus } from '../../src/core/types.js';
 import { SerialBroker } from '../../src/serial-broker.js';
 import { READER, READER_OPTIONS } from '../harness/devices.js';
+import { flushMicrotasks } from '../harness/fake-clock.js';
 import { FakeLockManager } from '../harness/fake-locks.js';
 import { FakeSerialRegistry, type FakeDevice } from '../harness/fake-serial.js';
 import { fieldsOfEvent, recordingLogger } from '../harness/recording-logger.js';
@@ -55,11 +56,9 @@ function stubPlatform(): { serial: FakeSerialRegistry; device: FakeDevice } {
   return { serial, device };
 }
 
-/** Lets the library's promise chains run. */
+/** Lets the library's promise chains run, as `BrowserHarness.settle()` does. */
 async function settle(): Promise<void> {
-  for (let round = 0; round < 8; round += 1) {
-    await new Promise<void>((resolve) => setImmediate(resolve));
-  }
+  await flushMicrotasks(8);
 }
 
 describe('SerialBroker', () => {
@@ -71,6 +70,9 @@ describe('SerialBroker', () => {
 
   afterEach(async () => {
     await SerialBroker.dispose();
+    // `configure()` merges, so `configure({})` would leave a test's logger in place for every
+    // later test. Overwriting the fields a test may set is the only reset the facade offers.
+    SerialBroker.configure({ logger: { log: () => undefined }, logPayloads: false });
     vi.unstubAllGlobals();
   });
 
@@ -109,15 +111,19 @@ describe('SerialBroker', () => {
     await settle();
     const viaReturn = vi.fn();
     const viaName = vi.fn();
+    const kept = vi.fn();
 
     const stop = SerialBroker.subscribe('Reader', 'onReceive', viaReturn);
     SerialBroker.subscribe('Reader', 'onReceive', viaName);
+    SerialBroker.subscribe('Reader', 'onReceive', kept);
     stop();
     SerialBroker.unsubscribe('Reader', 'onReceive', viaName);
 
     platform.device.emit('x');
     await settle();
 
+    // The listener left in place proves the chunk was delivered at all.
+    expect(kept).toHaveBeenCalledOnce();
     expect(viaReturn).not.toHaveBeenCalled();
     expect(viaName).not.toHaveBeenCalled();
   });
@@ -126,9 +132,12 @@ describe('SerialBroker', () => {
     await SerialBroker.setup('Reader', READER_OPTIONS);
     await settle();
 
+    expect(platform.device.isOpen).toBe(true);
+
     await SerialBroker.releaseAll();
 
     expect(SerialBroker.names()).toEqual([]);
+    expect(platform.device.isOpen).toBe(false);
   });
 
   it('restores a configuration persisted earlier', async () => {
@@ -163,8 +172,6 @@ describe('SerialBroker', () => {
     expect(records.some(([, message]) => message.includes('configuration registered'))).toBe(true);
     // Every record carries the fields that let several tabs be correlated in one console.
     expect(records[0]?.[2]).toHaveProperty('clientId');
-
-    SerialBroker.configure({});
   });
 
   it('warns when configure() comes too late to reach the client, and applies it after dispose()', async () => {
@@ -186,7 +193,6 @@ describe('SerialBroker', () => {
     expect(second.records.some(([, message]) => message.includes('configuration registered'))).toBe(
       true,
     );
-    SerialBroker.configure({});
   });
 
   it('passes logPayloads through, so traffic records carry the bytes', async () => {
@@ -202,8 +208,6 @@ describe('SerialBroker', () => {
       byteLength: 4,
       hex: '50 4F 4E 47',
     });
-
-    SerialBroker.configure({ logPayloads: false });
   });
 
   it('answers what is set up without building anything, even without Web Serial', async () => {

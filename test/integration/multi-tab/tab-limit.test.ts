@@ -3,19 +3,13 @@ import { describe, expect, it } from 'vitest';
 import { SerialBrokerErrorCode } from '../../../src/core/error-codes.js';
 import { normalizeConfiguration } from '../../../src/core/validation.js';
 import { storageKey } from '../../../src/storage/configuration-store.js';
-import { BrowserHarness, type VirtualTab } from '../../harness/browser-harness.js';
+import { BrowserHarness, TRANSPORT_MODES } from '../../harness/browser-harness.js';
 import { READER, READER_OPTIONS } from '../../harness/devices.js';
 import type { TransportMode } from '../../harness/fake-bus.js';
 
 /**
  * Limiting how many tabs use a configuration at once (ADR-0025).
  */
-
-const TRANSPORTS: readonly TransportMode[] = ['sharedworker', 'broadcastchannel'];
-
-function codes(tab: VirtualTab): string[] {
-  return tab.recordFor('Reader').errors.map((event) => event.error.code);
-}
 
 async function harnessWithDevice(transport: TransportMode) {
   const harness = new BrowserHarness({ transport });
@@ -24,7 +18,7 @@ async function harnessWithDevice(transport: TransportMode) {
   return { harness, device };
 }
 
-describe.each(TRANSPORTS)('tabs beyond the tab limit (%s)', (transport) => {
+describe.each(TRANSPORT_MODES)('tabs beyond the tab limit (%s)', (transport) => {
   it('wait, receive nothing, and join when a tab releases the configuration', async () => {
     const { harness, device } = await harnessWithDevice(transport);
     const first = harness.openTab();
@@ -35,6 +29,7 @@ describe.each(TRANSPORTS)('tabs beyond the tab limit (%s)', (transport) => {
     expect(second.client.getStatus('Reader').status).toBe('queued');
     device.emit('FIRST ONLY');
     await harness.settle();
+    expect(first.receivedText('Reader')).toBe('FIRST ONLY');
     expect(second.receivedText('Reader')).toBe('');
 
     await first.client.release('Reader');
@@ -98,7 +93,7 @@ describe.each(TRANSPORTS)('tabs beyond the tab limit (%s)', (transport) => {
   });
 });
 
-describe.each(TRANSPORTS)('a tab running a different tab limit (%s)', (transport) => {
+describe.each(TRANSPORT_MODES)('a tab running a different tab limit (%s)', (transport) => {
   it('reports the conflict to every tab, withdraws, and leaves the tab holding the port alone', async () => {
     const { harness, device } = await harnessWithDevice(transport);
     const holder = harness.openTab();
@@ -108,16 +103,17 @@ describe.each(TRANSPORTS)('a tab running a different tab limit (%s)', (transport
     await harness.settle();
 
     expect(other.client.getStatus('Reader').status).toBe('failed');
-    expect(codes(other)).toContain(SerialBrokerErrorCode.CONFIGURATION_CONFLICT);
+    expect(other.errorCodes('Reader')).toContain(SerialBrokerErrorCode.CONFIGURATION_CONFLICT);
     expect(other.recordFor('Reader').errors[0]?.error.context).toMatchObject({
       maxTabs: 2,
       holdingTabMaxTabs: 1,
     });
-    expect(codes(holder)).toContain(SerialBrokerErrorCode.CONFIGURATION_CONFLICT);
+    expect(holder.errorCodes('Reader')).toContain(SerialBrokerErrorCode.CONFIGURATION_CONFLICT);
 
     device.emit('HOLDER');
     await harness.settle();
     expect(holder.client.getStatus('Reader').status).toBe('open');
+    expect(holder.receivedText('Reader')).toBe('HOLDER');
     expect(other.receivedText('Reader')).toBe('');
   });
 });

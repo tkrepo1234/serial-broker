@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { chunkBytes, copyBytes } from '../../src/core/bytes.js';
+import { SerialBrokerErrorCode } from '../../src/core/error-codes.js';
 import { SerialBrokerError } from '../../src/core/errors.js';
 import { BrowserHarness } from '../harness/browser-harness.js';
 import { READER, READER_OPTIONS } from '../harness/devices.js';
@@ -77,11 +78,15 @@ describe('sending', () => {
   });
 
   it('refuses a string when a non-UTF-8 encoding is configured', async () => {
-    const { tab } = await connectedTab({ encoding: { encoding: 'windows-1252' } });
+    const { harness, device, tab } = await connectedTab({ encoding: { encoding: 'windows-1252' } });
 
     // TextEncoder only produces UTF-8. Silently sending the wrong bytes would present as a
     // device that misbehaves on umlauts, which is a miserable thing to debug.
-    await expect(tab.client.send('Reader', 'Grüße')).rejects.toThrow(SerialBrokerError);
+    await expect(tab.client.send('Reader', 'Grüße')).rejects.toMatchObject({
+      code: SerialBrokerErrorCode.INVALID_ARGUMENT,
+    });
+    await harness.settle();
+    expect(device.written).toHaveLength(0);
   });
 
   it('writes from one tab in the order that tab issued them', async () => {
@@ -186,13 +191,11 @@ describe('receiving', () => {
     await harness.settle();
 
     // A character cannot span a disconnect, so neither may the decoder's state: the orphaned
-    // lead byte must not corrupt the first text seen after the device comes back.
-    const decoded = tab
-      .recordFor('Reader')
-      .received.map((event) => event.text ?? '')
-      .join('');
-    expect(decoded.endsWith('OK')).toBe(true);
-    expect(decoded).not.toContain('€');
+    // lead byte must not corrupt the first text seen after the device comes back. A decoder that
+    // kept it would turn that text into a replacement character followed by "OK".
+    const received = tab.recordFor('Reader').received;
+    expect(received.at(-1)?.text).toBe('OK');
+    expect(received.map((event) => event.text ?? '').join('')).not.toContain('€');
   });
 });
 

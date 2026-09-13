@@ -6,6 +6,7 @@ import { SerialBrokerStatus } from '../../src/core/types.js';
 import { brokerChannelName, PROTOCOL_VERSION } from '../../src/protocol/version.js';
 import { BrowserHarness } from '../harness/browser-harness.js';
 import { READER, READER_OPTIONS } from '../harness/devices.js';
+import { fieldsOfEvent, recordingLogger } from '../harness/recording-logger.js';
 
 /**
  * Posts something a well-behaved tab would never send.
@@ -95,7 +96,9 @@ describe('argument validation at the boundary', () => {
     await expect(tab.client.send('', 'x')).rejects.toMatchObject({
       code: SerialBrokerErrorCode.INVALID_ARGUMENT,
     });
-    expect(() => tab.client.exists(42 as never)).toThrow();
+    expect(() => tab.client.exists(42 as never)).toThrow(
+      expect.objectContaining({ code: SerialBrokerErrorCode.INVALID_ARGUMENT }),
+    );
   });
 
   it('ignores unsubscribing from a configuration that is not set up', () => {
@@ -116,16 +119,16 @@ describe('a device that cannot be forgotten', () => {
     const tab = harness.openTab();
     await tab.setup('Reader', READER_OPTIONS);
 
+    const forget = vi.fn(() => Promise.reject(new Error('forget() is not implemented here')));
     const ports = await harness.serial.forContext(tab.id).getPorts();
     for (const port of ports) {
-      Object.assign(port, {
-        forget: () => Promise.reject(new Error('forget() is not implemented here')),
-      });
+      Object.assign(port, { forget });
     }
 
     // `forget()` is newer than the rest of Web Serial and absent in older Chromium. Failing
     // to revoke a permission is not a reason to fail the release.
     await expect(tab.client.release('Reader', { forgetDevice: true })).resolves.toBeUndefined();
+    expect(forget).toHaveBeenCalledOnce();
     expect(tab.client.exists('Reader')).toBe(false);
   });
 });
@@ -156,8 +159,9 @@ describe('hostile traffic on the shared bus', () => {
     expect(mismatch?.error.remediation).toContain('Reload all tabs');
   });
 
-  it('drops a malformed message without disturbing the connection', async () => {
-    const harness = new BrowserHarness(fallback);
+  it('drops and logs a malformed message without disturbing the connection', async () => {
+    const { logger, records } = recordingLogger();
+    const harness = new BrowserHarness({ ...fallback, logger });
     const device = harness.serial.addDevice(READER.vendorId, READER.productId);
     harness.serial.grant(device);
     const tab = harness.openTab();
@@ -170,6 +174,8 @@ describe('hostile traffic on the shared bus', () => {
 
     expect(tab.client.getStatus('Reader').status).toBe(SerialBrokerStatus.Open);
     expect(tab.receivedText('Reader')).toBe('still working');
+    // Dropped, but not silently: a peer sending garbage is worth an operator's attention.
+    expect(fieldsOfEvent(records, 'client.malformed-message')).toHaveLength(1);
   });
 
   it('ignores a status message for a configuration it does not have', async () => {
@@ -178,17 +184,18 @@ describe('hostile traffic on the shared bus', () => {
     const tab = harness.openTab();
     await tab.setup('Reader', READER_OPTIONS);
 
-    expect(() => {
-      injectRaw(harness, {
-        v: PROTOCOL_VERSION,
-        from: 'peer',
-        to: 'all',
-        type: 'status',
-        configName: 'SomethingElse',
-        status: 'failed',
-        timestamp: 1,
-      });
-    }).not.toThrow();
+    // Delivered in a later microtask, so a throw could not surface here anyway: what counts is
+    // that the configuration the tab does have is left alone.
+    injectRaw(harness, {
+      v: PROTOCOL_VERSION,
+      from: 'peer',
+      to: 'all',
+      type: 'status',
+      configName: 'SomethingElse',
+      status: 'failed',
+      maxTabs: Number.POSITIVE_INFINITY,
+      timestamp: 1,
+    });
     await harness.settle();
 
     expect(tab.client.getStatus('Reader').status).toBe(SerialBrokerStatus.Open);
@@ -200,6 +207,9 @@ describe('a configuration released while events are in flight', () => {
     const harness = new BrowserHarness();
     const device = harness.serial.addDevice(READER.vendorId, READER.productId);
     harness.serial.grant(device);
+    // Another tab keeps the port open, so the bytes below really are delivered - to that tab.
+    const owner = harness.openTab();
+    await owner.setup('Reader', READER_OPTIONS);
     const tab = harness.openTab();
     await tab.setup('Reader', READER_OPTIONS);
 
@@ -207,6 +217,7 @@ describe('a configuration released while events are in flight', () => {
     device.emit('after release');
     await harness.settle();
 
+    expect(owner.receivedText('Reader')).toBe('after release');
     expect(tab.recordFor('Reader').received).toHaveLength(0);
   });
 
