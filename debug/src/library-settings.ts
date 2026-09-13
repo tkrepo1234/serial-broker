@@ -36,17 +36,18 @@ export function resolveLibrarySettings(
   defaultWorkerUrl: string,
 ): LibrarySettings {
   const stored = parseSaved(saved);
-
-  const transport = query.get('transport') ?? stored.transport;
-  const logPayloads = query.get('logPayloads');
+  // A value in the link that could not be used counts as absent, the same as one saved: it must
+  // not push a valid saved setting aside in favour of the default.
+  const linked = parseSettings({
+    workerUrl: query.get('workerUrl'),
+    transport: query.get('transport'),
+    logPayloads: toBoolean(query.get('logPayloads')),
+  });
 
   return {
-    workerUrl: query.get('workerUrl') ?? stored.workerUrl ?? defaultWorkerUrl,
-    transport:
-      transport !== undefined && TRANSPORTS.includes(transport)
-        ? (transport as TransportKind)
-        : 'auto',
-    logPayloads: logPayloads === null ? (stored.logPayloads ?? false) : logPayloads === 'true',
+    workerUrl: linked.workerUrl ?? stored.workerUrl ?? defaultWorkerUrl,
+    transport: linked.transport ?? stored.transport ?? 'auto',
+    logPayloads: linked.logPayloads ?? stored.logPayloads ?? false,
   };
 }
 
@@ -79,7 +80,11 @@ function parseSaved(saved: string | null): Partial<LibrarySettings> {
   if (typeof parsed !== 'object' || parsed === null) {
     return {};
   }
-  const record = parsed as Record<string, unknown>;
+  return parseSettings(parsed as Record<string, unknown>);
+}
+
+/** Keeps each setting that holds a usable value, from a link or from what was saved. */
+function parseSettings(record: Readonly<Record<string, unknown>>): Partial<LibrarySettings> {
   const workerUrl = record['workerUrl'];
   const transport = record['transport'];
   const logPayloads = record['logPayloads'];
@@ -90,4 +95,9 @@ function parseSaved(saved: string | null): Partial<LibrarySettings> {
       : {}),
     ...(typeof logPayloads === 'boolean' ? { logPayloads } : {}),
   };
+}
+
+/** `true` and `false` as a link spells them; anything else is no value. */
+function toBoolean(text: string | null): boolean | undefined {
+  return text === 'true' ? true : text === 'false' ? false : undefined;
 }

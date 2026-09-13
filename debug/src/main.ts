@@ -14,6 +14,7 @@ import { SerialBrokerClient } from '../../src/client/serial-broker-client.js';
 import { describeSettings } from '../../src/core/diagnostics.js';
 import { SerialBrokerError } from '../../src/core/errors.js';
 import type { Logger, LogLevel, TransportKind, Unsubscribe } from '../../src/core/types.js';
+import { normalizeConfiguration } from '../../src/core/validation.js';
 import { openDiagnostics } from '../../src/diagnostics.js';
 import type { DiagnosticsSnapshot, SerialBrokerDiagnostics } from '../../src/diagnostics.js';
 import { createBrowserEnvironment } from '../../src/environment/browser.js';
@@ -157,12 +158,21 @@ const host: DetailHost = {
 
 const dialog = new SetupDialog(byId('setupDialog') as HTMLDialogElement, async (request) => {
   const page = requireClient();
-  if (request.replaces !== undefined && page.exists(request.replaces)) {
-    // Settings only change by connecting again: this page disconnects, and connects with the new
-    // ones. Other tabs keep theirs.
-    await page.release(request.replaces);
+  try {
+    if (request.replaces !== undefined && page.exists(request.replaces)) {
+      // The library judges the new settings before anything is released: a rejected value must
+      // leave the running configuration, and the copy remembered for it, as they were.
+      normalizeConfiguration(request.name, request.options);
+      // Settings only change by connecting again: this page disconnects, and connects with the new
+      // ones. Other tabs keep theirs.
+      await page.release(request.replaces);
+    }
+    await page.setup(request.name, request.options);
+  } catch (error) {
+    // Also logged, because the dialog may have been closed before the answer arrived.
+    logFailure(`set up "${request.name}"`, error);
+    throw error;
   }
-  await page.setup(request.name, request.options);
   selectedName = request.name;
   refreshNow();
 });
@@ -216,8 +226,12 @@ byId('clearLog').addEventListener('click', () => {
   pageLog.clear();
 });
 
-window.addEventListener('pagehide', () => {
-  diagnostics?.close();
+window.addEventListener('pagehide', (event) => {
+  // A page kept in the back/forward cache comes back with the same script state, and a closed
+  // observer cannot be reopened: it would collect nothing and watch nothing from then on.
+  if (!event.persisted) {
+    diagnostics?.close();
+  }
 });
 
 // --- Helpers ----------------------------------------------------------------------------------

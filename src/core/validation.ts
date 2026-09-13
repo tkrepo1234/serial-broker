@@ -71,16 +71,37 @@ export function validateName(name: unknown, argumentName = 'name'): string {
       name.length,
     );
   }
-  // Control characters would corrupt the Web Lock name, the storage key and every log
-  // record this name appears in. Checked by code point rather than by regular expression so
-  // the intent is readable without decoding escapes.
+  // Control characters - C0, DEL and C1 - would corrupt the Web Lock name, the storage key and
+  // every log record this name appears in. Checked by code unit rather than by regular expression
+  // so the intent is readable without decoding escapes.
   for (let index = 0; index < name.length; index += 1) {
-    const codePoint = name.charCodeAt(index);
-    if (codePoint < 0x20 || codePoint === 0x7f) {
+    const codeUnit = name.charCodeAt(index);
+    if (codeUnit < 0x20 || (codeUnit >= 0x7f && codeUnit <= 0x9f)) {
       throw invalid(argumentName, 'free of control characters', name);
     }
   }
+  // An unpaired surrogate becomes U+FFFD wherever the name is encoded as UTF-8, as a Web Lock name
+  // is on its way to the browser: two different names could then share one ownership lock.
+  if (hasUnpairedSurrogate(name)) {
+    throw invalid(argumentName, 'well-formed Unicode, without unpaired surrogates', name);
+  }
   return name;
+}
+
+function hasUnpairedSurrogate(text: string): boolean {
+  for (let index = 0; index < text.length; index += 1) {
+    const codeUnit = text.charCodeAt(index);
+    if (codeUnit >= 0xd800 && codeUnit <= 0xdbff) {
+      const next = text.charCodeAt(index + 1);
+      if (!(next >= 0xdc00 && next <= 0xdfff)) {
+        return true;
+      }
+      index += 1;
+    } else if (codeUnit >= 0xdc00 && codeUnit <= 0xdfff) {
+      return true;
+    }
+  }
+  return false;
 }
 
 function requireInteger(value: unknown, argumentName: string, min: number, max: number): number {
@@ -335,17 +356,19 @@ export function toSetupOptions(configuration: NormalizedConfiguration): Effectiv
 }
 
 /**
- * Checks that an encoding label is one `TextDecoder` will accept.
+ * Checks that an encoding label is one `TextDecoder` will accept, and returns its canonical name.
  *
  * Verified eagerly rather than at first use: an unknown label would otherwise surface as a
- * `RangeError` from deep inside the owning tab's read loop, minutes after the mistake.
+ * `RangeError` from deep inside the owning tab's read loop, minutes after the mistake. The
+ * canonical name - `utf-8` for `UTF-8`, `utf8` or `unicode-1-1-utf-8` - is what every later
+ * comparison sees, so a label spelled differently cannot behave differently.
  */
 function validateEncodingLabel(value: unknown, argumentName: string): string {
   if (typeof value !== 'string' || value.length === 0) {
     throw invalid(argumentName, 'a non-empty encoding label', value);
   }
   try {
-    new TextDecoder(value);
+    return new TextDecoder(value).encoding;
   } catch (error) {
     throw new SerialBrokerError(
       SerialBrokerErrorCode.INVALID_ARGUMENT,
@@ -353,7 +376,6 @@ function validateEncodingLabel(value: unknown, argumentName: string): string {
       { context: { argumentName, label: value }, cause: error },
     );
   }
-  return value;
 }
 
 /**

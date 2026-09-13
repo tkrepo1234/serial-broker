@@ -78,6 +78,9 @@ export class DisposalStack implements Disposable {
       }
     }
 
+    // A disposer that registers another one while this runs has it run at once, and its failure
+    // lands in `#failures`: collected here, so it is reported by this call rather than a later one.
+    failures.push(...this.#failures.splice(0));
     return failures.map(describeUnknown);
   }
 

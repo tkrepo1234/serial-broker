@@ -228,6 +228,7 @@ export function isSerializedError(value: unknown): value is SerializedSerialBrok
     typeof record['remediation'] === 'string' &&
     typeof record['isRetryable'] === 'boolean' &&
     typeof record['timestamp'] === 'number' &&
+    (record['configName'] === undefined || typeof record['configName'] === 'string') &&
     (context === undefined || (typeof context === 'object' && context !== null)) &&
     (cause === undefined || isSerializedCause(cause))
   );
@@ -250,7 +251,14 @@ function isSerializedCause(value: unknown): boolean {
  */
 export function describeUnknown(value: unknown): string {
   if (value instanceof Error) {
-    return `${value.name}: ${value.message}`;
+    try {
+      // `String` rather than plain interpolation: a hostile error may carry a Symbol as its name,
+      // and a getter may throw. This function is what reports such errors, so it must not throw.
+      const { name, message } = value as { name: unknown; message: unknown };
+      return `${String(name)}: ${String(message)}`;
+    } catch {
+      return Object.prototype.toString.call(value);
+    }
   }
   if (typeof value === 'string') {
     return value;

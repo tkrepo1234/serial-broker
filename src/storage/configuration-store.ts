@@ -76,10 +76,12 @@ export class ConfigurationStore {
     }
 
     const restored: NormalizedConfiguration[] = [];
+    const discarded = new Set<string>();
     for (const [name, options] of Object.entries(parsed)) {
       try {
         restored.push(normalizeConfiguration(name, options));
       } catch (error) {
+        discarded.add(name);
         this.logger.warn('discarded a stored configuration that failed validation', {
           configName: name,
           event: 'storage.invalid-entry',
@@ -95,12 +97,26 @@ export class ConfigurationStore {
       }
     }
 
+    if (discarded.size > 0) {
+      // Removed, not only skipped: an entry left behind would be reported on every restore, and
+      // carried forward by every save.
+      this.#write(
+        Object.fromEntries(Object.entries(parsed).filter(([name]) => !discarded.has(name))),
+      );
+    }
+
     return restored;
   }
 
-  /** Adds or replaces one configuration. */
+  /**
+   * Adds or replaces one configuration.
+   *
+   * A configuration that is not to be remembered removes an entry an earlier setup of the same
+   * name left behind: otherwise `restore()` would bring it back, remembered after all.
+   */
   save(configuration: NormalizedConfiguration): void {
     if (!configuration.persist) {
+      this.remove(configuration.name);
       return;
     }
 
@@ -178,9 +194,22 @@ export class ConfigurationStore {
     }
 
     // Written before the old keys are removed: a write that fails must not lose them.
-    this.storage.setItem(storageKey(), newest.value);
-    for (const { key } of present) {
-      this.storage.removeItem(key);
+    try {
+      this.storage.setItem(storageKey(), newest.value);
+    } catch (error) {
+      // The configurations are still restored from the old key, and the next write that succeeds
+      // carries them to the current one. Answering "nothing stored" instead would let that write
+      // replace them, and strand them under the old key for good.
+      this.#reportUnavailable('write', error);
+      return newest.value;
+    }
+    try {
+      for (const { key } of present) {
+        this.storage.removeItem(key);
+      }
+    } catch (error) {
+      // What matters has been moved; an old key left behind is only untidy.
+      this.#reportUnavailable('clear', error);
     }
     this.logger.info('moved remembered configurations to the current storage key', {
       event: 'storage.migrated',

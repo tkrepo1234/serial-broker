@@ -144,7 +144,7 @@ export const REMEDIATION: Record<SerialBrokerErrorCode, string> = {
   STORAGE_UNAVAILABLE:
     'localStorage is not writable, so the configuration will not be restored after a reload. Everything else keeps working. Common in private windows and sandboxed iframes.',
   STORAGE_CORRUPT:
-    'A stored configuration was discarded because it could not be parsed. It will be rewritten on the next successful setup().',
+    'A stored configuration could not be read or is no longer valid, and was removed from storage. Set it up again to have it remembered.',
   LISTENER_THREW:
     'One of your event listeners threw. The exception is in `cause`; other listeners were unaffected.',
   INTERNAL_INVARIANT:

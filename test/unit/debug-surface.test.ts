@@ -287,6 +287,18 @@ describe('debugging surface: library settings', () => {
     }
   });
 
+  it('lets an unusable value in a link fall back to the saved one, not to the default', () => {
+    const saved = JSON.stringify({ workerUrl: '/saved.js', transport: 'broadcastchannel' });
+
+    expect(
+      resolveLibrarySettings(
+        new URLSearchParams('transport=BroadcastChannel&workerUrl=&logPayloads=maybe'),
+        saved,
+        DEFAULT_WORKER,
+      ),
+    ).toEqual({ workerUrl: '/saved.js', transport: 'broadcastchannel', logPayloads: false });
+  });
+
   it('round-trips settings through a link', () => {
     const settings = {
       workerUrl: '/a b.js',
@@ -324,6 +336,10 @@ describe('debugging surface: formatting', () => {
     expect(formatRelative(1_400, 0)).toBe('in 1.4 s');
     expect(formatRelative(0, 320)).toBe('320 ms ago');
     expect(formatRelative(0, 125_000)).toBe('2 min 5 s ago');
+    // Just below a boundary, the rounded value moves to the next unit instead of overflowing.
+    expect(formatRelative(999.6, 0)).toBe('in 1.0 s');
+    expect(formatRelative(59_960, 0)).toBe('in 1 min 0 s');
+    expect(formatRelative(119_600, 0)).toBe('in 2 min 0 s');
   });
 
   it('names statuses in words, and a configuration no tab runs as not running', () => {

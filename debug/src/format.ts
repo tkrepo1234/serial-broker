@@ -77,15 +77,18 @@ export function formatClock(epochMs: number): string {
 export function formatRelative(targetMs: number, nowMs: number): string {
   const delta = targetMs - nowMs;
   const magnitude = Math.abs(delta);
+  // Rounded to what each unit shows before the unit is chosen, so a value just below a boundary
+  // reads "1.0 s" or "1 min 0 s" rather than "1000 ms" or "1 min 60 s".
+  const milliseconds = Math.round(magnitude);
+  const tenths = Math.round(magnitude / 100);
+  const seconds = Math.round(magnitude / 1_000);
   let text: string;
-  if (magnitude < 1_000) {
-    text = `${String(Math.round(magnitude))} ms`;
-  } else if (magnitude < 60_000) {
-    text = `${(magnitude / 1_000).toFixed(1)} s`;
+  if (milliseconds < 1_000) {
+    text = `${String(milliseconds)} ms`;
+  } else if (tenths < 600) {
+    text = `${(tenths / 10).toFixed(1)} s`;
   } else {
-    const minutes = Math.floor(magnitude / 60_000);
-    const seconds = Math.round((magnitude % 60_000) / 1_000);
-    text = `${String(minutes)} min ${String(seconds)} s`;
+    text = `${String(Math.floor(seconds / 60))} min ${String(seconds % 60)} s`;
   }
   return delta > 0 ? `in ${text}` : `${text} ago`;
 }

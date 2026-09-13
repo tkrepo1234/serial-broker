@@ -12,16 +12,30 @@ import { SerialBrokerError } from './errors.js';
  *   `BufferSource`.
  */
 export function copyBytes(source: BufferSource, argumentName = 'data'): Uint8Array {
-  if (source instanceof ArrayBuffer) {
-    return new Uint8Array(source.slice(0));
+  let bytes: Uint8Array | undefined;
+  try {
+    // A `DataView` or a `Uint16Array` contributes exactly the bytes it spans, not its whole
+    // backing buffer. A buffer is recognised by its tag rather than by `instanceof`, which is false
+    // for one made in another realm, such as an iframe.
+    if (isBuffer(source)) {
+      bytes = new Uint8Array(source);
+    } else if (ArrayBuffer.isView(source)) {
+      bytes = new Uint8Array(source.buffer, source.byteOffset, source.byteLength);
+    }
+  } catch (error) {
+    // A view of a buffer that was transferred elsewhere cannot even be looked at.
+    throw new SerialBrokerError(
+      SerialBrokerErrorCode.INVALID_ARGUMENT,
+      `${argumentName} cannot be read: its buffer has been transferred or detached`,
+      { context: { argumentName, detached: true }, cause: error },
+    );
   }
 
-  if (ArrayBuffer.isView(source)) {
-    // `slice` on the view's own byte range: a `DataView` or a `Uint16Array` must contribute
-    // exactly the bytes it spans, not its whole backing buffer.
-    return new Uint8Array(
-      source.buffer.slice(source.byteOffset, source.byteOffset + source.byteLength),
-    );
+  if (bytes !== undefined) {
+    // `slice` on a Uint8Array always allocates a new, unshared ArrayBuffer - also for a view of a
+    // SharedArrayBuffer, whose own `slice` would return shared memory again, which can neither be
+    // posted to another context nor written to a port.
+    return bytes.slice();
   }
 
   throw new SerialBrokerError(
@@ -29,6 +43,11 @@ export function copyBytes(source: BufferSource, argumentName = 'data'): Uint8Arr
     `${argumentName} must be a string, an ArrayBuffer or an ArrayBufferView`,
     { context: { argumentName, actualType: typeof source } },
   );
+}
+
+function isBuffer(value: unknown): value is ArrayBufferLike {
+  const tag = Object.prototype.toString.call(value);
+  return tag === '[object ArrayBuffer]' || tag === '[object SharedArrayBuffer]';
 }
 
 /**

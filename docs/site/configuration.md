@@ -36,7 +36,7 @@ passed to a second `setup()` in the same tab are ignored.
 The name addresses the configuration in every other call, and appears in the ownership lock, the
 storage key and every log record.
 
-- **Type:** string, 1–128 characters, no control characters.
+- **Type:** string, 1–128 characters, no control characters and no unpaired surrogates.
 - **Choose it** after the device's role in the application — `Scale`, `CardReader` — not after
   the port, which the application cannot identify anyway.
 
@@ -167,10 +167,10 @@ receive buffer that drops the tail of a large write instead of slowing the sende
 
 ## `encoding`
 
-| Option       | Type                          | Default   |
-| ------------ | ----------------------------- | --------- |
-| `encoding`   | a label `TextDecoder` accepts | `'utf-8'` |
-| `decodeText` | boolean                       | `false`   |
+| Option       | Type                                                         | Default   |
+| ------------ | ------------------------------------------------------------ | --------- |
+| `encoding`   | a label `TextDecoder` accepts, kept under its canonical name | `'utf-8'` |
+| `decodeText` | boolean                                                      | `false`   |
 
 `decodeText`
 : Adds `text` to every `onReceive` event, decoded with a streaming decoder so a character split
