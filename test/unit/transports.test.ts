@@ -125,7 +125,7 @@ describe('SharedWorkerTransport', () => {
     expect(port.posted).toHaveLength(after);
   });
 
-  it('ignores ownership changes, because the broker already knows', () => {
+  it('sends no message for an ownership change, which the broker learns from the claim', () => {
     const { transport, port } = create();
     const before = port.posted.length;
 

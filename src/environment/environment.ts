@@ -8,7 +8,8 @@ import type { ScopedLogger } from '../core/logger.js';
  *
  * Every browser API the library touches is reached through this object. No module outside
  * `src/environment/` references `navigator`, `window`, `self`, `Date`, `Math.random` or
- * `setTimeout`, and a lint rule enforces it.
+ * `setTimeout`, and a lint rule enforces it. The one exception is the worker script, which runs in a
+ * context of its own that nothing can hand an environment to (`src/worker/serial-broker.worker.ts`).
  *
  * Two things follow, and both are the point:
  *

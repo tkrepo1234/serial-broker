@@ -41,9 +41,11 @@ export interface Transport {
   /**
    * Tells the transport whether this context currently owns a configuration.
    *
-   * Only the `BroadcastChannel` fallback needs this: with no central router, each context has
+   * The `BroadcastChannel` fallback needs this to route: with no central router, each context has
    * to decide for itself whether a message addressed to `owner` is meant for it. The
-   * `SharedWorker` implementation ignores it, because the broker already knows.
+   * `SharedWorker` implementation sends nothing for it, because the broker learns ownership from
+   * `owner-claimed`, but repeats it in every heartbeat, so that a broker which forgot this context,
+   * or a new worker, can restore it (ADR-0021).
    */
   setOwnership(configName: string, isOwner: boolean): void;
 

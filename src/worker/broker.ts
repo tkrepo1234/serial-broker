@@ -38,8 +38,8 @@ interface ConfigurationState {
  * - **What happens to a write when the owner dies** is decided by the context that issued it
  *   (ADR-0013), which is the only context that knows whether repeating the command is safe.
  *
- * This is what lets the same class run unchanged inside a `SharedWorker` and inside every
- * participant when the `BroadcastChannel` fallback is in use (ADR-0006, ADR-0007).
+ * The same is what lets the `BroadcastChannel` fallback do without a broker at all: each tab
+ * resolves the same three targets from the envelope for itself (ADR-0006, ADR-0007).
  */
 export class Broker {
   readonly #configurations = new Map<string, ConfigurationState>();
@@ -49,7 +49,7 @@ export class Broker {
 
   constructor(private readonly host: BrokerHost) {}
 
-  /** Number of connected participants. For the worker's own diagnostics only. */
+  /** Number of participants the broker knows. For tests: the worker script has no use for it. */
   get clientCount(): number {
     return this.#clients.size;
   }
