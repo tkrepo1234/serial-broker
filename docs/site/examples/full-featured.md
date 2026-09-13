@@ -37,7 +37,10 @@ commands from the others'.
 it with its own settings, and serial-broker does not compare settings between windows. The panel
 keeps the baud rate in `localStorage` and listens for the `storage` event, which fires in every
 other window when one of them changes it. Each window then releases the configuration and sets it
-up again with the new rate.
+up again with the new rate; the window that made the change does so directly, since the event never
+reaches the window that wrote the value. Reconnects run one after another, so a quick series of
+changes cannot leave a window subscribed twice, and a window the user disconnected stays
+disconnected.
 
 **Errors are shown with the sentence that says what to do.** Every `SerialBrokerError` carries a
 `remediation`. The panel shows it as it is, except for `OWNER_LOST_DURING_WRITE`, where the scale

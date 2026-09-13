@@ -64,6 +64,10 @@ message.
 | `matcher.none`                    | debug | No granted port matches the configured device.                                            |
 | `matcher.ambiguous`               | warn  | Several granted ports match; the first is used.                                           |
 | `environment.transport-fallback`  | warn  | `SharedWorker` is unavailable or its script did not load; `BroadcastChannel` is used.     |
+| `transport.broker-lost`           | warn  | The worker left the tab's heartbeats unanswered; a new worker is started.                 |
+| `transport.worker-restarted`      | info  | A new worker was started after the old one stopped answering.                             |
+| `transport.worker-restart-failed` | warn  | Starting a new worker failed; the next unanswered heartbeats try again.                   |
+| `transport.broker-restored`       | info  | The worker answers again.                                                                 |
 | `storage.unavailable`             | warn  | A read or write to `localStorage` failed; configurations may not be remembered.           |
 | `storage.invalid-entry`           | warn  | A remembered configuration was invalid and discarded.                                     |
 | `storage.corrupt`                 | warn  | The stored configurations could not be read and were discarded.                           |

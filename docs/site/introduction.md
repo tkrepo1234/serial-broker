@@ -29,7 +29,7 @@ what it means for an application, is the subject of [How shared ports behave](sh
 
 | Feature                        | What it gives you                                                                                                  |
 | ------------------------------ | ------------------------------------------------------------------------------------------------------------------ |
-| **Shared port**                | Every tab reads and writes. Writes from any tab reach the device once.                                             |
+| **Shared port**                | Every tab reads and writes. A write reaches the device at most once.                                               |
 | **Failover**                   | Ownership moves to another tab when the holding tab goes away, however it goes away.                               |
 | **Reconnection**               | Bounded exponential backoff with jitter, cut short the moment the browser reports the device is back.              |
 | **Remembered devices**         | The browser keeps the permission; serial-broker keeps the configuration.                                           |

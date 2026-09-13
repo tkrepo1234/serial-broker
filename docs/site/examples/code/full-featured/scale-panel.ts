@@ -37,6 +37,10 @@ export class ScalePanel {
   readonly #elements: PanelElements;
   #listeners: Unsubscribe[] = [];
   #partialLine = '';
+  /** Set once the user disconnected this window: a change made elsewhere must not reconnect it. */
+  #isStopped = false;
+  /** The reconnect under way. Changes in quick succession reconnect one after the other. */
+  #reconnecting: Promise<void> = Promise.resolve();
 
   constructor(elements: PanelElements) {
     this.#elements = elements;
@@ -64,16 +68,17 @@ export class ScalePanel {
     });
 
     baudRate.addEventListener('change', () => {
-      // Saving is enough: the storage event below reconnects this tab and every other one.
+      // Saving tells every other tab, through the storage event below; that event never fires in
+      // the tab that saved, so this one reconnects here.
       localStorage.setItem(BAUD_RATE_KEY, baudRate.value);
-      void this.#reconnect();
+      this.#reconnect();
     });
 
     // Line settings must be the same in every tab, because the tab that holds the port opens it
     // with its own. When one tab changes them, every tab follows.
     window.addEventListener('storage', (event) => {
       if (event.key === BAUD_RATE_KEY) {
-        void this.#reconnect();
+        this.#reconnect();
       }
     });
 
@@ -86,6 +91,9 @@ export class ScalePanel {
 
   /** Stops using the scale in this tab. Other tabs keep working. */
   async stop(): Promise<void> {
+    this.#isStopped = true;
+    // A reconnect under way would otherwise set the configuration up again after this release.
+    await this.#reconnecting;
     this.#stopListening();
     await SerialBroker.release(NAME);
     this.#renderStatus('released');
@@ -122,10 +130,25 @@ export class ScalePanel {
     this.#renderStatus(SerialBroker.getStatus(NAME).status);
   }
 
-  async #reconnect(): Promise<void> {
-    this.#stopListening();
-    await SerialBroker.release(NAME);
-    await this.#connect();
+  /**
+   * Sets the configuration up again with the stored baud rate, once any reconnect before it is done.
+   *
+   * Two overlapping reconnects would both subscribe - the second `setup()` finds the configuration
+   * set up already - and every line would be logged twice.
+   */
+  #reconnect(): void {
+    this.#reconnecting = this.#reconnecting
+      .then(async () => {
+        if (this.#isStopped) {
+          return;
+        }
+        this.#stopListening();
+        await SerialBroker.release(NAME);
+        await this.#connect();
+      })
+      .catch((error: unknown) => {
+        this.#showError(error);
+      });
   }
 
   async #send(command: string): Promise<void> {

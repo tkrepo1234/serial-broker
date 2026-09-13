@@ -49,6 +49,10 @@ export class LineChannel {
           resolve(line);
         };
       });
+      // `send()` may wait longer than the answer does. Should the timeout fire first and `send()`
+      // then fail, `answer` is never awaited; handling it here keeps that from surfacing as an
+      // unhandled rejection. Awaiting it below still rejects.
+      answer.catch(() => undefined);
 
       try {
         await SerialBroker.send(this.#name, `${command}\r\n`);

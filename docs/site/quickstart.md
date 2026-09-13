@@ -55,9 +55,14 @@ you ask:
 
 ```ts
 connectButton.addEventListener('click', () => {
-  void SerialBroker.requestAccess('Adapter').then((granted) => {
-    connectButton.hidden = granted;
-  });
+  SerialBroker.requestAccess('Adapter').then(
+    (granted) => {
+      connectButton.hidden = granted;
+    },
+    (error: unknown) => {
+      output.textContent += `\n[${String(error)}]\n`;
+    },
+  );
 });
 ```
 
