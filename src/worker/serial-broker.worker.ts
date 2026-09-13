@@ -60,6 +60,17 @@ self.onconnect = (event): void => {
     handleMessage(port, messageEvent.data);
   });
 
+  // One message that could not be cloned is lost, and only that message. Added here, once per
+  // port, because a port is forgotten and registered again every time its tab is throttled past
+  // the sweep. The port stays open: closing it would cut a live tab - perhaps the owner - off from
+  // every other for good, and nothing would tell it so, which is why ADR-0021 never closes ports.
+  port.addEventListener('messageerror', () => {
+    logger.warn('dropped a message that could not be cloned', {
+      clientId: identities.get(port),
+      event: 'worker.message-error',
+    });
+  });
+
   // A `SharedWorker` port does not deliver anything until it is started.
   port.start();
 };
@@ -90,16 +101,11 @@ function register(port: MessagePort, clientId: ClientId): void {
     return;
   }
 
+  // There is no port-close event. A context that leaves politely says goodbye; one that dies
+  // stops sending heartbeats, and the sweep forgets it (ADR-0021).
   identities.set(port, clientId);
   ports.set(clientId, port);
   broker.handleConnect(clientId);
-
-  // There is no port-close event. A context that leaves politely says goodbye; one that dies
-  // stops sending heartbeats, and the sweep forgets it (ADR-0021). `messageerror` covers the
-  // case where a context sends something uncloneable and is likely to be in trouble.
-  port.addEventListener('messageerror', () => {
-    disconnect(port, clientId);
-  });
 }
 
 function disconnect(port: MessagePort, clientId: ClientId): void {

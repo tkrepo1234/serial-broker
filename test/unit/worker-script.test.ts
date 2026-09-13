@@ -91,6 +91,47 @@ describe('serial-broker.worker', () => {
     expect(alice.posted).toHaveLength(1);
   });
 
+  it('keeps a port whose message failed to clone, and goes on routing to it', () => {
+    const alice = new FakeMessagePort();
+    const bob = new FakeMessagePort();
+    connect({ ports: [alice] });
+    connect({ ports: [bob] });
+    alice.deliver(envelope('alice', 'all', { type: 'attach', configName: 'Reader' }));
+    alice.deliver(envelope('alice', 'all', { type: 'owner-claimed', configName: 'Reader' }));
+    bob.deliver(envelope('bob', 'all', { type: 'attach', configName: 'Reader' }));
+    alice.posted.length = 0;
+
+    // One message from the owner could not be cloned. Only that message is lost: closing the port
+    // would cut the owner off for good, with nothing to tell it so (ADR-0021).
+    alice.failToClone();
+    bob.deliver(
+      envelope('bob', 'owner', {
+        type: 'write-request',
+        configName: 'Reader',
+        requestId: 'w-1',
+        payload: new Uint8Array([1]),
+      }),
+    );
+
+    expect(alice.closed).toBe(false);
+    expect(alice.posted).toEqual([expect.objectContaining({ type: 'write-request' })]);
+  });
+
+  it('listens for clone failures on a port once, however often the port is forgotten and returns', () => {
+    const alice = new FakeMessagePort();
+    connect({ ports: [alice] });
+    const heartbeat = { type: 'heartbeat', configNames: ['Reader'], ownedConfigNames: [] };
+    alice.deliver(envelope('alice', 'all', heartbeat));
+
+    // A throttled tab: forgotten by the sweep, restored by its next heartbeat - three times over.
+    for (let round = 0; round < 3; round += 1) {
+      vi.advanceTimersByTime(SILENT_PARTICIPANT_TIMEOUT_MS + SWEEP_INTERVAL_MS);
+      alice.deliver(envelope('alice', 'all', heartbeat));
+    }
+
+    expect(alice.listenerCount('messageerror')).toBe(1);
+  });
+
   it('ignores a connect event with no port', () => {
     expect(() => {
       connect({ ports: [] });

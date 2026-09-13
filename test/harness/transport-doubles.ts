@@ -23,7 +23,13 @@ export class FakeMessagePort implements MessagePortLike {
   /** `true` once `close()` was called. */
   closed = false;
 
-  readonly #listeners = new Map<string, (event: never) => void>();
+  /**
+   * Every listener, per event type, in the order added.
+   *
+   * Kept as a list, as a real port keeps them: a fake that let a second listener replace the first
+   * would hide code that adds the same listener over and over.
+   */
+  readonly #listeners = new Map<string, ((event: never) => void)[]>();
 
   postMessage(message: unknown): void {
     this.posted.push(message);
@@ -40,17 +46,28 @@ export class FakeMessagePort implements MessagePortLike {
   addEventListener(type: 'message', listener: (event: { readonly data: unknown }) => void): void;
   addEventListener(type: 'messageerror', listener: (event: unknown) => void): void;
   addEventListener(type: string, listener: (event: never) => void): void {
-    this.#listeners.set(type, listener);
+    const listeners = this.#listeners.get(type) ?? [];
+    listeners.push(listener);
+    this.#listeners.set(type, listeners);
+  }
+
+  /** How many listeners are registered for an event type. */
+  listenerCount(type: 'message' | 'messageerror'): number {
+    return this.#listeners.get(type)?.length ?? 0;
   }
 
   /** Dispatches `raw` as a `message` event, as if the other end had posted it. */
   deliver(raw: unknown): void {
-    this.#listeners.get('message')?.({ data: raw } as never);
+    for (const listener of this.#listeners.get('message') ?? []) {
+      listener({ data: raw } as never);
+    }
   }
 
   /** Dispatches a `messageerror`, which the browser fires for a message that failed to clone. */
   failToClone(): void {
-    this.#listeners.get('messageerror')?.({} as never);
+    for (const listener of this.#listeners.get('messageerror') ?? []) {
+      listener({} as never);
+    }
   }
 }
 
