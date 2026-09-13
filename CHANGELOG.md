@@ -31,6 +31,9 @@ coordinate with each other. See
   and the worker drops one that has been silent for three minutes.
 - Tabs on different protocol versions detect each other: every tab announces its version on a
   channel no version renames, and a mismatch is reported as `PROTOCOL_VERSION_MISMATCH`.
+- A worker script of another protocol version - a copied worker file from another release, or a
+  cached one - is reported as `PROTOCOL_VERSION_MISMATCH`, and the tabs move to `BroadcastChannel`
+  instead of staying cut off from each other with nothing reported.
 - An opt-in structured logger. The library writes nothing to the console uninvited.
 - A read-only diagnostics entry point, `serial-broker/diagnostics`. Every tab of the origin
   reports its role, connection state, reconnect timing, pending writes, listeners and effective

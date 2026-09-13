@@ -57,6 +57,38 @@ describe('serial-broker.worker', () => {
     expect(bob.posted).toHaveLength(0);
   });
 
+  it('answers a hello in another protocol version with a welcome in its own, and nothing more', () => {
+    const alice = new FakeMessagePort();
+    const bob = new FakeMessagePort();
+    connect({ ports: [alice] });
+    connect({ ports: [bob] });
+    bob.deliver(envelope('bob', 'all', { type: 'attach', configName: 'Reader' }));
+
+    // A tab of another build that was served this worker script: a copied file left over from an
+    // earlier release, or a cached one (ADR-0024).
+    const otherVersion = { v: PROTOCOL_VERSION + 1, from: 'alice', to: 'all' };
+    alice.deliver({ ...otherVersion, type: 'hello' });
+    alice.deliver({ ...otherVersion, type: 'attach', configName: 'Reader' });
+    bob.deliver(envelope('bob', 'all', { type: 'status-request', configName: 'Reader' }));
+
+    // The welcome carries this worker's version, which is how the tab learns that the two differ.
+    // Everything else the tab says is still dropped, so it never takes part.
+    expect(alice.posted).toEqual([
+      expect.objectContaining({ type: 'welcome', v: PROTOCOL_VERSION, to: 'alice' }),
+    ]);
+    expect(bob.posted).toHaveLength(0);
+  });
+
+  it('does not answer a hello in another protocol version that names no sender', () => {
+    const alice = new FakeMessagePort();
+    connect({ ports: [alice] });
+
+    alice.deliver({ v: PROTOCOL_VERSION + 1, to: 'all', type: 'hello' });
+    alice.deliver({ v: PROTOCOL_VERSION + 1, from: '', to: 'all', type: 'hello' });
+
+    expect(alice.posted).toHaveLength(0);
+  });
+
   it('forgets a port that falls silent, and knows it again from its next message', () => {
     const alice = new FakeMessagePort();
     const bob = new FakeMessagePort();

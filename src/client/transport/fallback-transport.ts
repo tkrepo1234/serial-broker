@@ -1,6 +1,6 @@
 import type { ProtocolMessage } from '../../protocol/messages.js';
 
-import type { WorkerStartup } from './shared-worker-transport.js';
+import type { WorkerLoadFailure, WorkerStartup } from './shared-worker-transport.js';
 import type { Transport, TransportRequest } from './transport.js';
 
 /**
@@ -13,6 +13,13 @@ import type { Transport, TransportRequest } from './transport.js';
  * is always kept: dropping an ownership claim or a write result would leave other tabs waiting.
  */
 export const MAX_REPLAYED_MESSAGES = 1000;
+
+/** What the log says on falling back, for each way of finding out that the worker is unusable. */
+const FALLBACK_LOG_MESSAGES: Readonly<Record<WorkerLoadFailure, string>> = {
+  'worker-script-failed': 'the SharedWorker script did not load; using BroadcastChannel',
+  'worker-other-protocol-version':
+    'the SharedWorker script runs another protocol version; using BroadcastChannel',
+};
 
 /** Something the application's side of the bus asked for, in the order it asked. */
 type Operation =
@@ -66,8 +73,8 @@ export class FallbackTransport implements Transport {
       onReady: () => {
         this.#pending = undefined;
       },
-      onLoadFailed: (event) => {
-        this.#fallBack(event);
+      onLoadFailed: (event, reason) => {
+        this.#fallBack(event, reason);
       },
     });
   }
@@ -123,7 +130,7 @@ export class FallbackTransport implements Transport {
     pending.push(operation);
   }
 
-  #fallBack(event: unknown): void {
+  #fallBack(event: unknown, reason: WorkerLoadFailure): void {
     const pending = this.#pending;
     if (pending === undefined || this.#isClosed) {
       this.#request.onTransportError(event);
@@ -161,9 +168,9 @@ export class FallbackTransport implements Transport {
       }
     }
 
-    this.#request.logger.warn('the SharedWorker script did not load; using BroadcastChannel', {
+    this.#request.logger.warn(FALLBACK_LOG_MESSAGES[reason], {
       event: 'environment.transport-fallback',
-      reason: 'worker-script-failed',
+      reason,
       replayedMessages: pending.filter((operation) => operation.kind === 'send').length,
       droppedMessages: this.#droppedMessages,
     });

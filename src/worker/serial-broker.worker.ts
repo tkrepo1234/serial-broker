@@ -1,5 +1,6 @@
 import { NOOP_LOGGER, ScopedLogger } from '../core/logger.js';
 import { decodeMessage, describeDecodeFailure } from '../protocol/decode.js';
+import { helloSenderOf, welcomeFor } from '../protocol/handshake.js';
 import { SILENT_PARTICIPANT_TIMEOUT_MS, SWEEP_INTERVAL_MS } from '../protocol/heartbeat.js';
 import type { ClientId, ProtocolMessage } from '../protocol/messages.js';
 
@@ -79,6 +80,27 @@ function handleMessage(port: MessagePort, raw: unknown): void {
   const result = decodeMessage(raw);
 
   if (!result.ok) {
+    // A tab of another protocol version, which the browser started on this script: a worker file
+    // copied from another release, or one kept by a cache. Its hello is the one message every
+    // version answers. The welcome carries this worker's version, and so tells the tab that nothing
+    // it sends arrives here; the tab is not registered, and nothing else it says is routed
+    // (ADR-0024).
+    const otherVersionSender =
+      result.failure.reason === 'version-mismatch' ? helloSenderOf(raw) : undefined;
+    if (otherVersionSender !== undefined) {
+      logger.warn('answered a tab on another protocol version', {
+        clientId: otherVersionSender,
+        event: 'worker.other-protocol-version',
+        reason: describeDecodeFailure(result.failure),
+      });
+      try {
+        port.postMessage(welcomeFor(otherVersionSender));
+      } catch {
+        // The tab has already gone, and nothing else is owed to it.
+      }
+      return;
+    }
+
     // Nothing can be done about a message this worker cannot parse, and it must not be
     // allowed to take the broker down: dropping it keeps every other tab working.
     logger.warn('dropped a message', { reason: describeDecodeFailure(result.failure) });

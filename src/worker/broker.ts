@@ -1,11 +1,6 @@
 import type { ScopedLogger } from '../core/logger.js';
-import {
-  BROKER_ID,
-  configNameOf,
-  type ClientId,
-  type ProtocolMessage,
-} from '../protocol/messages.js';
-import { PROTOCOL_VERSION } from '../protocol/version.js';
+import { welcomeFor } from '../protocol/handshake.js';
+import { configNameOf, type ClientId, type ProtocolMessage } from '../protocol/messages.js';
 
 /** What the broker needs from whichever transport is hosting it. */
 export interface BrokerHost {
@@ -103,12 +98,7 @@ export class Broker {
         // The answer is how a participant learns that this script loaded and runs. Until it
         // arrives, the participant keeps what it sent, so it can send it again another way if
         // the script turns out not to load (ADR-0007).
-        this.host.deliver(clientId, {
-          type: 'welcome',
-          v: PROTOCOL_VERSION,
-          from: BROKER_ID,
-          to: clientId,
-        });
+        this.host.deliver(clientId, welcomeFor(clientId));
         return;
 
       case 'heartbeat':

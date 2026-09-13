@@ -7,6 +7,7 @@ import {
 import {
   SharedWorkerTransport,
   type SharedWorkerLike,
+  type WorkerLoadFailure,
 } from '../../src/client/transport/shared-worker-transport.js';
 import { HEARTBEAT_INTERVAL_MS } from '../../src/protocol/heartbeat.js';
 import type { ClientId, ProtocolMessage } from '../../src/protocol/messages.js';
@@ -330,13 +331,13 @@ describe('SharedWorkerTransport, while its script is starting', () => {
       },
     };
     let readyCount = 0;
-    const loadFailures: unknown[] = [];
+    const loadFailures: { event: unknown; reason: WorkerLoadFailure }[] = [];
 
     new SharedWorkerTransport(rec.request, () => worker, 'fake://worker', {
       onReady: () => {
         readyCount += 1;
       },
-      onLoadFailed: (event) => loadFailures.push(event),
+      onLoadFailed: (event, reason) => loadFailures.push({ event, reason }),
     });
 
     return {
@@ -365,7 +366,7 @@ describe('SharedWorkerTransport, while its script is starting', () => {
 
     failToLoad();
 
-    expect(loadFailures).toHaveLength(1);
+    expect(loadFailures).toEqual([{ event: { type: 'error' }, reason: 'worker-script-failed' }]);
     expect(transportErrors).toHaveLength(0);
   });
 
@@ -377,6 +378,33 @@ describe('SharedWorkerTransport, while its script is starting', () => {
 
     expect(loadFailures).toHaveLength(0);
     expect(transportErrors).toHaveLength(1);
+  });
+
+  it('reports a worker script of another protocol version as a load failure, and the version as a mismatch', () => {
+    const { port, ready, loadFailures, decodeFailures, transportErrors } = start();
+
+    // The worker's answer to hello, in its own version (ADR-0024). Such a worker drops everything
+    // this tab says, so nothing sent so far reached anyone - as with a script that did not load.
+    port.deliver({ ...WELCOME, v: PROTOCOL_VERSION - 1 });
+
+    expect(ready()).toBe(0);
+    expect(loadFailures).toEqual([
+      { event: expect.anything() as unknown, reason: 'worker-other-protocol-version' },
+    ]);
+    expect(decodeFailures).toEqual([
+      { reason: 'version-mismatch', theirVersion: PROTOCOL_VERSION - 1 },
+    ]);
+    expect(transportErrors).toHaveLength(0);
+  });
+
+  it('reports a message in another protocol version after the welcome only as a mismatch', () => {
+    const { port, loadFailures, decodeFailures } = start();
+
+    port.deliver(WELCOME);
+    port.deliver({ ...WELCOME, v: PROTOCOL_VERSION - 1 });
+
+    expect(loadFailures).toHaveLength(0);
+    expect(decodeFailures).toHaveLength(1);
   });
 });
 

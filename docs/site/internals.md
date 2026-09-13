@@ -72,6 +72,12 @@ the broker's `welcome` arrives, the wrapper keeps everything the tab sent. If th
 first, none of it reached anyone, and it is replayed over a `BroadcastChannel` — exactly once, in
 order — before the tab carries on there.
 
+The same happens when the worker script is of another protocol version, such as a copied worker
+file left over from an earlier release. The `hello` and the `welcome` are the one exchange whose
+shape no version may change: a worker answers every `hello`, whatever its version, with a `welcome`
+in its own. A tab that receives a message in another version on the worker's port reports
+`PROTOCOL_VERSION_MISMATCH` and falls back as above [ADR-0024].
+
 ## The protocol between tabs
 
 Every message carries `{ v, from, to, type }` and is validated completely on arrival; anything
@@ -183,3 +189,6 @@ in a real browser, with real or emulated hardware [ADR-0017].
 | 0019 | Ship the debugging surface in the package, as static content                        |
 | 0020 | Build the developer documentation with Sphinx, MyST and a TSDoc-generated reference |
 | 0021 | Forget tabs that stop sending heartbeats                                            |
+| 0022 | Version stored configurations separately from the protocol                          |
+| 0023 | Announce the protocol version on an unversioned channel                             |
+| 0024 | Keep the handshake with the worker readable by every protocol version               |

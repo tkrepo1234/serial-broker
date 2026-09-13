@@ -10,7 +10,8 @@ import type { Transport, TransportRequest } from '../../src/client/transport/tra
 import { NOOP_LOGGER, ScopedLogger } from '../../src/core/logger.js';
 import { decodeMessage } from '../../src/protocol/decode.js';
 import { SILENT_PARTICIPANT_TIMEOUT_MS, SWEEP_INTERVAL_MS } from '../../src/protocol/heartbeat.js';
-import type { ClientId, ProtocolMessage } from '../../src/protocol/messages.js';
+import { BROKER_ID, type ClientId, type ProtocolMessage } from '../../src/protocol/messages.js';
+import { PROTOCOL_VERSION } from '../../src/protocol/version.js';
 import { Broker } from '../../src/worker/broker.js';
 
 import type { FakeClock } from './fake-clock.js';
@@ -179,6 +180,18 @@ export class FakeBroadcastHub {
 export type TransportMode = 'sharedworker' | 'broadcastchannel';
 
 /**
+ * What the browser runs when a tab starts the `SharedWorker`.
+ *
+ * - `'loads'`: this build's worker script, hosting the real broker.
+ * - `'fails'`: nothing, until {@link FakeBus.failWorkerScripts} delivers the browser's error
+ *   event, as for a script that answers 404.
+ * - `'other-version'`: a worker script of an earlier protocol version, such as a copied worker
+ *   file left over from an older release. It drops everything a tab says, and keeps only the
+ *   frozen part of the handshake: it answers `hello` with a welcome in its own version (ADR-0024).
+ */
+export type WorkerScript = 'loads' | 'fails' | 'other-version';
+
+/**
  * The message bus shared by every simulated context in a test.
  *
  * Holds both implementations so the same scenario can be run against each without the test
@@ -195,13 +208,11 @@ export class FakeBus {
 
   /**
    * @param mode - Which transport the tabs start on.
-   * @param workerScript - In `sharedworker` mode, whether the worker script loads. With
-   *   `'fails'`, nothing a tab sends reaches the broker until {@link failWorkerScripts} delivers
-   *   the browser's error event.
+   * @param workerScript - In `sharedworker` mode, which worker script the browser runs.
    */
   constructor(
     readonly mode: TransportMode,
-    readonly workerScript: 'loads' | 'fails' = 'loads',
+    readonly workerScript: WorkerScript = 'loads',
     /** Time for the bus: the heartbeats tabs send and the worker's sweep. */
     readonly clock: FakeClock,
   ) {
@@ -237,12 +248,31 @@ export class FakeBus {
     const request: TransportRequest = { ...tabRequest, clock: this.clock };
     const clientId = request.clientId;
     const loads = this.workerScript === 'loads';
+    /** The tab's end of the port, for a worker that answers without this build's broker. */
+    let tabListener: MessageListener | undefined;
 
     const port: MessagePortLike = {
       postMessage: (message) => {
-        // A port to a worker whose script never ran accepts messages and delivers none.
-        if (loads && !this.#killed.has(contextId)) {
+        if (this.#killed.has(contextId)) {
+          return;
+        }
+        if (loads) {
           this.workerHost.send(clientId, structuredClone(message));
+          return;
+        }
+        // A port to a worker whose script never ran accepts messages and delivers none. A worker of
+        // another version drops them too, but answers the frozen handshake (ADR-0024).
+        if (
+          this.workerScript === 'other-version' &&
+          tabListener !== undefined &&
+          (message as { readonly type?: unknown }).type === 'hello'
+        ) {
+          deliver(tabListener, {
+            type: 'welcome',
+            v: PROTOCOL_VERSION - 1,
+            from: BROKER_ID,
+            to: clientId,
+          });
         }
       },
       start: () => {
@@ -252,8 +282,13 @@ export class FakeBus {
         this.workerHost.disconnect(clientId);
       },
       addEventListener: (type: string, listener: unknown) => {
-        if (type === 'message' && loads) {
+        if (type !== 'message') {
+          return;
+        }
+        if (loads) {
           this.workerHost.connect(clientId, listener as MessageListener);
+        } else {
+          tabListener = listener as MessageListener;
         }
       },
     } as MessagePortLike;

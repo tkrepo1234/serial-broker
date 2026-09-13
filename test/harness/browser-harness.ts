@@ -14,7 +14,7 @@ import type {
   SerialBrokerEnvironment,
 } from '../../src/environment/environment.js';
 
-import { FakeBus, type TransportMode } from './fake-bus.js';
+import { FakeBus, type TransportMode, type WorkerScript } from './fake-bus.js';
 import { FakeClock, flushMicrotasks } from './fake-clock.js';
 import { FakeLockManager } from './fake-locks.js';
 import { FakeSerialRegistry } from './fake-serial.js';
@@ -134,7 +134,7 @@ export interface HarnessOptions {
    * In `sharedworker` mode, whether the worker script loads. With `'fails'`, tabs are cut off
    * until `bus.failWorkerScripts()` reports the failure, as a browser does for a missing script.
    */
-  readonly workerScript?: 'loads' | 'fails';
+  readonly workerScript?: WorkerScript;
   /** Fixed value returned for reconnect jitter, so backoff delays are exact. */
   readonly randomValue?: number;
   /** Receives the library's diagnostics. Useful when a scenario test misbehaves. */

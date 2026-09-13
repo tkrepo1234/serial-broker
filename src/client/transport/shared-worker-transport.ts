@@ -27,15 +27,25 @@ export interface MessagePortLike {
 /** Constructs a `SharedWorker`. Injected so the harness can substitute one (ADR-0014). */
 export type SharedWorkerFactory = (url: string | URL, name: string) => SharedWorkerLike;
 
+/**
+ * Why a worker cannot be used, found out before its broker ever answered.
+ *
+ * - `worker-script-failed`: the browser reported that the script did not load, or threw while it
+ *   was evaluated (ADR-0007).
+ * - `worker-other-protocol-version`: the script runs another protocol version, and said so in its
+ *   answer to `hello` (ADR-0024).
+ */
+export type WorkerLoadFailure = 'worker-script-failed' | 'worker-other-protocol-version';
+
 /** Tells whoever created the transport whether the worker script started (ADR-0007). */
 export interface WorkerStartup {
   /** The broker answered `hello`: the script loaded and runs. Called at most once. */
   readonly onReady: () => void;
   /**
-   * The script failed to load before the broker ever answered, so nothing sent so far reached
-   * anyone. Called instead of reporting the failure as a transport error.
+   * The worker cannot be used, and no broker of this version ever answered, so nothing sent so far
+   * reached anyone. Called instead of reporting the failure as a transport error.
    */
-  readonly onLoadFailed: (event: unknown) => void;
+  readonly onLoadFailed: (event: unknown, reason: WorkerLoadFailure) => void;
 }
 
 /**
@@ -95,7 +105,7 @@ export class SharedWorkerTransport implements Transport {
       // such a worker silently delivers nothing. Before the broker has answered, that also means
       // nothing sent so far arrived anywhere - which is what makes sending it again elsewhere safe.
       if (!this.#isReady && this.#startup !== undefined) {
-        this.#startup.onLoadFailed(event);
+        this.#startup.onLoadFailed(event, 'worker-script-failed');
         return;
       }
       request.onTransportError(event);
@@ -190,6 +200,23 @@ export class SharedWorkerTransport implements Transport {
     const result = decodeMessage(raw);
     if (!result.ok) {
       this.#request.onDecodeFailure(result.failure);
+      // Only the worker speaks on this port, and a broker passes on nothing but messages in its own
+      // version. A message in another version is therefore the worker's own answer to hello: the
+      // script runs another protocol version and drops everything this context says. Before a
+      // welcome of this version, that means nothing sent so far reached anyone - as when the script
+      // does not load at all, and with the same remedy (ADR-0024).
+      if (
+        result.failure.reason === 'version-mismatch' &&
+        !this.#isReady &&
+        this.#startup !== undefined
+      ) {
+        this.#startup.onLoadFailed(
+          new Error(
+            `The SharedWorker script runs protocol version ${String(result.failure.theirVersion)}, not ${String(PROTOCOL_VERSION)}`,
+          ),
+          'worker-other-protocol-version',
+        );
+      }
       return;
     }
 
