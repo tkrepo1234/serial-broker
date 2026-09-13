@@ -120,6 +120,22 @@ describe.each(TRANSPORTS)('a tab running a different tab limit (%s)', (transport
     expect(holder.client.getStatus('Reader').status).toBe('open');
     expect(other.receivedText('Reader')).toBe('');
   });
+
+  it('refuses a write with the conflict at once, instead of letting it wait for its deadline', async () => {
+    const { harness, device } = await harnessWithDevice(transport);
+    const holder = harness.openTab();
+    await holder.setup('Reader', { ...READER_OPTIONS, maxTabs: 1 });
+    const other = harness.openTab();
+    await other.setup('Reader', { ...READER_OPTIONS, maxTabs: 2 });
+
+    const writing = other.client.send('Reader', 'PING').catch((error: unknown) => error);
+    await harness.settle();
+
+    expect(await Promise.race([writing, Promise.resolve('still waiting')])).toMatchObject({
+      code: SerialBrokerErrorCode.CONFIGURATION_CONFLICT,
+    });
+    expect(device.writtenText()).toBe('');
+  });
 });
 
 describe('the maxTabs option', () => {

@@ -127,7 +127,8 @@ tab does not count. `release()` of a name that is not set up does nothing and ra
 data bits, stop bits, parity, flow control, buffer size or `maxTabs`. Other differences are ignored,
 and identical options make the second `setup()` a no-op.
 **Delivered through `onError`**, in every tab, when a tab finds the tab holding the port running
-the configuration with a different `maxTabs`. That tab withdraws and shows `failed`.
+the configuration with a different `maxTabs`. That tab withdraws and shows `failed`; its pending
+writes, and every `send()` there until it is released, are rejected with this error.
 **Context:** `existing` and `requested` device filters; for a differing tab limit, `maxTabs` of
 the tab that withdrew and `holdingTabMaxTabs` of the tab holding the port.
 **Do:** `release()` the configuration first, then set it up with the new options. See
