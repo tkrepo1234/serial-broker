@@ -6,6 +6,7 @@
   "out": "docs/site/api/reference",
   "entryFileName": "index.md",
   "disableSources": true,
+  "sort": ["source-order"],
   "hidePageHeader": true,
   "hideBreadcrumbs": true,
   "useCodeBlocks": true,

@@ -1,0 +1,28 @@
+/*
+ * Keeps every page readable without scrolling sideways.
+ *
+ * The Read the Docs theme caps the text column at 800px and stops table cells from wrapping,
+ * so a 100-character line of example code or a generated table of type signatures pushes the
+ * page wider than the window.
+ */
+
+/* A wider column: example code is formatted at 100 characters, which 800px cannot hold. */
+.wy-nav-content {
+  max-width: 1100px;
+}
+
+/* Table cells wrap like text, instead of widening the table past the column. */
+.wy-table-responsive table td,
+.wy-table-responsive table th {
+  white-space: normal;
+}
+
+/* On a narrow window, code wraps rather than scrolls. */
+.rst-content div[class^='highlight'] pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.rst-content code.literal {
+  overflow-wrap: anywhere;
+}

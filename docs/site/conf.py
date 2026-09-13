@@ -44,3 +44,7 @@ html_theme_options = {
     "sticky_navigation": True,
 }
 html_show_sourcelink = False
+
+# Keeps pages from scrolling sideways; see the stylesheet for what it changes and why.
+html_static_path = ["_static"]
+html_css_files = ["serial-broker.css"]

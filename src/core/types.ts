@@ -11,6 +11,8 @@ import type { SerialBrokerError } from './errors.js';
  * Treat this union as extensible. A future version may add a value, and applications must
  * handle an unrecognised status gracefully - typically by falling through to a neutral state
  * rather than throwing.
+ *
+ * @enum
  */
 export const SerialBrokerStatus = {
   /** Registered, but not yet trying to connect. */
@@ -253,7 +255,10 @@ export interface SerialBrokerEventMap {
   readonly onStatusChange: StatusChangeEvent;
 }
 
-/** Every subscribable event name. */
+/**
+ * Every subscribable event name: `'onReceive'`, `'onSend'`, `'onError'` or `'onStatusChange'`.
+ * {@link SerialBrokerEventMap} gives each one's payload.
+ */
 export type SerialBrokerEventName = keyof SerialBrokerEventMap;
 
 /** A listener for a given event. */

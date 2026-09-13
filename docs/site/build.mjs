@@ -6,7 +6,7 @@
  */
 
 import { spawnSync } from 'node:child_process';
-import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -38,6 +38,7 @@ run(process.execPath, [
 // TypeDoc names each module page after its entry file. Readers know them by the import path.
 retitle('docs/site/api/reference/index/index.md', 'serial-broker');
 retitle('docs/site/api/reference/diagnostics/index.md', 'serial-broker/diagnostics');
+unlinkRowAnchors(join(root, 'docs', 'site', 'api', 'reference'));
 run(python, ['-m', 'sphinx', '-b', 'html', '--keep-going', 'docs/site', 'docs/site/_build/html']);
 
 process.stdout.write('\nBuilt docs/site/_build/html/index.html\n');
@@ -45,6 +46,27 @@ process.stdout.write('\nBuilt docs/site/_build/html/index.html\n');
 function retitle(path, title) {
   const file = join(root, path);
   writeFileSync(file, readFileSync(file, 'utf8').replace(/^# .*$/m, `# ${title}`));
+}
+
+/**
+ * Points links at a member of another page to that page.
+ *
+ * TypeDoc marks each table row with an HTML anchor and links inherited members to it, but MyST
+ * only resolves anchors it generated itself, so every such link would be a broken reference.
+ */
+function unlinkRowAnchors(directory) {
+  for (const entry of readdirSync(directory, { withFileTypes: true })) {
+    const path = join(directory, entry.name);
+    if (entry.isDirectory()) {
+      unlinkRowAnchors(path);
+    } else if (entry.name.endsWith('.md')) {
+      const text = readFileSync(path, 'utf8');
+      const unlinked = text.replace(/\.md#(?:property|enumeration-member)-[\w-]+\)/g, '.md)');
+      if (unlinked !== text) {
+        writeFileSync(path, unlinked);
+      }
+    }
+  }
 }
 
 function run(command, args) {

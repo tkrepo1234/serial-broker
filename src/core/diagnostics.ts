@@ -32,7 +32,20 @@ export const CONNECTION_STATES = [
   'stopped',
 ] as const;
 
-/** One of {@link CONNECTION_STATES}. Finer-grained than the public status, on purpose. */
+/**
+ * The state of the connection in the tab that holds the port. Finer-grained than the public
+ * status, on purpose:
+ *
+ * | State | Meaning |
+ * | --- | --- |
+ * | `'idle'` | Not trying to connect. |
+ * | `'awaiting-permission'` | No granted port matches the device; waiting for `requestAccess()`. |
+ * | `'opening'` | Opening the port is in progress. |
+ * | `'open'` | The port is open and being read. |
+ * | `'reconnecting'` | The connection was lost, and the next attempt is scheduled. |
+ * | `'failed'` | `maxAttempts` attempts failed; revived when the device is plugged in again. |
+ * | `'stopped'` | This tab stopped holding the port. |
+ */
 export type ConnectionStateName = (typeof CONNECTION_STATES)[number];
 
 /** The settings a configuration is actually running with, every default applied. */
@@ -179,40 +192,63 @@ export interface ObservedEventBase {
   readonly timestamp: number;
 }
 
-/** Something that happened to a watched configuration, somewhere on the origin. */
+/** The device sent data. */
+export interface ObservedReceived extends ObservedEventBase {
+  /** Always `'received'`. */
+  readonly kind: 'received';
+  /** The bytes exactly as the device produced them. */
+  readonly data: Uint8Array;
+  /** The decoded text, when the owner's configuration decodes text. */
+  readonly text: string | undefined;
+}
+
+/** Bytes were handed to the device. */
+export interface ObservedSent extends ObservedEventBase {
+  /** Always `'sent'`. */
+  readonly kind: 'sent';
+  /** The bytes that were written. */
+  readonly data: Uint8Array;
+  /** The context whose write this was. */
+  readonly originClientId: string;
+}
+
+/** The connection status changed. */
+export interface ObservedStatus extends ObservedEventBase {
+  /** Always `'status'`. */
+  readonly kind: 'status';
+  /** The status now in effect. */
+  readonly status: SerialBrokerStatus;
+}
+
+/** Something went wrong. */
+export interface ObservedError extends ObservedEventBase {
+  /** Always `'error'`. */
+  readonly kind: 'error';
+  /** The error, rebuilt with its code, context and remediation. */
+  readonly error: SerialBrokerError;
+}
+
+/** A context took the port, or gave it up. That context is `from`. */
+export interface ObservedOwnership extends ObservedEventBase {
+  /** `'owner-claimed'` or `'owner-released'`. */
+  readonly kind: 'owner-claimed' | 'owner-released';
+}
+
+/**
+ * Something that happened to a watched configuration, somewhere on the origin.
+ *
+ * Tell the kinds apart by `kind`:
+ *
+ * | `kind` | Type | What happened |
+ * | --- | --- | --- |
+ * | `'received'` | {@link ObservedReceived} | The device sent data. |
+ * | `'sent'` | {@link ObservedSent} | Bytes were handed to the device. |
+ * | `'status'` | {@link ObservedStatus} | The connection status changed. |
+ * | `'error'` | {@link ObservedError} | Something went wrong. |
+ * | `'owner-claimed'`, `'owner-released'` | {@link ObservedOwnership} | A tab took the port, or gave it up. |
+ */
 export type ObservedEvent =
-  | (ObservedEventBase & {
-      /** The device sent data. */
-      readonly kind: 'received';
-      /** The bytes exactly as the device produced them. */
-      readonly data: Uint8Array;
-      /** The decoded text, when the owner's configuration decodes text. */
-      readonly text: string | undefined;
-    })
-  | (ObservedEventBase & {
-      /** Bytes were handed to the device. */
-      readonly kind: 'sent';
-      /** The bytes that were written. */
-      readonly data: Uint8Array;
-      /** The context whose write this was. */
-      readonly originClientId: string;
-    })
-  | (ObservedEventBase & {
-      /** The connection status changed. */
-      readonly kind: 'status';
-      /** The status now in effect. */
-      readonly status: SerialBrokerStatus;
-    })
-  | (ObservedEventBase & {
-      /** Something went wrong. */
-      readonly kind: 'error';
-      /** The error, rebuilt with its code, context and remediation. */
-      readonly error: SerialBrokerError;
-    })
-  | (ObservedEventBase & {
-      /** A context took the port, or gave it up. */
-      readonly kind: 'owner-claimed' | 'owner-released';
-    });
+  ObservedReceived | ObservedSent | ObservedStatus | ObservedError | ObservedOwnership;
 
 /**
  * Describes a normalised configuration as the settings it runs with.

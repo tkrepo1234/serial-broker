@@ -4,6 +4,8 @@
  * These are part of the public API: applications branch on `error.code`, never on
  * `error.message`. Adding a code is a minor change; renaming or repurposing one is breaking.
  * See ADR-0012 and docs/guidelines/error-handling.md.
+ *
+ * @enum
  */
 export const SerialBrokerErrorCode = {
   // --- Caller mistakes -------------------------------------------------------------------
