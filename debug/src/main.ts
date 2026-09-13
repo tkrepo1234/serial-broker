@@ -289,18 +289,44 @@ function remembered(): RememberedConfiguration[] {
   }));
 }
 
+/**
+ * One thing the browser has or lacks, as a status dot and its name.
+ *
+ * @param whenMissing - The dot for a missing capability: `failed` when serial-broker cannot work
+ *   without it, `connecting` (the warning colour) when something else can stand in.
+ */
+function capability(
+  label: string,
+  isPresent: boolean,
+  whenMissing: 'failed' | 'connecting' = 'failed',
+): HTMLLIElement {
+  return element('li', { title: `${label}: ${isPresent ? 'available' : 'not available'}` }, [
+    element('span', { className: `dot ${isPresent ? 'open' : whenMissing}` }),
+    isPresent ? label : `${label} (not available)`,
+  ]);
+}
+
 async function renderFacts(): Promise<void> {
-  const check = (label: string, isPresent: boolean): string => `${isPresent ? '✓' : '✗'} ${label}`;
-  const facts: [string, string][] = [
+  const hasSharedWorker = typeof SharedWorker !== 'undefined';
+  const hasBroadcastChannel = typeof BroadcastChannel !== 'undefined';
+  // Either bus will do, so one that is missing is only a warning while the other exists.
+  const missingBus = hasSharedWorker || hasBroadcastChannel ? 'connecting' : 'failed';
+
+  const facts: [string, string | Node][] = [
     [
       'Browser',
-      [
-        check('secure context', window.isSecureContext),
-        check('Web Serial', 'serial' in navigator),
-        check('Web Locks', 'locks' in navigator),
-        check('SharedWorker', typeof SharedWorker !== 'undefined'),
-        check('BroadcastChannel', typeof BroadcastChannel !== 'undefined'),
-      ].join('   '),
+      element('ul', { className: 'capabilities' }, [
+        capability('secure context', window.isSecureContext),
+        capability('Web Serial', 'serial' in navigator),
+        capability('Web Locks', 'locks' in navigator),
+      ]),
+    ],
+    [
+      'Message bus',
+      element('ul', { className: 'capabilities' }, [
+        capability('SharedWorker', hasSharedWorker, missingBus),
+        capability('BroadcastChannel', hasBroadcastChannel, missingBus),
+      ]),
     ],
     [
       'This tab',
@@ -315,7 +341,7 @@ async function renderFacts(): Promise<void> {
   byId('facts').replaceChildren(
     ...facts.flatMap(([term, value]) => [
       element('dt', { text: term }),
-      element('dd', { text: value }),
+      typeof value === 'string' ? element('dd', { text: value }) : element('dd', {}, [value]),
     ]),
   );
 }
