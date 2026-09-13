@@ -6,9 +6,7 @@ import {
   SWEEP_INTERVAL_MS,
 } from '../../../src/protocol/heartbeat.js';
 import { BrowserHarness } from '../../harness/browser-harness.js';
-
-const READER = { vendorId: 0x1a86, productId: 0x7523 };
-const OPTIONS = { device: READER, serial: { baudRate: 9600 } };
+import { READER, READER_OPTIONS } from '../../harness/devices.js';
 
 /**
  * Tabs that die without saying goodbye, as the worker experiences them (ADR-0021).
@@ -27,9 +25,9 @@ describe('tabs on the SharedWorker', () => {
     const device = harness.serial.addDevice(READER.vendorId, READER.productId);
     harness.serial.grant(device);
     const owner = harness.openTab();
-    await owner.setup('Reader', OPTIONS);
+    await owner.setup('Reader', READER_OPTIONS);
     const other = harness.openTab();
-    await other.setup('Reader', OPTIONS);
+    await other.setup('Reader', READER_OPTIONS);
     return { harness, device, owner, other };
   }
 

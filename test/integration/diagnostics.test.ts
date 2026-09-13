@@ -1,20 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import { SerialBrokerErrorCode } from '../../src/core/error-codes.js';
-import type { LogFields, Logger, LogLevel } from '../../src/core/types.js';
 import { SerialBrokerStatus } from '../../src/core/types.js';
 import { BrowserHarness } from '../harness/browser-harness.js';
-
-const READER = { vendorId: 0x1a86, productId: 0x7523 };
-const OPTIONS = { device: READER, serial: { baudRate: 9600 } };
-
-function recordingLogger(): { logger: Logger; records: [LogLevel, string, LogFields][] } {
-  const records: [LogLevel, string, LogFields][] = [];
-  return {
-    logger: { log: (level, message, fields) => records.push([level, message, fields]) },
-    records,
-  };
-}
+import { READER, READER_OPTIONS } from '../harness/devices.js';
+import { recordingLogger } from '../harness/recording-logger.js';
 
 /**
  * What an operator sees when something goes wrong.
@@ -33,14 +23,14 @@ describe('error reporting', () => {
     const device = harness.serial.addDevice(READER.vendorId, READER.productId);
     harness.serial.grant(device);
     const tab = harness.openTab();
-    await tab.setup('Reader', OPTIONS);
+    await tab.setup('Reader', READER_OPTIONS);
     return { harness, device, tab };
   }
 
   it('reports a failed write to the caller and to every tab', async () => {
     const { harness, device, tab } = await connectedTab();
     const peer = harness.openTab();
-    await peer.setup('Reader', OPTIONS);
+    await peer.setup('Reader', READER_OPTIONS);
     device.faults.failWriteWith = 'NetworkError';
 
     await expect(tab.client.send('Reader', 'x')).rejects.toMatchObject({
@@ -72,7 +62,7 @@ describe('error reporting', () => {
   it('rebuilds an error raised in another tab faithfully', async () => {
     const { harness, device, tab } = await connectedTab();
     const peer = harness.openTab();
-    await peer.setup('Reader', OPTIONS);
+    await peer.setup('Reader', READER_OPTIONS);
     device.faults.failWriteWith = 'NetworkError';
 
     await tab.client.send('Reader', 'x').catch(() => undefined);
@@ -87,7 +77,7 @@ describe('error reporting', () => {
   it('reports an error exactly once per tab', async () => {
     const { harness, device } = await connectedTab();
     const peer = harness.openTab();
-    await peer.setup('Reader', OPTIONS);
+    await peer.setup('Reader', READER_OPTIONS);
 
     harness.serial.unplug(device);
     await harness.settle();
@@ -167,7 +157,7 @@ describe('error reporting', () => {
     const harness = new BrowserHarness();
     harness.serial.addDevice(READER.vendorId, READER.productId);
     const tab = harness.openTab();
-    await tab.setup('Reader', { ...OPTIONS, connection: { writeTimeoutMs: 1_000 } });
+    await tab.setup('Reader', { ...READER_OPTIONS, connection: { writeTimeoutMs: 1_000 } });
 
     const outcome = tab.client.send('Reader', 'x').catch((reason: unknown) => reason);
     await harness.advance(1_000);
@@ -189,9 +179,9 @@ describe('error reporting', () => {
     const harness = new BrowserHarness();
     harness.serial.addDevice(READER.vendorId, READER.productId);
     const owner = harness.openTab();
-    await owner.setup('Reader', OPTIONS);
+    await owner.setup('Reader', READER_OPTIONS);
     const peer = harness.openTab();
-    await peer.setup('Reader', OPTIONS);
+    await peer.setup('Reader', READER_OPTIONS);
 
     // Only the tab that will hold the port can act on the picker's result, so asking from
     // anywhere else would prompt the user for nothing.
@@ -203,7 +193,7 @@ describe('error reporting', () => {
   it('does nothing when access is requested for a port that is already open', async () => {
     const { harness, tab } = await connectedTab();
     const peer = harness.openTab();
-    await peer.setup('Reader', OPTIONS);
+    await peer.setup('Reader', READER_OPTIONS);
 
     await expect(peer.client.requestAccess('Reader')).resolves.toBe(true);
     expect(tab.client.getStatus('Reader').status).toBe(SerialBrokerStatus.Open);
@@ -218,7 +208,7 @@ describe('logging', () => {
 
     // No logger configured. A library that writes to the host console uninvited is a bad
     // citizen, and the absence of output is the behaviour being asserted.
-    await expect(tab.setup('Reader', OPTIONS)).resolves.toBeUndefined();
+    await expect(tab.setup('Reader', READER_OPTIONS)).resolves.toBeUndefined();
   });
 
   it('records lifecycle milestones with correlating fields', async () => {
@@ -226,7 +216,7 @@ describe('logging', () => {
     const harness = new BrowserHarness({ logger });
     harness.serial.grant(harness.serial.addDevice(READER.vendorId, READER.productId));
     const tab = harness.openTab();
-    await tab.setup('Reader', OPTIONS);
+    await tab.setup('Reader', READER_OPTIONS);
 
     const milestones = records.filter(([level]) => level === 'info').map(([, message]) => message);
     expect(milestones).toContain('configuration registered');
@@ -244,7 +234,7 @@ describe('logging', () => {
     const device = harness.serial.addDevice(READER.vendorId, READER.productId);
     harness.serial.grant(device);
     const tab = harness.openTab();
-    await tab.setup('Reader', OPTIONS);
+    await tab.setup('Reader', READER_OPTIONS);
 
     await tab.client.send('Reader', 'PIN=1234');
     device.emit('CARD=5555444433332222');
@@ -266,7 +256,7 @@ describe('logging', () => {
     const device = harness.serial.addDevice(READER.vendorId, READER.productId);
     harness.serial.grant(device);
     const tab = harness.openTab();
-    await tab.setup('Reader', OPTIONS);
+    await tab.setup('Reader', READER_OPTIONS);
 
     await tab.client.send('Reader', 'PIN=1234');
     device.emit('CARD=5555');
@@ -288,7 +278,7 @@ describe('logging', () => {
     const device = harness.serial.addDevice(READER.vendorId, READER.productId);
     harness.serial.grant(device);
     const tab = harness.openTab();
-    await tab.setup('Reader', OPTIONS);
+    await tab.setup('Reader', READER_OPTIONS);
 
     await tab.client.send('Reader', 'AT');
     await harness.settle();
@@ -302,7 +292,7 @@ describe('logging', () => {
     const device = harness.serial.addDevice(READER.vendorId, READER.productId);
     harness.serial.grant(device);
     const tab = harness.openTab();
-    await tab.setup('Reader', OPTIONS);
+    await tab.setup('Reader', READER_OPTIONS);
 
     harness.serial.unplug(device);
     await harness.settle();

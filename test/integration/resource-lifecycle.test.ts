@@ -4,10 +4,8 @@ import { SerialBrokerErrorCode } from '../../src/core/error-codes.js';
 import { mapOpenError, mapRequestPortError } from '../../src/owner/serial-errors.js';
 import { ownerLockName } from '../../src/protocol/version.js';
 import { BrowserHarness } from '../harness/browser-harness.js';
+import { READER, READER_OPTIONS } from '../harness/devices.js';
 import { domException } from '../harness/fake-serial.js';
-
-const READER = { vendorId: 0x1a86, productId: 0x7523 };
-const OPTIONS = { device: READER, serial: { baudRate: 9600 } };
 
 /**
  * Row 16 of the scenario matrix: rapid setup/release churn leaks nothing.
@@ -26,7 +24,7 @@ describe('resource lifecycle', () => {
     const tab = harness.openTab();
 
     for (let round = 0; round < 10; round += 1) {
-      await tab.client.setup('Reader', OPTIONS);
+      await tab.client.setup('Reader', READER_OPTIONS);
       await harness.settle();
       await tab.client.release('Reader');
       await harness.settle();
@@ -47,7 +45,7 @@ describe('resource lifecycle', () => {
 
     for (let round = 0; round < 5; round += 1) {
       for (const tab of tabs) {
-        await tab.client.setup('Reader', OPTIONS);
+        await tab.client.setup('Reader', READER_OPTIONS);
       }
       await harness.settle();
       for (const tab of tabs) {
@@ -70,12 +68,12 @@ describe('resource lifecycle', () => {
     harness.serial.grant(device);
     const tab = harness.openTab();
 
-    await tab.setup('Reader', OPTIONS);
+    await tab.setup('Reader', READER_OPTIONS);
     const received: unknown[] = [];
     tab.client.subscribe('Reader', 'onReceive', (event) => received.push(event));
 
     await tab.client.release('Reader');
-    await tab.client.setup('Reader', OPTIONS);
+    await tab.client.setup('Reader', READER_OPTIONS);
     await harness.settle();
     device.emit('after the churn');
     await harness.settle();
@@ -92,7 +90,7 @@ describe('resource lifecycle', () => {
     const tab = harness.openTab();
 
     for (let round = 0; round < 5; round += 1) {
-      await tab.client.setup('Reader', OPTIONS);
+      await tab.client.setup('Reader', READER_OPTIONS);
       await harness.settle();
       await tab.client.release('Reader');
       await harness.settle();
@@ -109,7 +107,7 @@ describe('resource lifecycle', () => {
     device.faults.failOpenWith = 'NetworkError';
     const tab = harness.openTab();
 
-    await tab.setup('Reader', OPTIONS);
+    await tab.setup('Reader', READER_OPTIONS);
     await harness.advance(1_000);
     expect(harness.clock.pendingTimerCount).toBeGreaterThan(0);
 
@@ -128,7 +126,7 @@ describe('resource lifecycle', () => {
     harness.serial.grant(harness.serial.addDevice(0x0403, 0x6001));
     const tab = harness.openTab();
 
-    await tab.client.setup('Reader', OPTIONS);
+    await tab.client.setup('Reader', READER_OPTIONS);
     await tab.client.setup('Scale', {
       device: { vendorId: 0x0403, productId: 0x6001 },
       serial: { baudRate: 19_200 },

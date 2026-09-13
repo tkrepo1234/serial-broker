@@ -10,9 +10,8 @@ import { SerialBrokerErrorCode } from '../../../src/core/error-codes.js';
 import { SerialBrokerStatus } from '../../../src/core/types.js';
 import { ownerLockName } from '../../../src/protocol/version.js';
 import { BrowserHarness, TRANSPORT_MODES } from '../../harness/browser-harness.js';
+import { READER, READER_OPTIONS } from '../../harness/devices.js';
 
-const READER = { vendorId: 0x1a86, productId: 0x7523 };
-const OPTIONS = { device: READER, serial: { baudRate: 9600 } };
 const WINDOW_MS = 100;
 
 /**
@@ -34,9 +33,9 @@ describe.each(TRANSPORT_MODES)('diagnostics observer (%s)', (transport) => {
     const device = harness.serial.addDevice(READER.vendorId, READER.productId);
     harness.serial.grant(device);
     const owner = harness.openTab();
-    await owner.setup('Reader', OPTIONS);
+    await owner.setup('Reader', READER_OPTIONS);
     const peer = harness.openTab();
-    await peer.setup('Reader', OPTIONS);
+    await peer.setup('Reader', READER_OPTIONS);
     return { harness, device, owner, peer };
   }
 
@@ -115,7 +114,7 @@ describe.each(TRANSPORT_MODES)('diagnostics observer (%s)', (transport) => {
     harness.serial.grant(device);
     device.faults.failOpenWith = 'NetworkError';
     const tab = harness.openTab();
-    await tab.setup('Reader', OPTIONS);
+    await tab.setup('Reader', READER_OPTIONS);
     const observer = harness.openObserver();
 
     // The first retry is immediate and fails as well, so the second is scheduled after the
@@ -200,7 +199,7 @@ describe.each(TRANSPORT_MODES)('diagnostics observer (%s)', (transport) => {
     const harness = new BrowserHarness({ transport });
     harness.serial.grant(harness.serial.addDevice(READER.vendorId, READER.productId));
     const tab = harness.openTab();
-    await tab.setup('Reader', OPTIONS);
+    await tab.setup('Reader', READER_OPTIONS);
     const observer = harness.openObserver();
     observer.watch('Reader', () => undefined);
     await collect(harness, observer);

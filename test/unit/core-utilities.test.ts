@@ -12,9 +12,10 @@ import { DisposalStack } from '../../src/core/disposable.js';
 import { SerialBrokerErrorCode } from '../../src/core/error-codes.js';
 import { SerialBrokerError } from '../../src/core/errors.js';
 import { NOOP_LOGGER, ScopedLogger } from '../../src/core/logger.js';
-import type { LogFields, Logger, LogLevel } from '../../src/core/types.js';
+import type { Logger } from '../../src/core/types.js';
 import { WriteQueue } from '../../src/owner/write-queue.js';
 import { FakeClock } from '../harness/fake-clock.js';
+import { recordingLogger } from '../harness/recording-logger.js';
 
 describe('assertNever', () => {
   it('reports an unhandled union member', () => {
@@ -278,14 +279,6 @@ describe('WriteQueue', () => {
 });
 
 describe('ScopedLogger', () => {
-  function recordingLogger(): { logger: Logger; records: [LogLevel, string, LogFields][] } {
-    const records: [LogLevel, string, LogFields][] = [];
-    return {
-      logger: { log: (level, message, fields) => records.push([level, message, fields]) },
-      records,
-    };
-  }
-
   it('attaches its scope to every record', () => {
     const { logger, records } = recordingLogger();
 

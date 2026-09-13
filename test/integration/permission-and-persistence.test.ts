@@ -4,9 +4,7 @@ import { SerialBrokerErrorCode } from '../../src/core/error-codes.js';
 import { SerialBrokerStatus } from '../../src/core/types.js';
 import { storageKey } from '../../src/protocol/version.js';
 import { BrowserHarness } from '../harness/browser-harness.js';
-
-const READER = { vendorId: 0x1a86, productId: 0x7523 };
-const OPTIONS = { device: READER, serial: { baudRate: 9600 } };
+import { READER, READER_OPTIONS } from '../harness/devices.js';
 
 /**
  * Remembering a device across visits.
@@ -21,7 +19,7 @@ describe('permission and persistence', () => {
     harness.serial.addDevice(READER.vendorId, READER.productId);
 
     const tab = harness.openTab();
-    await tab.setup('Reader', OPTIONS);
+    await tab.setup('Reader', READER_OPTIONS);
 
     // Not an error: the user has simply never granted this device, and the browser will not
     // show a picker outside a user gesture. The application has to ask.
@@ -33,7 +31,7 @@ describe('permission and persistence', () => {
     const device = harness.serial.addDevice(READER.vendorId, READER.productId);
 
     const tab = harness.openTab();
-    await tab.setup('Reader', OPTIONS);
+    await tab.setup('Reader', READER_OPTIONS);
 
     harness.serial.pickerQueue.push(device);
     const granted = await tab.client.requestAccess('Reader');
@@ -48,7 +46,7 @@ describe('permission and persistence', () => {
     harness.serial.addDevice(READER.vendorId, READER.productId);
 
     const tab = harness.openTab();
-    await tab.setup('Reader', OPTIONS);
+    await tab.setup('Reader', READER_OPTIONS);
 
     // The picker queue is empty, so the user dismisses it. Throwing here would force every
     // caller to write a try/catch around the ordinary case.
@@ -60,7 +58,7 @@ describe('permission and persistence', () => {
     const wrongDevice = harness.serial.addDevice(0x0403, 0x6001);
 
     const tab = harness.openTab();
-    await tab.setup('Reader', OPTIONS);
+    await tab.setup('Reader', READER_OPTIONS);
     // A browser applies the filters and would not offer this device. The check behind them
     // still has to hold, should one offer it anyway.
     harness.serial.ignoresFilters = true;
@@ -76,7 +74,7 @@ describe('permission and persistence', () => {
     const wrongDevice = harness.serial.addDevice(0x0403, 0x6001);
 
     const tab = harness.openTab();
-    await tab.setup('Reader', OPTIONS);
+    await tab.setup('Reader', READER_OPTIONS);
     harness.serial.pickerQueue.push(wrongDevice);
 
     // The picker filters by the configured USB IDs, so the user can only dismiss it.
@@ -89,7 +87,7 @@ describe('permission and persistence', () => {
     harness.serial.grant(device);
 
     const tab = harness.openTab();
-    await tab.setup('Reader', OPTIONS);
+    await tab.setup('Reader', READER_OPTIONS);
 
     // The permission is the browser's and survives the reload; `getPorts()` returns the
     // device with no gesture and no picker.
@@ -103,7 +101,7 @@ describe('permission and persistence', () => {
     harness.serial.grant(device);
 
     const first = harness.openTab();
-    await first.setup('Reader', OPTIONS);
+    await first.setup('Reader', READER_OPTIONS);
     await first.close();
 
     const reloaded = harness.openTab();
@@ -120,12 +118,12 @@ describe('permission and persistence', () => {
     harness.serial.grant(device);
 
     const tab = harness.openTab();
-    await tab.setup('Reader', OPTIONS);
+    await tab.setup('Reader', READER_OPTIONS);
     await tab.client.release('Reader');
 
     // Releasing a configuration must not cost the user their grant, or every release would
     // mean another click the next time.
-    await tab.setup('Reader', OPTIONS);
+    await tab.setup('Reader', READER_OPTIONS);
     expect(tab.client.getStatus('Reader').status).toBe(SerialBrokerStatus.Open);
   });
 
@@ -135,10 +133,10 @@ describe('permission and persistence', () => {
     harness.serial.grant(device);
 
     const tab = harness.openTab();
-    await tab.setup('Reader', OPTIONS);
+    await tab.setup('Reader', READER_OPTIONS);
     await tab.client.release('Reader', { forgetDevice: true });
 
-    await tab.setup('Reader', OPTIONS);
+    await tab.setup('Reader', READER_OPTIONS);
     expect(tab.client.getStatus('Reader').status).toBe(SerialBrokerStatus.AwaitingPermission);
   });
 
@@ -148,7 +146,7 @@ describe('permission and persistence', () => {
     harness.serial.grant(device);
 
     const tab = harness.openTab();
-    await tab.setup('Reader', OPTIONS);
+    await tab.setup('Reader', READER_OPTIONS);
     await tab.client.release('Reader');
     await tab.close();
 
@@ -162,7 +160,7 @@ describe('permission and persistence', () => {
     harness.serial.grant(device);
 
     const tab = harness.openTab();
-    await tab.setup('Reader', { ...OPTIONS, persist: false });
+    await tab.setup('Reader', { ...READER_OPTIONS, persist: false });
     await tab.close();
 
     const reloaded = harness.openTab();
@@ -206,7 +204,7 @@ describe('permission and persistence', () => {
     harness.storage.isUnavailable = true;
 
     const tab = harness.openTab();
-    await tab.setup('Reader', OPTIONS);
+    await tab.setup('Reader', READER_OPTIONS);
 
     // A private window or a sandboxed iframe loses persistence, not the device.
     expect(tab.client.getStatus('Reader').status).toBe(SerialBrokerStatus.Open);

@@ -2,9 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { SerialBrokerStatus } from '../../../src/core/types.js';
 import { BrowserHarness } from '../../harness/browser-harness.js';
-
-const CARD_READER = { vendorId: 0x1a86, productId: 0x7523 };
-const OPTIONS = { device: CARD_READER, serial: { baudRate: 9600 } };
+import { READER, READER_OPTIONS } from '../../harness/devices.js';
 
 /**
  * A worker script that was not deployed, or is served from the wrong path (ADR-0007).
@@ -22,13 +20,13 @@ describe('tabs whose worker script fails to load', () => {
     other: ReturnType<BrowserHarness['openTab']>;
   }> {
     const harness = new BrowserHarness({ transport: 'sharedworker', workerScript: 'fails' });
-    const device = harness.serial.addDevice(CARD_READER.vendorId, CARD_READER.productId);
+    const device = harness.serial.addDevice(READER.vendorId, READER.productId);
     harness.serial.grant(device);
 
     const owner = harness.openTab();
-    await owner.setup('CardReader', OPTIONS);
+    await owner.setup('CardReader', READER_OPTIONS);
     const other = harness.openTab();
-    await other.setup('CardReader', OPTIONS);
+    await other.setup('CardReader', READER_OPTIONS);
 
     return { harness, device, owner, other };
   }

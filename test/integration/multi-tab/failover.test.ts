@@ -5,9 +5,7 @@ import { SerialBrokerError } from '../../../src/core/errors.js';
 import { SerialBrokerStatus } from '../../../src/core/types.js';
 import { ownerLockName } from '../../../src/protocol/version.js';
 import { BrowserHarness, TRANSPORT_MODES } from '../../harness/browser-harness.js';
-
-const READER = { vendorId: 0x1a86, productId: 0x7523 };
-const OPTIONS = { device: READER, serial: { baudRate: 9600 } };
+import { READER, READER_OPTIONS } from '../../harness/devices.js';
 
 /**
  * What happens when the tab holding the port goes away.
@@ -29,9 +27,9 @@ describe.each(TRANSPORT_MODES)('ownership failover (%s)', (transport) => {
     harness.serial.grant(device);
 
     const owner = harness.openTab();
-    await owner.setup('Reader', OPTIONS);
+    await owner.setup('Reader', READER_OPTIONS);
     const peer = harness.openTab();
-    await peer.setup('Reader', OPTIONS);
+    await peer.setup('Reader', READER_OPTIONS);
 
     return { harness, device, owner, peer };
   }
@@ -99,7 +97,7 @@ describe.each(TRANSPORT_MODES)('ownership failover (%s)', (transport) => {
     device.faults.failOpenTimes = 1;
 
     const tab = harness.openTab();
-    await tab.setup('Reader', OPTIONS);
+    await tab.setup('Reader', READER_OPTIONS);
     expect(tab.client.getStatus('Reader').status).toBe(SerialBrokerStatus.Reconnecting);
 
     const write = tab.client.send('Reader', 'HELD');
@@ -154,7 +152,7 @@ describe.each(TRANSPORT_MODES)('ownership failover (%s)', (transport) => {
     expect(harness.locks.holderOf(ownerLockName('Reader'))).toBeUndefined();
 
     const returning = harness.openTab();
-    await returning.setup('Reader', OPTIONS);
+    await returning.setup('Reader', READER_OPTIONS);
 
     expect(harness.locks.holderOf(ownerLockName('Reader'))).toBe(returning.id);
     // Three opens: the first tab, the successor after the first closed, and this one.

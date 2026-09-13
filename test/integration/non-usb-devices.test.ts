@@ -5,12 +5,9 @@ import { SerialBrokerStatus } from '../../src/core/types.js';
 import { normalizeConfiguration } from '../../src/core/validation.js';
 import { matchesDevice, toRequestOptions } from '../../src/owner/port-matcher.js';
 import { BrowserHarness } from '../harness/browser-harness.js';
+import { READER, READER_OPTIONS } from '../harness/devices.js';
 
 const ANY_DEVICE = { device: { any: true }, serial: { baudRate: 9600 } } as const;
-const USB_DEVICE = {
-  device: { vendorId: 0x1a86, productId: 0x7523 },
-  serial: { baudRate: 9600 },
-};
 
 /**
  * Ports that report no USB identity at all.
@@ -124,11 +121,13 @@ describe('the device filter', () => {
   });
 
   it('matches only the configured device when it names one', () => {
-    const configuration = normalizeConfiguration('Reader', USB_DEVICE);
+    const configuration = normalizeConfiguration('Reader', READER_OPTIONS);
 
     expect(
       matchesDevice(
-        { getInfo: () => ({ usbVendorId: 0x1a86, usbProductId: 0x7523 }) } as unknown as SerialPort,
+        {
+          getInfo: () => ({ usbVendorId: READER.vendorId, usbProductId: READER.productId }),
+        } as unknown as SerialPort,
         configuration,
       ),
     ).toBe(true);
@@ -174,9 +173,9 @@ describe('the device filter', () => {
 
   it('refuses to turn a USB configuration into a wildcard one', async () => {
     const harness = new BrowserHarness();
-    harness.serial.grant(harness.serial.addDevice(0x1a86, 0x7523));
+    harness.serial.grant(harness.serial.addDevice(READER.vendorId, READER.productId));
     const tab = harness.openTab();
-    await tab.client.setup('Reader', USB_DEVICE);
+    await tab.client.setup('Reader', READER_OPTIONS);
 
     // One of the two would open a port the other never asked for.
     await expect(tab.client.setup('Reader', ANY_DEVICE)).rejects.toMatchObject({

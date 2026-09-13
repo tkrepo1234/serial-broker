@@ -5,12 +5,12 @@ import {
   MAX_REPLAYED_MESSAGES,
 } from '../../src/client/transport/fallback-transport.js';
 import type { WorkerStartup } from '../../src/client/transport/shared-worker-transport.js';
-import type { Transport, TransportRequest } from '../../src/client/transport/transport.js';
-import { ScopedLogger } from '../../src/core/logger.js';
-import type { LogFields, LogLevel } from '../../src/core/types.js';
+import type { Transport } from '../../src/client/transport/transport.js';
+import type { LogFields } from '../../src/core/types.js';
 import type { ClientId, ProtocolMessage } from '../../src/protocol/messages.js';
 import { PROTOCOL_VERSION } from '../../src/protocol/version.js';
-import { FakeClock } from '../harness/fake-clock.js';
+import { type LogRecord, recordingLogger } from '../harness/recording-logger.js';
+import { recordTransportRequest } from '../harness/transport-doubles.js';
 
 const SELF = 'self' as ClientId;
 
@@ -72,24 +72,13 @@ function setUp(options: { fallbackThrows?: boolean } = {}): {
   transport: FallbackTransport;
   worker: RecordingTransport;
   fallback: RecordingTransport;
-  logs: { level: LogLevel; fields: LogFields }[];
+  records: LogRecord[];
   transportErrors: unknown[];
   ready: () => void;
   failToLoad: () => void;
 } {
-  const logs: { level: LogLevel; fields: LogFields }[] = [];
-  const transportErrors: unknown[] = [];
-  const request: TransportRequest = {
-    clientId: SELF,
-    onMessage: () => undefined,
-    onDecodeFailure: () => undefined,
-    onTransportError: (error) => transportErrors.push(error),
-    clock: new FakeClock(),
-    logger: new ScopedLogger(
-      { log: (level, _message, fields) => logs.push({ level, fields }) },
-      {},
-    ),
-  };
+  const { logger, records } = recordingLogger();
+  const { request, transportErrors } = recordTransportRequest(SELF, logger);
 
   const worker = new RecordingTransport('sharedworker');
   const fallback = new RecordingTransport('broadcastchannel');
@@ -113,7 +102,7 @@ function setUp(options: { fallbackThrows?: boolean } = {}): {
     transport,
     worker,
     fallback,
-    logs,
+    records,
     transportErrors,
     ready: () => startup?.onReady(),
     failToLoad: () => startup?.onLoadFailed(LOAD_ERROR),
@@ -171,21 +160,22 @@ describe('FallbackTransport', () => {
   });
 
   it('logs the fallback with how much was replayed', () => {
-    const { transport, logs, failToLoad } = setUp();
+    const { transport, records, failToLoad } = setUp();
     transport.send(statusRequest());
     transport.send(statusRequest());
 
     failToLoad();
 
-    expect(logs).toContainEqual({
-      level: 'warn',
-      fields: expect.objectContaining({
+    expect(records).toContainEqual([
+      'warn',
+      expect.any(String),
+      expect.objectContaining({
         event: 'environment.transport-fallback',
         reason: 'worker-script-failed',
         replayedMessages: 2,
         droppedMessages: 0,
       }) as LogFields,
-    });
+    ]);
   });
 
   it('forgets what it kept once the broker has answered, and never falls back after that', () => {
@@ -201,7 +191,7 @@ describe('FallbackTransport', () => {
   });
 
   it('bounds the traffic it keeps, never the messages other tabs wait for', () => {
-    const { transport, fallback, logs, failToLoad } = setUp();
+    const { transport, fallback, records, failToLoad } = setUp();
     for (let index = 0; index < MAX_REPLAYED_MESSAGES + 5; index += 1) {
       transport.send(dataReceived());
     }
@@ -214,7 +204,7 @@ describe('FallbackTransport', () => {
       fallback.operations.filter((operation) => operation === 'send data-received'),
     ).toHaveLength(MAX_REPLAYED_MESSAGES);
     expect(fallback.operations.slice(-2)).toEqual(['send status-request', 'attach Reader']);
-    expect(logs.at(-1)?.fields).toMatchObject({ droppedMessages: 5 });
+    expect(records.at(-1)?.[2]).toMatchObject({ droppedMessages: 5 });
   });
 
   it('does not fall back once closed', () => {

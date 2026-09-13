@@ -3,9 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { chunkBytes, copyBytes } from '../../src/core/bytes.js';
 import { SerialBrokerError } from '../../src/core/errors.js';
 import { BrowserHarness } from '../harness/browser-harness.js';
-
-const READER = { vendorId: 0x1a86, productId: 0x7523 };
-const OPTIONS = { device: READER, serial: { baudRate: 9600 } };
+import { READER, READER_OPTIONS } from '../harness/devices.js';
 
 /** A connected tab, since every test here needs one. */
 async function connectedTab(options: Record<string, unknown> = {}): Promise<{
@@ -17,7 +15,7 @@ async function connectedTab(options: Record<string, unknown> = {}): Promise<{
   const device = harness.serial.addDevice(READER.vendorId, READER.productId);
   harness.serial.grant(device);
   const tab = harness.openTab();
-  await tab.setup('Reader', { ...OPTIONS, ...options });
+  await tab.setup('Reader', { ...READER_OPTIONS, ...options });
   return { harness, device, tab };
 }
 
@@ -165,7 +163,7 @@ describe('receiving', () => {
   it('delivers decoded text to peer tabs as well', async () => {
     const { harness, device, tab } = await connectedTab({ encoding: { decodeText: true } });
     const peer = harness.openTab();
-    await peer.setup('Reader', { ...OPTIONS, encoding: { decodeText: true } });
+    await peer.setup('Reader', { ...READER_OPTIONS, encoding: { decodeText: true } });
 
     device.emit('shared');
     await harness.settle();

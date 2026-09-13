@@ -1,12 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { SerialBrokerErrorCode } from '../../src/core/error-codes.js';
-import type { LogFields, Logger, LogLevel } from '../../src/core/types.js';
 import { SerialBrokerStatus } from '../../src/core/types.js';
 import { SerialBroker } from '../../src/serial-broker.js';
-
-const DEVICE = { vendorId: 0x1a86, productId: 0x7523 };
-const OPTIONS = { device: DEVICE, serial: { baudRate: 9600 } };
+import { READER, READER_OPTIONS } from '../harness/devices.js';
+import { FakeLockManager } from '../harness/fake-locks.js';
+import { FakeSerialRegistry, type FakeDevice } from '../harness/fake-serial.js';
+import { fieldsOfEvent, recordingLogger } from '../harness/recording-logger.js';
 
 /**
  * The zero-argument singleton an application actually imports.
@@ -16,50 +16,23 @@ const OPTIONS = { device: DEVICE, serial: { baudRate: 9600 } };
  * the module must not touch a global are all behaviour worth pinning down.
  */
 
-/** A minimal but faithful stand-in for the platform, good enough to open one port. */
-function stubPlatform(): { written: Uint8Array[]; emit: (bytes: Uint8Array) => void } {
-  const written: Uint8Array[] = [];
-  let push: (bytes: Uint8Array) => void = () => undefined;
-
-  const port = {
-    getInfo: () => ({ usbVendorId: DEVICE.vendorId, usbProductId: DEVICE.productId }),
-    readable: null as ReadableStream<Uint8Array> | null,
-    writable: null as WritableStream<Uint8Array> | null,
-    open: async (): Promise<void> => {
-      port.readable = new ReadableStream<Uint8Array>({
-        start: (controller) => {
-          push = (bytes) => controller.enqueue(bytes);
-        },
-      });
-      port.writable = new WritableStream<Uint8Array>({
-        write: (chunk) => {
-          written.push(new Uint8Array(chunk));
-        },
-      });
-      await Promise.resolve();
-    },
-    close: async (): Promise<void> => {
-      port.readable = null;
-      port.writable = null;
-      await Promise.resolve();
-    },
-    forget: async (): Promise<void> => await Promise.resolve(),
-  };
+/**
+ * Puts the harness's Web Serial and Web Locks fakes where a browser puts the real ones.
+ *
+ * The rest of the suite injects its environment (ADR-0014), but the singleton builds its own
+ * from globals on first use - so the same fakes a harness tab is wired to are installed as
+ * `navigator.serial` and `navigator.locks`, for one page with one granted device. Everything
+ * else is stubbed only as far as building an environment needs: without `SharedWorker` the
+ * facade takes the `BroadcastChannel` path, with nobody else on the channel.
+ */
+function stubPlatform(): { serial: FakeSerialRegistry; device: FakeDevice } {
+  const serial = new FakeSerialRegistry();
+  const device = serial.addDevice(READER.vendorId, READER.productId);
+  serial.grant(device);
 
   vi.stubGlobal('navigator', {
-    serial: {
-      getPorts: async () => await Promise.resolve([port]),
-      requestPort: async () => await Promise.resolve(port),
-      addEventListener: () => undefined,
-      removeEventListener: () => undefined,
-    },
-    locks: {
-      request: async <T>(
-        _name: string,
-        _options: unknown,
-        callback: (lock: unknown) => Promise<T>,
-      ): Promise<T> => await callback({ name: _name, mode: 'exclusive' }),
-    },
+    serial: serial.forContext('page'),
+    locks: new FakeLockManager().forContext('page'),
   });
 
   vi.stubGlobal('SharedWorker', undefined);
@@ -79,7 +52,7 @@ function stubPlatform(): { written: Uint8Array[]; emit: (bytes: Uint8Array) => v
     removeItem: (key: string) => entries.delete(key),
   });
 
-  return { written, emit: (bytes) => push(bytes) };
+  return { serial, device };
 }
 
 /** Lets the library's promise chains run. */
@@ -106,7 +79,7 @@ describe('SerialBroker', () => {
   });
 
   it('connects, sends and receives through the singleton', async () => {
-    await SerialBroker.setup('Reader', OPTIONS);
+    await SerialBroker.setup('Reader', READER_OPTIONS);
     await settle();
 
     const received: string[] = [];
@@ -115,16 +88,16 @@ describe('SerialBroker', () => {
     });
 
     await SerialBroker.send('Reader', 'PING');
-    platform.emit(new TextEncoder().encode('PONG'));
+    platform.device.emit('PONG');
     await settle();
 
     expect(SerialBroker.getStatus('Reader').status).toBe(SerialBrokerStatus.Open);
-    expect(new TextDecoder().decode(platform.written[0])).toBe('PING');
+    expect(new TextDecoder().decode(platform.device.written[0])).toBe('PING');
     expect(received).toEqual(['PONG']);
   });
 
   it('answers questions about what is set up', async () => {
-    await SerialBroker.setup('Reader', OPTIONS);
+    await SerialBroker.setup('Reader', READER_OPTIONS);
 
     expect(SerialBroker.exists('Reader')).toBe(true);
     expect(SerialBroker.exists('Other')).toBe(false);
@@ -132,7 +105,7 @@ describe('SerialBroker', () => {
   });
 
   it('removes a listener through the returned function and through unsubscribe', async () => {
-    await SerialBroker.setup('Reader', OPTIONS);
+    await SerialBroker.setup('Reader', READER_OPTIONS);
     await settle();
     const viaReturn = vi.fn();
     const viaName = vi.fn();
@@ -142,7 +115,7 @@ describe('SerialBroker', () => {
     stop();
     SerialBroker.unsubscribe('Reader', 'onReceive', viaName);
 
-    platform.emit(new TextEncoder().encode('x'));
+    platform.device.emit('x');
     await settle();
 
     expect(viaReturn).not.toHaveBeenCalled();
@@ -150,7 +123,7 @@ describe('SerialBroker', () => {
   });
 
   it('releases everything it holds', async () => {
-    await SerialBroker.setup('Reader', OPTIONS);
+    await SerialBroker.setup('Reader', READER_OPTIONS);
     await settle();
 
     await SerialBroker.releaseAll();
@@ -159,7 +132,7 @@ describe('SerialBroker', () => {
   });
 
   it('restores a configuration persisted earlier', async () => {
-    await SerialBroker.setup('Reader', OPTIONS);
+    await SerialBroker.setup('Reader', READER_OPTIONS);
     await settle();
     await SerialBroker.dispose();
 
@@ -167,8 +140,9 @@ describe('SerialBroker', () => {
   });
 
   it('grants access when the user picks the configured device', async () => {
-    await SerialBroker.setup('Reader', OPTIONS);
+    await SerialBroker.setup('Reader', READER_OPTIONS);
     await settle();
+    platform.serial.pickerQueue.push(platform.device);
 
     await expect(SerialBroker.requestAccess('Reader')).resolves.toBe(true);
   });
@@ -180,13 +154,10 @@ describe('SerialBroker', () => {
   });
 
   it('passes a configured logger through to the library', async () => {
-    const records: [LogLevel, string, LogFields][] = [];
-    const logger: Logger = {
-      log: (level, message, fields) => records.push([level, message, fields]),
-    };
+    const { logger, records } = recordingLogger();
 
     SerialBroker.configure({ logger });
-    await SerialBroker.setup('Reader', OPTIONS);
+    await SerialBroker.setup('Reader', READER_OPTIONS);
     await settle();
 
     expect(records.some(([, message]) => message.includes('configuration registered'))).toBe(true);
@@ -197,18 +168,15 @@ describe('SerialBroker', () => {
   });
 
   it('passes logPayloads through, so traffic records carry the bytes', async () => {
-    const records: LogFields[] = [];
-    const logger: Logger = {
-      log: (_level, _message, fields) => records.push(fields),
-    };
+    const { logger, records } = recordingLogger();
 
     SerialBroker.configure({ logger, logPayloads: true });
-    await SerialBroker.setup('Reader', OPTIONS);
+    await SerialBroker.setup('Reader', READER_OPTIONS);
     await settle();
-    platform.emit(new TextEncoder().encode('PONG'));
+    platform.device.emit('PONG');
     await settle();
 
-    expect(records.find((fields) => fields.event === 'supervisor.received')).toMatchObject({
+    expect(fieldsOfEvent(records, 'supervisor.received')[0]).toMatchObject({
       byteLength: 4,
       hex: '50 4F 4E 47',
     });
@@ -227,10 +195,10 @@ describe('SerialBroker', () => {
   });
 
   it('rebuilds itself after being disposed', async () => {
-    await SerialBroker.setup('Reader', OPTIONS);
+    await SerialBroker.setup('Reader', READER_OPTIONS);
     await SerialBroker.dispose();
 
-    await SerialBroker.setup('Reader', OPTIONS);
+    await SerialBroker.setup('Reader', READER_OPTIONS);
 
     expect(SerialBroker.exists('Reader')).toBe(true);
   });

@@ -7,6 +7,7 @@ import {
 } from '../../src/protocol/heartbeat.js';
 import type { ClientId, ProtocolMessage } from '../../src/protocol/messages.js';
 import { PROTOCOL_VERSION } from '../../src/protocol/version.js';
+import { envelope, FakeMessagePort } from '../harness/transport-doubles.js';
 
 /**
  * The `SharedWorker` entry point.
@@ -15,42 +16,6 @@ import { PROTOCOL_VERSION } from '../../src/protocol/version.js';
  * of the library that runs in a context where a thrown exception takes every tab's coordination
  * with it - so its error handling is worth testing directly rather than inferring.
  */
-
-interface FakePort {
-  readonly posted: unknown[];
-  deliver(raw: unknown): void;
-  closed: boolean;
-}
-
-/** A `MessagePort` that records what the worker sends and replays what it is given. */
-function createPort(): FakePort {
-  const listeners = new Map<string, (event: unknown) => void>();
-
-  return {
-    posted: [],
-    closed: false,
-    deliver(raw: unknown) {
-      listeners.get('message')?.({ data: raw });
-    },
-    // The worker only uses these four members.
-    ...({
-      postMessage(this: FakePort, message: unknown) {
-        this.posted.push(message);
-      },
-      start: () => undefined,
-      close(this: FakePort) {
-        this.closed = true;
-      },
-      addEventListener: (type: string, listener: (event: unknown) => void) => {
-        listeners.set(type, listener);
-      },
-    } as object),
-  } as FakePort;
-}
-
-function envelope(from: string, to: string, extra: Record<string, unknown>): unknown {
-  return { v: PROTOCOL_VERSION, from, to, ...extra };
-}
 
 let connect: (event: { ports: readonly unknown[] }) => void;
 
@@ -79,8 +44,8 @@ describe('serial-broker.worker', () => {
   });
 
   it('welcomes a context that says hello, on its own port only', () => {
-    const alice = createPort();
-    const bob = createPort();
+    const alice = new FakeMessagePort();
+    const bob = new FakeMessagePort();
     connect({ ports: [alice] });
     connect({ ports: [bob] });
     bob.deliver(envelope('bob', 'all', { type: 'attach', configName: 'Reader' }));
@@ -93,8 +58,8 @@ describe('serial-broker.worker', () => {
   });
 
   it('forgets a port that falls silent, and knows it again from its next message', () => {
-    const alice = createPort();
-    const bob = createPort();
+    const alice = new FakeMessagePort();
+    const bob = new FakeMessagePort();
     connect({ ports: [alice] });
     connect({ ports: [bob] });
     alice.deliver(envelope('alice', 'all', { type: 'attach', configName: 'Reader' }));
@@ -133,8 +98,8 @@ describe('serial-broker.worker', () => {
   });
 
   it('routes a broadcast between two connected ports', () => {
-    const alice = createPort();
-    const bob = createPort();
+    const alice = new FakeMessagePort();
+    const bob = new FakeMessagePort();
     connect({ ports: [alice] });
     connect({ ports: [bob] });
 
@@ -148,8 +113,8 @@ describe('serial-broker.worker', () => {
   });
 
   it('routes a write request to whichever port claimed ownership', () => {
-    const alice = createPort();
-    const bob = createPort();
+    const alice = new FakeMessagePort();
+    const bob = new FakeMessagePort();
     connect({ ports: [alice] });
     connect({ ports: [bob] });
 
@@ -171,8 +136,8 @@ describe('serial-broker.worker', () => {
   });
 
   it('drops a message it cannot parse, without disturbing anything else', () => {
-    const alice = createPort();
-    const bob = createPort();
+    const alice = new FakeMessagePort();
+    const bob = new FakeMessagePort();
     connect({ ports: [alice] });
     connect({ ports: [bob] });
     alice.deliver(envelope('alice', 'all', { type: 'attach', configName: 'Reader' }));
@@ -188,8 +153,8 @@ describe('serial-broker.worker', () => {
   });
 
   it('stops routing to a port that said goodbye', () => {
-    const alice = createPort();
-    const bob = createPort();
+    const alice = new FakeMessagePort();
+    const bob = new FakeMessagePort();
     connect({ ports: [alice] });
     connect({ ports: [bob] });
     alice.deliver(envelope('alice', 'all', { type: 'attach', configName: 'Reader' }));
@@ -203,9 +168,9 @@ describe('serial-broker.worker', () => {
   });
 
   it('survives a port that throws when posted to', () => {
-    const alice = createPort();
-    const hostile = createPort();
-    const survivor = createPort();
+    const alice = new FakeMessagePort();
+    const hostile = new FakeMessagePort();
+    const survivor = new FakeMessagePort();
     Object.assign(hostile, {
       postMessage: () => {
         throw new Error('the port is gone');
@@ -230,7 +195,7 @@ describe('serial-broker.worker', () => {
   });
 
   it('accepts a reconnecting context that reuses its port', () => {
-    const port = createPort();
+    const port = new FakeMessagePort();
     connect({ ports: [port] });
 
     port.deliver(envelope('alice', 'all', { type: 'attach', configName: 'Reader' }));

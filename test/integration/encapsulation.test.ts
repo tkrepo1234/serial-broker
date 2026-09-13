@@ -4,9 +4,7 @@ import { SerialBrokerErrorCode } from '../../src/core/error-codes.js';
 import { SerialBrokerStatus } from '../../src/core/types.js';
 import * as publicApi from '../../src/index.js';
 import { BrowserHarness } from '../harness/browser-harness.js';
-
-const READER = { vendorId: 0x1a86, productId: 0x7523 };
-const OPTIONS = { device: READER, serial: { baudRate: 9600 } };
+import { READER, READER_OPTIONS } from '../harness/devices.js';
 
 /**
  * The encapsulation boundary, asserted rather than trusted.
@@ -26,9 +24,9 @@ describe('encapsulation', () => {
     const device = harness.serial.addDevice(READER.vendorId, READER.productId);
     harness.serial.grant(device);
     const owner = harness.openTab();
-    await owner.setup('Reader', OPTIONS);
+    await owner.setup('Reader', READER_OPTIONS);
     const peer = harness.openTab();
-    await peer.setup('Reader', OPTIONS);
+    await peer.setup('Reader', READER_OPTIONS);
     return { harness, owner, peer };
   }
 
@@ -64,7 +62,7 @@ describe('encapsulation', () => {
     const device = harness.serial.addDevice(READER.vendorId, READER.productId);
     harness.serial.grant(device);
     const tab = harness.openTab();
-    await tab.setup('Reader', OPTIONS);
+    await tab.setup('Reader', READER_OPTIONS);
 
     device.emit('x');
     await harness.settle();
@@ -167,9 +165,9 @@ describe('argument handling at the public surface', () => {
     harness.serial.grant(device);
     const tab = harness.openTab();
 
-    await tab.client.setup('Reader', OPTIONS);
+    await tab.client.setup('Reader', READER_OPTIONS);
     await harness.settle();
-    await tab.client.setup('Reader', OPTIONS);
+    await tab.client.setup('Reader', READER_OPTIONS);
     await harness.settle();
 
     // Safe to call on every page initialisation, and it must not interrupt a working port.
@@ -181,10 +179,10 @@ describe('argument handling at the public surface', () => {
     const device = harness.serial.addDevice(READER.vendorId, READER.productId);
     harness.serial.grant(device);
     const tab = harness.openTab();
-    await tab.client.setup('Reader', OPTIONS);
+    await tab.client.setup('Reader', READER_OPTIONS);
 
     await expect(
-      tab.client.setup('Reader', { ...OPTIONS, serial: { baudRate: 19_200 } }),
+      tab.client.setup('Reader', { ...READER_OPTIONS, serial: { baudRate: 19_200 } }),
     ).rejects.toMatchObject({ code: SerialBrokerErrorCode.CONFIGURATION_CONFLICT });
   });
 
@@ -193,7 +191,7 @@ describe('argument handling at the public surface', () => {
     const device = harness.serial.addDevice(READER.vendorId, READER.productId);
     harness.serial.grant(device);
     const tab = harness.openTab();
-    await tab.client.setup('Reader', OPTIONS);
+    await tab.client.setup('Reader', READER_OPTIONS);
 
     const received: unknown[] = [];
     const stop = tab.client.subscribe('Reader', 'onReceive', (event) => received.push(event));
@@ -211,7 +209,7 @@ describe('argument handling at the public surface', () => {
     harness.serial.grant(harness.serial.addDevice(READER.vendorId, READER.productId));
     const tab = harness.openTab();
 
-    await tab.client.setup('Reader', OPTIONS);
+    await tab.client.setup('Reader', READER_OPTIONS);
 
     expect(tab.client.exists('Reader')).toBe(true);
     expect(tab.client.exists('Other')).toBe(false);
@@ -224,7 +222,7 @@ describe('argument handling at the public surface', () => {
     harness.serial.grant(harness.serial.addDevice(0x0403, 0x6001));
     const tab = harness.openTab();
 
-    await tab.client.setup('Reader', OPTIONS);
+    await tab.client.setup('Reader', READER_OPTIONS);
     await tab.client.setup('Scale', {
       device: { vendorId: 0x0403, productId: 0x6001 },
       serial: { baudRate: 19_200 },

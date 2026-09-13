@@ -2,10 +2,9 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { SerialBrokerErrorCode } from '../../src/core/error-codes.js';
 import type { SerialBrokerError } from '../../src/core/errors.js';
-import { NOOP_LOGGER, ScopedLogger } from '../../src/core/logger.js';
 import { createBrowserEnvironment, isSupported } from '../../src/environment/browser.js';
 import type { ClientId } from '../../src/protocol/messages.js';
-import { FakeClock } from '../harness/fake-clock.js';
+import { recordTransportRequest } from '../harness/transport-doubles.js';
 
 /**
  * The composition root, which is the one file allowed to read a global.
@@ -112,18 +111,11 @@ function stubBrowser(
   );
 }
 
-/** Everything a transport needs, with the callbacks stubbed out. */
+/** Everything a transport needs. Most tests here only look at which transport was built. */
 function transportRequest(): Parameters<
   ReturnType<typeof createBrowserEnvironment>['createTransport']
 >[0] {
-  return {
-    clientId: 'c-1' as ClientId,
-    onMessage: () => undefined,
-    onDecodeFailure: () => undefined,
-    onTransportError: () => undefined,
-    logger: new ScopedLogger(NOOP_LOGGER, {}),
-    clock: new FakeClock(),
-  };
+  return recordTransportRequest('c-1' as ClientId).request;
 }
 
 afterEach(() => {
@@ -237,18 +229,18 @@ describe('createBrowserEnvironment', () => {
 
   it('reports a worker script that fails to load when SharedWorker was demanded', () => {
     stubBrowser();
-    const errors: unknown[] = [];
+    const { request, transportErrors } = recordTransportRequest('c-1' as ClientId);
     const transport = createBrowserEnvironment({
       transport: 'sharedworker',
       workerUrl: 'https://example.test/missing.js',
-    }).createTransport({ ...transportRequest(), onTransportError: (error) => errors.push(error) });
+    }).createTransport(request);
 
     for (const listener of workerErrorListeners) {
       listener({ type: 'error' });
     }
 
     expect(transport.kind).toBe('sharedworker');
-    expect(errors).toHaveLength(1);
+    expect(transportErrors).toHaveLength(1);
   });
 
   it('reports that no transport is available when neither exists', () => {

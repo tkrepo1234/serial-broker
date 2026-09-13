@@ -2,9 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { SerialBrokerStatus } from '../../../src/core/types.js';
 import { BrowserHarness, TRANSPORT_MODES } from '../../harness/browser-harness.js';
-
-const CARD_READER = { vendorId: 0x1a86, productId: 0x7523 };
-const OPTIONS = { device: CARD_READER, serial: { baudRate: 9600 } };
+import { READER, READER_OPTIONS } from '../../harness/devices.js';
 
 /**
  * The product claim, tested end to end: several tabs, one port.
@@ -19,7 +17,7 @@ describe.each(TRANSPORT_MODES)('sharing one port across tabs (%s)', (transport) 
     device: ReturnType<BrowserHarness['serial']['addDevice']>;
   }> {
     const harness = new BrowserHarness({ transport });
-    const device = harness.serial.addDevice(CARD_READER.vendorId, CARD_READER.productId);
+    const device = harness.serial.addDevice(READER.vendorId, READER.productId);
     harness.serial.grant(device);
     return { harness, device };
   }
@@ -28,7 +26,7 @@ describe.each(TRANSPORT_MODES)('sharing one port across tabs (%s)', (transport) 
     const { harness, device } = await withOpenPort();
 
     const tab = harness.openTab();
-    await tab.setup('CardReader', OPTIONS);
+    await tab.setup('CardReader', READER_OPTIONS);
 
     expect(tab.client.getStatus('CardReader').status).toBe(SerialBrokerStatus.Open);
     expect(device.openCount).toBe(1);
@@ -38,9 +36,9 @@ describe.each(TRANSPORT_MODES)('sharing one port across tabs (%s)', (transport) 
     const { harness, device } = await withOpenPort();
 
     const first = harness.openTab();
-    await first.setup('CardReader', OPTIONS);
+    await first.setup('CardReader', READER_OPTIONS);
     const second = harness.openTab();
-    await second.setup('CardReader', OPTIONS);
+    await second.setup('CardReader', READER_OPTIONS);
 
     // A second `open()` on a device another context holds fails with InvalidStateError in
     // every browser. One open across two tabs is the entire point of the library.
@@ -50,9 +48,9 @@ describe.each(TRANSPORT_MODES)('sharing one port across tabs (%s)', (transport) 
   it('delivers received data to every tab', async () => {
     const { harness, device } = await withOpenPort();
     const first = harness.openTab();
-    await first.setup('CardReader', OPTIONS);
+    await first.setup('CardReader', READER_OPTIONS);
     const second = harness.openTab();
-    await second.setup('CardReader', OPTIONS);
+    await second.setup('CardReader', READER_OPTIONS);
 
     device.emit('CARD:1234');
     await harness.settle();
@@ -64,9 +62,9 @@ describe.each(TRANSPORT_MODES)('sharing one port across tabs (%s)', (transport) 
   it('writes from a tab that does not own the port, exactly once', async () => {
     const { harness, device } = await withOpenPort();
     const owner = harness.openTab();
-    await owner.setup('CardReader', OPTIONS);
+    await owner.setup('CardReader', READER_OPTIONS);
     const other = harness.openTab();
-    await other.setup('CardReader', OPTIONS);
+    await other.setup('CardReader', READER_OPTIONS);
 
     await other.client.send('CardReader', 'STATUS?');
     await harness.settle();
@@ -78,9 +76,9 @@ describe.each(TRANSPORT_MODES)('sharing one port across tabs (%s)', (transport) 
   it('tells every tab about a write, and who issued it', async () => {
     const { harness } = await withOpenPort();
     const owner = harness.openTab();
-    await owner.setup('CardReader', OPTIONS);
+    await owner.setup('CardReader', READER_OPTIONS);
     const other = harness.openTab();
-    await other.setup('CardReader', OPTIONS);
+    await other.setup('CardReader', READER_OPTIONS);
 
     await other.client.send('CardReader', 'PING');
     await harness.settle();
@@ -92,10 +90,10 @@ describe.each(TRANSPORT_MODES)('sharing one port across tabs (%s)', (transport) 
   it('reports the current status to a tab that joins an already-open configuration', async () => {
     const { harness } = await withOpenPort();
     const first = harness.openTab();
-    await first.setup('CardReader', OPTIONS);
+    await first.setup('CardReader', READER_OPTIONS);
 
     const late = harness.openTab();
-    await late.setup('CardReader', OPTIONS);
+    await late.setup('CardReader', READER_OPTIONS);
     await harness.settle();
 
     // The joining tab never opened anything itself, so without the broker asking the owner to
@@ -105,13 +103,13 @@ describe.each(TRANSPORT_MODES)('sharing one port across tabs (%s)', (transport) 
 
   it('keeps two configurations on two devices independent', async () => {
     const harness = new BrowserHarness({ transport });
-    const reader = harness.serial.addDevice(0x1a86, 0x7523);
+    const reader = harness.serial.addDevice(READER.vendorId, READER.productId);
     const scale = harness.serial.addDevice(0x0403, 0x6001);
     harness.serial.grant(reader);
     harness.serial.grant(scale);
 
     const tab = harness.openTab();
-    await tab.setup('CardReader', OPTIONS);
+    await tab.setup('CardReader', READER_OPTIONS);
     await tab.setup('Scale', {
       device: { vendorId: 0x0403, productId: 0x6001 },
       serial: { baudRate: 19200 },

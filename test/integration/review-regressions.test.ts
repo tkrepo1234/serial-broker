@@ -5,9 +5,8 @@ import { SerialBrokerStatus } from '../../src/core/types.js';
 import { normalizeConfiguration } from '../../src/core/validation.js';
 import { brokerChannelName, PROTOCOL_VERSION, storageKey } from '../../src/protocol/version.js';
 import { BrowserHarness } from '../harness/browser-harness.js';
-
-const READER = { vendorId: 0x1a86, productId: 0x7523 };
-const OPTIONS = { device: READER, serial: { baudRate: 9600 } };
+import { READER, READER_OPTIONS } from '../harness/devices.js';
+import { fieldsOfEvent, recordingLogger } from '../harness/recording-logger.js';
 
 /**
  * Defects found in the review of 2026-09-13, each pinned by the behaviour it broke.
@@ -22,7 +21,7 @@ async function connectedTab(): Promise<{
   const device = harness.serial.addDevice(READER.vendorId, READER.productId);
   harness.serial.grant(device);
   const tab = harness.openTab();
-  await tab.setup('Reader', OPTIONS);
+  await tab.setup('Reader', READER_OPTIONS);
   return { harness, device, tab };
 }
 
@@ -39,7 +38,7 @@ describe('releasing a configuration', () => {
     const { harness, tab } = await connectedTab();
 
     const releasing = tab.client.release('Reader');
-    await tab.client.setup('Reader', OPTIONS);
+    await tab.client.setup('Reader', READER_OPTIONS);
     await releasing;
     await harness.settle();
 
@@ -63,19 +62,11 @@ describe('asking for a device that is already connected', () => {
 
 describe('reconnecting after a connection that held', () => {
   it('retries at once only once, then backs off as from a fresh start', async () => {
-    const delays: unknown[] = [];
-    const harness = new BrowserHarness({
-      logger: {
-        log: (_level, _message, fields) => {
-          if (fields.event === 'supervisor.reconnect') {
-            delays.push(fields['delayMs']);
-          }
-        },
-      },
-    });
+    const { logger, records } = recordingLogger();
+    const harness = new BrowserHarness({ logger });
     const device = harness.serial.addDevice(READER.vendorId, READER.productId);
     harness.serial.grant(device);
-    await harness.openTab().setup('Reader', OPTIONS);
+    await harness.openTab().setup('Reader', READER_OPTIONS);
     // Longer than stableAfterMs, so the attempt count starts over when the connection breaks.
     await harness.advance(6_000);
 
@@ -87,6 +78,9 @@ describe('reconnecting after a connection that held', () => {
       await harness.settle();
     }
 
+    const delays = fieldsOfEvent(records, 'supervisor.reconnect').map(
+      (fields) => fields['delayMs'],
+    );
     // Before the fix this was [0, 0, 250, 500]: two immediate retries in a row.
     expect(delays.slice(0, 4)).toEqual([0, 250, 500, 1000]);
   });
@@ -95,7 +89,10 @@ describe('reconnecting after a connection that held', () => {
 describe('options and names', () => {
   it('rejects null instead of treating it as not set', () => {
     expect(() =>
-      normalizeConfiguration('Reader', { ...OPTIONS, serial: { baudRate: 9600, dataBits: null } }),
+      normalizeConfiguration('Reader', {
+        ...READER_OPTIONS,
+        serial: { baudRate: 9600, dataBits: null },
+      }),
     ).toThrow(
       expect.objectContaining({
         code: SerialBrokerErrorCode.INVALID_ARGUMENT,
@@ -107,7 +104,7 @@ describe('options and names', () => {
   it('remembers a configuration named __proto__', async () => {
     const harness = new BrowserHarness();
     const tab = harness.openTab();
-    await tab.setup('__proto__', OPTIONS);
+    await tab.setup('__proto__', READER_OPTIONS);
 
     const later = harness.openTab();
 
@@ -127,7 +124,7 @@ describe('a device plugged in while the ports are being listed', () => {
     };
 
     const tab = harness.openTab();
-    await tab.setup('Reader', OPTIONS);
+    await tab.setup('Reader', READER_OPTIONS);
 
     expect(tab.client.getStatus('Reader').status).toBe(SerialBrokerStatus.Open);
   });
@@ -138,36 +135,31 @@ describe('setting a configuration up again', () => {
     const { tab } = await connectedTab();
 
     await expect(
-      tab.client.setup('Reader', { ...OPTIONS, serial: { baudRate: 9600, bufferSize: 4096 } }),
+      tab.client.setup('Reader', {
+        ...READER_OPTIONS,
+        serial: { baudRate: 9600, bufferSize: 4096 },
+      }),
     ).rejects.toMatchObject({ code: SerialBrokerErrorCode.CONFIGURATION_CONFLICT });
   });
 });
 
 describe('a killed tab', () => {
   it('runs none of its timers any more', async () => {
-    const reconnects: unknown[] = [];
-    const harness = new BrowserHarness({
-      logger: {
-        log: (_level, _message, fields) => {
-          if (fields.event === 'supervisor.reconnect') {
-            reconnects.push(fields);
-          }
-        },
-      },
-    });
+    const { logger, records } = recordingLogger();
+    const harness = new BrowserHarness({ logger });
     const device = harness.serial.addDevice(READER.vendorId, READER.productId);
     harness.serial.grant(device);
     device.faults.failOpenWith = 'NetworkError';
     const tab = harness.openTab();
-    await tab.setup('Reader', OPTIONS);
+    await tab.setup('Reader', READER_OPTIONS);
     await harness.advance(1_000);
-    const before = reconnects.length;
+    const before = fieldsOfEvent(records, 'supervisor.reconnect').length;
     expect(before).toBeGreaterThan(0);
 
     await tab.kill();
     await harness.advance(60_000);
 
-    expect(reconnects).toHaveLength(before);
+    expect(fieldsOfEvent(records, 'supervisor.reconnect')).toHaveLength(before);
   });
 });
 
@@ -175,7 +167,7 @@ describe('a mixed deployment', () => {
   it('is reported once per foreign protocol version, not once per message', async () => {
     const harness = new BrowserHarness({ transport: 'broadcastchannel' });
     const tab = harness.openTab();
-    await tab.setup('Reader', OPTIONS);
+    await tab.setup('Reader', READER_OPTIONS);
     const foreign = { v: PROTOCOL_VERSION + 1, from: 'old-tab', to: 'all', type: 'hello' };
 
     harness.bus.broadcastHub.injectForeign(brokerChannelName(), foreign);
@@ -195,7 +187,7 @@ describe('handing the port over by releasing it', () => {
   it('lets the next tab open the port while the releasing tab stays open', async () => {
     const { harness, device, tab: owner } = await connectedTab();
     const other = harness.openTab();
-    await other.setup('Reader', OPTIONS);
+    await other.setup('Reader', READER_OPTIONS);
 
     // The releasing tab lives on, so nothing but its own close() can free the device.
     await owner.client.release('Reader');

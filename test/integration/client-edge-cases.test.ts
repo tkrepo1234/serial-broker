@@ -5,9 +5,7 @@ import { SerialBrokerErrorCode } from '../../src/core/error-codes.js';
 import { SerialBrokerStatus } from '../../src/core/types.js';
 import { brokerChannelName, PROTOCOL_VERSION } from '../../src/protocol/version.js';
 import { BrowserHarness } from '../harness/browser-harness.js';
-
-const READER = { vendorId: 0x1a86, productId: 0x7523 };
-const OPTIONS = { device: READER, serial: { baudRate: 9600 } };
+import { READER, READER_OPTIONS } from '../harness/devices.js';
 
 /**
  * Posts something a well-behaved tab would never send.
@@ -28,7 +26,7 @@ describe('unusable environments', () => {
       serial: {} as never,
     });
 
-    await expect(client.setup('Reader', OPTIONS)).rejects.toMatchObject({
+    await expect(client.setup('Reader', READER_OPTIONS)).rejects.toMatchObject({
       code: SerialBrokerErrorCode.WEB_SERIAL_UNAVAILABLE,
     });
   });
@@ -42,7 +40,7 @@ describe('unusable environments', () => {
 
     // Without an exclusive lock there is no way to guarantee one owner, and guessing would be
     // worse than refusing.
-    await expect(client.setup('Reader', OPTIONS)).rejects.toMatchObject({
+    await expect(client.setup('Reader', READER_OPTIONS)).rejects.toMatchObject({
       code: SerialBrokerErrorCode.WEB_LOCKS_UNAVAILABLE,
     });
   });
@@ -54,7 +52,7 @@ describe('a disposed client', () => {
     const tab = harness.openTab();
     await tab.client.dispose();
 
-    await expect(tab.client.setup('Reader', OPTIONS)).rejects.toMatchObject({
+    await expect(tab.client.setup('Reader', READER_OPTIONS)).rejects.toMatchObject({
       code: SerialBrokerErrorCode.CONFIGURATION_RELEASED,
     });
   });
@@ -83,7 +81,7 @@ describe('argument validation at the boundary', () => {
     const harness = new BrowserHarness();
     harness.serial.grant(harness.serial.addDevice(READER.vendorId, READER.productId));
     const tab = harness.openTab();
-    await tab.client.setup('Reader', OPTIONS);
+    await tab.client.setup('Reader', READER_OPTIONS);
 
     expect(() => tab.client.subscribe('Reader', 'onReceive', 'not a function' as never)).toThrow(
       expect.objectContaining({ code: SerialBrokerErrorCode.INVALID_ARGUMENT }),
@@ -116,7 +114,7 @@ describe('a device that cannot be forgotten', () => {
     const device = harness.serial.addDevice(READER.vendorId, READER.productId);
     harness.serial.grant(device);
     const tab = harness.openTab();
-    await tab.setup('Reader', OPTIONS);
+    await tab.setup('Reader', READER_OPTIONS);
 
     const ports = await harness.serial.forContext(tab.id).getPorts();
     for (const port of ports) {
@@ -139,7 +137,7 @@ describe('hostile traffic on the shared bus', () => {
     const harness = new BrowserHarness(fallback);
     harness.serial.grant(harness.serial.addDevice(READER.vendorId, READER.productId));
     const tab = harness.openTab();
-    await tab.setup('Reader', OPTIONS);
+    await tab.setup('Reader', READER_OPTIONS);
 
     // A tab left open across a deployment that changed the protocol. Both groups partition
     // and both report it, rather than misreading each other's messages (ADR-0008).
@@ -163,7 +161,7 @@ describe('hostile traffic on the shared bus', () => {
     const device = harness.serial.addDevice(READER.vendorId, READER.productId);
     harness.serial.grant(device);
     const tab = harness.openTab();
-    await tab.setup('Reader', OPTIONS);
+    await tab.setup('Reader', READER_OPTIONS);
 
     injectRaw(harness, { v: PROTOCOL_VERSION, from: 'noise', to: 'all', type: 'nonsense' });
     await harness.settle();
@@ -178,7 +176,7 @@ describe('hostile traffic on the shared bus', () => {
     const harness = new BrowserHarness(fallback);
     harness.serial.grant(harness.serial.addDevice(READER.vendorId, READER.productId));
     const tab = harness.openTab();
-    await tab.setup('Reader', OPTIONS);
+    await tab.setup('Reader', READER_OPTIONS);
 
     expect(() => {
       injectRaw(harness, {
@@ -203,7 +201,7 @@ describe('a configuration released while events are in flight', () => {
     const device = harness.serial.addDevice(READER.vendorId, READER.productId);
     harness.serial.grant(device);
     const tab = harness.openTab();
-    await tab.setup('Reader', OPTIONS);
+    await tab.setup('Reader', READER_OPTIONS);
 
     await tab.client.release('Reader');
     device.emit('after release');
@@ -216,7 +214,7 @@ describe('a configuration released while events are in flight', () => {
     const harness = new BrowserHarness();
     harness.serial.grant(harness.serial.addDevice(READER.vendorId, READER.productId));
     const tab = harness.openTab();
-    await tab.setup('Reader', OPTIONS);
+    await tab.setup('Reader', READER_OPTIONS);
 
     await tab.client.release('Reader');
 

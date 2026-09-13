@@ -6,152 +6,87 @@ import {
 } from '../../src/client/transport/broadcast-channel-transport.js';
 import {
   SharedWorkerTransport,
-  type MessagePortLike,
   type SharedWorkerLike,
 } from '../../src/client/transport/shared-worker-transport.js';
-import type { TransportRequest } from '../../src/client/transport/transport.js';
-import { NOOP_LOGGER, ScopedLogger } from '../../src/core/logger.js';
 import { HEARTBEAT_INTERVAL_MS } from '../../src/protocol/heartbeat.js';
 import type { ClientId, ProtocolMessage } from '../../src/protocol/messages.js';
 import { PROTOCOL_VERSION } from '../../src/protocol/version.js';
-import { FakeClock } from '../harness/fake-clock.js';
+import {
+  envelope,
+  FakeMessagePort,
+  recordTransportRequest,
+  type TransportRequestRecorder,
+} from '../harness/transport-doubles.js';
 
 const SELF = 'self' as ClientId;
 const PEER = 'peer' as ClientId;
 
-interface Recorder {
-  readonly request: TransportRequest;
-  readonly clock: FakeClock;
-  readonly messages: ProtocolMessage[];
-  readonly decodeFailures: unknown[];
-  readonly transportErrors: unknown[];
-}
-
-function recorder(): Recorder {
-  const messages: ProtocolMessage[] = [];
-  const decodeFailures: unknown[] = [];
-  const transportErrors: unknown[] = [];
-  const clock = new FakeClock();
-
-  return {
-    clock,
-    messages,
-    decodeFailures,
-    transportErrors,
-    request: {
-      clientId: SELF,
-      onMessage: (message) => messages.push(message),
-      onDecodeFailure: (failure) => decodeFailures.push(failure),
-      onTransportError: (error) => transportErrors.push(error),
-      logger: new ScopedLogger(NOOP_LOGGER, {}),
-      clock,
-    },
-  };
-}
-
-function envelope(
-  from: ClientId,
-  to: ProtocolMessage['to'],
-  extra: Record<string, unknown> = {},
-): unknown {
-  return { v: PROTOCOL_VERSION, from, to, type: 'status-request', configName: 'Reader', ...extra };
-}
-
-/** A `MessagePort` whose incoming messages a test can drive. */
-function fakePort(): {
-  port: MessagePortLike;
-  posted: unknown[];
-  deliver: (raw: unknown) => void;
-  fail: (type: 'messageerror') => void;
-  closed: () => boolean;
-} {
-  const posted: unknown[] = [];
-  const listeners = new Map<string, (event: never) => void>();
-  let isClosed = false;
-
-  const port = {
-    postMessage: (message: unknown) => posted.push(message),
-    start: () => undefined,
-    close: () => {
-      isClosed = true;
-    },
-    addEventListener: (type: string, listener: (event: never) => void) => {
-      listeners.set(type, listener);
-    },
-  } as unknown as MessagePortLike;
-
-  return {
-    port,
-    posted,
-    deliver: (raw) => listeners.get('message')?.({ data: raw } as never),
-    fail: (type) => listeners.get(type)?.({} as never),
-    closed: () => isClosed,
-  };
-}
+/** What the addressing tests send. Which message it is does not matter, only where it goes. */
+const STATUS_REQUEST = { type: 'status-request', configName: 'Reader' };
 
 describe('SharedWorkerTransport', () => {
-  function create(): ReturnType<typeof recorder> &
-    ReturnType<typeof fakePort> & {
-      transport: SharedWorkerTransport;
-    } {
-    const rec = recorder();
-    const fake = fakePort();
-    const worker: SharedWorkerLike = { port: fake.port, addEventListener: () => undefined };
+  function create(): TransportRequestRecorder & {
+    port: FakeMessagePort;
+    transport: SharedWorkerTransport;
+  } {
+    const rec = recordTransportRequest(SELF);
+    const port = new FakeMessagePort();
+    const worker: SharedWorkerLike = { port, addEventListener: () => undefined };
     const transport = new SharedWorkerTransport(rec.request, () => worker, 'fake://worker');
-    return { ...rec, ...fake, transport };
+    return { ...rec, port, transport };
   }
 
   it('announces itself as soon as it connects', () => {
-    const { posted } = create();
+    const { port } = create();
 
-    expect((posted[0] as ProtocolMessage).type).toBe('hello');
+    expect((port.posted[0] as ProtocolMessage).type).toBe('hello');
   });
 
   it('sends attach and detach as messages, because the broker needs to know', () => {
-    const { transport, posted } = create();
+    const { transport, port } = create();
 
     transport.attach('Reader');
     transport.detach('Reader');
 
-    expect((posted[1] as ProtocolMessage).type).toBe('attach');
-    expect((posted[2] as ProtocolMessage).type).toBe('detach');
+    expect((port.posted[1] as ProtocolMessage).type).toBe('attach');
+    expect((port.posted[2] as ProtocolMessage).type).toBe('detach');
   });
 
   it('delivers a valid message from the broker', () => {
-    const { deliver, messages } = create();
+    const { port, messages } = create();
 
-    deliver(envelope(PEER, SELF));
+    port.deliver(envelope(PEER, SELF, STATUS_REQUEST));
 
     expect(messages).toHaveLength(1);
   });
 
   it('reports a message it cannot parse instead of delivering it', () => {
-    const { deliver, messages, decodeFailures } = create();
+    const { port, messages, decodeFailures } = create();
 
-    deliver({ garbage: true });
+    port.deliver({ garbage: true });
 
     expect(messages).toHaveLength(0);
     expect(decodeFailures).toHaveLength(1);
   });
 
   it('ignores its own message coming back', () => {
-    const { deliver, messages } = create();
+    const { port, messages } = create();
 
     // Double-delivering every local event would be a miserable bug to find.
-    deliver(envelope(SELF, 'all'));
+    port.deliver(envelope(SELF, 'all', STATUS_REQUEST));
 
     expect(messages).toHaveLength(0);
   });
 
   it('reports a failure to post rather than throwing into the caller', () => {
-    const rec = recorder();
-    const fake = fakePort();
-    Object.assign(fake.port, {
+    const rec = recordTransportRequest(SELF);
+    const port = new FakeMessagePort();
+    Object.assign(port, {
       postMessage: () => {
         throw new Error('the port is closed');
       },
     });
-    const worker: SharedWorkerLike = { port: fake.port, addEventListener: () => undefined };
+    const worker: SharedWorkerLike = { port, addEventListener: () => undefined };
 
     const transport = new SharedWorkerTransport(rec.request, () => worker, 'fake://w');
     transport.attach('Reader');
@@ -162,50 +97,50 @@ describe('SharedWorkerTransport', () => {
   });
 
   it('reports a message that failed to clone on the way in', () => {
-    const { fail, transportErrors } = create();
+    const { port, transportErrors } = create();
 
-    fail('messageerror');
+    port.failToClone();
 
     expect(transportErrors).toHaveLength(1);
   });
 
   it('says goodbye and closes the port', () => {
-    const { transport, posted, closed } = create();
+    const { transport, port } = create();
 
     transport.close();
 
-    expect((posted.at(-1) as ProtocolMessage).type).toBe('goodbye');
-    expect(closed()).toBe(true);
+    expect((port.posted.at(-1) as ProtocolMessage).type).toBe('goodbye');
+    expect(port.closed).toBe(true);
   });
 
   it('is safe to close twice and sends nothing afterwards', () => {
-    const { transport, posted } = create();
+    const { transport, port } = create();
 
     transport.close();
-    const after = posted.length;
+    const after = port.posted.length;
     transport.close();
     transport.attach('Reader');
 
-    expect(posted).toHaveLength(after);
+    expect(port.posted).toHaveLength(after);
   });
 
   it('ignores ownership changes, because the broker already knows', () => {
-    const { transport, posted } = create();
-    const before = posted.length;
+    const { transport, port } = create();
+    const before = port.posted.length;
 
     transport.setOwnership('Reader', true);
 
-    expect(posted).toHaveLength(before);
+    expect(port.posted).toHaveLength(before);
   });
 });
 
 describe('BroadcastChannelTransport', () => {
-  function create(): ReturnType<typeof recorder> & {
+  function create(): TransportRequestRecorder & {
     transport: BroadcastChannelTransport;
     posted: unknown[];
     deliver: (raw: unknown) => void;
   } {
-    const rec = recorder();
+    const rec = recordTransportRequest(SELF);
     const posted: unknown[] = [];
     const listeners = new Map<string, (event: never) => void>();
 
@@ -230,7 +165,7 @@ describe('BroadcastChannelTransport', () => {
     const { transport, deliver, messages } = create();
 
     transport.attach('Reader');
-    deliver(envelope(PEER, 'all'));
+    deliver(envelope(PEER, 'all', STATUS_REQUEST));
 
     expect(messages).toHaveLength(1);
   });
@@ -239,7 +174,7 @@ describe('BroadcastChannelTransport', () => {
     const { deliver, messages } = create();
 
     // With no broker, every message reaches every context; filtering is the receiver's job.
-    deliver(envelope(PEER, 'all'));
+    deliver(envelope(PEER, 'all', STATUS_REQUEST));
 
     expect(messages).toHaveLength(0);
   });
@@ -248,22 +183,22 @@ describe('BroadcastChannelTransport', () => {
     const { transport, deliver, messages } = create();
     transport.attach('Reader');
 
-    deliver(envelope(PEER, 'owner'));
+    deliver(envelope(PEER, 'owner', STATUS_REQUEST));
     expect(messages).toHaveLength(0);
 
     transport.setOwnership('Reader', true);
-    deliver(envelope(PEER, 'owner'));
+    deliver(envelope(PEER, 'owner', STATUS_REQUEST));
     expect(messages).toHaveLength(1);
 
     transport.setOwnership('Reader', false);
-    deliver(envelope(PEER, 'owner'));
+    deliver(envelope(PEER, 'owner', STATUS_REQUEST));
     expect(messages).toHaveLength(1);
   });
 
   it('accepts a message addressed to it by name', () => {
     const { deliver, messages } = create();
 
-    deliver(envelope(PEER, SELF));
+    deliver(envelope(PEER, SELF, STATUS_REQUEST));
 
     expect(messages).toHaveLength(1);
   });
@@ -271,7 +206,7 @@ describe('BroadcastChannelTransport', () => {
   it('discards a message addressed to somebody else', () => {
     const { deliver, messages } = create();
 
-    deliver(envelope(PEER, 'another-tab' as ClientId));
+    deliver(envelope(PEER, 'another-tab' as ClientId, STATUS_REQUEST));
 
     expect(messages).toHaveLength(0);
   });
@@ -290,8 +225,8 @@ describe('BroadcastChannelTransport', () => {
     transport.setOwnership('Reader', true);
 
     transport.detach('Reader');
-    deliver(envelope(PEER, 'all'));
-    deliver(envelope(PEER, 'owner'));
+    deliver(envelope(PEER, 'all', STATUS_REQUEST));
+    deliver(envelope(PEER, 'owner', STATUS_REQUEST));
 
     expect(messages).toHaveLength(0);
   });
@@ -300,13 +235,13 @@ describe('BroadcastChannelTransport', () => {
     const { transport, deliver, messages } = create();
     transport.attach('Reader');
 
-    deliver(envelope(SELF, 'all'));
+    deliver(envelope(SELF, 'all', STATUS_REQUEST));
 
     expect(messages).toHaveLength(0);
   });
 
   it('reports a failure to post', () => {
-    const rec = recorder();
+    const rec = recordTransportRequest(SELF);
     const channel = {
       postMessage: () => {
         throw new Error('channel closed');
@@ -341,7 +276,7 @@ describe('BroadcastChannelTransport', () => {
 
 describe('both transports', () => {
   it('report a decode failure rather than delivering an unparsable message', () => {
-    const rec = recorder();
+    const rec = recordTransportRequest(SELF);
     const listeners = new Map<string, (event: never) => void>();
     const channel = {
       postMessage: () => undefined,
@@ -359,7 +294,7 @@ describe('both transports', () => {
   });
 
   it('never throw out of a message handler', () => {
-    const rec = recorder();
+    const rec = recordTransportRequest(SELF);
     const listeners = new Map<string, (event: never) => void>();
     const channel = {
       postMessage: () => undefined,
@@ -379,17 +314,17 @@ describe('both transports', () => {
 describe('SharedWorkerTransport, while its script is starting', () => {
   const WELCOME = { v: PROTOCOL_VERSION, from: 'serial-broker/broker', to: SELF, type: 'welcome' };
 
-  function start(): ReturnType<typeof recorder> &
-    ReturnType<typeof fakePort> & {
-      ready: () => number;
-      loadFailures: unknown[];
-      failToLoad: () => void;
-    } {
-    const rec = recorder();
-    const fake = fakePort();
+  function start(): TransportRequestRecorder & {
+    port: FakeMessagePort;
+    ready: () => number;
+    loadFailures: unknown[];
+    failToLoad: () => void;
+  } {
+    const rec = recordTransportRequest(SELF);
+    const port = new FakeMessagePort();
     let errorListener: (event: unknown) => void = () => undefined;
     const worker: SharedWorkerLike = {
-      port: fake.port,
+      port,
       addEventListener: (_type, listener) => {
         errorListener = listener;
       },
@@ -406,7 +341,7 @@ describe('SharedWorkerTransport, while its script is starting', () => {
 
     return {
       ...rec,
-      ...fake,
+      port,
       ready: () => readyCount,
       loadFailures,
       failToLoad: () => {
@@ -416,10 +351,10 @@ describe('SharedWorkerTransport, while its script is starting', () => {
   }
 
   it('reports the script running when the broker welcomes it, and keeps the welcome to itself', () => {
-    const { deliver, ready, messages } = start();
+    const { port, ready, messages } = start();
 
-    deliver(WELCOME);
-    deliver(WELCOME);
+    port.deliver(WELCOME);
+    port.deliver(WELCOME);
 
     expect(ready()).toBe(1);
     expect(messages).toHaveLength(0);
@@ -435,9 +370,9 @@ describe('SharedWorkerTransport, while its script is starting', () => {
   });
 
   it('reports a failure after the welcome as a transport error', () => {
-    const { deliver, failToLoad, loadFailures, transportErrors } = start();
+    const { port, failToLoad, loadFailures, transportErrors } = start();
 
-    deliver(WELCOME);
+    port.deliver(WELCOME);
     failToLoad();
 
     expect(loadFailures).toHaveLength(0);
@@ -446,26 +381,28 @@ describe('SharedWorkerTransport, while its script is starting', () => {
 });
 
 describe('SharedWorkerTransport heartbeats', () => {
-  function start(): ReturnType<typeof recorder> &
-    ReturnType<typeof fakePort> & { transport: SharedWorkerTransport } {
-    const rec = recorder();
-    const fake = fakePort();
-    const worker: SharedWorkerLike = { port: fake.port, addEventListener: () => undefined };
+  function start(): TransportRequestRecorder & {
+    port: FakeMessagePort;
+    transport: SharedWorkerTransport;
+  } {
+    const rec = recordTransportRequest(SELF);
+    const port = new FakeMessagePort();
+    const worker: SharedWorkerLike = { port, addEventListener: () => undefined };
     const transport = new SharedWorkerTransport(rec.request, () => worker, 'fake://worker');
-    return { ...rec, ...fake, transport };
+    return { ...rec, port, transport };
   }
 
   it('tells the broker periodically what this context takes part in and owns', async () => {
-    const { transport, posted, clock } = start();
+    const { transport, port, clock } = start();
     transport.attach('Reader');
     transport.attach('Printer');
     transport.setOwnership('Reader', true);
     transport.detach('Printer');
-    posted.length = 0;
+    port.posted.length = 0;
 
     await clock.advance(HEARTBEAT_INTERVAL_MS);
 
-    expect(posted).toEqual([
+    expect(port.posted).toEqual([
       expect.objectContaining({
         type: 'heartbeat',
         configNames: ['Reader'],
@@ -475,28 +412,28 @@ describe('SharedWorkerTransport heartbeats', () => {
 
     transport.setOwnership('Reader', false);
     await clock.advance(HEARTBEAT_INTERVAL_MS);
-    expect(posted.at(-1)).toMatchObject({ configNames: ['Reader'], ownedConfigNames: [] });
+    expect(port.posted.at(-1)).toMatchObject({ configNames: ['Reader'], ownedConfigNames: [] });
   });
 
   it('stops sending heartbeats once closed', async () => {
-    const { transport, posted, clock } = start();
+    const { transport, port, clock } = start();
 
     transport.close();
-    posted.length = 0;
+    port.posted.length = 0;
     await clock.advance(3 * HEARTBEAT_INTERVAL_MS);
 
-    expect(posted).toEqual([]);
+    expect(port.posted).toEqual([]);
     expect(clock.pendingTimerCount).toBe(0);
   });
 });
 
 describe('SharedWorkerTransport once closed', () => {
   it('reports nothing the worker or its port says any more', () => {
-    const rec = recorder();
-    const fake = fakePort();
+    const rec = recordTransportRequest(SELF);
+    const port = new FakeMessagePort();
     let workerError: (event: unknown) => void = () => undefined;
     const worker: SharedWorkerLike = {
-      port: fake.port,
+      port,
       addEventListener: (_type, listener) => {
         workerError = listener;
       },
@@ -505,7 +442,7 @@ describe('SharedWorkerTransport once closed', () => {
 
     transport.close();
     workerError({ type: 'error' });
-    fake.fail('messageerror');
+    port.failToClone();
 
     expect(rec.transportErrors).toEqual([]);
   });

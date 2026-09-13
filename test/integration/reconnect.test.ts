@@ -3,9 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { SerialBrokerErrorCode } from '../../src/core/error-codes.js';
 import { SerialBrokerStatus } from '../../src/core/types.js';
 import { BrowserHarness } from '../harness/browser-harness.js';
-
-const READER = { vendorId: 0x1a86, productId: 0x7523 };
-const OPTIONS = { device: READER, serial: { baudRate: 9600 } };
+import { READER, READER_OPTIONS } from '../harness/devices.js';
 
 /**
  * Keeping the port open across a device being switched off, unplugged or power-cycled.
@@ -23,7 +21,7 @@ describe('reconnect supervision', () => {
     const device = harness.serial.addDevice(READER.vendorId, READER.productId);
     harness.serial.grant(device);
     const tab = harness.openTab();
-    await tab.setup('Reader', OPTIONS);
+    await tab.setup('Reader', READER_OPTIONS);
     return { harness, device, tab };
   }
 
@@ -74,7 +72,7 @@ describe('reconnect supervision', () => {
     device.faults.failOpenTimes = 1;
 
     const tab = harness.openTab();
-    await tab.setup('Reader', OPTIONS);
+    await tab.setup('Reader', READER_OPTIONS);
 
     // A power-cycled device is usually back within one event-loop turn. Waiting 250 ms for
     // the first retry would turn a non-event into a visible outage (ADR-0010).
@@ -90,7 +88,7 @@ describe('reconnect supervision', () => {
     device.faults.failOpenWith = 'NetworkError';
 
     const tab = harness.openTab();
-    await tab.setup('Reader', OPTIONS);
+    await tab.setup('Reader', READER_OPTIONS);
 
     const delays: number[] = [];
     for (let attempt = 0; attempt < 5; attempt += 1) {
@@ -110,7 +108,7 @@ describe('reconnect supervision', () => {
     device.faults.failOpenWith = 'NetworkError';
 
     const tab = harness.openTab();
-    await tab.setup('Reader', { ...OPTIONS, connection: { maxAttempts: 3 } });
+    await tab.setup('Reader', { ...READER_OPTIONS, connection: { maxAttempts: 3 } });
     await harness.advance(10_000);
 
     expect(tab.client.getStatus('Reader').status).toBe(SerialBrokerStatus.Failed);
@@ -128,7 +126,7 @@ describe('reconnect supervision', () => {
     device.faults.failOpenWith = 'NetworkError';
 
     const tab = harness.openTab();
-    await tab.setup('Reader', { ...OPTIONS, connection: { maxAttempts: 2 } });
+    await tab.setup('Reader', { ...READER_OPTIONS, connection: { maxAttempts: 2 } });
     await harness.advance(10_000);
     expect(tab.client.getStatus('Reader').status).toBe(SerialBrokerStatus.Failed);
 
@@ -147,7 +145,7 @@ describe('reconnect supervision', () => {
     device.faults.failOpenWith = 'NetworkError';
 
     const tab = harness.openTab();
-    await tab.setup('Reader', OPTIONS);
+    await tab.setup('Reader', READER_OPTIONS);
     await harness.advance(3_000);
     expect(tab.client.getStatus('Reader').status).toBe(SerialBrokerStatus.Reconnecting);
 
@@ -167,7 +165,7 @@ describe('reconnect supervision', () => {
     device.faults.hangOnOpen = true;
 
     const tab = harness.openTab();
-    await tab.setup('Reader', OPTIONS);
+    await tab.setup('Reader', READER_OPTIONS);
     await harness.advance(10_000);
 
     // Without a deadline on open(), the state machine would sit in `connecting` forever with
@@ -187,7 +185,7 @@ describe('reconnect supervision', () => {
   it('tells every tab about a reconnection, not just the one that owns the port', async () => {
     const { harness, device, tab } = await connectedTab();
     const peer = harness.openTab();
-    await peer.setup('Reader', OPTIONS);
+    await peer.setup('Reader', READER_OPTIONS);
 
     harness.serial.unplug(device);
     await harness.settle();

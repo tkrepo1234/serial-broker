@@ -3,9 +3,9 @@ import { describe, expect, it } from 'vitest';
 import { DiagnosticsObserver } from '../../src/client/diagnostics-observer.js';
 import { SerialBrokerErrorCode } from '../../src/core/error-codes.js';
 import { SerialBrokerError } from '../../src/core/errors.js';
-import type { LogFields, Logger, LogLevel } from '../../src/core/types.js';
 import { brokerChannelName, PROTOCOL_VERSION } from '../../src/protocol/version.js';
 import { BrowserHarness } from '../harness/browser-harness.js';
+import { recordingLogger } from '../harness/recording-logger.js';
 
 /**
  * A diagnostics observer on a bus that does not behave.
@@ -16,10 +16,7 @@ import { BrowserHarness } from '../harness/browser-harness.js';
  */
 describe('diagnostics observer on a misbehaving bus', () => {
   it('logs a malformed message and a failing bus instead of throwing', () => {
-    const records: [LogLevel, string, LogFields][] = [];
-    const logger: Logger = {
-      log: (level, message, fields) => records.push([level, message, fields]),
-    };
+    const { logger, records } = recordingLogger();
     const harness = new BrowserHarness({ logger });
     const environment = harness.createEnvironment('observer');
 
