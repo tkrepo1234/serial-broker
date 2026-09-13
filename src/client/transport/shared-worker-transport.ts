@@ -338,6 +338,10 @@ export class SharedWorkerTransport implements Transport {
     const result = decodeMessage(raw);
     if (!result.ok) {
       this.#request.onDecodeFailure(result.failure);
+      if (this.#disposal.isDisposed) {
+        // The report reached the application, which may react by closing the bus.
+        return;
+      }
       // Only the worker speaks on this port, and a broker passes on nothing but messages in its own
       // version. A message in another version is therefore the worker's own answer to hello: the
       // script runs another protocol version and drops everything this context says. Before a

@@ -406,6 +406,31 @@ describe('SharedWorkerTransport, while its script is starting', () => {
     expect(loadFailures).toHaveLength(0);
     expect(decodeFailures).toHaveLength(1);
   });
+
+  it('does not go on to fall back when hearing the other version made the application close the bus', () => {
+    const rec = recordTransportRequest(SELF);
+    const port = new FakeMessagePort();
+    const loadFailures: WorkerLoadFailure[] = [];
+    const bus: { transport?: SharedWorkerTransport } = {};
+    // The client turns the decode failure into PROTOCOL_VERSION_MISMATCH, synchronously, and an
+    // application may answer that by disposing everything.
+    const request = {
+      ...rec.request,
+      onDecodeFailure: () => {
+        bus.transport?.close();
+      },
+    };
+    bus.transport = new SharedWorkerTransport(
+      request,
+      () => ({ port, addEventListener: () => undefined }),
+      'fake://worker',
+      { onReady: () => undefined, onLoadFailed: (_event, reason) => loadFailures.push(reason) },
+    );
+
+    port.deliver({ ...WELCOME, v: PROTOCOL_VERSION - 1 });
+
+    expect(loadFailures).toEqual([]);
+  });
 });
 
 describe('SharedWorkerTransport heartbeats', () => {
