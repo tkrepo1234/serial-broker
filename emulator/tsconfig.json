@@ -10,7 +10,11 @@
     "moduleResolution": "nodenext",
     "allowImportingTsExtensions": true,
     "erasableSyntaxOnly": true,
-    "noEmit": true
+    "noEmit": true,
+    // launch.mjs is JavaScript on purpose, so that a Node too old to strip types can still run
+    // it and explain the problem. It is part of the program only so that the type-aware lint
+    // rules can resolve it; with checkJs off, it is not type-checked.
+    "allowJs": true
   },
-  "include": ["src/**/*.ts", "test/**/*.ts"]
+  "include": ["src/**/*.ts", "test/**/*.ts", "launch.mjs"]
 }

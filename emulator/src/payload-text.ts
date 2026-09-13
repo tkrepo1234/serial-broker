@@ -7,6 +7,9 @@ const SIMPLE_ESCAPES = new Map([
   ['n', '\n'],
   ['t', '\t'],
   ['\\', '\\'],
+  // describeBytes writes a quote as \" so that the quotes around a payload stay unambiguous.
+  // Accepting the same escape here is what lets an operator copy a logged payload into `send`.
+  ['"', '"'],
 ]);
 
 const NAMED_BYTES = new Map([
@@ -18,7 +21,7 @@ const NAMED_BYTES = new Map([
 ]);
 
 /**
- * Turns operator input into bytes, honouring `\r`, `\n`, `\t`, `\\` and `\xHH` escapes.
+ * Turns operator input into bytes, honouring `\r`, `\n`, `\t`, `\\`, `\"` and `\xHH` escapes.
  *
  * Everything else is encoded as UTF-8, so `send Grüße` sends the two-byte `ü` a real device
  * would receive from a UTF-8 host.
@@ -63,6 +66,9 @@ export function parseEscapedText(text: string): Uint8Array {
 
 /**
  * Renders bytes for the operator's log: printable ASCII as text, everything else as `\xHH`.
+ *
+ * The inverse of {@link parseEscapedText}: the text between the quotes, typed after `send`,
+ * produces the same bytes again.
  *
  * @param bytes - The payload.
  * @param maxBytes - Longer payloads are cut here and marked with their full length.

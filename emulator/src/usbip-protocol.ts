@@ -27,6 +27,17 @@ export const URB_HEADER_BYTES = 48;
 const PATH_BYTES = 256;
 const DEVICE_RECORD_BYTES = PATH_BYTES + BUS_ID_BYTES + 24;
 
+/**
+ * The largest OUT transfer buffer the server accepts, 1 MiB.
+ *
+ * The header's `transfer_buffer_length` is a 32-bit field the client fills in, and the server
+ * has to hold the whole buffer before it can hand the transfer to the device. Without a cap, one
+ * header claiming 4 GiB makes the server wait for, and buffer, all of it. A host driver writing
+ * to a full-speed serial device sends a few KiB per transfer, so 1 MiB leaves ample room for any
+ * real write while keeping a malformed or hostile header from exhausting memory.
+ */
+export const MAX_OUT_TRANSFER_BYTES = 1024 * 1024;
+
 /** `number_of_packets` for a transfer that is not isochronous. */
 const NOT_ISOCHRONOUS = 0xffffffff;
 
@@ -118,8 +129,9 @@ export function decodeBusId(bytes: Uint8Array): string {
  *
  * @param header - At least {@link URB_HEADER_BYTES} bytes.
  * @returns The header plus, for an OUT submission, the transfer buffer that follows it.
- * @throws {@link UsbipProtocolError} for an unknown command or an isochronous transfer, which
- *   a CDC ACM device has no endpoint for.
+ * @throws {@link UsbipProtocolError} for an unknown command, an isochronous transfer, which
+ *   a CDC ACM device has no endpoint for, or an OUT transfer buffer larger than
+ *   {@link MAX_OUT_TRANSFER_BYTES}.
  */
 export function urbCommandLength(header: Uint8Array): number {
   const view = viewOf(header);
@@ -135,7 +147,18 @@ export function urbCommandLength(header: Uint8Array): number {
     throw new UsbipProtocolError('Isochronous transfers are not supported by this device.');
   }
   const isOut = view.getUint32(0x0c) === 0;
-  return URB_HEADER_BYTES + (isOut ? view.getUint32(0x18) : 0);
+  if (!isOut) {
+    // An IN transfer's buffer length is only how much the host is willing to receive; no bytes
+    // follow the header, so there is nothing to buffer and nothing to cap.
+    return URB_HEADER_BYTES;
+  }
+  const transferBufferLength = view.getUint32(0x18);
+  if (transferBufferLength > MAX_OUT_TRANSFER_BYTES) {
+    throw new UsbipProtocolError(
+      `OUT transfer of ${String(transferBufferLength)} bytes exceeds the ${String(MAX_OUT_TRANSFER_BYTES)}-byte limit.`,
+    );
+  }
+  return URB_HEADER_BYTES + transferBufferLength;
 }
 
 /**

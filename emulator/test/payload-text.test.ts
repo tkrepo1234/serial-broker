@@ -26,6 +26,13 @@ describe('describeBytes', () => {
     );
   });
 
+  it('writes every byte in a form parseEscapedText reads back, so a logged payload can be sent again', () => {
+    const everyByte = Uint8Array.from({ length: 256 }, (_, byte) => byte);
+    const described = describeBytes(everyByte, everyByte.length);
+
+    expect([...parseEscapedText(described.slice(1, -1))]).toEqual([...everyByte]);
+  });
+
   it('cuts a long payload and says how long it really was', () => {
     expect(describeBytes(new Uint8Array(100).fill(0x41), 3)).toBe('"AAA" … (100 bytes)');
   });

@@ -9,6 +9,7 @@ import {
   encodeImportReply,
   encodeSubmitReply,
   encodeUnlinkReply,
+  MAX_OUT_TRANSFER_BYTES,
   urbCommandLength,
   UsbipProtocolError,
 } from '../src/usbip-protocol.ts';
@@ -84,6 +85,32 @@ describe('urbCommandLength', () => {
     view(command).setUint32(0x20, 8);
 
     expect(() => urbCommandLength(command)).toThrow(/Isochronous/);
+  });
+
+  it('accepts an OUT transfer of exactly the maximum length', () => {
+    const header = submitCommand({ seqnum: 1, direction: 'out', endpoint: 2 });
+    view(header).setUint32(0x18, MAX_OUT_TRANSFER_BYTES);
+
+    expect(MAX_OUT_TRANSFER_BYTES).toBe(1024 * 1024);
+    expect(urbCommandLength(header)).toBe(48 + MAX_OUT_TRANSFER_BYTES);
+  });
+
+  it('rejects an OUT transfer longer than the maximum, which the server would otherwise buffer', () => {
+    const oneOver = submitCommand({ seqnum: 1, direction: 'out', endpoint: 2 });
+    view(oneOver).setUint32(0x18, MAX_OUT_TRANSFER_BYTES + 1);
+    const fourGiB = submitCommand({ seqnum: 2, direction: 'out', endpoint: 2 });
+    view(fourGiB).setUint32(0x18, 0xffffffff);
+
+    expect(() => urbCommandLength(oneOver)).toThrow(UsbipProtocolError);
+    expect(() => urbCommandLength(fourGiB)).toThrow(
+      'OUT transfer of 4294967295 bytes exceeds the 1048576-byte limit.',
+    );
+  });
+
+  it('does not cap an IN submission, whose buffer length is only a request', () => {
+    const command = submitCommand({ seqnum: 1, direction: 'in', endpoint: 2, length: 0xffffffff });
+
+    expect(urbCommandLength(command)).toBe(48);
   });
 });
 

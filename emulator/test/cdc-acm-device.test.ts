@@ -306,4 +306,19 @@ describe('CdcAcmDevice detach', () => {
     expect(results).toEqual([]);
     expect(device.status().isAttached).toBe(false);
   });
+
+  it('refuses to send before a host attaches, instead of queueing bytes the attach would drop', () => {
+    const device = new CdcAcmDevice(IDENTITY);
+
+    expect(() => device.sendToHost(encoder.encode('EARLY'))).toThrow(/No host has the device/);
+    expect(device.status().bytesQueuedToHost).toBe(0);
+  });
+
+  it('refuses to send after the host detached, instead of reporting bytes as queued', () => {
+    const { device } = attachedDevice();
+    device.detach();
+
+    expect(() => device.sendToHost(encoder.encode('LATE'))).toThrow(/No host has the device/);
+    expect(device.status().bytesQueuedToHost).toBe(0);
+  });
 });

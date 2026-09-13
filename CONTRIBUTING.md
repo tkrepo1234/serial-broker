@@ -29,6 +29,10 @@ npm run verify    # what CI runs
 
 Node 20.11 or newer. The library itself never runs in Node — that is only the toolchain.
 
+The [device emulator](./emulator/README.md) (`npm run emulator`) is the exception: it runs its
+TypeScript sources directly, on Node's built-in type stripping, and so needs a Node that has it
+switched on by default — 22.18 or newer, or 23.6 or newer on the 23 line.
+
 ## Making a change
 
 1. Branch: `<type>/<short-description>`.

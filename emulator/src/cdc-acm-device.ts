@@ -207,13 +207,15 @@ export class CdcAcmDevice {
    * Sends bytes to the host as if the device had produced them on its own.
    *
    * @param bytes - Delivered to the host's next reads, after anything already queued.
+   * @throws An `Error` if no host is attached. Nothing could receive the bytes then, and queueing
+   *   them anyway would mislead: {@link attach} and {@link detach} both drop queued bytes, while
+   *   {@link status} would count them as on their way to a host until then.
    */
   sendToHost(bytes: Uint8Array): void {
-    if (bytes.length === 0) {
-      return;
+    if (this.#complete === undefined) {
+      throw new Error('No host has the device attached, so nothing would receive these bytes.');
     }
-    this.#toHost.push(bytes.slice());
-    this.#deliverToHost();
+    this.#queueToHost(bytes);
   }
 
   /** Switches between returning written bytes and swallowing them. */
@@ -282,9 +284,19 @@ export class CdcAcmDevice {
       actualLength: command.data.length,
       data: new Uint8Array(0),
     });
-    if (this.#behaviour === 'echo') {
-      this.sendToHost(command.data);
+    // An echo answers the host that wrote. Writes only arrive from an attached host, but a
+    // submission made while detached must not leave bytes queued for nobody either.
+    if (this.#behaviour === 'echo' && this.#complete !== undefined) {
+      this.#queueToHost(command.data);
     }
+  }
+
+  #queueToHost(bytes: Uint8Array): void {
+    if (bytes.length === 0) {
+      return;
+    }
+    this.#toHost.push(bytes.slice());
+    this.#deliverToHost();
   }
 
   #deliverToHost(): void {

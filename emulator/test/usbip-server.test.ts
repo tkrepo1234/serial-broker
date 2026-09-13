@@ -203,6 +203,89 @@ describe('UsbipServer', () => {
       expect.objectContaining({ kind: 'protocol-error', message: 'Unknown operation 0x1234.' }),
     );
   });
+
+  it('drops a connection that speaks another USB/IP version, before acting on the request', async () => {
+    const client = await connectClient();
+    const request = deviceListRequest();
+    new DataView(request.buffer).setUint16(0, 0x0106);
+
+    client.write(request);
+    await client.closed();
+
+    expect(events).toContainEqual(
+      expect.objectContaining({
+        kind: 'protocol-error',
+        message: 'Unsupported USB/IP version 0x0106; this server speaks 0x0111.',
+      }),
+    );
+    expect(events).not.toContainEqual(expect.objectContaining({ kind: 'device-listed' }));
+  });
+
+  it('ignores whatever follows a device list on the same connection, rather than importing onto it', async () => {
+    const client = await connectClient();
+    const listThenImport = new Uint8Array(8 + 40);
+    listThenImport.set(deviceListRequest());
+    listThenImport.set(importRequest('1-1'), 8);
+
+    client.write(listThenImport);
+    await client.closed();
+
+    expect(events.filter((event) => event.kind === 'device-listed')).toHaveLength(1);
+    expect(events).not.toContainEqual(expect.objectContaining({ kind: 'attached' }));
+    expect(server.isAttached).toBe(false);
+  });
+
+  it('ignores whatever follows a refused import on the same connection', async () => {
+    const client = await connectClient();
+    const refusedThenList = new Uint8Array(40 + 8);
+    refusedThenList.set(importRequest('2-7'));
+    refusedThenList.set(deviceListRequest(), 40);
+
+    client.write(refusedThenList);
+    await client.closed();
+
+    expect(events).toContainEqual(expect.objectContaining({ kind: 'import-refused' }));
+    expect(events).not.toContainEqual(expect.objectContaining({ kind: 'device-listed' }));
+  });
+
+  it('drops a connection whose OUT submission claims more than the maximum, instead of waiting to buffer it', async () => {
+    const client = await importDevice();
+    const header = submitCommand({ seqnum: 1, direction: 'out', endpoint: 2 });
+    new DataView(header.buffer).setUint32(0x18, 0xffffffff);
+
+    client.write(header);
+    await client.closed();
+
+    expect(events).toContainEqual(
+      expect.objectContaining({
+        kind: 'protocol-error',
+        message: 'OUT transfer of 4294967295 bytes exceeds the 1048576-byte limit.',
+      }),
+    );
+  });
+
+  it('reassembles a large write that arrives in many small pieces, and answers it once', async () => {
+    const client = await importDevice();
+    const data = Array.from({ length: 64 * 1024 }, (_, index) => index & 0xff);
+    const command = submitCommand({ seqnum: 9, direction: 'out', endpoint: 2, data });
+
+    for (let offset = 0; offset < command.length; offset += 1000) {
+      client.write(command.subarray(offset, offset + 1000));
+    }
+    const reply = replyHeader(await client.read(48));
+
+    expect(reply).toMatchObject({ seqnum: 9, status: 0, actualLength: data.length });
+    expect(device.status().bytesFromHost).toBe(data.length);
+  });
+
+  it('rejects listening on a port in use, and reports the error as a server event too', async () => {
+    const secondEvents: ServerEvent[] = [];
+    const second = new UsbipServer(device, { port }, (event) => secondEvents.push(event));
+
+    await expect(second.listen()).rejects.toThrow(/EADDRINUSE/);
+    const reported = secondEvents.find((event) => event.kind === 'server-error');
+    expect(reported?.kind === 'server-error' && reported.message).toMatch(/EADDRINUSE/);
+  });
 });
 
 /**

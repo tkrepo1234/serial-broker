@@ -56,7 +56,7 @@
   "scripts": {
     "build": "tsup && tsup --config tsup.debug.config.ts && tsc -p tsconfig.build.json && node scripts/cjs-types.mjs",
     "typecheck": "tsc --noEmit && tsc -p emulator && tsc -p docs/site/examples/code",
-    "emulator": "node emulator/src/main.ts",
+    "emulator": "node emulator/launch.mjs",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "format": "prettier --write .",

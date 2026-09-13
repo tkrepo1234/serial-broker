@@ -12,6 +12,8 @@ import { existsSync } from 'node:fs';
 import { createInterface } from 'node:readline';
 import { parseArgs } from 'node:util';
 
+import { AttachedPort } from './attached-port.ts';
+import type { UsbipOutcome } from './attached-port.ts';
 import { CdcAcmDevice } from './cdc-acm-device.ts';
 import type { DeviceEvent, DeviceStatus } from './cdc-acm-device.ts';
 import { describeBytes, parseEscapedText } from './payload-text.ts';
@@ -34,12 +36,12 @@ const COMMANDS = `Commands:
   echo          return every byte written (the default, like TX and RX bridged)
   silent        accept writes and answer nothing
   chunk <n>     return at most n bytes per read ("chunk off" lifts the cap)
-  send <text>   send bytes to the host; escapes \\r \\n \\t \\\\ \\xHH
+  send <text>   send bytes to the attached host; escapes \\r \\n \\t \\\\ \\" \\xHH
   status        show the device and connection state
   help          show this list
   quit          stop the emulator`;
 
-const USAGE = `Usage: node emulator/src/main.ts [options]
+const USAGE = `Usage: node emulator/launch.mjs [options]
 
 Options:
   --host <address>      listen address (default 127.0.0.1)
@@ -81,15 +83,15 @@ const device = new CdcAcmDevice(
     log(describeDeviceEvent(event));
   },
 );
+const attachedPort = new AttachedPort();
 const server = new UsbipServer(
   device,
   { host: options.host, port: parseId(options.port, '--port') },
   (event) => {
+    attachedPort.recordServerEvent(event);
     log(describeServerEvent(event));
   },
 );
-
-let attachedPort: string | undefined;
 
 await server.listen();
 log(
@@ -99,7 +101,7 @@ if (!existsSync(options.usbip)) {
   log(`usbip.exe not found at ${options.usbip}.`);
   log('Install usbip-win2 (see emulator/README.md) or pass --usbip, then type "attach".');
 } else if (!options['no-attach']) {
-  runUsbip(['attach', '-r', options.host, '-b', BUS_ID]);
+  attach();
 }
 log('Type "help" for commands.');
 
@@ -118,21 +120,17 @@ function handleCommand(command: string, argument: string): void {
       return;
     case 'plug':
       server.plug();
-      runUsbip(['attach', '-r', options.host, '-b', BUS_ID]);
+      attach();
       return;
     case 'unplug':
       server.unplug();
       log('unplugged; "plug" to bring it back');
       return;
     case 'attach':
-      runUsbip(['attach', '-r', options.host, '-b', BUS_ID]);
+      attach();
       return;
     case 'detach':
-      if (attachedPort === undefined) {
-        log('this emulator has not attached a port; run "usbip.exe port" to find one');
-        return;
-      }
-      runUsbip(['detach', '-p', attachedPort]);
+      detach();
       return;
     case 'hang':
       device.hang();
@@ -182,15 +180,33 @@ function setChunk(argument: string): void {
   log(`reads capped at ${String(bytes)} bytes`);
 }
 
+/** Sends through the device, which refuses while no host is attached; the refusal is logged. */
 function send(argument: string): void {
   try {
     device.sendToHost(parseEscapedText(argument));
   } catch (error) {
-    log(error instanceof Error ? error.message : String(error));
+    log(`not sent: ${error instanceof Error ? error.message : String(error)}`);
   }
 }
 
-function runUsbip(args: readonly string[]): void {
+function attach(): void {
+  runUsbip(['attach', '-r', options.host, '-b', BUS_ID], (outcome) => {
+    attachedPort.recordAttach(outcome);
+  });
+}
+
+function detach(): void {
+  const { port } = attachedPort;
+  if (port === undefined) {
+    log('no port attached by this emulator is known; run "usbip.exe port" to find one');
+    return;
+  }
+  runUsbip(['detach', '-p', port], (outcome) => {
+    attachedPort.recordDetach(port, outcome);
+  });
+}
+
+function runUsbip(args: readonly string[], onDone: (outcome: UsbipOutcome) => void): void {
   log(`usbip.exe ${args.join(' ')}`);
   execFile(options.usbip, args, { windowsHide: true }, (error, stdout, stderr) => {
     const output = `${stdout}${stderr}`.trim();
@@ -200,10 +216,7 @@ function runUsbip(args: readonly string[]): void {
     if (error !== null && output === '') {
       log(`usbip: ${error.message}`);
     }
-    const attached = /attached to port (\d+)/.exec(output);
-    if (attached?.[1] !== undefined) {
-      attachedPort = attached[1];
-    }
+    onDone({ isSuccess: error === null, output });
   });
 }
 
@@ -248,6 +261,8 @@ function describeServerEvent(event: ServerEvent): string {
       return `detached (${event.reason})`;
     case 'protocol-error':
       return `protocol error from ${event.remoteAddress}: ${event.message}`;
+    case 'server-error':
+      return `USB/IP server error: ${event.message}`;
   }
 }
 

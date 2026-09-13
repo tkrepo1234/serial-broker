@@ -9,6 +9,7 @@
 import { createServer } from 'node:net';
 import type { AddressInfo, Server, Socket } from 'node:net';
 
+import { ByteQueue } from './byte-queue.ts';
 import type { CdcAcmDevice } from './cdc-acm-device.ts';
 import { interfaceSummaries } from './usb-descriptors.ts';
 import {
@@ -26,6 +27,7 @@ import {
   URB_HEADER_BYTES,
   urbCommandLength,
   USB_SPEED_FULL,
+  USBIP_VERSION,
   UsbipProtocolError,
 } from './usbip-protocol.ts';
 import type { ExportedDevice } from './usbip-protocol.ts';
@@ -48,7 +50,8 @@ export type ServerEvent =
   | { readonly kind: 'attached'; readonly remoteAddress: string }
   | { readonly kind: 'import-refused'; readonly remoteAddress: string; readonly reason: string }
   | { readonly kind: 'detached'; readonly reason: 'unplugged' | 'connection-closed' }
-  | { readonly kind: 'protocol-error'; readonly remoteAddress: string; readonly message: string };
+  | { readonly kind: 'protocol-error'; readonly remoteAddress: string; readonly message: string }
+  | { readonly kind: 'server-error'; readonly message: string };
 
 /** The bus ID the device is exported under, as `usbip.exe attach -b` expects it. */
 export const BUS_ID = `${String(BUS_NUMBER)}-${String(DEVICE_NUMBER)}`;
@@ -84,6 +87,13 @@ export class UsbipServer {
     this.#server = createServer((socket) => {
       this.#accept(socket);
     });
+    // A net.Server can emit 'error' at any time, not only while it starts listening: a failed
+    // accept, for one. An 'error' event nobody listens to is thrown, and thrown from inside the
+    // event loop it ends the process, taking the emulated device and every connection with it.
+    // This listener stays for the server's whole life and reports the error instead.
+    this.#server.on('error', (error) => {
+      this.#onEvent({ kind: 'server-error', message: error.message });
+    });
   }
 
   /** Whether a client has the device imported right now. */
@@ -100,6 +110,8 @@ export class UsbipServer {
    * Starts listening.
    *
    * @returns The port actually bound, which differs from the requested one only when that was 0.
+   * @throws The listening error, such as `EADDRINUSE`. It is also reported as a `'server-error'`
+   *   event, like every other server error.
    */
   async listen(): Promise<number> {
     await new Promise<void>((resolve, reject) => {
@@ -148,17 +160,27 @@ export class UsbipServer {
     this.#sockets.add(socket);
     socket.setNoDelay(true);
     const remoteAddress = `${socket.remoteAddress ?? '?'}:${String(socket.remotePort ?? '?')}`;
-    let buffered: Uint8Array = new Uint8Array(0);
+    const received = new ByteQueue();
     let isImported = false;
 
     socket.on('data', (chunk: Buffer) => {
-      buffered = concat(buffered, chunk);
+      // The server ends a connection after answering a device list or refusing an import; it
+      // has nothing more to say on it. Whatever the client sends after that is ignored, in this
+      // chunk or a later one: acting on it could, for one, import the device onto a connection
+      // that is already closing.
+      if (isClosing(socket)) {
+        return;
+      }
+      received.push(chunk);
       try {
-        let consumed = this.#handleNext(socket, buffered, isImported, remoteAddress);
-        while (consumed > 0 && !socket.destroyed) {
-          buffered = buffered.subarray(consumed);
+        let consumed = this.#handleNext(socket, received, isImported, remoteAddress);
+        while (consumed > 0) {
+          received.discard(consumed);
+          if (isClosing(socket)) {
+            return;
+          }
           isImported ||= this.#attachedSocket === socket;
-          consumed = this.#handleNext(socket, buffered, isImported, remoteAddress);
+          consumed = this.#handleNext(socket, received, isImported, remoteAddress);
         }
       } catch (error) {
         if (!(error instanceof UsbipProtocolError)) {
@@ -179,15 +201,27 @@ export class UsbipServer {
     });
   }
 
-  /** Handles one complete message at the front of `bytes`; returns how many bytes it used. */
-  #handleNext(socket: Socket, bytes: Uint8Array, isImported: boolean, remote: string): number {
+  /**
+   * Handles the message at the front of `received`, if all of it has arrived.
+   *
+   * @returns How many bytes the message used, or 0 while it is incomplete. The caller discards
+   *   the used bytes.
+   */
+  #handleNext(socket: Socket, received: ByteQueue, isImported: boolean, remote: string): number {
     if (isImported) {
-      return this.#handleUrb(socket, bytes);
+      return this.#handleUrb(socket, received);
     }
-    if (bytes.length < OPERATION_HEADER_BYTES) {
+    if (received.length < OPERATION_HEADER_BYTES) {
       return 0;
     }
-    const { code } = decodeOperationHeader(bytes);
+    const { version, code } = decodeOperationHeader(received.peek(OPERATION_HEADER_BYTES));
+    // The version is checked first because it decides how everything after it is laid out: a
+    // client speaking another version may mean something else by the very same bytes.
+    if (version !== USBIP_VERSION) {
+      throw new UsbipProtocolError(
+        `Unsupported USB/IP version 0x${hex4(version)}; this server speaks 0x${hex4(USBIP_VERSION)}.`,
+      );
+    }
     if (code === OP_REQ_DEVLIST) {
       const devices = this.#isPluggedIn ? [this.#exportedDevice()] : [];
       socket.end(encodeDeviceListReply(devices));
@@ -197,10 +231,12 @@ export class UsbipServer {
     if (code !== OP_REQ_IMPORT) {
       throw new UsbipProtocolError(`Unknown operation 0x${code.toString(16)}.`);
     }
-    if (bytes.length < OPERATION_HEADER_BYTES + BUS_ID_BYTES) {
+    if (received.length < OPERATION_HEADER_BYTES + BUS_ID_BYTES) {
       return 0;
     }
-    const busId = decodeBusId(bytes.subarray(OPERATION_HEADER_BYTES));
+    const busId = decodeBusId(
+      received.peek(OPERATION_HEADER_BYTES + BUS_ID_BYTES).subarray(OPERATION_HEADER_BYTES),
+    );
     const refusal = this.#importRefusal(busId);
     if (refusal !== undefined) {
       socket.end(encodeImportReply(undefined));
@@ -220,15 +256,17 @@ export class UsbipServer {
     return OPERATION_HEADER_BYTES + BUS_ID_BYTES;
   }
 
-  #handleUrb(socket: Socket, bytes: Uint8Array): number {
-    if (bytes.length < URB_HEADER_BYTES) {
+  #handleUrb(socket: Socket, received: ByteQueue): number {
+    if (received.length < URB_HEADER_BYTES) {
       return 0;
     }
-    const length = urbCommandLength(bytes);
-    if (bytes.length < length) {
+    // urbCommandLength refuses an OUT transfer above MAX_OUT_TRANSFER_BYTES, so the queue never
+    // holds more than one capped command while it waits for the rest of it.
+    const length = urbCommandLength(received.peek(URB_HEADER_BYTES));
+    if (received.length < length) {
       return 0;
     }
-    const command = decodeUrbCommand(bytes.subarray(0, length));
+    const command = decodeUrbCommand(received.peek(length));
     if (command.kind === 'submit') {
       this.#device.submit(command);
     } else {
@@ -280,14 +318,18 @@ export class UsbipServer {
   }
 }
 
-function concat(first: Uint8Array, second: Uint8Array): Uint8Array {
-  if (first.length === 0) {
-    return second;
-  }
-  const joined = new Uint8Array(first.length + second.length);
-  joined.set(first);
-  joined.set(second, first.length);
-  return joined;
+/**
+ * Whether the server has ended or destroyed a connection, and so must not act on it any more.
+ *
+ * A function rather than an inline check because handling a message changes this state, and
+ * TypeScript would otherwise carry the value it narrowed before the handling past it.
+ */
+function isClosing(socket: Socket): boolean {
+  return socket.destroyed || socket.writableEnded;
+}
+
+function hex4(value: number): string {
+  return value.toString(16).padStart(4, '0');
 }
 
 function ignoreEvent(): void {

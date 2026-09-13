@@ -29,7 +29,11 @@ actually needs. Why this approach and not a virtual COM port driver is in
    point; take it. It also restarts every USB 3.0 hub once, so do not run it during a call on a
    USB headset.
 
-That is all. The emulator itself needs nothing but this repository's Node.
+That is all on the Windows side. The emulator itself needs **Node 22.18 or newer** (23.6 or newer
+on the 23 line), newer than the library's toolchain needs: it runs its TypeScript sources directly,
+on the type stripping those versions switch on by default. `node emulator/launch.mjs` checks for
+that and says so plainly on an older Node, where `node emulator/src/main.ts` stops with a bare
+`ERR_UNKNOWN_FILE_EXTENSION`.
 
 ## Running it
 
@@ -58,19 +62,22 @@ Options: `npm run emulator -- --help`.
 
 Typed into the emulator's terminal while it runs.
 
-| Command       | What the device does                                                                          |
-| ------------- | --------------------------------------------------------------------------------------------- |
-| `unplug`      | Disappears, as if its cable were pulled. It refuses to be re-attached until `plug`.           |
-| `plug`        | Comes back and is attached again.                                                             |
-| `hang`        | Stops accepting data. Writes stay in flight — the port stays open, the host just waits.       |
-| `resume`      | Accepts the held writes in order, and everything after.                                       |
-| `echo`        | Returns every byte written. The default.                                                      |
-| `silent`      | Accepts writes and answers nothing.                                                           |
-| `chunk <n>`   | Returns at most _n_ bytes per read, so text arrives split — `chunk 1` splits every character. |
-| `send <text>` | Sends bytes on its own initiative. Escapes: `\r` `\n` `\t` `\\` `\xHH`.                       |
-| `status`      | Shows line coding, DTR/RTS, byte counters, and whether it is hung.                            |
-| `attach`      | Runs `usbip.exe attach` without changing anything else.                                       |
-| `detach`      | Runs `usbip.exe detach` for the port the emulator attached.                                   |
+| Command       | What the device does                                                                                                                                 |
+| ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `unplug`      | Disappears, as if its cable were pulled. It refuses to be re-attached until `plug`.                                                                  |
+| `plug`        | Comes back and is attached again.                                                                                                                    |
+| `hang`        | Stops accepting data. Writes stay in flight — the port stays open, the host just waits.                                                              |
+| `resume`      | Accepts the held writes in order, and everything after.                                                                                              |
+| `echo`        | Returns every byte written. The default.                                                                                                             |
+| `silent`      | Accepts writes and answers nothing.                                                                                                                  |
+| `chunk <n>`   | Returns at most _n_ bytes per read, so text arrives split — `chunk 1` splits every character.                                                        |
+| `chunk off`   | Fills each read as far as the host's buffer allows again.                                                                                            |
+| `send <text>` | Sends bytes on its own initiative. Escapes: `\r` `\n` `\t` `\\` `\"` `\xHH`. Refused, and logged as not sent, while no host has the device attached. |
+| `status`      | Shows line coding, DTR/RTS, byte counters, and whether it is hung.                                                                                   |
+| `attach`      | Runs `usbip.exe attach` without changing anything else.                                                                                              |
+| `detach`      | Runs `usbip.exe detach` for the port the emulator attached, while that attachment lasts.                                                             |
+| `help`        | Lists these commands.                                                                                                                                |
+| `quit`        | Stops the emulator, closing every connection.                                                                                                        |
 
 Every transfer is logged, so you can see exactly which bytes reached the device and when.
 

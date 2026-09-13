@@ -97,7 +97,7 @@ been reworked; the rework has to match the documentation's colours and style.
 
 ## Open findings from the project review of 2026-09-13
 
-The verified defects were fixed in `6d31c59`. What remains needs a decision or is larger work.
+The verified defects were fixed in `6d31c59` and the commits after it. What remains needs a decision or is larger work.
 
 ### Decisions
 
@@ -111,13 +111,6 @@ The verified defects were fixed in `6d31c59`. What remains needs a decision or i
 - **A listener that throws is reported in every tab** (`LISTENER_THREW` is broadcast).
 - **Tabs on different protocol versions cannot detect each other** (see "Found while writing the
   chapters").
-
-### Risks
-
-- Packaging: the emulator needs Node's type stripping (newer than `engines` says).
-- Emulator: `attachedPort` is never cleared, bytes sent while no host is attached are queued and
-  then dropped, OUT transfers have no length cap, the server's error listener is removed once
-  listening, and the USB/IP version is not checked.
 
 ### Refactorings
 
