@@ -11,6 +11,7 @@ export default defineConfig(
   {
     ignores: [
       'dist/**',
+      '.claude/**',
       'coverage/**',
       'node_modules/**',
       // The documentation site's Python environment and build output (ADR-0020).

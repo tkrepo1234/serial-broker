@@ -25,3 +25,6 @@ tools/
 docs/.venv/
 docs/site/api/reference/
 docs/site/_build/
+
+# Agent worktrees and local Claude Code state
+.claude/
