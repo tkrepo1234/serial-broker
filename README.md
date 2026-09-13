@@ -57,8 +57,9 @@ npm install serial-broker
 
 The library needs to load one extra file, `serial-broker.worker.js`, which coordinates the
 tabs. Bundlers that understand `new URL(..., import.meta.url)` — Vite, webpack 5, Parcel 2,
-Rollup — find it on their own. If yours does not, or if you serve assets from a different
-origin path, say where it is **before the first `setup()`**:
+Rollup with the right plugin — find it on their own. If yours does not, if you serve assets from
+a different origin path, or if you load the CommonJS build, say where it is **before the first
+`setup()`**:
 
 ```ts
 SerialBroker.configure({ workerUrl: '/assets/serial-broker.worker.js' });
