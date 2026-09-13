@@ -1,5 +1,6 @@
 import type { Clock, TimerHandle } from '../core/clock.js';
 import { createSignal, type Signal } from '../core/deadline.js';
+import { describeUnknown } from '../core/errors.js';
 import type { ScopedLogger } from '../core/logger.js';
 import type { LockManagerLike } from '../environment/environment.js';
 import { ownerLockName } from '../protocol/version.js';
@@ -21,6 +22,9 @@ export interface ElectionCallbacks {
   readonly onLost: () => void;
 }
 
+/** How long to wait before requesting the lock again after a request failed. */
+export const ELECTION_RETRY_DELAY_MS = 1_000;
+
 /**
  * Elects exactly one context to own a configuration's port.
  *
@@ -35,9 +39,6 @@ export interface ElectionCallbacks {
  *
  * See ADR-0005.
  */
-/** How long to wait before requesting the lock again after a request failed. */
-export const ELECTION_RETRY_DELAY_MS = 1_000;
-
 export class OwnershipElection {
   #abort: AbortController | undefined;
   #release: Signal | undefined;
@@ -64,7 +65,7 @@ export class OwnershipElection {
    * Returns immediately. If the lock is free this context becomes the owner in a microtask;
    * otherwise it waits, without polling, until whoever holds it lets go.
    *
-   * Calling this while already participating is a no-op.
+   * Calling this while already participating, or after {@link stop}, is a no-op.
    */
   start(): void {
     if (this.#abort !== undefined || this.#isStopped) {
@@ -117,7 +118,9 @@ export class OwnershipElection {
           this.logger.warn('ownership request failed', {
             configName: this.configName,
             event: 'election.failed',
-            error: String(error),
+            // Not `String(error)`, which throws for an error whose name or message cannot be read:
+            // this handler would then never rejoin, leaving the context out of the election.
+            error: describeUnknown(error),
           });
           this.#afterRelease('failed');
         },
@@ -175,12 +178,20 @@ export class OwnershipElection {
   }
 }
 
-/** Recognises the `AbortError` a cancelled lock request rejects with. */
+/**
+ * Recognises the `AbortError` a cancelled lock request rejects with.
+ *
+ * Never throws: it runs in the rejection handlers that rejoin the election and the tab limit's
+ * queue, and a throw there would leave the context out of either for good.
+ */
 export function isAbortError(error: unknown): boolean {
-  return (
-    typeof error === 'object' &&
-    error !== null &&
-    'name' in error &&
-    (error as { name?: unknown }).name === 'AbortError'
-  );
+  if (typeof error !== 'object' || error === null) {
+    return false;
+  }
+  try {
+    return (error as { name?: unknown }).name === 'AbortError';
+  } catch {
+    // A `name` getter that throws. Whatever this is, it is not the platform's abort.
+    return false;
+  }
 }

@@ -42,7 +42,12 @@ export class WriteQueue {
     return result;
   }
 
-  /** Resolves once the queue has drained. Used when closing a port in an orderly way. */
+  /**
+   * Resolves once every job queued so far has finished, successfully or not.
+   *
+   * A job queued after the call is not waited for. Used when closing a port in an orderly way,
+   * where jobs queued after the close began find the port gone and finish at once.
+   */
   async drain(): Promise<void> {
     await this.#tail;
   }

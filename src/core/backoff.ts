@@ -35,16 +35,23 @@ export function computeBackoffDelayMs(
     return 0;
   }
 
-  const exponential = settings.initialDelayMs * Math.pow(settings.factor, attempt - 1);
-  const capped = Math.min(settings.maxDelayMs, exponential);
+  // `Math.pow` overflows to Infinity after enough attempts - some 150 with a factor of 100. The
+  // cap absorbs that, except for a zero initial delay: `0 * Infinity` is NaN, which would become
+  // the timer's delay and the diagnostics' next attempt. Zero stays zero, however long it grew.
+  const capped =
+    settings.initialDelayMs === 0
+      ? 0
+      : Math.min(
+          settings.maxDelayMs,
+          settings.initialDelayMs * Math.pow(settings.factor, attempt - 1),
+        );
 
   // Full jitter: a uniform draw from [jitter*capped, capped]. With jitter = 0 this is the
   // classic "random between 0 and the cap"; with jitter = 1 it degenerates to no jitter.
   const floor = capped * settings.jitter;
   const jittered = floor + random() * (capped - floor);
 
-  // `Math.pow` overflows to Infinity for large attempt counts before the cap is applied on
-  // some paths; the cap below makes the result finite regardless of arithmetic order.
+  // Clamped once more, for a random source that strays outside [0, 1).
   return Math.min(settings.maxDelayMs, Math.max(0, Math.round(jittered)));
 }
 

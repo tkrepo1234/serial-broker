@@ -35,6 +35,13 @@ describe('computeBackoffDelayMs', () => {
     expect(Number.isFinite(delay)).toBe(true);
   });
 
+  it('stays at zero with no initial delay, however many attempts have failed', () => {
+    const settings = { ...SETTINGS, initialDelayMs: 0, factor: 100 };
+
+    // 100^199 overflows to Infinity, and 0 * Infinity is NaN - a delay no timer can keep.
+    expect(computeBackoffDelayMs(200, settings, fixedRandom(0.5))).toBe(0);
+  });
+
   it('draws between the jitter floor and the full delay', () => {
     const floor = computeBackoffDelayMs(1, SETTINGS, fixedRandom(0));
     const ceiling = computeBackoffDelayMs(1, SETTINGS, fixedRandom(1));

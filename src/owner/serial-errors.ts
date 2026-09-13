@@ -89,21 +89,35 @@ function build(
   message: (detail: string) => string,
 ): SerialBrokerError {
   const name = domExceptionName(error);
+  // Own entries only: the tables are plain objects, and a name such as `constructor` would
+  // otherwise find what every object inherits and become the error's code.
+  const mapped = name !== undefined && Object.hasOwn(table, name) ? table[name] : undefined;
 
-  return new SerialBrokerError(
-    (name === undefined ? undefined : table[name]) ?? fallback,
-    message(describeUnknown(error)),
-    {
-      configName: context.configName,
-      // Always recorded, mapped or not: an unmapped name is exactly what a bug report needs.
-      context: { ...context.extra, domExceptionName: name },
-      timestamp: context.timestamp,
-      cause: error,
-    },
-  );
+  return new SerialBrokerError(mapped ?? fallback, message(describeUnknown(error)), {
+    configName: context.configName,
+    // Always recorded, mapped or not: an unmapped name is exactly what a bug report needs.
+    context: { ...context.extra, domExceptionName: name },
+    timestamp: context.timestamp,
+    cause: error,
+  });
 }
 
-/** The `name` of a thrown value, which for Web Serial is always a `DOMException` name. */
+/**
+ * The `name` of a thrown value, which for Web Serial is always a `DOMException` name.
+ *
+ * Never throws, and yields only a string: the mapping runs inside the supervisor's failure
+ * handling, where a throw would leave the attempt with no way out, and the name goes into
+ * `context`, which has to survive structured cloning. See docs/guidelines/defensive-programming.md.
+ */
 function domExceptionName(error: unknown): string | undefined {
-  return error instanceof Error ? error.name : undefined;
+  if (!(error instanceof Error)) {
+    return undefined;
+  }
+  try {
+    const { name } = error as { name: unknown };
+    return typeof name === 'string' ? name : undefined;
+  } catch {
+    // A `name` getter that throws: there is no name to key on, and the fallback code applies.
+    return undefined;
+  }
 }
