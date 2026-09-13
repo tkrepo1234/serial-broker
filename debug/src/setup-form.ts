@@ -3,6 +3,7 @@ import {
   DEFAULT_ENCODING_SETTINGS,
   DEFAULT_MAX_TABS,
   DEFAULT_SERIAL_SETTINGS,
+  DEFAULT_PERSIST,
 } from '../../src/core/defaults.js';
 import type { EffectiveSettings } from '../../src/core/diagnostics.js';
 import { SerialBrokerError } from '../../src/core/errors.js';
@@ -76,7 +77,7 @@ export function defaultFormValues(): SetupFormValues {
     encoding: '',
     // A checkbox cannot be left blank, so it starts at the library's default instead.
     decodeText: DEFAULT_ENCODING_SETTINGS.decodeText,
-    persist: true,
+    persist: DEFAULT_PERSIST,
     maxTabs: '',
   };
 }

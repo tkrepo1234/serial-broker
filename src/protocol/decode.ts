@@ -1,5 +1,5 @@
 import { assertNever } from '../core/assert.js';
-import { isSerializedError } from '../core/errors.js';
+import { describeUnknown, isSerializedError } from '../core/errors.js';
 
 import { isParticipantDiagnostics } from './decode-diagnostics.js';
 import { isFiniteNumber, isNonEmptyString, isRecord, isStatus, isTabLimit } from './guards.js';
@@ -79,7 +79,7 @@ export function decodeMessage(raw: unknown): DecodeResult {
     // "reading a field cannot throw" is an assumption, not a fact. Structured cloning does not
     // carry getters today, so this is unreachable through the supported transports - which is
     // exactly why it is worth two lines rather than an argument.
-    return fail({ reason: 'malformed', type: 'unreadable', field: String(error) });
+    return fail({ reason: 'malformed', type: 'unreadable', field: describeUnknown(error) });
   }
 }
 

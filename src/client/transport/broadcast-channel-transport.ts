@@ -109,7 +109,12 @@ export class BroadcastChannelTransport implements Transport {
 
     this.#attached.clear();
     this.#owned.clear();
-    this.#disposal.disposeAll();
+    for (const failure of this.#disposal.disposeAll()) {
+      this.#request.logger.warn('a cleanup step failed while closing the bus', {
+        event: 'transport.dispose-failed',
+        reason: failure,
+      });
+    }
   }
 
   #receive(raw: unknown): void {

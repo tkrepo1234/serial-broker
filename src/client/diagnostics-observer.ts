@@ -6,10 +6,15 @@ import type {
   ParticipantDiagnostics,
 } from '../core/diagnostics.js';
 import { SerialBrokerErrorCode } from '../core/error-codes.js';
-import { deserializeError, describeUnknown, SerialBrokerError } from '../core/errors.js';
+import {
+  deserializeError,
+  describeUnknown,
+  SerialBrokerError,
+  withTimestamp,
+} from '../core/errors.js';
 import type { ScopedLogger } from '../core/logger.js';
 import type { Unsubscribe } from '../core/types.js';
-import { validateName } from '../core/validation.js';
+import { invalidArgument, validateName } from '../core/validation.js';
 import type { LockInfoLike, SerialBrokerEnvironment } from '../environment/environment.js';
 import { describeDecodeFailure } from '../protocol/decode.js';
 import type { ClientId, ProtocolMessage, RequestId } from '../protocol/messages.js';
@@ -113,10 +118,9 @@ export class DiagnosticsObserver {
   async collect(windowMs: number = DEFAULT_COLLECT_WINDOW_MS): Promise<DiagnosticsSnapshot> {
     this.#assertOpen();
     if (!Number.isInteger(windowMs) || windowMs < 0) {
-      throw new SerialBrokerError(
-        SerialBrokerErrorCode.INVALID_ARGUMENT,
-        'windowMs must be a non-negative integer',
-        { context: { argumentName: 'windowMs', expected: 'a non-negative integer' } },
+      throw withTimestamp(
+        invalidArgument('windowMs', 'a non-negative integer', windowMs),
+        this.#environment.clock.now(),
       );
     }
 
@@ -167,12 +171,16 @@ export class DiagnosticsObserver {
    */
   watch(configName: string, listener: (event: ObservedEvent) => void): Unsubscribe {
     this.#assertOpen();
-    const name = validateName(configName, 'configName');
+    let name: string;
+    try {
+      name = validateName(configName, 'configName');
+    } catch (error) {
+      throw withTimestamp(error, this.#environment.clock.now());
+    }
     if (typeof listener !== 'function') {
-      throw new SerialBrokerError(
-        SerialBrokerErrorCode.INVALID_ARGUMENT,
-        'listener must be a function',
-        { context: { argumentName: 'listener' } },
+      throw withTimestamp(
+        invalidArgument('listener', 'a function', listener, { configName: name }),
+        this.#environment.clock.now(),
       );
     }
 

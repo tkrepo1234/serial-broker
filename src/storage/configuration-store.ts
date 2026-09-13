@@ -48,6 +48,8 @@ export class ConfigurationStore {
     private readonly storage: KeyValueStorage,
     private readonly logger: ScopedLogger,
     private readonly reportProblem: StorageProblemReporter,
+    /** The time for the errors it reports; the store has no clock of its own (ADR-0014). */
+    private readonly now: () => number = () => 0,
   ) {}
 
   /**
@@ -91,7 +93,7 @@ export class ConfigurationStore {
           new SerialBrokerError(
             SerialBrokerErrorCode.STORAGE_CORRUPT,
             `The stored configuration "${name}" was discarded because it is no longer valid`,
-            { configName: name, cause: error },
+            { configName: name, cause: error, timestamp: this.now() },
           ),
         );
       }
@@ -239,7 +241,7 @@ export class ConfigurationStore {
       new SerialBrokerError(
         SerialBrokerErrorCode.STORAGE_UNAVAILABLE,
         `Configurations cannot be persisted: the ${operation} failed`,
-        { context: { operation }, cause: error },
+        { context: { operation }, cause: error, timestamp: this.now() },
       ),
     );
   }
@@ -250,7 +252,10 @@ export class ConfigurationStore {
       reason,
     });
     this.reportProblem(
-      new SerialBrokerError(SerialBrokerErrorCode.STORAGE_CORRUPT, reason, { cause: error }),
+      new SerialBrokerError(SerialBrokerErrorCode.STORAGE_CORRUPT, reason, {
+        cause: error,
+        timestamp: this.now(),
+      }),
     );
     this.clear();
   }

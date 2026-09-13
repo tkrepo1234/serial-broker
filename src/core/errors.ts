@@ -308,3 +308,24 @@ export function describeUnknown(value: unknown): string {
 function isDomException(error: Error): boolean {
   return Object.prototype.toString.call(error) === '[object DOMException]';
 }
+
+/**
+ * Gives an error created without a time the moment it reached the caller.
+ *
+ * Validation runs in core code that has no clock (ADR-0014), so the errors it throws carry the
+ * timestamp `0`, where the documentation promises epoch milliseconds. The code that calls it has
+ * the clock, and fills the time in once, before the error reaches the application.
+ *
+ * @returns The same value, for `throw withTimestamp(error, now)`.
+ */
+export function withTimestamp(error: unknown, now: number): unknown {
+  if (error instanceof SerialBrokerError && error.timestamp === 0) {
+    Object.defineProperty(error, 'timestamp', {
+      value: now,
+      enumerable: true,
+      configurable: true,
+      writable: false,
+    });
+  }
+  return error;
+}

@@ -3,7 +3,7 @@ import type { NormalizedConfiguration } from '../core/defaults.js';
 import type { ParticipantDiagnostics } from '../core/diagnostics.js';
 import { DisposalStack } from '../core/disposable.js';
 import { SerialBrokerErrorCode } from '../core/error-codes.js';
-import { describeUnknown, SerialBrokerError } from '../core/errors.js';
+import { describeUnknown, SerialBrokerError, withTimestamp } from '../core/errors.js';
 import type { ScopedLogger } from '../core/logger.js';
 import type {
   ReleaseOptions,
@@ -18,6 +18,7 @@ import {
   normalizeConfiguration,
   toSetupOptions,
   validateName,
+  invalidArgument,
 } from '../core/validation.js';
 import type { SerialBrokerEnvironment } from '../environment/environment.js';
 import { matchesDevice } from '../owner/port-matcher.js';
@@ -86,11 +87,16 @@ export class SerialBrokerClient {
     this.#clientId = environment.newId('c') as ClientId;
     this.#logger = environment.logger.child({ clientId: this.#clientId });
 
-    this.#store = new ConfigurationStore(environment.storage, this.#logger, (error) => {
-      // Storage problems are never fatal: the library works in memory, it just will not
-      // remember across a reload. Reporting it to every session is how an application learns.
-      this.#reportGlobal(error);
-    });
+    this.#store = new ConfigurationStore(
+      environment.storage,
+      this.#logger,
+      (error) => {
+        // Storage problems are never fatal: the library works in memory, it just will not
+        // remember across a reload. Reporting it to every session is how an application learns.
+        this.#reportGlobal(error);
+      },
+      () => environment.clock.now(),
+    );
   }
 
   /** This context's identity on the bus. Diagnostics only; never exposed publicly. */
@@ -138,7 +144,7 @@ export class SerialBrokerClient {
   async setup(name: unknown, options: unknown): Promise<void> {
     this.#assertUsable();
 
-    const configuration = normalizeConfiguration(name, options);
+    const configuration = this.#stamped(() => normalizeConfiguration(name, options));
 
     const releasing = this.#releasing.get(configuration.name);
     if (releasing !== undefined) {
@@ -227,7 +233,7 @@ export class SerialBrokerClient {
 
   /** Stops using a configuration in this context. */
   async release(name: unknown, options: ReleaseOptions = {}): Promise<void> {
-    const validName = validateName(name);
+    const validName = this.#validName(name);
     const session = this.#sessions.get(validName);
     if (session === undefined) {
       if (this.#setUpDuringRelease.has(validName)) {
@@ -290,7 +296,7 @@ export class SerialBrokerClient {
 
   /** Writes to a device. */
   async send(name: unknown, data: SendableData): Promise<void> {
-    const session = this.#requireSession(validateName(name));
+    const session = this.#requireSession(this.#validName(name));
     await session.send(this.#toBytes(data, session.definition));
   }
 
@@ -300,31 +306,24 @@ export class SerialBrokerClient {
     event: TEvent,
     listener: (payload: SerialBrokerEventMap[TEvent]) => void,
   ): Unsubscribe {
-    const validName = validateName(name);
+    const validName = this.#validName(name);
     const session = this.#requireSession(validName);
 
     if (typeof event !== 'string' || !Object.hasOwn(EVENT_NAMES, event)) {
       // A misspelt event name would otherwise register a listener that is never called, and
       // nothing would ever say so.
-      throw new SerialBrokerError(
-        SerialBrokerErrorCode.INVALID_ARGUMENT,
-        `event must be one of ${Object.keys(EVENT_NAMES).join(', ')}`,
-        {
+      throw withTimestamp(
+        invalidArgument('event', `one of ${Object.keys(EVENT_NAMES).join(', ')}`, event, {
           configName: validName,
-          context: {
-            argumentName: 'event',
-            expected: Object.keys(EVENT_NAMES).join(' | '),
-            actualType: typeof event,
-          },
-        },
+        }),
+        this.environment.clock.now(),
       );
     }
 
     if (typeof listener !== 'function') {
-      throw new SerialBrokerError(
-        SerialBrokerErrorCode.INVALID_ARGUMENT,
-        'listener must be a function',
-        { configName: validName, context: { argumentName: 'listener' } },
+      throw withTimestamp(
+        invalidArgument('listener', 'a function', listener, { configName: validName }),
+        this.environment.clock.now(),
       );
     }
 
@@ -353,17 +352,17 @@ export class SerialBrokerClient {
     event: TEvent,
     listener: (payload: SerialBrokerEventMap[TEvent]) => void,
   ): void {
-    this.#sessions.get(validateName(name))?.unsubscribe(event, listener);
+    this.#sessions.get(this.#validName(name))?.unsubscribe(event, listener);
   }
 
   /** A point-in-time view of a configuration. */
   getStatus(name: unknown): SerialBrokerStatusSnapshot {
-    return this.#requireSession(validateName(name)).getStatus();
+    return this.#requireSession(this.#validName(name)).getStatus();
   }
 
   /** `true` if a configuration is set up in this context. */
   exists(name: unknown): boolean {
-    return this.#sessions.has(validateName(name));
+    return this.#sessions.has(this.#validName(name));
   }
 
   /** Every configuration name set up in this context. */
@@ -378,7 +377,7 @@ export class SerialBrokerClient {
    * @throws A {@link SerialBrokerError} for anything other than a dismissal.
    */
   async requestAccess(name: unknown): Promise<boolean> {
-    const session = this.#requireSession(validateName(name));
+    const session = this.#requireSession(this.#validName(name));
 
     try {
       await session.requestAccess();
@@ -413,7 +412,12 @@ export class SerialBrokerClient {
 
     this.#transport?.close();
     this.#transport = undefined;
-    this.#disposal.disposeAll();
+    for (const failure of this.#disposal.disposeAll()) {
+      this.#logger.warn('a cleanup step failed while disposing', {
+        event: 'client.dispose-failed',
+        reason: failure,
+      });
+    }
   }
 
   // --- Internals ------------------------------------------------------------------------------
@@ -641,6 +645,19 @@ export class SerialBrokerClient {
     }
   }
 
+  /** Runs a check from core code, filling in the time of the error it throws (see `withTimestamp`). */
+  #stamped<T>(check: () => T): T {
+    try {
+      return check();
+    } catch (error) {
+      throw withTimestamp(error, this.environment.clock.now());
+    }
+  }
+
+  #validName(name: unknown): string {
+    return this.#stamped(() => validateName(name));
+  }
+
   #requireSession(name: string): ConfigurationSession {
     const session = this.#sessions.get(name);
     if (session === undefined) {
@@ -668,14 +685,21 @@ export class SerialBrokerClient {
           `String payloads can only be encoded as UTF-8; "${configuration.encoding.encoding}" is configured. Encode the bytes yourself and pass a Uint8Array.`,
           {
             configName: configuration.name,
-            context: { argumentName: 'data', encoding: configuration.encoding.encoding },
+            // Not `invalidArgument`: that records a primitive value, and this one is the payload.
+            context: {
+              argumentName: 'data',
+              expected: 'bytes, while an encoding other than UTF-8 is configured',
+              actualType: 'string',
+              encoding: configuration.encoding.encoding,
+            },
+            timestamp: this.environment.clock.now(),
           },
         );
       }
       return new TextEncoder().encode(data);
     }
 
-    return copyBytes(data);
+    return this.#stamped(() => copyBytes(data));
   }
 
   async #forgetDevice(configuration: NormalizedConfiguration): Promise<void> {

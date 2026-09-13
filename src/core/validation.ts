@@ -72,7 +72,11 @@ export function invalidArgument(
   argumentName: string,
   expected: string,
   actual: unknown,
-  options: { readonly cause?: unknown; readonly context?: Readonly<Record<string, unknown>> } = {},
+  options: {
+    readonly cause?: unknown;
+    readonly context?: Readonly<Record<string, unknown>>;
+    readonly configName?: string;
+  } = {},
 ): SerialBrokerError {
   return new SerialBrokerError(
     SerialBrokerErrorCode.INVALID_ARGUMENT,
@@ -86,6 +90,7 @@ export function invalidArgument(
         actualValue: isLoggableValue(actual) ? actual : undefined,
       },
       cause: options.cause,
+      configName: options.configName,
     },
   );
 }

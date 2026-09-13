@@ -7,7 +7,7 @@ import {
 import type { Transport, TransportRequest } from '../client/transport/transport.js';
 import type { Clock } from '../core/clock.js';
 import { SerialBrokerErrorCode } from '../core/error-codes.js';
-import { SerialBrokerError } from '../core/errors.js';
+import { describeUnknown, SerialBrokerError } from '../core/errors.js';
 import { NOOP_LOGGER, ScopedLogger } from '../core/logger.js';
 import type { Logger, TransportKind } from '../core/types.js';
 
@@ -79,7 +79,7 @@ function requireSerial(): SerialLike {
     throw new SerialBrokerError(
       SerialBrokerErrorCode.WEB_SERIAL_UNAVAILABLE,
       'This context does not expose navigator.serial',
-      { context: { hasNavigator: typeof navigator !== 'undefined' } },
+      { context: { hasNavigator: typeof navigator !== 'undefined' }, timestamp: Date.now() },
     );
   }
   return navigator.serial;
@@ -90,7 +90,7 @@ function requireLocks(): LockManagerLike {
     throw new SerialBrokerError(
       SerialBrokerErrorCode.WEB_LOCKS_UNAVAILABLE,
       'This context does not expose navigator.locks',
-      {},
+      { timestamp: Date.now() },
     );
   }
   return navigator.locks;
@@ -146,7 +146,7 @@ function createTransport(request: TransportRequest, options: BrowserEnvironmentO
       throw new SerialBrokerError(
         SerialBrokerErrorCode.BROKER_UNAVAILABLE,
         'The SharedWorker transport was requested, but this context has no SharedWorker',
-        {},
+        { timestamp: Date.now() },
       );
     }
     if (typeof BroadcastChannel !== 'undefined') {
@@ -184,12 +184,12 @@ function createTransport(request: TransportRequest, options: BrowserEnvironmentO
         throw new SerialBrokerError(
           SerialBrokerErrorCode.BROKER_UNAVAILABLE,
           'The SharedWorker transport was requested but could not be constructed',
-          { cause: error },
+          { cause: error, timestamp: Date.now() },
         );
       }
       request.logger.warn('SharedWorker unavailable; falling back to BroadcastChannel', {
         event: 'environment.transport-fallback',
-        reason: String(error),
+        reason: describeUnknown(error),
       });
     }
   }
@@ -198,7 +198,7 @@ function createTransport(request: TransportRequest, options: BrowserEnvironmentO
     throw new SerialBrokerError(
       SerialBrokerErrorCode.TRANSPORT_UNAVAILABLE,
       'Neither SharedWorker nor BroadcastChannel is available in this context',
-      {},
+      { timestamp: Date.now() },
     );
   }
 

@@ -1,5 +1,6 @@
 import type { Clock, TimerHandle } from '../core/clock.js';
 import { createSignal, type Signal } from '../core/deadline.js';
+import { describeUnknown } from '../core/errors.js';
 import type { ScopedLogger } from '../core/logger.js';
 import type { LockManagerLike } from '../environment/environment.js';
 import { isAbortError } from '../owner/election.js';
@@ -181,7 +182,7 @@ export class TabSlot {
     this.logger.warn('requesting a place among the tabs failed; the tab queues again', {
       configName: this.configName,
       event: 'slot.failed',
-      error: String(error),
+      error: describeUnknown(error),
     });
     // After a pause, for the reason the election pauses: a request the browser refuses outright
     // would otherwise be repeated in an endless chain of microtasks.

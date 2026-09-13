@@ -1,5 +1,6 @@
 import type { TimerHandle } from '../../core/clock.js';
 import { DisposalStack } from '../../core/disposable.js';
+import { describeUnknown } from '../../core/errors.js';
 import { decodeMessage } from '../../protocol/decode.js';
 import { HEARTBEAT_INTERVAL_MS, MAX_UNANSWERED_HEARTBEATS } from '../../protocol/heartbeat.js';
 import type { ProtocolMessage } from '../../protocol/messages.js';
@@ -166,7 +167,12 @@ export class SharedWorkerTransport implements Transport {
 
     this.#sender.sendGoodbye();
 
-    this.#disposal.disposeAll();
+    for (const failure of this.#disposal.disposeAll()) {
+      this.#request.logger.warn('a cleanup step failed while closing the bus', {
+        event: 'transport.dispose-failed',
+        reason: failure,
+      });
+    }
   }
 
   /**
@@ -310,7 +316,7 @@ export class SharedWorkerTransport implements Transport {
       // reported; the next unanswered heartbeats try again.
       this.#request.logger.warn('could not start a new SharedWorker', {
         event: 'transport.worker-restart-failed',
-        reason: String(error),
+        reason: describeUnknown(error),
       });
       return;
     }
