@@ -199,6 +199,17 @@ they are left unticked because the checklist is about a run **with** hardware.
       in both, then repeat steps 5 and 6. Both tabs must log `environment.transport-fallback` with
       `reason: 'worker-script-failed'` and behave as in step 25.
 
+### The worker
+
+- [ ] **28.** Configure a `workerUrl` that serves a build of the worker with another
+      `PROTOCOL_VERSION`, open two tabs and set the configuration up in both. Both tabs must report
+      `PROTOCOL_VERSION_MISMATCH`, log `environment.transport-fallback` with
+      `reason: 'worker-other-protocol-version'`, and behave as in step 25.
+- [ ] **29.** With two tabs sharing the port, terminate the worker from `chrome://inspect/#workers`.
+      Within about a minute each tab reports `BROKER_UNAVAILABLE` once, a new worker appears there,
+      and steps 5 and 6 work again without a reload. Repeat with one tab hidden for more than five
+      minutes beforehand: it reconnects too, within about four minutes.
+
 ## Recording a run
 
 Append to this file:

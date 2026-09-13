@@ -55,6 +55,8 @@ describe('tabs on the SharedWorker', () => {
 
     expect(harness.bus.workerHost.clientCount).toBe(2);
     expect(other.receivedText('Reader')).toBe('STILL HERE');
+    // The worker answered every heartbeat, so no tab gave up on it.
+    expect(other.recordFor('Reader').errors).toEqual([]);
   });
 
   it('keep working after the owner died and its successor took over', async () => {

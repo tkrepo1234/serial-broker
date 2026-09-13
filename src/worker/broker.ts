@@ -103,6 +103,9 @@ export class Broker {
 
       case 'heartbeat':
         this.#restore(clientId, message.configNames, message.ownedConfigNames);
+        // Answered, because a port to a dead worker reports nothing to the tab either: a tab whose
+        // heartbeats go unanswered gives up on this worker and starts a new one (ADR-0021).
+        this.host.deliver(clientId, welcomeFor(clientId));
         return;
 
       case 'welcome':

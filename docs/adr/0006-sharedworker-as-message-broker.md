@@ -77,3 +77,17 @@ there means it works identically under both transports and survives the broker i
 
 Scenario matrix rows 3, 4, 7, 11, 12; the harness implements a real multi-context message
 graph with controllable delivery order.
+
+## Amendment (2026-09-13): two consequences that did not hold
+
+Two positive consequences above were wrong, and are corrected here rather than rewritten.
+
+- "A closed message port tells the broker immediately that a participant is gone." A `MessagePort`
+  has no close event. The broker learns that a tab died only when its heartbeats stop
+  ([ADR-0021](./0021-forget-silent-participants.md)).
+- "If it were restarted, participants re-announce themselves on their next message." Nothing made
+  an open tab notice a restart: a port to a dead worker delivers and reports nothing, and no
+  transport started a worker again. Since ADR-0021's amendment the broker answers heartbeats, and a
+  tab whose heartbeats go unanswered starts a new worker and restores its participation and
+  ownership with a heartbeat. The broker still holds nothing that has to be recovered; what is lost
+  is the traffic between its death and the tabs reconnecting.

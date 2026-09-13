@@ -120,7 +120,11 @@ describe('serial-broker.worker', () => {
       }),
     );
     bob.deliver(envelope('bob', 'all', { type: 'status-request', configName: 'Reader' }));
-    expect(alice.posted).toHaveLength(1);
+    // The broker answers her heartbeat, and routes to her again.
+    expect(alice.posted).toEqual([
+      expect.objectContaining({ type: 'welcome' }),
+      expect.objectContaining({ type: 'status-request' }),
+    ]);
   });
 
   it('keeps a port whose message failed to clone, and goes on routing to it', () => {
@@ -162,6 +166,51 @@ describe('serial-broker.worker', () => {
     }
 
     expect(alice.listenerCount('messageerror')).toBe(1);
+  });
+
+  it('answers a heartbeat on the port it came from', () => {
+    const alice = new FakeMessagePort();
+    const bob = new FakeMessagePort();
+    connect({ ports: [alice] });
+    connect({ ports: [bob] });
+    bob.deliver(envelope('bob', 'all', { type: 'attach', configName: 'Reader' }));
+
+    alice.deliver(
+      envelope('alice', 'all', {
+        type: 'heartbeat',
+        configNames: ['Reader'],
+        ownedConfigNames: [],
+      }),
+    );
+
+    // A tab that hears nothing back gives up on the worker and starts a new one (ADR-0021).
+    expect(alice.posted).toEqual([expect.objectContaining({ type: 'welcome', to: 'alice' })]);
+    expect(bob.posted).toHaveLength(0);
+  });
+
+  it('routes to the port a context came back on, even after a late message on the one it left', () => {
+    const oldPort = new FakeMessagePort();
+    const newPort = new FakeMessagePort();
+    const bob = new FakeMessagePort();
+    const heartbeat = { type: 'heartbeat', configNames: ['Reader'], ownedConfigNames: [] };
+    connect({ ports: [oldPort] });
+    oldPort.deliver(envelope('alice', 'all', heartbeat));
+    vi.advanceTimersByTime(SILENT_PARTICIPANT_TIMEOUT_MS + SWEEP_INTERVAL_MS);
+
+    // Alice's tab gave up on this worker while it was stuck, and connected again. A message still
+    // queued on her old port arrives after the new port was registered.
+    connect({ ports: [newPort] });
+    newPort.deliver(envelope('alice', 'all', heartbeat));
+    oldPort.deliver(envelope('alice', 'all', heartbeat));
+    newPort.deliver(envelope('alice', 'all', heartbeat));
+    oldPort.posted.length = 0;
+    newPort.posted.length = 0;
+
+    connect({ ports: [bob] });
+    bob.deliver(envelope('bob', 'all', { type: 'status-request', configName: 'Reader' }));
+
+    expect(newPort.posted).toEqual([expect.objectContaining({ type: 'status-request' })]);
+    expect(oldPort.posted).toHaveLength(0);
   });
 
   it('ignores a connect event with no port', () => {

@@ -13,10 +13,12 @@ import { Broker } from './broker.js';
  * open - that is the entire reason it exists. Every tab connects a `MessagePort` to it, and
  * it routes between them (ADR-0006).
  *
- * It deliberately holds no important state: if the browser were to discard and restart it,
- * participants re-announce themselves with their next message and nothing is lost. The things
- * that must not be lost - which context owns the port, what happens to an in-flight write -
- * are held by the Web Lock and by the context that issued the write (ADR-0005, ADR-0013).
+ * It deliberately holds no important state. If the worker dies - it crashed, the browser ended it,
+ * or someone terminated it - no tab is told: their ports simply go quiet. The broker answers every
+ * heartbeat, so each tab notices within a few heartbeats, starts a new worker, and restores its
+ * part there with a heartbeat (ADR-0021). What is lost is the traffic in between. The things that
+ * must not be lost - which context owns the port, what happens to an in-flight write - are held by
+ * the Web Lock and by the context that issued the write (ADR-0005, ADR-0013).
  *
  * This file never imports the Web Serial API. It cannot: `navigator.serial` is not exposed to
  * workers, which is the constraint the whole architecture is built around (ADR-0004).
@@ -119,7 +121,10 @@ function handleMessage(port: MessagePort, raw: unknown): void {
 }
 
 function register(port: MessagePort, clientId: ClientId): void {
-  if (identities.get(port) === clientId) {
+  // Both directions are checked. A tab that gave up on this worker while it hung connects again on
+  // a new port, and a message still queued on its old port can arrive after the sweep forgot it.
+  // The tab's next message on its new port has to win the table back.
+  if (identities.get(port) === clientId && ports.get(clientId) === port) {
     return;
   }
 

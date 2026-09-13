@@ -20,3 +20,17 @@ export const SILENT_PARTICIPANT_TIMEOUT_MS = 180_000;
 
 /** How often the broker looks for participants that have fallen silent. */
 export const SWEEP_INTERVAL_MS = 30_000;
+
+/**
+ * How many heartbeats in a row the broker may leave unanswered before a participant gives up on
+ * the worker (ADR-0021).
+ *
+ * The broker answers every heartbeat at once, so heartbeats going unanswered mean that the worker
+ * died or hangs - a port to a dead worker reports nothing else. Counted in heartbeats rather than
+ * measured in time: a browser holds back the timers of a hidden tab to about one run a minute, and
+ * such a tab sends fewer heartbeats, each of them still answered, so throttling can delay the
+ * verdict but never cause it. A long task in the tab can push one answer past the next heartbeat,
+ * not three in a row. With three, a dead worker is noticed 45 to 60 seconds after its last answer
+ * in a visible tab, and within about four minutes in a hidden one.
+ */
+export const MAX_UNANSWERED_HEARTBEATS = 3;

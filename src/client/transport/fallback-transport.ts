@@ -7,10 +7,13 @@ import type { Transport, TransportRequest } from './transport.js';
  * Most traffic messages - data received and data sent - kept for replay while the worker has
  * not answered.
  *
- * A worker script normally answers within milliseconds, and a missing one is reported about as
- * fast. The bound only matters for a fetch that hangs while the tab holds a port that streams
- * data, and there it trades completeness of the traffic for bounded memory. Every other message
- * is always kept: dropping an ownership claim or a write result would leave other tabs waiting.
+ * A worker script normally answers within milliseconds, and a missing one, or one of another
+ * protocol version, is found out about as fast. One that says nothing at all is given up on once
+ * `MAX_UNANSWERED_HEARTBEATS` heartbeats went unanswered - under a minute in a visible tab, a few in
+ * a hidden one (ADR-0021) - so the record is kept for that long at most. In that time only traffic
+ * arrives in quantity, and this bound trades its completeness for bounded memory. Every other
+ * message is always kept: dropping an ownership claim or a write result would leave other tabs
+ * waiting, and the rest of what a tab says in that time is bounded by the time itself.
  */
 export const MAX_REPLAYED_MESSAGES = 1000;
 
@@ -19,6 +22,7 @@ const FALLBACK_LOG_MESSAGES: Readonly<Record<WorkerLoadFailure, string>> = {
   'worker-script-failed': 'the SharedWorker script did not load; using BroadcastChannel',
   'worker-other-protocol-version':
     'the SharedWorker script runs another protocol version; using BroadcastChannel',
+  'worker-not-answering': 'the SharedWorker never answered; using BroadcastChannel',
 };
 
 /** Something the application's side of the bus asked for, in the order it asked. */
