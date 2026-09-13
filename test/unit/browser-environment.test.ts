@@ -17,6 +17,9 @@ import type { ClientId } from '../../src/protocol/messages.js';
 
 const globals = globalThis as Record<string, unknown>;
 
+/** The `error` listeners registered on every stubbed `SharedWorker`, to fire a load failure. */
+const workerErrorListeners: ((event: unknown) => void)[] = [];
+
 function stubBrowser(
   overrides: {
     hasSerial?: boolean;
@@ -60,7 +63,11 @@ function stubBrowser(
           close: () => undefined,
           addEventListener: () => undefined,
         };
-        addEventListener = (): void => undefined;
+        addEventListener = (type: string, listener: (event: unknown) => void): void => {
+          if (type === 'error') {
+            workerErrorListeners.push(listener);
+          }
+        };
         constructor() {
           if (sharedWorker === 'throwing') {
             throw new Error('Refused to create a worker: CSP');
@@ -118,6 +125,7 @@ function transportRequest(): Parameters<
 }
 
 afterEach(() => {
+  workerErrorListeners.length = 0;
   vi.unstubAllGlobals();
   delete globals['navigator'];
 });
@@ -208,6 +216,37 @@ describe('createBrowserEnvironment', () => {
         transportRequest(),
       ).kind,
     ).toBe('broadcastchannel');
+  });
+
+  it('falls back when the worker script fails to load after construction', () => {
+    stubBrowser();
+    const transport = createBrowserEnvironment({
+      workerUrl: 'https://example.test/missing.js',
+    }).createTransport(transportRequest());
+    expect(transport.kind).toBe('sharedworker');
+
+    // A 404 does not make construction throw; the browser reports it afterwards.
+    for (const listener of workerErrorListeners) {
+      listener({ type: 'error' });
+    }
+
+    expect(transport.kind).toBe('broadcastchannel');
+  });
+
+  it('reports a worker script that fails to load when SharedWorker was demanded', () => {
+    stubBrowser();
+    const errors: unknown[] = [];
+    const transport = createBrowserEnvironment({
+      transport: 'sharedworker',
+      workerUrl: 'https://example.test/missing.js',
+    }).createTransport({ ...transportRequest(), onTransportError: (error) => errors.push(error) });
+
+    for (const listener of workerErrorListeners) {
+      listener({ type: 'error' });
+    }
+
+    expect(transport.kind).toBe('sharedworker');
+    expect(errors).toHaveLength(1);
   });
 
   it('reports that no transport is available when neither exists', () => {

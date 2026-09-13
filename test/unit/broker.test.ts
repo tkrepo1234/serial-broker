@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { NOOP_LOGGER, ScopedLogger } from '../../src/core/logger.js';
-import type { ClientId, ProtocolMessage } from '../../src/protocol/messages.js';
+import { BROKER_ID, type ClientId, type ProtocolMessage } from '../../src/protocol/messages.js';
 import { PROTOCOL_VERSION } from '../../src/protocol/version.js';
 import { Broker } from '../../src/worker/broker.js';
 
@@ -237,6 +237,7 @@ describe('Broker', () => {
     broker.handleMessage(ALICE, attach(ALICE));
     broker.handleConnect(BOB);
     broker.handleMessage(CAROL, message(CAROL, 'all', { type: 'hello' } as never));
+    delivered.length = 0;
 
     broker.handleMessage(
       CAROL,
@@ -247,12 +248,25 @@ describe('Broker', () => {
     expect(delivered.map((entry) => entry.to)).toEqual([ALICE, BOB]);
   });
 
-  it('ignores hello, which exists only to announce a context', () => {
+  it('answers hello with a welcome to that context alone, which proves the script runs', () => {
     const { broker, delivered } = createBroker();
+    broker.handleMessage(BOB, attach(BOB));
+    delivered.length = 0;
 
     broker.handleMessage(ALICE, message(ALICE, 'all', { type: 'hello' } as never));
 
+    expect(delivered).toEqual([
+      { to: ALICE, message: { type: 'welcome', v: PROTOCOL_VERSION, from: BROKER_ID, to: ALICE } },
+    ]);
+    expect(broker.clientCount).toBe(2);
+  });
+
+  it('ignores a welcome, which only the broker itself sends', () => {
+    const { broker, delivered } = createBroker();
+    broker.handleMessage(BOB, attach(BOB));
+
+    broker.handleMessage(ALICE, message(ALICE, 'all', { type: 'welcome' } as never));
+
     expect(delivered).toHaveLength(0);
-    expect(broker.clientCount).toBe(1);
   });
 });

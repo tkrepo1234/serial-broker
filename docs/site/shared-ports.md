@@ -190,10 +190,10 @@ either.
 ## The message bus
 
 Tabs exchange messages through a `SharedWorker` by default. The worker only routes messages: it
-does not open the port, decide who owns it, or hold writes. If a `SharedWorker` is not available —
-or when the browser refuses to create one — serial-broker uses a `BroadcastChannel` instead. A
-worker that is created but whose script cannot be loaded is not replaced; it is reported as
-`BROKER_UNAVAILABLE`, and the tab cannot coordinate until the script is served correctly.
+does not open the port, decide who owns it, or hold writes. If a `SharedWorker` is not available,
+the browser refuses to create one, or its script fails to load, serial-broker uses a
+`BroadcastChannel` instead. What a tab sent before its worker script failed is sent again over the
+channel, once and in order, so the tab joins the others as if it had started there.
 
 Behaviour is identical on both. The fallback costs a little more work per message, because every
 tab receives every message and ignores those not meant for it; at the rates a serial device

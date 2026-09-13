@@ -27,15 +27,12 @@ chapters in Markdown (MyST), the API reference generated from TSDoc, Python in `
 
 ### Found while writing the chapters
 
-Checking every statement against the source turned up behaviour worth deciding on. Fixed at once:
+Checking every statement against the source turned up behaviour worth deciding on. A worker script
+that fails to load now falls back to `BroadcastChannel` too (ADR-0007, amended). Fixed at once:
 `SerialBroker.configure({ logPayloads })` was never passed on and did nothing, and the remediation
 for `RECONNECT_EXHAUSTED` advised a second `setup()`, which is a no-op. Open, and documented as
 they are:
 
-- **A worker script that fails to load does not fall back.** `SharedWorker` construction succeeds
-  and the failure arrives later as an `error` event, reported as `BROKER_UNAVAILABLE`. The tab is
-  then cut off from the others, and two such tabs would both try to hold the device. Falling back
-  to `BroadcastChannel` at that point would make a mis-served worker script harmless.
 - **Tabs on different protocol versions cannot detect each other.** The version is part of every
   lock and bus name, so `PROTOCOL_VERSION_MISMATCH` is practically never raised; the symptom is a
   tab that cannot open the device. A version-independent announcement channel would make the

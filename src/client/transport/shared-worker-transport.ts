@@ -24,6 +24,17 @@ export interface MessagePortLike {
 /** Constructs a `SharedWorker`. Injected so the harness can substitute one (ADR-0014). */
 export type SharedWorkerFactory = (url: string | URL, name: string) => SharedWorkerLike;
 
+/** Tells whoever created the transport whether the worker script started (ADR-0007). */
+export interface WorkerStartup {
+  /** The broker answered `hello`: the script loaded and runs. Called at most once. */
+  readonly onReady: () => void;
+  /**
+   * The script failed to load before the broker ever answered, so nothing sent so far reached
+   * anyone. Called instead of reporting the failure as a transport error.
+   */
+  readonly onLoadFailed: (event: unknown) => void;
+}
+
 /**
  * Delivers messages through a `SharedWorker` hosting the broker.
  *
@@ -40,18 +51,34 @@ export class SharedWorkerTransport implements Transport {
   readonly #port: MessagePortLike;
   readonly #disposal = new DisposalStack();
   readonly #request: TransportRequest;
+  readonly #startup: WorkerStartup | undefined;
+  #isReady = false;
 
-  constructor(request: TransportRequest, createWorker: SharedWorkerFactory, url: string | URL) {
+  /**
+   * @param startup - When given, a script that fails to load before the broker answers is
+   *   reported to it rather than as a transport error, and so is the broker's answer.
+   */
+  constructor(
+    request: TransportRequest,
+    createWorker: SharedWorkerFactory,
+    url: string | URL,
+    startup?: WorkerStartup,
+  ) {
     this.clientId = request.clientId;
     this.#request = request;
+    this.#startup = startup;
 
     const worker = createWorker(url, brokerChannelName());
     this.#port = worker.port;
 
     worker.addEventListener('error', (event) => {
-      // A worker that fails to evaluate leaves a port that silently never delivers anything.
-      // Surfacing it here is what lets the client fall back to BroadcastChannel instead of
-      // waiting forever for a connection that cannot happen.
+      // The browser fires this when the script cannot be fetched or evaluated, and a port to
+      // such a worker silently delivers nothing. Before the broker has answered, that also means
+      // nothing sent so far arrived anywhere - which is what makes sending it again elsewhere safe.
+      if (!this.#isReady && this.#startup !== undefined) {
+        this.#startup.onLoadFailed(event);
+        return;
+      }
       request.onTransportError(event);
     });
 
@@ -141,6 +168,15 @@ export class SharedWorkerTransport implements Transport {
     const result = decodeMessage(raw);
     if (!result.ok) {
       this.#request.onDecodeFailure(result.failure);
+      return;
+    }
+
+    if (result.message.type === 'welcome') {
+      // Meant for this transport rather than for the client: the script is running.
+      if (!this.#isReady) {
+        this.#isReady = true;
+        this.#startup?.onReady();
+      }
       return;
     }
 

@@ -1,5 +1,9 @@
 import { BroadcastChannelTransport } from '../client/transport/broadcast-channel-transport.js';
-import { SharedWorkerTransport } from '../client/transport/shared-worker-transport.js';
+import { FallbackTransport } from '../client/transport/fallback-transport.js';
+import {
+  SharedWorkerTransport,
+  type SharedWorkerFactory,
+} from '../client/transport/shared-worker-transport.js';
 import type { Transport, TransportRequest } from '../client/transport/transport.js';
 import type { Clock } from '../core/clock.js';
 import { SerialBrokerErrorCode } from '../core/error-codes.js';
@@ -124,8 +128,9 @@ function createStorage(): KeyValueStorage {
  * Chooses and constructs the message bus.
  *
  * `SharedWorker` first, because point-to-point routing is cheaper and presence is exact
- * (ADR-0006). `BroadcastChannel` when it is unavailable or its construction throws, which is
- * a realistic outcome of a strict CSP or an unusual bundler setup (ADR-0007).
+ * (ADR-0006). `BroadcastChannel` when it is unavailable, when its construction throws, or when
+ * its script fails to load - realistic outcomes of a strict CSP, an unusual bundler setup, or a
+ * worker file that was not deployed (ADR-0007).
  */
 function createTransport(
   request: TransportRequest,
@@ -137,14 +142,24 @@ function createTransport(
   if (preference !== 'broadcastchannel' && typeof SharedWorker !== 'undefined') {
     try {
       const url = options.workerUrl ?? defaultWorkerUrl();
-      return new SharedWorkerTransport(
+      // The one place where the platform's `SharedWorker` meets the narrowed interface the
+      // transport works against.
+      const createWorker: SharedWorkerFactory = (scriptUrl, name) =>
+        new SharedWorker(scriptUrl, { name, type: 'module' });
+
+      if (preference === 'sharedworker' || typeof BroadcastChannel === 'undefined') {
+        return new SharedWorkerTransport(request, createWorker, url);
+      }
+
+      // A script that cannot be fetched does not make construction throw: the browser creates
+      // the worker and reports the failure afterwards. A transport that can still switch then
+      // keeps such a tab connected to the others (ADR-0007).
+      return new FallbackTransport(
         request,
-        // The cast is the one place where the platform's `SharedWorker` meets the narrowed
-        // interface the transport works against; the shapes match, but TypeScript has no way
-        // to know that `MessagePort` satisfies `MessagePortLike` structurally under its
-        // overloaded `addEventListener`.
-        (scriptUrl, name) => new SharedWorker(scriptUrl, { name, type: 'module' }),
-        url,
+        (workerRequest, startup) =>
+          new SharedWorkerTransport(workerRequest, createWorker, url, startup),
+        (fallbackRequest) =>
+          new BroadcastChannelTransport(fallbackRequest, (name) => new BroadcastChannel(name)),
       );
     } catch (error) {
       if (preference === 'sharedworker') {

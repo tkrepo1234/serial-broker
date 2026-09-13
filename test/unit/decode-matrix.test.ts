@@ -15,6 +15,7 @@ const ERROR_PAYLOAD = new SerialBrokerError(SerialBrokerErrorCode.WRITE_FAILED, 
 const VALID: Record<ProtocolMessageType, Record<string, unknown>> = {
   hello: { ...BASE, type: 'hello' },
   goodbye: { ...BASE, type: 'goodbye' },
+  welcome: { ...BASE, to: 'c-2', type: 'welcome' },
   attach: { ...BASE, type: 'attach', configName: 'Reader' },
   detach: { ...BASE, type: 'detach', configName: 'Reader' },
   'owner-claimed': { ...BASE, type: 'owner-claimed', configName: 'Reader' },
@@ -68,6 +69,7 @@ const VALID: Record<ProtocolMessageType, Record<string, unknown>> = {
 const REQUIRED_FIELDS: Record<ProtocolMessageType, readonly string[]> = {
   hello: [],
   goodbye: [],
+  welcome: [],
   attach: ['configName'],
   detach: ['configName'],
   'owner-claimed': ['configName'],

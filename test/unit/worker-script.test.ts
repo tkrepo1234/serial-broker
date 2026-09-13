@@ -70,6 +70,20 @@ describe('serial-broker.worker', () => {
     expect(typeof connect).toBe('function');
   });
 
+  it('welcomes a context that says hello, on its own port only', () => {
+    const alice = createPort();
+    const bob = createPort();
+    connect({ ports: [alice] });
+    connect({ ports: [bob] });
+    bob.deliver(envelope('bob', 'all', { type: 'attach', configName: 'Reader' }));
+
+    alice.deliver(envelope('alice', 'all', { type: 'hello' }));
+
+    // The welcome is how a tab learns that this script loaded at all (ADR-0007).
+    expect(alice.posted).toEqual([expect.objectContaining({ type: 'welcome', to: 'alice' })]);
+    expect(bob.posted).toHaveLength(0);
+  });
+
   it('ignores a connect event with no port', () => {
     expect(() => {
       connect({ ports: [] });

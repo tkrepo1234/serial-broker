@@ -369,3 +369,72 @@ describe('both transports', () => {
     expect(() => listeners.get('message')?.({ data: null } as never)).not.toThrow();
   });
 });
+
+describe('SharedWorkerTransport, while its script is starting', () => {
+  const WELCOME = { v: PROTOCOL_VERSION, from: 'serial-broker/broker', to: SELF, type: 'welcome' };
+
+  function start(): ReturnType<typeof recorder> &
+    ReturnType<typeof fakePort> & {
+      ready: () => number;
+      loadFailures: unknown[];
+      failToLoad: () => void;
+    } {
+    const rec = recorder();
+    const fake = fakePort();
+    let errorListener: (event: unknown) => void = () => undefined;
+    const worker: SharedWorkerLike = {
+      port: fake.port,
+      addEventListener: (_type, listener) => {
+        errorListener = listener;
+      },
+    };
+    let readyCount = 0;
+    const loadFailures: unknown[] = [];
+
+    new SharedWorkerTransport(rec.request, () => worker, 'fake://worker', {
+      onReady: () => {
+        readyCount += 1;
+      },
+      onLoadFailed: (event) => loadFailures.push(event),
+    });
+
+    return {
+      ...rec,
+      ...fake,
+      ready: () => readyCount,
+      loadFailures,
+      failToLoad: () => {
+        errorListener({ type: 'error' });
+      },
+    };
+  }
+
+  it('reports the script running when the broker welcomes it, and keeps the welcome to itself', () => {
+    const { deliver, ready, messages } = start();
+
+    deliver(WELCOME);
+    deliver(WELCOME);
+
+    expect(ready()).toBe(1);
+    expect(messages).toHaveLength(0);
+  });
+
+  it('reports a failure before the welcome as a load failure, not a transport error', () => {
+    const { failToLoad, loadFailures, transportErrors } = start();
+
+    failToLoad();
+
+    expect(loadFailures).toHaveLength(1);
+    expect(transportErrors).toHaveLength(0);
+  });
+
+  it('reports a failure after the welcome as a transport error', () => {
+    const { deliver, failToLoad, loadFailures, transportErrors } = start();
+
+    deliver(WELCOME);
+    failToLoad();
+
+    expect(loadFailures).toHaveLength(0);
+    expect(transportErrors).toHaveLength(1);
+  });
+});

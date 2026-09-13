@@ -1,0 +1,170 @@
+import type { ProtocolMessage } from '../../protocol/messages.js';
+
+import type { WorkerStartup } from './shared-worker-transport.js';
+import type { Transport, TransportRequest } from './transport.js';
+
+/**
+ * Most messages kept for replay while the worker has not answered.
+ *
+ * A worker script normally answers within milliseconds, and a missing one is reported about as
+ * fast. The bound only matters for a fetch that hangs while the tab keeps sending - an owner
+ * streaming data, say - and there it trades completeness of the replay for bounded memory.
+ */
+export const MAX_REPLAYED_MESSAGES = 1000;
+
+/** Something the application's side of the bus asked for, in the order it asked. */
+type Operation =
+  | { readonly kind: 'send'; readonly message: ProtocolMessage }
+  | { readonly kind: 'attach' | 'detach'; readonly configName: string }
+  | { readonly kind: 'ownership'; readonly configName: string; readonly isOwner: boolean };
+
+/**
+ * A `SharedWorker` transport that moves to `BroadcastChannel` when the worker script turns out
+ * not to load.
+ *
+ * Constructing a `SharedWorker` succeeds even when its script URL answers 404: the browser
+ * reports the failure afterwards, as an `error` event. By then the tab has already announced
+ * itself, attached its configurations, perhaps claimed a port - all into a port that delivers
+ * nothing. Falling back at construction alone would leave that tab cut off from every other
+ * (ADR-0007).
+ *
+ * So until the broker's `welcome` proves the script runs, everything asked of the bus is kept.
+ * If the script fails first, none of it reached anyone, and replaying it over a
+ * `BroadcastChannel` delivers each message exactly once, in the order it was sent. Once the
+ * welcome arrives the record is dropped, and a later worker error is an ordinary transport error.
+ */
+export class FallbackTransport implements Transport {
+  readonly clientId;
+
+  readonly #request: TransportRequest;
+  readonly #createFallback: (request: TransportRequest) => Transport;
+  #active: Transport;
+  /** `undefined` once the outcome is known: the worker answered, or the fallback took over. */
+  #pending: Operation[] | undefined = [];
+  #keptMessages = 0;
+  #droppedMessages = 0;
+  #isClosed = false;
+
+  /**
+   * @param request - What the transport delivers to.
+   * @param createWorkerTransport - Builds the `SharedWorker` transport, wired to report whether
+   *   its script started.
+   * @param createFallback - Builds the `BroadcastChannel` transport, only if it is needed.
+   */
+  constructor(
+    request: TransportRequest,
+    createWorkerTransport: (request: TransportRequest, startup: WorkerStartup) => Transport,
+    createFallback: (request: TransportRequest) => Transport,
+  ) {
+    this.clientId = request.clientId;
+    this.#request = request;
+    this.#createFallback = createFallback;
+    this.#active = createWorkerTransport(request, {
+      onReady: () => {
+        this.#pending = undefined;
+      },
+      onLoadFailed: (event) => {
+        this.#fallBack(event);
+      },
+    });
+  }
+
+  /** {@inheritDoc Transport.kind} */
+  get kind(): Transport['kind'] {
+    return this.#active.kind;
+  }
+
+  /** {@inheritDoc Transport.send} */
+  send(message: ProtocolMessage): void {
+    this.#keep({ kind: 'send', message });
+    this.#active.send(message);
+  }
+
+  /** {@inheritDoc Transport.attach} */
+  attach(configName: string): void {
+    this.#keep({ kind: 'attach', configName });
+    this.#active.attach(configName);
+  }
+
+  /** {@inheritDoc Transport.detach} */
+  detach(configName: string): void {
+    this.#keep({ kind: 'detach', configName });
+    this.#active.detach(configName);
+  }
+
+  /** {@inheritDoc Transport.setOwnership} */
+  setOwnership(configName: string, isOwner: boolean): void {
+    this.#keep({ kind: 'ownership', configName, isOwner });
+    this.#active.setOwnership(configName, isOwner);
+  }
+
+  /** {@inheritDoc Transport.close} */
+  close(): void {
+    this.#isClosed = true;
+    this.#pending = undefined;
+    this.#active.close();
+  }
+
+  #keep(operation: Operation): void {
+    const pending = this.#pending;
+    if (pending === undefined) {
+      return;
+    }
+    if (operation.kind === 'send') {
+      if (this.#keptMessages >= MAX_REPLAYED_MESSAGES) {
+        this.#droppedMessages += 1;
+        return;
+      }
+      this.#keptMessages += 1;
+    }
+    // Attach, detach and ownership are always kept: they are few, and without them the fallback
+    // would discard every message addressed to this tab.
+    pending.push(operation);
+  }
+
+  #fallBack(event: unknown): void {
+    const pending = this.#pending;
+    if (pending === undefined || this.#isClosed) {
+      this.#request.onTransportError(event);
+      return;
+    }
+
+    let fallback: Transport;
+    try {
+      fallback = this.#createFallback(this.#request);
+    } catch {
+      // Nothing to fall back to. The failure worth reporting is the worker's, not this one.
+      this.#request.onTransportError(event);
+      return;
+    }
+
+    this.#pending = undefined;
+    const failed = this.#active;
+    this.#active = fallback;
+    failed.close();
+
+    for (const operation of pending) {
+      switch (operation.kind) {
+        case 'send':
+          fallback.send(operation.message);
+          break;
+        case 'attach':
+          fallback.attach(operation.configName);
+          break;
+        case 'detach':
+          fallback.detach(operation.configName);
+          break;
+        case 'ownership':
+          fallback.setOwnership(operation.configName, operation.isOwner);
+          break;
+      }
+    }
+
+    this.#request.logger.warn('the SharedWorker script did not load; using BroadcastChannel', {
+      event: 'environment.transport-fallback',
+      reason: 'worker-script-failed',
+      replayedMessages: this.#keptMessages,
+      droppedMessages: this.#droppedMessages,
+    });
+  }
+}

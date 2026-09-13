@@ -106,6 +106,7 @@ function decodeChecked(raw: unknown): DecodeResult {
 
   switch (type) {
     case 'hello':
+    case 'welcome':
     case 'goodbye':
       return { ok: true, message: raw as unknown as ProtocolMessage };
 

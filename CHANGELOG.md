@@ -25,7 +25,8 @@ coordinate with each other. See
 - A single error type with stable codes, structured context and a mandatory remediation
   sentence, faithfully reconstructed when an error crosses a tab boundary.
 - A `BroadcastChannel` fallback for contexts without `SharedWorker`, such as Chrome for
-  Android, functionally equivalent to the default.
+  Android, functionally equivalent to the default. It also takes over when the worker script
+  fails to load, replaying what the tab sent before the failure.
 - An opt-in structured logger. The library writes nothing to the console uninvited.
 - A read-only diagnostics entry point, `serial-broker/diagnostics`. Every tab of the origin
   reports its role, connection state, reconnect timing, pending writes, listeners and effective
@@ -37,5 +38,6 @@ coordinate with each other. See
 
 ### Notes
 
-- Wire protocol version: **2**. Version 1 was never released; 2 adds the diagnostics request and
-  report.
+- Wire protocol version: **3**. Version 1 was never released; 2 added the diagnostics request and
+  report, 3 the broker's `welcome`. Remembered configurations are stored per protocol version, so
+  those remembered by a build on version 2 are not restored.

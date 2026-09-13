@@ -72,3 +72,51 @@ recipient. At the message rates a serial port produces, neither is measurable.
 
 The multi-context suite is parameterised over both transports; a dedicated test asserts
 automatic selection and the reported reason when `SharedWorker` construction throws.
+
+## Amendment (2026-09-13): a worker script that fails to load
+
+The decision above falls back when `SharedWorker` is missing or its construction throws. A script
+URL that answers 404 does neither: the browser creates the worker and fires `error` on it
+afterwards. By then the tab has said `hello`, attached its configurations and possibly claimed a
+port, all into a port that delivers nothing. It stayed cut off from every other tab — reported as
+`BROKER_UNAVAILABLE`, but not recovered.
+
+### Decision
+
+In `auto` mode the worker transport is wrapped in a `FallbackTransport`:
+
+1. The broker answers every `hello` with a `welcome` addressed to the sender, which proves the
+   script loaded and runs. Adding it changed the message shapes, so the protocol version went from
+   2 to 3 (ADR-0008).
+2. Until the welcome arrives, the wrapper records every message sent and every attach, detach and
+   ownership change, in order.
+3. If the worker reports an error first, nothing recorded reached anyone. The wrapper creates a
+   `BroadcastChannelTransport`, replays the record into it — each message exactly once, in its
+   original order — and uses it from then on. It logs `environment.transport-fallback` with
+   `reason: 'worker-script-failed'`.
+4. After the welcome the record is dropped, and a worker error is a transport error as before.
+   `transport: 'sharedworker'` never falls back.
+
+The record holds at most 1000 messages. A fetch that hangs while the tab streams data would
+otherwise grow it without bound; beyond the limit, messages are counted and reported as dropped
+rather than replayed. Attach, detach and ownership changes are always kept.
+
+### Alternatives considered
+
+- **Re-announce state instead of replaying.** Send `hello`, `attach` and `owner-claimed` again
+  after switching. Smaller, but status broadcasts, traffic and write requests sent in between would
+  be lost, and re-deriving them would reach into every configuration session.
+- **Fall back when no welcome arrives within a timeout.** Needs no protocol change, but a slow
+  network would switch tabs whose worker was merely late, splitting them from tabs whose worker
+  arrived.
+
+### Consequences
+
+A mis-served worker script no longer cuts tabs off from each other. One partition remains: if the
+script fails to load in one tab but loads in another — a transient network error rather than a
+missing file — the two tabs are on different transports and do not hear each other. Ownership is
+still decided by the Web Lock, so only one of them opens the device; the other waits for data and
+write results that never arrive. Reloading that tab resolves it.
+
+Verified by `test/unit/fallback-transport.test.ts` and
+`test/integration/multi-tab/worker-script-fallback.test.ts`; manual test plan step 27.

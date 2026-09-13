@@ -204,10 +204,11 @@ itself. Every tab must use the same URL; see [The worker script](installing.md#t
 
 `transport`
 : `'auto'` (the default) uses a `SharedWorker`, and a `BroadcastChannel` where the browser has no
-`SharedWorker` or refuses to create one. `'broadcastchannel'` always uses the channel.
-`'sharedworker'` never does: where the worker cannot be created, `setup()` fails with
-`BROKER_UNAVAILABLE`. A worker that is created but whose script then fails to load is reported
-as `BROKER_UNAVAILABLE` through `onError` in every mode, without a fallback.
+`SharedWorker`, refuses to create one, or cannot load its script. `'broadcastchannel'` always
+uses the channel. `'sharedworker'` never does: where the worker cannot be created, `setup()`
+fails with `BROKER_UNAVAILABLE`, and a script that fails to load is reported as
+`BROKER_UNAVAILABLE` through `onError`. Useful in development, to notice a worker script that is
+not being served.
 
 `logger`
 : Receives structured log records. Without one, serial-broker writes nothing anywhere. See

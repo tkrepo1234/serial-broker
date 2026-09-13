@@ -130,6 +130,11 @@ export class VirtualTab {
 export interface HarnessOptions {
   /** Which message bus to simulate. Scenario suites run against both. */
   readonly transport?: TransportMode;
+  /**
+   * In `sharedworker` mode, whether the worker script loads. With `'fails'`, tabs are cut off
+   * until `bus.failWorkerScripts()` reports the failure, as a browser does for a missing script.
+   */
+  readonly workerScript?: 'loads' | 'fails';
   /** Fixed value returned for reconnect jitter, so backoff delays are exact. */
   readonly randomValue?: number;
   /** Receives the library's diagnostics. Useful when a scenario test misbehaves. */
@@ -157,7 +162,7 @@ export class BrowserHarness {
   #nextIdNumber = 0;
 
   constructor(private readonly options: HarnessOptions = {}) {
-    this.bus = new FakeBus(options.transport ?? 'sharedworker');
+    this.bus = new FakeBus(options.transport ?? 'sharedworker', options.workerScript ?? 'loads');
   }
 
   /** Opens a new tab of the same origin. */

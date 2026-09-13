@@ -195,6 +195,9 @@ they are left unticked because the checklist is about a run **with** hardware.
       `setup()`, then repeat steps 5, 6, 9 and 13. Behaviour must be indistinguishable.
 - [ ] **26.** If an Android device is available, open the debugging surface on Chrome for Android
       with an OTG adapter. `SharedWorker` is absent there, so the fallback is what runs.
+- [ ] **27.** Configure a `workerUrl` that answers 404, open two tabs and set the configuration up
+      in both, then repeat steps 5 and 6. Both tabs must log `environment.transport-fallback` with
+      `reason: 'worker-script-failed'` and behave as in step 25.
 
 ## Recording a run
 
@@ -202,7 +205,7 @@ Append to this file:
 
 ```
 ### 2026-??-?? — Chrome ???, Windows ??, CH340 loopback
-Steps 1–26: pass / fail with notes.
+Steps 1–27: pass / fail with notes.
 Observations worth keeping.
 ```
 

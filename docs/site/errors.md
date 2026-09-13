@@ -154,7 +154,9 @@ privacy configurations, and in sandboxed iframes without `allow-same-origin`.
 
 `BROKER_UNAVAILABLE`
 : **Raised by** `setup()` when `transport: 'sharedworker'` is configured and the worker cannot be
-created. **Delivered through `onError`** when the message bus reports a failure while running.
+created. **Delivered through `onError`** when the message bus reports a failure while running —
+with `transport: 'sharedworker'`, also when the worker script fails to load. With the default
+`'auto'`, a script that fails to load is replaced by a `BroadcastChannel` and raises nothing.
 **Do:** check that `serial-broker.worker.js` is served from the application's origin, at the URL
 every tab uses; see [The worker script](installing.md#the-worker-script).
 

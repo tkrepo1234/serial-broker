@@ -65,23 +65,30 @@ The bus is an interface, `Transport`, with two implementations [ADR-0006, ADR-00
 Because routing depends only on the addressed envelope, and ownership only on the Web Lock, the two
 behave identically.
 
+In the default mode the worker transport is wrapped in a `FallbackTransport`. A `SharedWorker`
+whose script answers 404 is still created; the browser reports the failure afterwards. So until
+the broker's `welcome` arrives, the wrapper keeps everything the tab sent. If the failure comes
+first, none of it reached anyone, and it is replayed over a `BroadcastChannel` — exactly once, in
+order — before the tab carries on there.
+
 ## The protocol between tabs
 
 Every message carries `{ v, from, to, type }` and is validated completely on arrival; anything
 malformed is dropped [ADR-0008].
 
-| Message                                     | Sent by                | Purpose                                         |
-| ------------------------------------------- | ---------------------- | ----------------------------------------------- |
-| `hello`, `goodbye`                          | every tab              | Announce a tab to the broker; leave cleanly.    |
-| `attach`, `detach`                          | every tab              | Start or stop participating in a configuration. |
-| `owner-claimed`, `owner-released`           | the owner              | Ownership changed.                              |
-| `status-request`                            | a tab that just set up | Asks the owner to restate the status.           |
-| `status`                                    | the owner              | The connection status changed.                  |
-| `write-request`                             | a participant          | Asks the owner to write.                        |
-| `write-started`, `write-result`             | the owner              | The write began; how it ended.                  |
-| `data-received`, `data-sent`                | the owner              | Traffic, to every participant.                  |
-| `error`                                     | any tab                | A failure every participant should know about.  |
-| `diagnostics-request`, `diagnostics-report` | an observer; every tab | The diagnostics collection [ADR-0018].          |
+| Message                                     | Sent by                | Purpose                                               |
+| ------------------------------------------- | ---------------------- | ----------------------------------------------------- |
+| `hello`, `goodbye`                          | every tab              | Announce a tab to the broker; leave cleanly.          |
+| `welcome`                                   | the broker             | Answers `hello`, which proves the worker script runs. |
+| `attach`, `detach`                          | every tab              | Start or stop participating in a configuration.       |
+| `owner-claimed`, `owner-released`           | the owner              | Ownership changed.                                    |
+| `status-request`                            | a tab that just set up | Asks the owner to restate the status.                 |
+| `status`                                    | the owner              | The connection status changed.                        |
+| `write-request`                             | a participant          | Asks the owner to write.                              |
+| `write-started`, `write-result`             | the owner              | The write began; how it ended.                        |
+| `data-received`, `data-sent`                | the owner              | Traffic, to every participant.                        |
+| `error`                                     | any tab                | A failure every participant should know about.        |
+| `diagnostics-request`, `diagnostics-report` | an observer; every tab | The diagnostics collection [ADR-0018].                |
 
 The protocol version is part of every message, of the lock names, of the name of the worker and
 the channel, and of the storage key, and it is incremented on any change to a message. Tabs on

@@ -42,6 +42,20 @@ export interface HelloMessage extends Envelope {
   readonly type: 'hello';
 }
 
+/**
+ * The broker's answer to `hello`, addressed to the context that said it.
+ *
+ * Its arrival proves that the worker script loaded and runs. Until then a context keeps what it
+ * has sent, so that it can send it again over `BroadcastChannel` should the script fail to load
+ * (ADR-0007).
+ */
+export interface WelcomeMessage extends Envelope {
+  readonly type: 'welcome';
+}
+
+/** The sender identity the broker uses. It is not a context and never appears in a report. */
+export const BROKER_ID = 'serial-broker/broker' as ClientId;
+
 /** Declares interest in a configuration, so its events are routed to this context. */
 export interface AttachMessage extends Envelope {
   readonly type: 'attach';
@@ -172,6 +186,7 @@ export interface GoodbyeMessage extends Envelope {
 /** Every message that can appear on the bus. */
 export type ProtocolMessage =
   | HelloMessage
+  | WelcomeMessage
   | AttachMessage
   | DetachMessage
   | OwnerClaimedMessage

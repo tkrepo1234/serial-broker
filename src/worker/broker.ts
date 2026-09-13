@@ -1,5 +1,6 @@
 import type { ScopedLogger } from '../core/logger.js';
-import type { ClientId, ProtocolMessage } from '../protocol/messages.js';
+import { BROKER_ID, type ClientId, type ProtocolMessage } from '../protocol/messages.js';
+import { PROTOCOL_VERSION } from '../protocol/version.js';
 
 /** What the broker needs from whichever transport is hosting it. */
 export interface BrokerHost {
@@ -87,6 +88,19 @@ export class Broker {
 
     switch (message.type) {
       case 'hello':
+        // The answer is how a participant learns that this script loaded and runs. Until it
+        // arrives, the participant keeps what it sent, so it can send it again another way if
+        // the script turns out not to load (ADR-0007).
+        this.host.deliver(clientId, {
+          type: 'welcome',
+          v: PROTOCOL_VERSION,
+          from: BROKER_ID,
+          to: clientId,
+        });
+        return;
+
+      case 'welcome':
+        // Only the broker sends this. One arriving here came from something else on the bus.
         return;
 
       case 'goodbye':

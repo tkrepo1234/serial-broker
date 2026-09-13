@@ -1,5 +1,6 @@
 import { BroadcastChannelTransport } from '../../src/client/transport/broadcast-channel-transport.js';
 import type { BroadcastChannelLike } from '../../src/client/transport/broadcast-channel-transport.js';
+import { FallbackTransport } from '../../src/client/transport/fallback-transport.js';
 import {
   SharedWorkerTransport,
   type MessagePortLike,
@@ -161,7 +162,25 @@ export class FakeBus {
   readonly workerHost = new FakeWorkerHost();
   readonly broadcastHub = new FakeBroadcastHub();
 
-  constructor(readonly mode: TransportMode) {}
+  readonly #workerFailures: ((event: unknown) => void)[] = [];
+
+  /**
+   * @param mode - Which transport the tabs start on.
+   * @param workerScript - In `sharedworker` mode, whether the worker script loads. With
+   *   `'fails'`, nothing a tab sends reaches the broker until {@link failWorkerScripts} delivers
+   *   the browser's error event.
+   */
+  constructor(
+    readonly mode: TransportMode,
+    readonly workerScript: 'loads' | 'fails' = 'loads',
+  ) {}
+
+  /** Reports every worker script that did not load, as the browser's `error` event does. */
+  failWorkerScripts(): void {
+    for (const fail of this.#workerFailures.splice(0)) {
+      fail({ type: 'error' });
+    }
+  }
 
   /** Builds the transport a simulated context should use. */
   createTransport(contextId: string, request: TransportRequest): Transport {
@@ -178,10 +197,14 @@ export class FakeBus {
 
   #createWorkerTransport(contextId: string, request: TransportRequest): Transport {
     const clientId = request.clientId;
+    const loads = this.workerScript === 'loads';
 
     const port: MessagePortLike = {
       postMessage: (message) => {
-        this.workerHost.send(clientId, structuredClone(message));
+        // A port to a worker whose script never ran accepts messages and delivers none.
+        if (loads) {
+          this.workerHost.send(clientId, structuredClone(message));
+        }
       },
       start: () => {
         /* nothing to do: this fake delivers as soon as a listener is registered */
@@ -190,7 +213,7 @@ export class FakeBus {
         this.workerHost.disconnect(clientId);
       },
       addEventListener: (type: string, listener: unknown) => {
-        if (type === 'message') {
+        if (type === 'message' && loads) {
           this.workerHost.connect(clientId, listener as MessageListener);
         }
       },
@@ -198,12 +221,23 @@ export class FakeBus {
 
     const worker: SharedWorkerLike = {
       port,
-      addEventListener: () => {
-        /* the worker script always loads in the harness; failure is tested separately */
+      addEventListener: (_type, listener) => {
+        if (!loads) {
+          this.#workerFailures.push(listener);
+        }
       },
     };
 
-    void contextId;
-    return new SharedWorkerTransport(request, () => worker, 'fake://worker');
+    // Wrapped exactly as the browser environment wraps it, so every scenario in this mode also
+    // runs through the path that waits for the broker's welcome (ADR-0007).
+    return new FallbackTransport(
+      request,
+      (workerRequest, startup) =>
+        new SharedWorkerTransport(workerRequest, () => worker, 'fake://worker', startup),
+      (fallbackRequest) =>
+        new BroadcastChannelTransport(fallbackRequest, (name) =>
+          this.broadcastHub.create(name, contextId),
+        ),
+    );
   }
 }
