@@ -137,8 +137,12 @@ export class DiagnosticsObserver {
       requestId,
     });
 
-    const locks = await this.#queryLocks();
+    // Queried alongside the window, not before it: a browser slow to list its locks would otherwise
+    // hold the collection past its window, and past `close()`. A list that has not arrived when the
+    // window closes is reported as unavailable.
+    const locksQueried = this.#queryLocks();
     await windowClosed;
+    const locks = await Promise.race([locksQueried, Promise.resolve(undefined)]);
 
     return {
       collectedAt: this.#environment.clock.now(),

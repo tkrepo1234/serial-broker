@@ -108,4 +108,30 @@ describe('a tab limit', () => {
 
     expect(admitted).toEqual(['tab2']);
   });
+
+  it('does not queue again for a refused request once it has let go', async () => {
+    const clock = new FakeClock();
+    let refuse: (error: Error) => void = () => undefined;
+    const slot = new TabSlot(
+      {
+        request: () =>
+          new Promise((_, reject) => {
+            refuse = reject;
+          }),
+      },
+      'Reader',
+      1,
+      () => undefined,
+      new ScopedLogger(NOOP_LOGGER, {}),
+      clock,
+    );
+
+    slot.start();
+    slot.stop();
+    // The browser refuses the request, for a reason of its own, after the tab let go.
+    refuse(new Error('The request was refused'));
+    await settle();
+
+    expect(clock.pendingTimerCount).toBe(0);
+  });
 });
