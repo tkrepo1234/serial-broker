@@ -97,26 +97,71 @@ describe('reconnect supervision', () => {
       await harness.settle();
     }
 
-    // Attempt 0 immediate, then 250 * 2^n with the harness's jitter draw fixed at 1.
+    // Attempt 0 immediate, then 250 * 2^n with the harness's jitter draw at the top of its range.
     expect(delays).toEqual([0, 250, 500, 1000, 2000]);
   });
 
-  it('stops retrying after maxAttempts and says so once', async () => {
+  it('never waits longer than maxDelayMs between attempts', async () => {
     const harness = new BrowserHarness();
     const device = harness.serial.addDevice(READER.vendorId, READER.productId);
     harness.serial.grant(device);
     device.faults.failOpenWith = 'NetworkError';
 
     const tab = harness.openTab();
-    await tab.setup('Reader', { ...READER_OPTIONS, connection: { maxAttempts: 3 } });
+    await tab.setup('Reader', { ...READER_OPTIONS, connection: { maxDelayMs: 1_000 } });
+
+    const delays: number[] = [];
+    for (let attempt = 0; attempt < 7; attempt += 1) {
+      delays.push(harness.clock.nextTimerInMs ?? -1);
+      await harness.clock.advanceToNextTimer();
+      await harness.settle();
+    }
+
+    expect(delays).toEqual([0, 250, 500, 1000, 1000, 1000, 1000]);
+    expect(tab.client.getStatus('Reader').status).toBe(SerialBrokerStatus.Reconnecting);
+  });
+
+  it('stops retrying after maxAttempts and says so once in every tab', async () => {
+    const harness = new BrowserHarness();
+    const device = harness.serial.addDevice(READER.vendorId, READER.productId);
+    harness.serial.grant(device);
+    device.faults.failOpenWith = 'NetworkError';
+    const options = { ...READER_OPTIONS, connection: { maxAttempts: 3 } };
+
+    const tab = harness.openTab();
+    await tab.setup('Reader', options);
+    const peer = harness.openTab();
+    await peer.setup('Reader', options);
     await harness.advance(10_000);
 
-    expect(tab.client.getStatus('Reader').status).toBe(SerialBrokerStatus.Failed);
-    const exhausted = tab
-      .recordFor('Reader')
-      .errors.filter((event) => event.error.code === SerialBrokerErrorCode.RECONNECT_EXHAUSTED);
-    expect(exhausted).toHaveLength(1);
+    for (const each of [tab, peer]) {
+      expect(each.client.getStatus('Reader').status).toBe(SerialBrokerStatus.Failed);
+      expect(
+        each
+          .errorCodes('Reader')
+          .filter((code) => code === SerialBrokerErrorCode.RECONNECT_EXHAUSTED),
+      ).toHaveLength(1);
+    }
     expect(harness.clock.pendingTimerCount).toBe(0);
+  });
+
+  it('reconnects when the device ends the stream without an error', async () => {
+    const { harness, device, tab } = await connectedTab();
+
+    // A device can close its end cleanly - a firmware reset, a USB-serial bridge restarting -
+    // and the read loop then sees the stream finish instead of fail. The connection is gone all
+    // the same.
+    device.endStream();
+    await harness.settle();
+    expect(tab.errorCodes('Reader')).toEqual([SerialBrokerErrorCode.DEVICE_DISCONNECTED]);
+
+    await harness.advance(0);
+    device.emit('BACK');
+    await harness.settle();
+
+    expect(tab.client.getStatus('Reader').status).toBe(SerialBrokerStatus.Open);
+    expect(device.openCount).toBe(2);
+    expect(tab.receivedText('Reader')).toBe('BACK');
   });
 
   it('revives a failed configuration when the device is plugged in again', async () => {

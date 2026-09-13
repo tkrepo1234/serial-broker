@@ -11,8 +11,8 @@ import { READER, READER_OPTIONS } from '../../harness/devices.js';
  * only gets exercised on someone's Android phone in production (ADR-0007).
  */
 describe.each(TRANSPORT_MODES)('sharing one port across tabs (%s)', (transport) => {
-  /** A harness with one granted device and one tab already connected to it. */
-  async function withOpenPort(): Promise<{
+  /** A harness with one granted device, and no tab open yet. */
+  async function withGrantedDevice(): Promise<{
     harness: BrowserHarness;
     device: ReturnType<BrowserHarness['serial']['addDevice']>;
   }> {
@@ -23,7 +23,7 @@ describe.each(TRANSPORT_MODES)('sharing one port across tabs (%s)', (transport) 
   }
 
   it('opens the port in the first tab that sets the configuration up', async () => {
-    const { harness, device } = await withOpenPort();
+    const { harness, device } = await withGrantedDevice();
 
     const tab = harness.openTab();
     await tab.setup('CardReader', READER_OPTIONS);
@@ -33,7 +33,7 @@ describe.each(TRANSPORT_MODES)('sharing one port across tabs (%s)', (transport) 
   });
 
   it('does not open the port a second time when another tab joins', async () => {
-    const { harness, device } = await withOpenPort();
+    const { harness, device } = await withGrantedDevice();
 
     const first = harness.openTab();
     await first.setup('CardReader', READER_OPTIONS);
@@ -46,7 +46,7 @@ describe.each(TRANSPORT_MODES)('sharing one port across tabs (%s)', (transport) 
   });
 
   it('delivers received data to every tab', async () => {
-    const { harness, device } = await withOpenPort();
+    const { harness, device } = await withGrantedDevice();
     const first = harness.openTab();
     await first.setup('CardReader', READER_OPTIONS);
     const second = harness.openTab();
@@ -60,7 +60,7 @@ describe.each(TRANSPORT_MODES)('sharing one port across tabs (%s)', (transport) 
   });
 
   it('writes from a tab that does not own the port, exactly once', async () => {
-    const { harness, device } = await withOpenPort();
+    const { harness, device } = await withGrantedDevice();
     const owner = harness.openTab();
     await owner.setup('CardReader', READER_OPTIONS);
     const other = harness.openTab();
@@ -74,7 +74,7 @@ describe.each(TRANSPORT_MODES)('sharing one port across tabs (%s)', (transport) 
   });
 
   it('tells every tab about a write, and who issued it', async () => {
-    const { harness } = await withOpenPort();
+    const { harness } = await withGrantedDevice();
     const owner = harness.openTab();
     await owner.setup('CardReader', READER_OPTIONS);
     const other = harness.openTab();
@@ -88,7 +88,7 @@ describe.each(TRANSPORT_MODES)('sharing one port across tabs (%s)', (transport) 
   });
 
   it('reports the current status to a tab that joins an already-open configuration', async () => {
-    const { harness } = await withOpenPort();
+    const { harness } = await withGrantedDevice();
     const first = harness.openTab();
     await first.setup('CardReader', READER_OPTIONS);
 

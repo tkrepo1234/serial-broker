@@ -34,8 +34,9 @@ function open(configuration: NormalizedConfiguration): Promise<void>;
 **Prefer a type that cannot be wrong over an assertion that it is not.** An interior function
 that needs an open connection should take the open state as a parameter, not take the
 connection and assert about it — the compiler then proves at every call site what an assertion
-could only discover at runtime. This is why the library has no `assert(...)` helper: every
-place one would have gone, a discriminated union or a narrower parameter said it better.
+could only discover at runtime. This is why the library has no general `assert(condition)`
+helper: every place one would have gone, a discriminated union or a narrower parameter said it
+better. The one helper in `core/assert.ts` is `assertNever`, below.
 
 Where the compiler genuinely cannot help - a union member arriving from outside the type
 system - use `assertNever` in the `default` of the switch. It makes an unhandled case a

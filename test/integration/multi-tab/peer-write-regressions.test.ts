@@ -1,25 +1,22 @@
 import { describe, expect, it } from 'vitest';
 
-import { BrowserHarness } from '../../harness/browser-harness.js';
+import { BrowserHarness, TRANSPORT_MODES } from '../../harness/browser-harness.js';
 import { READER, READER_OPTIONS } from '../../harness/devices.js';
-import type { TransportMode } from '../../harness/fake-bus.js';
-import { openHoldingClient } from '../../harness/holding-client.js';
 
 /**
  * Writes the tab holding the port accepts from other tabs, and what it remembers of them to keep
  * each write at most once (ADR-0013).
  */
 
-const TRANSPORTS: readonly TransportMode[] = ['sharedworker', 'broadcastchannel'];
-
-describe.each(TRANSPORTS)('a write that found the port closed (%s)', (transport) => {
+describe.each(TRANSPORT_MODES)('a write that found the port closed (%s)', (transport) => {
   it('is written once the port is open again, not answered with NOT_CONNECTED again', async () => {
     const harness = new BrowserHarness({ transport });
     const device = harness.serial.addDevice(READER.vendorId, READER.productId);
     harness.serial.grant(device);
     const owner = harness.openTab();
     await owner.setup('Reader', READER_OPTIONS);
-    const busy = openHoldingClient(harness);
+
+    const busy = harness.openBusyTab();
     await busy.client.setup('Reader', READER_OPTIONS);
     await harness.settle();
 

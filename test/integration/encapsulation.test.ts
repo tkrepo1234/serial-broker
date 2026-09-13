@@ -145,13 +145,15 @@ describe('argument handling at the public surface', () => {
   it('rejects an unknown configuration by name, listing what is known', async () => {
     const harness = new BrowserHarness();
     const tab = harness.openTab();
+    await tab.client.setup('Reader', READER_OPTIONS);
 
-    try {
-      tab.client.getStatus('Nonexistent');
-      expect.unreachable();
-    } catch (error) {
-      expect((error as { code: string }).code).toBe(SerialBrokerErrorCode.UNKNOWN_CONFIGURATION);
-    }
+    expect(() => tab.client.getStatus('Nonexistent')).toThrow(
+      expect.objectContaining({
+        code: SerialBrokerErrorCode.UNKNOWN_CONFIGURATION,
+        configName: 'Nonexistent',
+        context: { known: ['Reader'] },
+      }),
+    );
   });
 
   it('treats releasing an unknown configuration as a no-op', async () => {
@@ -195,15 +197,22 @@ describe('argument handling at the public surface', () => {
     harness.serial.grant(device);
     const tab = harness.openTab();
     await tab.client.setup('Reader', READER_OPTIONS);
+    // `setup()` does not wait for the port: without this the chunk below reaches nobody, and the
+    // assertion that nobody heard it passes for the wrong reason.
+    await harness.settle();
 
     const received: unknown[] = [];
+    const kept: unknown[] = [];
     const stop = tab.client.subscribe('Reader', 'onReceive', (event) => received.push(event));
+    tab.client.subscribe('Reader', 'onReceive', (event) => kept.push(event));
     stop();
     stop();
 
     device.emit('x');
     await harness.settle();
 
+    // The second call must not remove anything else, and the chunk did arrive.
+    expect(kept).toHaveLength(1);
     expect(received).toHaveLength(0);
   });
 

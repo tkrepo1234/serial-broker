@@ -34,8 +34,11 @@ SerialBroker.subscribe(DEVICE, 'onReceive', (event) => {
 showStatus(SerialBroker.getStatus(DEVICE).status);
 
 connectButton.addEventListener('click', () => {
-  // Called directly in the click: an `await` before it would use up the click.
-  void SerialBroker.requestAccess(DEVICE);
+  // Called directly in the click: an `await` before it would use up the click. It can still fail -
+  // in a tab that does not hold the port, for one - so the failure is shown rather than dropped.
+  SerialBroker.requestAccess(DEVICE).catch((error: unknown) => {
+    output.textContent += `\n[${String(error)}]\n`;
+  });
 });
 
 sendForm.addEventListener('submit', (event) => {

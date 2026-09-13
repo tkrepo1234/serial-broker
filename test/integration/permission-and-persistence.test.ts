@@ -86,6 +86,8 @@ describe('permission and persistence', () => {
     const harness = new BrowserHarness();
     const device = harness.serial.addDevice(READER.vendorId, READER.productId);
     harness.serial.grant(device);
+    // Would be taken by a picker, had one been shown.
+    harness.serial.pickerQueue.push(device);
 
     const tab = harness.openTab();
     await tab.setup('Reader', READER_OPTIONS);
@@ -93,7 +95,7 @@ describe('permission and persistence', () => {
     // The permission is the browser's and survives the reload; `getPorts()` returns the
     // device with no gesture and no picker.
     expect(tab.client.getStatus('Reader').status).toBe(SerialBrokerStatus.Open);
-    expect(harness.serial.pickerQueue).toHaveLength(0);
+    expect(harness.serial.pickerQueue).toEqual([device]);
   });
 
   it('restores a persisted configuration in a new tab without being told about it', async () => {

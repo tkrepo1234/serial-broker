@@ -6,6 +6,7 @@ import { normalizeConfiguration } from '../../src/core/validation.js';
 import { matchesDevice, toRequestOptions } from '../../src/owner/port-matcher.js';
 import { BrowserHarness } from '../harness/browser-harness.js';
 import { READER, READER_OPTIONS } from '../harness/devices.js';
+import { fieldsOfEvent, recordingLogger } from '../harness/recording-logger.js';
 
 const ANY_DEVICE = { device: { any: true }, serial: { baudRate: 9600 } } as const;
 
@@ -91,9 +92,12 @@ describe('a device with no USB identity', () => {
   });
 
   it('warns rather than guessing when several ports could match', async () => {
-    const harness = new BrowserHarness();
-    harness.serial.grant(harness.serial.addNonUsbPort());
-    harness.serial.grant(harness.serial.addNonUsbPort());
+    const { logger, records } = recordingLogger();
+    const harness = new BrowserHarness({ logger });
+    const first = harness.serial.addNonUsbPort();
+    const second = harness.serial.addNonUsbPort();
+    harness.serial.grant(first);
+    harness.serial.grant(second);
 
     const tab = harness.openTab();
     await tab.setup('LocalPort', ANY_DEVICE);
@@ -101,6 +105,11 @@ describe('a device with no USB identity', () => {
     // The honest outcome: an `any` filter cannot tell two ports apart, so it takes the first
     // and says so. Documented as a known limitation rather than hidden.
     expect(tab.client.getStatus('LocalPort').status).toBe(SerialBrokerStatus.Open);
+    expect(first.isOpen).toBe(true);
+    expect(second.isOpen).toBe(false);
+    expect(fieldsOfEvent(records, 'matcher.ambiguous')).toEqual([
+      expect.objectContaining({ configName: 'LocalPort', matchCount: 2 }),
+    ]);
   });
 
   it('shows the picker unfiltered, so a non-USB port is offered at all', () => {

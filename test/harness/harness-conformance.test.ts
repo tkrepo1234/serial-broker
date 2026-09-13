@@ -144,6 +144,40 @@ describe('FakeLockManager', () => {
     expect(locks.holderOf(LOCK)).toBe('a');
   });
 
+  it('drops the queued requests of a context that is destroyed', async () => {
+    const locks = new FakeLockManager();
+    let release = (): void => undefined;
+    let deadGranted = false;
+
+    void locks.forContext('a').request(LOCK, {}, async () => {
+      await new Promise<void>((resolve) => {
+        release = resolve;
+      });
+    });
+    await flushMicrotasks();
+    void locks.forContext('b').request(LOCK, {}, async () => {
+      deadGranted = true;
+    });
+    await flushMicrotasks();
+
+    // A tab that dies while waiting leaves the queue with it: granting it the lock later would
+    // hand ownership to a context that runs no code, and nobody would ever take over.
+    locks.killContext('b');
+    release();
+    await flushMicrotasks();
+
+    expect(deadGranted).toBe(false);
+    expect(locks.holderOf(LOCK)).toBeUndefined();
+  });
+
+  it('refuses shared mode rather than granting it as exclusive', async () => {
+    const locks = new FakeLockManager();
+
+    await expect(
+      locks.forContext('a').request(LOCK, { mode: 'shared' }, async () => undefined),
+    ).rejects.toThrow(/shared/);
+  });
+
   it('passes null to an ifAvailable request when the lock is taken', async () => {
     const locks = new FakeLockManager();
     let observed: unknown = 'not called';
@@ -268,6 +302,78 @@ describe('FakeSerialRegistry', () => {
     await expect(second?.open({ baudRate: 9600 })).rejects.toMatchObject({
       name: 'InvalidStateError',
     });
+  });
+
+  it('does not list a granted device while it is unplugged', async () => {
+    const registry = new FakeSerialRegistry();
+    const device = registry.addDevice(1, 2);
+    registry.grant(device);
+    const serial = registry.forContext('tab1');
+
+    registry.unplug(device);
+    expect(await serial.getPorts()).toHaveLength(0);
+    registry.plug(device);
+    expect(await serial.getPorts()).toHaveLength(1);
+  });
+
+  it('refuses to close a port whose readable stream is still locked', async () => {
+    const registry = new FakeSerialRegistry();
+    registry.grant(registry.addDevice(1, 2));
+    const [port] = await registry.forContext('tab1').getPorts();
+    await port!.open({ baudRate: 9600 });
+
+    const reader = port!.readable!.getReader();
+    await expect(port!.close()).rejects.toThrow(TypeError);
+
+    reader.releaseLock();
+    await expect(port!.close()).resolves.toBeUndefined();
+  });
+
+  it('releases the devices of a context that goes away, whatever their streams', async () => {
+    const registry = new FakeSerialRegistry();
+    const device = registry.addDevice(1, 2);
+    registry.grant(device);
+    const [first] = await registry.forContext('tab1').getPorts();
+    await first!.open({ baudRate: 9600 });
+    first!.readable!.getReader();
+
+    registry.removeContext('tab1');
+    const [second] = await registry.forContext('tab2').getPorts();
+
+    await expect(second!.open({ baudRate: 9600 })).resolves.toBeUndefined();
+    expect(device.openCount).toBe(2);
+  });
+
+  it('does not let a port object from before an unplug release the device opened since', async () => {
+    const registry = new FakeSerialRegistry();
+    const device = registry.addDevice(1, 2);
+    registry.grant(device);
+    const [stale] = await registry.forContext('tab1').getPorts();
+    await stale!.open({ baudRate: 9600 });
+    registry.unplug(device);
+    registry.plug(device);
+    const [current] = await registry.forContext('tab2').getPorts();
+    await current!.open({ baudRate: 9600 });
+
+    // tab1 tidies up after the loss. That must not free the device tab2 holds now, or a third
+    // context could open it alongside tab2 - which no browser allows.
+    registry.removeContext('tab1');
+
+    expect(device.isOpen).toBe(true);
+    const [third] = await registry.forContext('tab3').getPorts();
+    await expect(third!.open({ baudRate: 9600 })).rejects.toMatchObject({
+      name: 'InvalidStateError',
+    });
+  });
+
+  it('offers in the picker only a device the filters match', async () => {
+    const registry = new FakeSerialRegistry();
+    const device = registry.addDevice(1, 2);
+    registry.pickerQueue.push(device);
+
+    await expect(
+      registry.forContext('tab1').requestPort({ filters: [{ usbVendorId: 9 }] }),
+    ).rejects.toMatchObject({ name: 'NotFoundError' });
   });
 
   it('rejects the picker when the user selects nothing', async () => {

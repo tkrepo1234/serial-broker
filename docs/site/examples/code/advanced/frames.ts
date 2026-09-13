@@ -38,11 +38,14 @@ export class FrameParser {
 
       const payload = Uint8Array.from(this.#buffered.slice(start + 1, end));
       const checksum = this.#buffered[end + 1];
-      this.#buffered = this.#buffered.slice(end + 2);
 
       if (checksum === xor(payload)) {
+        this.#buffered = this.#buffered.slice(end + 2);
         this.#onFrame(payload);
       } else {
+        // The STX may have been noise, with a real frame starting inside what looked like the
+        // payload. Searching again from just after it keeps that frame instead of dropping it.
+        this.#buffered = this.#buffered.slice(start + 1);
         this.#onCorrupt(payload);
       }
     }

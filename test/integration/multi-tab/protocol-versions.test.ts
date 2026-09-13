@@ -9,9 +9,8 @@ import {
   versionAnnouncement,
 } from '../../../src/protocol/announcement.js';
 import { PROTOCOL_VERSION } from '../../../src/protocol/version.js';
-import { BrowserHarness, type VirtualTab } from '../../harness/browser-harness.js';
+import { BrowserHarness, TRANSPORT_MODES, type VirtualTab } from '../../harness/browser-harness.js';
 import { READER_OPTIONS } from '../../harness/devices.js';
-import type { TransportMode } from '../../harness/fake-bus.js';
 
 /**
  * Tabs on different protocol versions share no lock, worker or bus, and learn of each other only
@@ -48,101 +47,98 @@ function mismatches(tab: VirtualTab): ErrorEvent[] {
     .errors.filter((event) => event.error.code === SerialBrokerErrorCode.PROTOCOL_VERSION_MISMATCH);
 }
 
-describe.each<TransportMode>(['sharedworker', 'broadcastchannel'])(
-  'tabs on different protocol versions (%s)',
-  (transport) => {
-    it('report a tab that announces another version once, and answer it every time', async () => {
-      const harness = new BrowserHarness({ transport });
-      const tab = harness.openTab();
-      await tab.setup('Reader', READER_OPTIONS);
-      const other = tabOfAnotherBuild(harness);
+describe.each(TRANSPORT_MODES)('tabs on different protocol versions (%s)', (transport) => {
+  it('report a tab that announces another version once, and answer it every time', async () => {
+    const harness = new BrowserHarness({ transport });
+    const tab = harness.openTab();
+    await tab.setup('Reader', READER_OPTIONS);
+    const other = tabOfAnotherBuild(harness);
 
-      other.post(versionAnnouncement(PROTOCOL_VERSION + 1, false));
-      other.post(versionAnnouncement(PROTOCOL_VERSION + 1, false));
-      await harness.settle();
+    other.post(versionAnnouncement(PROTOCOL_VERSION + 1, false));
+    other.post(versionAnnouncement(PROTOCOL_VERSION + 1, false));
+    await harness.settle();
 
-      expect(mismatches(tab).map((event) => event.error.context)).toEqual([
-        { theirVersion: PROTOCOL_VERSION + 1 },
-      ]);
-      // Answered each time: a tab opened later has to learn of this one too.
-      expect(other.heard).toEqual([
-        versionAnnouncement(PROTOCOL_VERSION, true),
-        versionAnnouncement(PROTOCOL_VERSION, true),
-      ]);
-    });
+    expect(mismatches(tab).map((event) => event.error.context)).toEqual([
+      { theirVersion: PROTOCOL_VERSION + 1 },
+    ]);
+    // Answered each time: a tab opened later has to learn of this one too.
+    expect(other.heard).toEqual([
+      versionAnnouncement(PROTOCOL_VERSION, true),
+      versionAnnouncement(PROTOCOL_VERSION, true),
+    ]);
+  });
 
-    it('learn of a tab on another version that was open before them', async () => {
-      const harness = new BrowserHarness({ transport });
-      const other = tabOfAnotherBuild(harness);
+  it('learn of a tab on another version that was open before them', async () => {
+    const harness = new BrowserHarness({ transport });
+    const other = tabOfAnotherBuild(harness);
 
-      const tab = harness.openTab();
-      await tab.setup('Reader', READER_OPTIONS);
+    const tab = harness.openTab();
+    await tab.setup('Reader', READER_OPTIONS);
 
-      // The new tab announced itself, and the tab already open answers, as its library would.
-      expect(other.heard).toEqual([versionAnnouncement(PROTOCOL_VERSION, false)]);
-      other.post(versionAnnouncement(PROTOCOL_VERSION - 1, true));
-      await harness.settle();
+    // The new tab announced itself, and the tab already open answers, as its library would.
+    expect(other.heard).toEqual([versionAnnouncement(PROTOCOL_VERSION, false)]);
+    other.post(versionAnnouncement(PROTOCOL_VERSION - 1, true));
+    await harness.settle();
 
-      expect(mismatches(tab).map((event) => event.error.context)).toEqual([
-        { theirVersion: PROTOCOL_VERSION - 1 },
-      ]);
-    });
+    expect(mismatches(tab).map((event) => event.error.context)).toEqual([
+      { theirVersion: PROTOCOL_VERSION - 1 },
+    ]);
+  });
 
-    it('never answer a reply, so two versions cannot keep each other talking', async () => {
-      const harness = new BrowserHarness({ transport });
-      const tab = harness.openTab();
-      await tab.setup('Reader', READER_OPTIONS);
-      const other = tabOfAnotherBuild(harness);
+  it('never answer a reply, so two versions cannot keep each other talking', async () => {
+    const harness = new BrowserHarness({ transport });
+    const tab = harness.openTab();
+    await tab.setup('Reader', READER_OPTIONS);
+    const other = tabOfAnotherBuild(harness);
 
-      other.post(versionAnnouncement(PROTOCOL_VERSION + 1, true));
-      await harness.settle();
+    other.post(versionAnnouncement(PROTOCOL_VERSION + 1, true));
+    await harness.settle();
 
-      expect(mismatches(tab)).toHaveLength(1);
-      expect(other.heard).toEqual([]);
-    });
+    expect(mismatches(tab)).toHaveLength(1);
+    expect(other.heard).toEqual([]);
+  });
 
-    it('tell the applications of tabs on the same version nothing', async () => {
-      const harness = new BrowserHarness({ transport });
-      const first = harness.openTab();
-      await first.setup('Reader', READER_OPTIONS);
-      const second = harness.openTab();
-      await second.setup('Reader', READER_OPTIONS);
-      await harness.settle();
+  it('tell the applications of tabs on the same version nothing', async () => {
+    const harness = new BrowserHarness({ transport });
+    const first = harness.openTab();
+    await first.setup('Reader', READER_OPTIONS);
+    const second = harness.openTab();
+    await second.setup('Reader', READER_OPTIONS);
+    await harness.settle();
 
-      expect(mismatches(first)).toEqual([]);
-      expect(mismatches(second)).toEqual([]);
-    });
+    expect(mismatches(first)).toEqual([]);
+    expect(mismatches(second)).toEqual([]);
+  });
 
-    it('ignore anything else posted on the channel', async () => {
-      const harness = new BrowserHarness({ transport });
-      const tab = harness.openTab();
-      await tab.setup('Reader', READER_OPTIONS);
-      const other = tabOfAnotherBuild(harness);
+  it('ignore anything else posted on the channel', async () => {
+    const harness = new BrowserHarness({ transport });
+    const tab = harness.openTab();
+    await tab.setup('Reader', READER_OPTIONS);
+    const other = tabOfAnotherBuild(harness);
 
-      other.post('hello');
-      other.post(null);
-      other.post({ ...versionAnnouncement(PROTOCOL_VERSION + 1, false), protocolVersion: '5' });
-      other.post({ type: 'serial-broker/protocol-version', protocolVersion: PROTOCOL_VERSION + 1 });
-      await harness.settle();
+    other.post('hello');
+    other.post(null);
+    other.post({ ...versionAnnouncement(PROTOCOL_VERSION + 1, false), protocolVersion: '5' });
+    other.post({ type: 'serial-broker/protocol-version', protocolVersion: PROTOCOL_VERSION + 1 });
+    await harness.settle();
 
-      expect(tab.recordFor('Reader').errors).toEqual([]);
-      expect(other.heard).toEqual([]);
-    });
+    expect(tab.recordFor('Reader').errors).toEqual([]);
+    expect(other.heard).toEqual([]);
+  });
 
-    it('stop answering once closed', async () => {
-      const harness = new BrowserHarness({ transport });
-      const tab = harness.openTab();
-      await tab.setup('Reader', READER_OPTIONS);
-      const other = tabOfAnotherBuild(harness);
+  it('stop answering once closed', async () => {
+    const harness = new BrowserHarness({ transport });
+    const tab = harness.openTab();
+    await tab.setup('Reader', READER_OPTIONS);
+    const other = tabOfAnotherBuild(harness);
 
-      await tab.close();
-      other.post(versionAnnouncement(PROTOCOL_VERSION + 1, false));
-      await harness.settle();
+    await tab.close();
+    other.post(versionAnnouncement(PROTOCOL_VERSION + 1, false));
+    await harness.settle();
 
-      expect(other.heard).toEqual([]);
-    });
-  },
-);
+    expect(other.heard).toEqual([]);
+  });
+});
 
 describe('a platform without BroadcastChannel', () => {
   it('still sets configurations up, without detecting other versions', async () => {

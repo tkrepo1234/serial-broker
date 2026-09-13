@@ -20,9 +20,10 @@ third-party script or an untrusted iframe without `sandbox` gets full access to 
 permission; it only asks the browser which ports the user has already granted. Revoking access
 in site settings takes effect immediately.
 
-**What is persisted.** `localStorage` holds only configurations: a name, USB vendor and product
-IDs, line settings and timeouts. No payload data, no credentials, nothing derived from device
-traffic.
+**What is persisted.** `localStorage` holds only configurations: the options passed to `setup()` —
+a name, the device filter (USB vendor and product IDs, or `any`), line settings, reconnect and
+timeout settings, text encoding and the tab limit. No payload data, no credentials, nothing
+derived from device traffic.
 
 **What is logged.** Nothing, unless an application supplies a logger. When one is supplied,
 payload bytes never appear at `info` level or above — serial traffic routinely carries card

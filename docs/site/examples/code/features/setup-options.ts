@@ -7,8 +7,8 @@ const consoleLogger: Logger = {
 };
 
 /**
- * Library-wide settings. They are read once, when the first configuration is set up, so this
- * runs before any `setup()`.
+ * Library-wide settings. They are read once, by the first call that needs serial-broker's client -
+ * `setup()` or `restore()`, typically - so this runs before any of them.
  */
 export function configureSerialBroker(): void {
   SerialBroker.configure({

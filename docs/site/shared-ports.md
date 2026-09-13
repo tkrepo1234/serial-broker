@@ -193,8 +193,8 @@ Two things are remembered between visits, by two different parties:
   `persist: false`. `SerialBroker.restore()` sets up every remembered configuration.
 
 Only the tab that holds the port can ask the user for permission, because only it can open the
-port the user chooses. `requestAccess()` in any other tab rejects with `PERMISSION_REQUIRED` while
-the status is `awaiting-permission`, and returns `true` without asking once the port is open.
+port the user chooses. `requestAccess()` in any other tab rejects with `PERMISSION_REQUIRED` unless
+the status is `open`, and returns `true` without asking once the port is open.
 
 A USB vendor and product ID name a kind of device, not a particular one. With two identical
 adapters granted, serial-broker uses the first one and says so in the log. A configuration with

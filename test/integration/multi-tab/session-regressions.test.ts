@@ -3,7 +3,6 @@ import { describe, expect, it } from 'vitest';
 import type { SerialBrokerClient } from '../../../src/client/serial-broker-client.js';
 import { BrowserHarness, TRANSPORT_MODES } from '../../harness/browser-harness.js';
 import { READER, READER_OPTIONS } from '../../harness/devices.js';
-import { openHoldingClient } from '../../harness/holding-client.js';
 
 /**
  * Defects in the tab holding the port found in the review of 2026-09-13, each pinned by the
@@ -27,7 +26,7 @@ describe.each(TRANSPORT_MODES)('the tab that holds the port (%s)', (transport) =
     const { harness, device } = harnessWithDevice(transport);
     const first = harness.openTab();
     await first.setup('Reader', READER_OPTIONS);
-    const busy = openHoldingClient(harness);
+    const busy = harness.openBusyTab();
     await busy.client.setup('Reader', READER_OPTIONS);
     await harness.settle();
 
@@ -51,7 +50,7 @@ describe.each(TRANSPORT_MODES)('the tab that holds the port (%s)', (transport) =
     const { harness, device } = harnessWithDevice(transport);
     const first = harness.openTab();
     await first.setup('Reader', READER_OPTIONS);
-    const busy = openHoldingClient(harness);
+    const busy = harness.openBusyTab();
     await busy.client.setup('Reader', READER_OPTIONS);
     await harness.settle();
 

@@ -14,23 +14,23 @@ A configuration name is set up separately in every tab, and each tab may pass it
 **serial-broker does not compare options between tabs.** Which tab's options take effect depends
 on the option:
 
-| Options                                                         | Taken from                                                                                |
-| --------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
-| `device`, `serial`                                              | The tab that holds the port, when it opens it.                                            |
-| `connection` except `writeTimeoutMs`, and `encoding.decodeText` | The tab that holds the port.                                                              |
-| `connection.writeTimeoutMs`                                     | The tab that issued the write — and the holding tab's, for each chunk.                    |
-| `encoding.encoding` for sending, `persist`                      | Each tab for itself.                                                                      |
-| `maxTabs`                                                       | Every tab alike. A tab running a different limit than the tab holding the port withdraws. |
+| Options                                                                                           | Taken from                                                                                |
+| ------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| `device`, `serial`                                                                                | The tab that holds the port, when it opens it.                                            |
+| `connection` except `writeTimeoutMs`, `encoding.decodeText`, and `encoding.encoding` for decoding | The tab that holds the port.                                                              |
+| `connection.writeTimeoutMs`                                                                       | The tab that issued the write — and the holding tab's, for each chunk.                    |
+| `encoding.encoding` for sending, `persist`                                                        | Each tab for itself.                                                                      |
+| `maxTabs`                                                                                         | Every tab alike. A tab running a different limit than the tab holding the port withdraws. |
 
 In practice: **pass the same options for a name in every tab.** An application that lets the user
 change them has to tell its other tabs, as the [full-featured example](examples/full-featured.md)
 does. The [debugging surface](diagnostics.md) marks a configuration whose tabs run different
 settings.
 
-Within one tab, calling `setup()` again for a name with the same device and line settings does
-nothing. Calling it with a different `device`, `baudRate`, `dataBits`, `stopBits`, `parity`,
-`flowControl`, `bufferSize` or `maxTabs` fails with `CONFIGURATION_CONFLICT`; release the configuration first. Other options
-passed to a second `setup()` in the same tab are ignored.
+Within one tab, calling `setup()` again for a name with the same device, line settings and tab
+limit does nothing. Calling it with a different `device`, `baudRate`, `dataBits`, `stopBits`,
+`parity`, `flowControl`, `bufferSize` or `maxTabs` fails with `CONFIGURATION_CONFLICT`; release the
+configuration first. Other options passed to a second `setup()` in the same tab are ignored.
 
 ## `name`
 
@@ -210,10 +210,12 @@ The browser remembers the device permission independently of this option.
 
 ## `configure()`
 
-Library-wide options. Call `configure()` before any other `SerialBroker` method: the first of them
-creates serial-broker's internal client with the options set so far. A later `configure()` does not
-reach that client; it logs the warning `facade.late-configure`, and its options apply only after
-`dispose()`. Options passed in several calls are merged.
+Library-wide options. Call `configure()` before any other `SerialBroker` method: the first one that
+needs serial-broker's internal client creates it with the options set so far. (`exists()`,
+`names()`, `unsubscribe()`, `release()`, `releaseAll()` and `isSupported()` create nothing while
+nothing is set up.) A later `configure()` does not reach that client; it logs the warning
+`facade.late-configure`, and its options apply only after `dispose()`. Options passed in several
+calls are merged.
 
 `workerUrl`
 : The URL of `serial-broker.worker.js`. Needed when the bundler does not emit the script by itself,

@@ -31,7 +31,7 @@ the coordination is deliberately invisible.
 
 | Capability                          | What it means                                                                                                               |
 | ----------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
-| **Shares one port across tabs**     | Every tab can read and write. Writes from any tab reach the device exactly once.                                            |
+| **Shares one port across tabs**     | Every tab can read and write. A write reaches the device at most once, and is never repeated.                               |
 | **Survives the owning tab closing** | Including a crash, an out-of-memory kill or a closed laptop — no unload handler required.                                   |
 | **Reconnects automatically**        | Device switched off, unplugged, power-cycled: the port reopens with the same settings, with no application code.            |
 | **Remembers the device**            | The browser keeps the permission; this library keeps the configuration. A later visit connects with no prompt.              |

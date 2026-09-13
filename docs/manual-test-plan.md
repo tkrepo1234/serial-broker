@@ -108,20 +108,19 @@ it proves the software path, not the electrical one.
 
 ## Setup
 
-1. `npm run build`
-2. Serve the repository root over `http://localhost` — Web Serial refuses anything that is not
-   a secure context, so a LAN address over plain HTTP will not do.
-3. Open `http://localhost:<port>/debug/` in Chrome — the debugging surface. Each card lists the
+1. `npm run debug` — builds the package and serves `dist/` over `http://localhost`. Web Serial
+   refuses anything that is not a secure context, so a LAN address over plain HTTP will not do.
+2. Open `http://localhost:<port>/debug/` in Chrome — the debugging surface. Each card lists the
    tabs running a configuration and which of them holds the port; use it to confirm the failover
    steps rather than inferring them.
-4. Attach a USB-serial device. A CH340 adapter (`0x1a86` / `0x7523`) with its TX and RX pins
+3. Attach a USB-serial device. A CH340 adapter (`0x1a86` / `0x7523`) with its TX and RX pins
    bridged is ideal: everything sent comes straight back, so send and receive are visible in
    one window.
 
 ## Checklist
 
-Each row corresponds to a row of the scenario matrix in
-[testing.md](./guidelines/testing.md), which the automated suite covers in simulation.
+The checklist exercises on real hardware what the scenario matrix in
+[testing.md](./guidelines/testing.md) covers in simulation.
 
 ### First connection
 
@@ -138,7 +137,7 @@ they are left unticked because the checklist is about a run **with** hardware.
 
 ### Several tabs
 
-- [ ] **5.** Open the debugging surface in a second and third tab and click _Join_ on the card.
+- [ ] **5.** Open the debugging surface in a second and third tab and click _Connect_ on the card.
       Each reaches `open` without prompting.
 - [ ] **6.** Send from tab 2. Every tab's traffic shows it once, from tab 2. The device receives
       it **once**.
@@ -216,7 +215,7 @@ Append to this file:
 
 ```
 ### 2026-??-?? — Chrome ???, Windows ??, CH340 loopback
-Steps 1–27: pass / fail with notes.
+Steps 1–29: pass / fail with notes.
 Observations worth keeping.
 ```
 

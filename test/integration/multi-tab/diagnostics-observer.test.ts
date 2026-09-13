@@ -239,6 +239,10 @@ describe.each(TRANSPORT_MODES)('diagnostics observer (%s)', (transport) => {
     const events: ObservedEvent[] = [];
     const stop = observer.watch('Reader', (event) => events.push(event));
     await harness.settle();
+    device.emit('SEEN');
+    await harness.settle();
+    expect(events.map((event) => event.kind)).toContain('received');
+    const seen = events.length;
 
     stop();
     stop();
@@ -246,7 +250,7 @@ describe.each(TRANSPORT_MODES)('diagnostics observer (%s)', (transport) => {
     device.emit('UNSEEN');
     await harness.settle();
 
-    expect(events).toEqual([]);
+    expect(events).toHaveLength(seen);
   });
 
   it('keeps delivering to other listeners when one of them throws', async () => {

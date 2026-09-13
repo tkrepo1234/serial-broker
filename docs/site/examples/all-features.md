@@ -12,7 +12,7 @@ and origin. Show the button while — and only while — the status is `awaiting
 ```
 
 Only the tab that holds the port can ask. In any other tab `requestAccess()` rejects with
-`PERMISSION_REQUIRED` while the device is still missing; see
+`PERMISSION_REQUIRED` unless the port is open; see
 [Permission, and remembering devices](../shared-ports.md#permission-and-remembering-devices).
 
 ## Showing the status

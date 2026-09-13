@@ -119,7 +119,8 @@ what it must be; `actualType` and, for simple values, `actualValue` say what it 
 `UNKNOWN_CONFIGURATION`
 : **Raised by** `send()`, `subscribe()`, `getStatus()`, `requestAccess()` and the other methods
 that take a name, when that name is not set up **in this tab**. A configuration set up in another
-tab does not count. `release()` of a name that is not set up does nothing and raises nothing.
+tab does not count. `release()` and `unsubscribe()` of a name that is not set up do nothing and
+raise nothing, and `exists()` answers `false`.
 **Do:** call `setup()` in this tab first — every tab sets up the configurations it uses.
 
 `CONFIGURATION_CONFLICT`
@@ -129,7 +130,9 @@ and identical options make the second `setup()` a no-op.
 **Delivered through `onError`**, in every tab, when a tab finds the tab holding the port running
 the configuration with a different `maxTabs`. That tab withdraws and shows `failed`; its pending
 writes, and every `send()` there until it is released, are rejected with this error.
-**Context:** `existing` and `requested` device filters; for a differing tab limit, `maxTabs` of
+**Context:** from `setup()`, `existing` and `requested`, the two device filters in their normalised
+form (`{ kind: 'usb', vendorId, productId }` or `{ kind: 'any' }`), which are equal when only the
+line settings or the tab limit differ; through `onError`, for a differing tab limit, `maxTabs` of
 the tab that withdrew and `holdingTabMaxTabs` of the tab holding the port.
 **Do:** `release()` the configuration first, then set it up with the new options. See
 [Restoring, releasing and forgetting](examples/all-features.md#restoring-releasing-and-forgetting)
@@ -170,20 +173,23 @@ privacy configurations, and in sandboxed iframes without `allow-same-origin`.
 created. **Delivered through `onError`** when the message bus reports a failure while running —
 with `transport: 'sharedworker'`, also when the worker script fails to load. With the default
 `'auto'`, a script that fails to load is replaced by a `BroadcastChannel` and raises nothing.
-Also delivered, once per tab, when the worker stops answering the tabs' heartbeats because it crashed
-or was ended; the tabs then connect to a new worker on their own.
+Also delivered when the worker stops answering the tabs' heartbeats because it crashed or was
+ended, once in every tab for each such loss; the tabs then connect to a new worker on their own.
 **Do:** check that `serial-broker.worker.js` is served from the application's origin, at the URL
 every tab uses; see [The worker script](installing.md#the-worker-script).
 
 ### Permission
 
 `PERMISSION_REQUIRED`
-: **Raised by** `requestAccess()` in a tab that does not hold the port, while the device is not
-connected. Only the tab holding the port can use the user's choice.
+: **Raised by** `requestAccess()` in a tab that does not hold the port, whenever the status is not
+`open` — `awaiting-permission`, but also `connecting`, `reconnecting`, `failed`, and `queued`, where
+the message says the tab is waiting for a place. Only the tab holding the port can use the user's
+choice.
 **Context:** `status`.
 **Do:** in practice, show the button only in response to `awaiting-permission`, which is reported
-in every tab; if this error occurs anyway, ask the user to try again. In a tab that does not hold
-the port, `requestAccess()` while the device is connected resolves `true` without a prompt.
+in every tab, and show this error if it occurs anyway: the button may be clicked in a tab that does
+not hold the port. In such a tab, `requestAccess()` while the port is open resolves `true` without
+a prompt.
 
 `PERMISSION_DENIED`
 : **Not raised.** When the user closes the port picker without choosing — or no port in the picker
@@ -209,7 +215,9 @@ These are delivered through `onError`, in every tab.
 `OPEN_FAILED` (retryable)
 : **Arises** when the browser rejects opening the port: another program has it open, the adapter
 rejects the line settings, or the port is in a state it cannot be opened from.
-**Context:** `domExceptionName`, the name of the browser's exception.
+**Context:** `domExceptionName`, the name of the browser's exception, when the browser threw one.
+A port that opens without a readable or writable stream is reported with `hasReadable` and
+`hasWritable` instead.
 **Do:** nothing for a single occurrence. When it repeats, close terminal programs and other
 tools using the device, and check the line settings.
 
