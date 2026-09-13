@@ -68,4 +68,27 @@ describe('diagnostics observer on a misbehaving bus', () => {
 
     expect(seen.sort()).toEqual(['Reader:error', 'Scale:error']);
   });
+
+  it('finishes a collection at its window when the browser never lists its locks', async () => {
+    const harness = new BrowserHarness();
+    const environment = harness.createEnvironment('observer');
+    const observer = new DiagnosticsObserver({
+      ...environment,
+      locks: {
+        request: environment.locks.request.bind(environment.locks),
+        query: () =>
+          new Promise(() => {
+            /* never answers */
+          }),
+      },
+    });
+
+    const collecting = observer.collect(100);
+    await harness.advance(100);
+
+    expect(await Promise.race([collecting, Promise.resolve('still collecting')])).toMatchObject({
+      participants: [],
+      locks: undefined,
+    });
+  });
 });

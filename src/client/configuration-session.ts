@@ -17,17 +17,18 @@ import { PortSupervisor } from '../owner/port-supervisor.js';
 import type { ClientId, ProtocolMessage, RequestId } from '../protocol/messages.js';
 import { PROTOCOL_VERSION } from '../protocol/version.js';
 
+import { AcceptedWrites } from './accepted-writes.js';
 import { PendingWrites } from './pending-writes.js';
 import { TabSlot } from './tab-slot.js';
 import type { Transport } from './transport/transport.js';
 
-/**
- * How many writes from peers the owner remembers having accepted.
- *
- * A repeat can only come from the moments around an owner change, when a participant hands on
- * the writes it has not yet seen start; a few hundred covers any realistic burst there.
- */
-const MAX_REMEMBERED_PEER_WRITES = 1_024;
+/** Where the outcome of a write performed at this context's port goes. */
+interface WriteReport {
+  /** The first byte is being handed to the device. */
+  readonly started: () => void;
+  /** The write ended, or was answered with the outcome of an earlier attempt. */
+  readonly finished: (error: SerialBrokerError | undefined) => void;
+}
 
 /**
  * One configuration, in one browsing context.
@@ -45,26 +46,21 @@ const MAX_REMEMBERED_PEER_WRITES = 1_024;
  * Over the 400-line mark that docs/guidelines/coding-style.md flags. What remains is the
  * wiring itself - which of four collaborators handles what, and in which order - and that is
  * only legible in one place. The parts with rules of their own have been lifted out:
- * the delivery guarantee (`pending-writes.ts`), ownership (`../owner/election.ts`), the port
- * lifecycle (`../owner/port-supervisor.ts`) and event dispatch (`../core/emitter.ts`).
+ * the delivery guarantee (`pending-writes.ts`, and `accepted-writes.ts` at the port), the tab
+ * limit (`tab-slot.ts`), ownership (`../owner/election.ts`), the port lifecycle
+ * (`../owner/port-supervisor.ts`) and event dispatch (`../core/emitter.ts`).
  */
 export class ConfigurationSession {
   readonly #emitter: EventEmitter;
   readonly #election: OwnershipElection;
   readonly #writes: PendingWrites;
   /**
-   * Writes this context has accepted from peers while holding the port, keyed by origin and
-   * request, with their outcome once known.
+   * The writes accepted at this context's port in the current term of holding it (ADR-0013).
    *
-   * A participant can hand the same write to this owner twice. It sends to whoever holds the port,
-   * and may learn only afterwards - from `owner-claimed` - that ownership moved, whereupon it hands
-   * on every write it has not seen start. Recognising the request is what keeps the write at most
-   * once (ADR-0013); answering the repeat with the known outcome lets the participant settle.
+   * Replaced, not cleared, when the term ends: a write of the old term that ends later records its
+   * outcome in the old term's record, where it cannot make the new term forget a write.
    */
-  readonly #acceptedPeerWrites = new Map<
-    string,
-    { isDone: boolean; error: SerialBrokerError | undefined }
-  >();
+  #acceptedWrites = new AcceptedWrites();
 
   #supervisor: PortSupervisor | undefined;
   #status: SerialBrokerStatus = SerialBrokerStatus.Idle;
@@ -75,8 +71,8 @@ export class ConfigurationSession {
   readonly #slot: TabSlot | undefined;
   /** On the bus and in the election: at once without a limit, once a place is held with one. */
   #isJoined = false;
-  /** Gave up because the tab holding the port runs a different tab limit (ADR-0025). */
-  #isWithdrawn = false;
+  /** Why this tab gave up: the tab holding the port runs a different tab limit (ADR-0025). */
+  #withdrawal: SerialBrokerError | undefined;
 
   constructor(
     private readonly environment: SerialBrokerEnvironment,
@@ -183,7 +179,7 @@ export class ConfigurationSession {
    * other tab asks for it. Hearing `open` from the owner hands on writes that have not started.
    */
   handleBusReconnected(): void {
-    if (this.#isReleased || !this.#isJoined || this.#isWithdrawn) {
+    if (this.#isReleased || !this.#isJoined || this.#withdrawal !== undefined) {
       return;
     }
     if (this.#election.isOwner) {
@@ -220,7 +216,7 @@ export class ConfigurationSession {
     await this.#stopBeingOwner();
     this.#election.stop();
 
-    if (this.#isJoined && !this.#isWithdrawn) {
+    if (this.#isJoined && this.#withdrawal === undefined) {
       this.transport.detach(this.configuration.name);
     }
     // The place goes last: the next tab joins only once this one has left the bus and the port.
@@ -315,6 +311,11 @@ export class ConfigurationSession {
         { configName: this.configuration.name, timestamp: this.environment.clock.now() },
       );
     }
+    if (this.#withdrawal !== undefined) {
+      // A withdrawn tab never writes again, so waiting for the deadline would only delay the
+      // answer the writes pending at the withdrawal were already given.
+      throw this.#withdrawal;
+    }
 
     await this.#writes.add(this.environment.newId('w') as RequestId, payload);
   }
@@ -349,7 +350,7 @@ export class ConfigurationSession {
 
   /** Handles a message addressed to this context. */
   handleMessage(message: ProtocolMessage): void {
-    if (this.#isReleased || !this.#isJoined || this.#isWithdrawn) {
+    if (this.#isReleased || !this.#isJoined || this.#withdrawal !== undefined) {
       return;
     }
 
@@ -409,11 +410,17 @@ export class ConfigurationSession {
         return;
 
       case 'status':
-        if (message.maxTabs !== this.configuration.maxTabs && !this.#election.isOwner) {
+        if (this.#election.isOwner) {
+          // The tab holding the port states its own status. One from another tab was sent by a
+          // former holder before it let go, and arrived after the lock did: taking it would show a
+          // status this tab's port does not have, and hold back every write while it lasted.
+          return;
+        }
+        if (message.maxTabs !== this.configuration.maxTabs) {
           this.#withdraw(message.maxTabs);
           return;
         }
-        if (message.status === SerialBrokerStatus.Open && !this.#election.isOwner) {
+        if (message.status === SerialBrokerStatus.Open) {
           // The owner states `open` when the port opens, and again after reaching a new broker. A
           // write request lost on the way in between is handed on here; one the owner already has,
           // it recognises. Before the status is set, so that a write only now allowed out is sent
@@ -541,9 +548,9 @@ export class ConfigurationSession {
   async #stopBeingOwner(): Promise<void> {
     const supervisor = this.#supervisor;
     this.#supervisor = undefined;
-    // A later term as owner starts with its own record: a write accepted now is either finished or
-    // failed by the time this context could hold the port again.
-    this.#acceptedPeerWrites.clear();
+    // A later term as owner starts with its own record: a write accepted now has ended, or is
+    // turned away as `NOT_CONNECTED`, before this context could write it again.
+    this.#acceptedWrites = new AcceptedWrites();
 
     if (supervisor === undefined) {
       // Not holding the port, so there is no ownership to give up. This matters: the election
@@ -578,7 +585,17 @@ export class ConfigurationSession {
   #dispatchWrite(requestId: RequestId, payload: Uint8Array): void {
     const supervisor = this.#supervisor;
     if (this.#election.isOwner && supervisor !== undefined) {
-      this.#writeLocally(supervisor, requestId, payload);
+      // Straight to the port, with no round trip across the bus - but through the same record as
+      // a peer's write: a late `NOT_CONNECTED` from a former owner hands this write on again, and
+      // it may already be queued here.
+      this.#performWrite(supervisor, this.transport.clientId, requestId, payload, {
+        started: () => {
+          this.#writes.markStarted(requestId);
+        },
+        finished: (error) => {
+          this.#settleWrite(requestId, error);
+        },
+      });
       return;
     }
 
@@ -593,40 +610,18 @@ export class ConfigurationSession {
     });
   }
 
-  /** The owner path: straight to the supervisor, with no round trip across the bus. */
-  #writeLocally(supervisor: PortSupervisor, requestId: RequestId, payload: Uint8Array): void {
-    void supervisor
-      .write(payload, () => {
-        this.#writes.markStarted(requestId);
-      })
-      .then(
-        () => {
-          this.#announceSent(payload, this.transport.clientId);
-          this.#writes.settle(requestId, undefined);
-        },
-        (error: unknown) => {
-          this.#settleWrite(requestId, toSerialBrokerError(error, this.configuration.name));
-        },
-      );
-  }
-
   /**
    * Settles a write this context issued, wherever it was performed.
    *
    * A write that found no open connection never started, so it goes back to wait for the next
-   * connection instead of failing - in the tab holding the port exactly as in any other.
+   * connection instead of failing - in the tab holding the port exactly as in any other. If it has
+   * begun all the same, it did so with another owner - this answer came late from a former one -
+   * and that owner's answer, or the next owner change, is what settles it.
    */
   #settleWrite(requestId: RequestId, error: SerialBrokerError | undefined): void {
     if (error?.code === SerialBrokerErrorCode.NOT_CONNECTED) {
-      if (this.#writes.redispatch(requestId)) {
-        return;
-      }
-      // `NOT_CONNECTED` means its sender never began the write. If it has begun all the same, it did
-      // so with another owner - this answer came late from a former one - and that owner's answer
-      // is what settles it.
-      if (this.#writes.isStarted(requestId)) {
-        return;
-      }
+      this.#writes.redispatch(requestId);
+      return;
     }
     this.#writes.settle(requestId, error);
   }
@@ -649,29 +644,8 @@ export class ConfigurationSession {
       return;
     }
 
-    const key = `${origin} ${requestId}`;
-    const accepted = this.#acceptedPeerWrites.get(key);
-    if (accepted !== undefined) {
-      // A repeat of a write already accepted. While it is still being written, its own answer is
-      // on the way; once done, the known outcome is sent again for a participant that may have
-      // missed it. Writing it a second time is never the answer (ADR-0013).
-      if (accepted.isDone) {
-        this.#sendWriteResult(origin, requestId, accepted.error);
-      }
-      return;
-    }
-    const record = { isDone: false, error: undefined as SerialBrokerError | undefined };
-    this.#acceptedPeerWrites.set(key, record);
-    if (this.#acceptedPeerWrites.size > MAX_REMEMBERED_PEER_WRITES) {
-      // Maps iterate in insertion order, so the first key is the oldest.
-      const oldest = this.#acceptedPeerWrites.keys().next().value;
-      if (oldest !== undefined) {
-        this.#acceptedPeerWrites.delete(oldest);
-      }
-    }
-
-    void supervisor
-      .write(payload, () => {
+    this.#performWrite(supervisor, origin, requestId, payload, {
+      started: () => {
         this.transport.send({
           type: 'write-started',
           v: PROTOCOL_VERSION,
@@ -680,25 +654,49 @@ export class ConfigurationSession {
           configName: this.configuration.name,
           requestId,
         });
-      })
-      .then(
-        () => {
-          record.isDone = true;
-          this.#announceSent(payload, origin);
-          this.#sendWriteResult(origin, requestId, undefined);
-        },
-        (error: unknown) => {
-          const failure = toSerialBrokerError(error, this.configuration.name);
-          if (failure.code === SerialBrokerErrorCode.NOT_CONNECTED) {
-            // Never started here, so it is not remembered: the participant hands it on again once
-            // the port is open, and then it has to be written, not answered with this again.
-            this.#acceptedPeerWrites.delete(key);
-          }
-          record.isDone = true;
-          record.error = failure;
-          this.#sendWriteResult(origin, requestId, failure);
-        },
-      );
+      },
+      finished: (error) => {
+        this.#sendWriteResult(origin, requestId, error);
+      },
+    });
+  }
+
+  /**
+   * Writes at this context's port, at most once per request whoever issued it (ADR-0013).
+   *
+   * A repeat of a write still being written is ignored, since its own outcome is on the way; a
+   * repeat of a finished one is answered with the known outcome, for an issuer that may have
+   * missed it.
+   */
+  #performWrite(
+    supervisor: PortSupervisor,
+    origin: ClientId,
+    requestId: RequestId,
+    payload: Uint8Array,
+    report: WriteReport,
+  ): void {
+    const accepted = this.#acceptedWrites;
+    const admission = accepted.admit(origin, requestId);
+    if (admission.kind === 'in-progress') {
+      return;
+    }
+    if (admission.kind === 'finished') {
+      report.finished(admission.error);
+      return;
+    }
+
+    void supervisor.write(payload, report.started).then(
+      () => {
+        accepted.finish(origin, requestId, undefined);
+        this.#announceSent(payload, origin);
+        report.finished(undefined);
+      },
+      (error: unknown) => {
+        const failure = toSerialBrokerError(error, this.configuration.name);
+        accepted.finish(origin, requestId, failure);
+        report.finished(failure);
+      },
+    );
   }
 
   #sendWriteResult(
@@ -775,7 +773,6 @@ export class ConfigurationSession {
    * configuration and sets it up with the same limit.
    */
   #withdraw(holdingTabMaxTabs: number): void {
-    this.#isWithdrawn = true;
     const conflict = new SerialBrokerError(
       SerialBrokerErrorCode.CONFIGURATION_CONFLICT,
       `"${this.configuration.name}" is used with maxTabs ${String(holdingTabMaxTabs)} by the tab holding the port, and with maxTabs ${String(this.configuration.maxTabs)} in this tab`,
@@ -785,6 +782,7 @@ export class ConfigurationSession {
         timestamp: this.environment.clock.now(),
       },
     );
+    this.#withdrawal = conflict;
     this.logger.warn('withdrew from a configuration run with a different tab limit', {
       event: 'session.tab-limit-conflict',
       maxTabs: this.configuration.maxTabs,

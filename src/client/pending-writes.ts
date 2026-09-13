@@ -139,11 +139,6 @@ export class PendingWrites {
     }
   }
 
-  /** `true` once an owner has reported beginning to write the request. */
-  isStarted(requestId: RequestId): boolean {
-    return this.#writes.get(requestId)?.started === true;
-  }
-
   /**
    * Returns a request to the queue so it can be handed to somebody else.
    *

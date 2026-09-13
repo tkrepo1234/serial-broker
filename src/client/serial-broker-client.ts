@@ -43,6 +43,14 @@ import type { Transport } from './transport/transport.js';
 /** How many errors nobody listened for are kept for the first `onError` listener: the latest. */
 const MAX_UNHEARD_ERRORS = 16;
 
+/** Every event a listener can be registered for. A record, so that a new event cannot be missed. */
+const EVENT_NAMES: Readonly<Record<SerialBrokerEventName, true>> = {
+  onReceive: true,
+  onSend: true,
+  onError: true,
+  onStatusChange: true,
+};
+
 /**
  * One browsing context's view of every configuration it participates in.
  *
@@ -64,6 +72,8 @@ export class SerialBrokerClient {
    * `onError` listener registered afterwards.
    */
   readonly #unheardErrors: SerialBrokerError[] = [];
+  /** Peer protocol versions already reported: a mixed deployment is reported once per version. */
+  readonly #reportedPeerVersions = new Set<unknown>();
   readonly #store: ConfigurationStore;
   readonly #disposal = new DisposalStack();
   readonly #clientId: ClientId;
@@ -220,6 +230,13 @@ export class SerialBrokerClient {
     const validName = validateName(name);
     const session = this.#sessions.get(validName);
     if (session === undefined) {
+      if (this.#setUpDuringRelease.has(validName)) {
+        // A `setup()` called before this waits for the release in progress and then sets the name
+        // up again. This call came later, so it releases what that `setup()` builds - which it has
+        // built by the time this wait ends, having waited first.
+        await this.#releasing.get(validName);
+        await this.release(validName, options);
+      }
       // Releasing something that is not set up is a no-op, not an error: it leaves the caller
       // in the state it asked for.
       return;
@@ -286,6 +303,23 @@ export class SerialBrokerClient {
     const validName = validateName(name);
     const session = this.#requireSession(validName);
 
+    if (typeof event !== 'string' || !Object.hasOwn(EVENT_NAMES, event)) {
+      // A misspelt event name would otherwise register a listener that is never called, and
+      // nothing would ever say so.
+      throw new SerialBrokerError(
+        SerialBrokerErrorCode.INVALID_ARGUMENT,
+        `event must be one of ${Object.keys(EVENT_NAMES).join(', ')}`,
+        {
+          configName: validName,
+          context: {
+            argumentName: 'event',
+            expected: Object.keys(EVENT_NAMES).join(' | '),
+            actualType: typeof event,
+          },
+        },
+      );
+    }
+
     if (typeof listener !== 'function') {
       throw new SerialBrokerError(
         SerialBrokerErrorCode.INVALID_ARGUMENT,
@@ -306,8 +340,10 @@ export class SerialBrokerClient {
       });
     }
 
+    // Bound to this session, not to the name: once the name is released and set up again, the
+    // same function may be registered anew, and removing this registration must not remove that.
     return () => {
-      this.#sessions.get(validName)?.unsubscribe(event, listener);
+      session.unsubscribe(event, listener);
     };
   }
 
@@ -371,6 +407,9 @@ export class SerialBrokerClient {
       await session.release();
     }
     this.#sessions.clear();
+    // A `release()` still under way has not closed its port or let its lock go yet, and still
+    // needs the bus to say so. `dispose()` answers for everything this context holds.
+    await Promise.all(this.#releasing.values());
 
     this.#transport?.close();
     this.#transport = undefined;
@@ -549,9 +588,6 @@ export class SerialBrokerClient {
       report,
     });
   }
-
-  /** Peer protocol versions already reported: a mixed deployment is reported once per version. */
-  readonly #reportedPeerVersions = new Set<unknown>();
 
   #handleDecodeFailure(failure: DecodeFailure): void {
     const description = describeDecodeFailure(failure);

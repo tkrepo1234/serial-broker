@@ -88,6 +88,26 @@ describe('argument validation at the boundary', () => {
     );
   });
 
+  it('rejects an event name it does not know, rather than registering a listener never called', async () => {
+    const harness = new BrowserHarness();
+    harness.serial.grant(harness.serial.addDevice(READER.vendorId, READER.productId));
+    const tab = harness.openTab();
+    await tab.client.setup('Reader', READER_OPTIONS);
+
+    expect(() => tab.client.subscribe('Reader', 'onData' as never, vi.fn())).toThrow(
+      expect.objectContaining({
+        code: SerialBrokerErrorCode.INVALID_ARGUMENT,
+        context: expect.objectContaining({ argumentName: 'event' }) as unknown,
+      }),
+    );
+    expect(tab.client.diagnostics()?.configurations[0]?.listeners).toEqual({
+      onReceive: 0,
+      onSend: 0,
+      onError: 0,
+      onStatusChange: 0,
+    });
+  });
+
   it('rejects an invalid name before doing anything with it', async () => {
     const harness = new BrowserHarness();
     const tab = harness.openTab();

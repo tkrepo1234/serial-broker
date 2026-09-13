@@ -76,7 +76,8 @@ export class TabSlot {
         },
         (error: unknown) => {
           this.#gateAbort = undefined;
-          if (!isAbortError(error)) {
+          // A tab that let go meanwhile does not queue again, however the request ended.
+          if (!isAbortError(error) && !this.#isStopped) {
             this.#retryLater(error);
           }
         },
