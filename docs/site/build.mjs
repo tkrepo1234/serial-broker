@@ -34,6 +34,9 @@ run(process.execPath, [
   join(root, 'node_modules', 'typedoc', 'bin', 'typedoc'),
   '--options',
   'typedoc.site.json',
+  // TypeDoc's validation - an undocumented export, a {@link} to nothing - only warns on its own,
+  // and a warning would pass CI unnoticed while Sphinx below fails on every one of its own.
+  '--treatWarningsAsErrors',
 ]);
 // TypeDoc names each module page after its entry file. Readers know them by the import path.
 retitle('docs/site/api/reference/index/index.md', 'serial-broker');
