@@ -35,6 +35,16 @@ function malformed(type: string, field: string): DecodeResult {
   return fail({ reason: 'malformed', type, field });
 }
 
+/**
+ * Accepts a message as it arrived, once every field its type declares has been checked.
+ *
+ * Only messages carrying a payload are rebuilt instead, because their payload may need
+ * normalising (see {@link asBytes}).
+ */
+function accepted(raw: Record<string, unknown>): DecodeResult {
+  return { ok: true, message: raw as unknown as ProtocolMessage };
+}
+
 const isNameList = (value: unknown): value is readonly string[] =>
   Array.isArray(value) && value.every(isNonEmptyString);
 
@@ -99,14 +109,14 @@ function decodeChecked(raw: unknown): DecodeResult {
     case 'hello':
     case 'welcome':
     case 'goodbye':
-      return { ok: true, message: raw as unknown as ProtocolMessage };
+      return accepted(raw);
 
     case 'heartbeat':
       if (!isNameList(raw['configNames'])) {
         return malformed(type, 'configNames');
       }
       return isNameList(raw['ownedConfigNames'])
-        ? { ok: true, message: raw as unknown as ProtocolMessage }
+        ? accepted(raw)
         : malformed(type, 'ownedConfigNames');
 
     case 'attach':
@@ -114,9 +124,7 @@ function decodeChecked(raw: unknown): DecodeResult {
     case 'owner-claimed':
     case 'owner-released':
     case 'status-request':
-      return isNonEmptyString(raw['configName'])
-        ? { ok: true, message: raw as unknown as ProtocolMessage }
-        : malformed(type, 'configName');
+      return isNonEmptyString(raw['configName']) ? accepted(raw) : malformed(type, 'configName');
 
     case 'write-request': {
       if (!isNonEmptyString(raw['configName'])) {
@@ -147,9 +155,7 @@ function decodeChecked(raw: unknown): DecodeResult {
       if (!isNonEmptyString(raw['configName'])) {
         return malformed(type, 'configName');
       }
-      return isNonEmptyString(raw['requestId'])
-        ? { ok: true, message: raw as unknown as ProtocolMessage }
-        : malformed(type, 'requestId');
+      return isNonEmptyString(raw['requestId']) ? accepted(raw) : malformed(type, 'requestId');
 
     case 'write-result': {
       if (!isNonEmptyString(raw['configName'])) {
@@ -166,7 +172,7 @@ function decodeChecked(raw: unknown): DecodeResult {
       if (!raw['ok'] && !isSerializedError(raw['error'])) {
         return malformed(type, 'error');
       }
-      return { ok: true, message: raw as unknown as ProtocolMessage };
+      return accepted(raw);
     }
 
     case 'data-received': {
@@ -238,30 +244,27 @@ function decodeChecked(raw: unknown): DecodeResult {
       if (!isTabLimit(raw['maxTabs'])) {
         return malformed(type, 'maxTabs');
       }
-      return isFiniteNumber(raw['timestamp'])
-        ? { ok: true, message: raw as unknown as ProtocolMessage }
-        : malformed(type, 'timestamp');
+      return isFiniteNumber(raw['timestamp']) ? accepted(raw) : malformed(type, 'timestamp');
 
     case 'diagnostics-request':
-      return isNonEmptyString(raw['requestId'])
-        ? { ok: true, message: raw as unknown as ProtocolMessage }
-        : malformed(type, 'requestId');
+      return isNonEmptyString(raw['requestId']) ? accepted(raw) : malformed(type, 'requestId');
 
     case 'diagnostics-report':
       if (!isNonEmptyString(raw['requestId'])) {
         return malformed(type, 'requestId');
       }
-      return isParticipantDiagnostics(raw['report'])
-        ? { ok: true, message: raw as unknown as ProtocolMessage }
-        : malformed(type, 'report');
+      return isParticipantDiagnostics(raw['report']) ? accepted(raw) : malformed(type, 'report');
 
     case 'error':
+      // Optional, but routed on when present: a name that is not one would be dropped by every
+      // receiver as belonging to no configuration, without anyone learning why.
+      if (raw['configName'] !== undefined && !isNonEmptyString(raw['configName'])) {
+        return malformed(type, 'configName');
+      }
       if (!isSerializedError(raw['error'])) {
         return malformed(type, 'error');
       }
-      return isFiniteNumber(raw['timestamp'])
-        ? { ok: true, message: raw as unknown as ProtocolMessage }
-        : malformed(type, 'timestamp');
+      return isFiniteNumber(raw['timestamp']) ? accepted(raw) : malformed(type, 'timestamp');
 
     default:
       return fail({ reason: 'unknown-type', type });

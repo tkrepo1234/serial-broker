@@ -160,6 +160,27 @@ describe('decode matrix', () => {
     expect(decodeMessage(message).ok).toBe(true);
   });
 
+  it('accepts an error message that concerns no configuration', () => {
+    const message = { ...VALID.error, configName: undefined };
+
+    expect(decodeMessage(message).ok).toBe(true);
+  });
+
+  it.each([
+    ['a number', 42],
+    ['an empty string', ''],
+    ['null', null],
+  ])('rejects an error message whose configuration name is %s', (_label, configName) => {
+    // Every receiver routes an error by its configuration name, so a name that is not one would be
+    // dropped as concerning nobody - silently, rather than reported as malformed.
+    const result = decodeMessage({ ...VALID.error, configName });
+
+    expect(result).toEqual({
+      ok: false,
+      failure: { reason: 'malformed', type: 'error', field: 'configName' },
+    });
+  });
+
   it('rejects an error message whose error is not one of ours', () => {
     const message = { ...VALID.error, error: { message: 'just an object' } };
 
