@@ -149,14 +149,15 @@ export class PortSupervisor {
    *
    * Returns immediately; progress is reported through {@link SupervisorCallbacks.onStatus}.
    * If no granted port matches the configured device, the status becomes
-   * `awaiting-permission` and nothing further happens until `requestAccess()` succeeds -
-   * the browser will not show a port picker outside a user gesture (ADR-0009).
+   * `awaiting-permission` and nothing is retried until `requestAccess()` succeeds or the
+   * platform reports a device plugged in - the browser will not show a port picker outside a
+   * user gesture (ADR-0009).
    */
   start(): void {
     if (this.#state.kind !== 'idle') {
       return;
     }
-    void this.#connect(0);
+    void this.#connect();
   }
 
   /**
@@ -241,6 +242,7 @@ export class PortSupervisor {
             actualVendorId: info.usbVendorId,
             actualProductId: info.usbProductId,
           },
+          timestamp: this.environment.clock.now(),
         },
       );
     }
@@ -265,7 +267,7 @@ export class PortSupervisor {
     // than awaited.
     this.#backoff.reset();
     this.#state = { kind: 'idle' };
-    await this.#connect(0);
+    await this.#connect();
   }
 
   /**
@@ -358,11 +360,8 @@ export class PortSupervisor {
 
     if (this.#state.kind === 'reconnecting') {
       this.environment.clock.clearTimer(this.#state.timer);
-      this.logger.info('device reappeared; reconnecting immediately', {
-        configName: this.configuration.name,
-        event: 'supervisor.device-connected',
-      });
-      void this.#connect(this.#backoff.attempt);
+      this.#logDeviceConnected();
+      void this.#connect();
       return;
     }
 
@@ -371,8 +370,16 @@ export class PortSupervisor {
     if (this.#state.kind === 'failed' || this.#state.kind === 'awaiting-permission') {
       this.#backoff.reset();
       this.#state = { kind: 'idle' };
-      void this.#connect(0);
+      this.#logDeviceConnected();
+      void this.#connect();
     }
+  }
+
+  #logDeviceConnected(): void {
+    this.logger.info('device reappeared; reconnecting immediately', {
+      configName: this.configuration.name,
+      event: 'supervisor.device-connected',
+    });
   }
 
   /**
@@ -412,16 +419,18 @@ export class PortSupervisor {
 
   // --- Connection lifecycle ---------------------------------------------------------------
 
-  async #connect(attempt: number): Promise<void> {
+  async #connect(): Promise<void> {
     if (this.#state.kind === 'stopped') {
       return;
     }
 
     const generation = (this.#generation += 1);
     this.#backoff.recordAttempt();
+    // Counted from one, as diagnostics and `supervisor.reconnect` count attempts, so that the
+    // number in an error's context, in a log record and in a report is the same attempt.
+    const attempt = this.#backoff.attempt;
     this.#nextAttemptAt = undefined;
     this.#state = { kind: 'listing' };
-    this.#deviceConnectedWhileListing = false;
     this.#setStatus(SerialBrokerStatus.Connecting);
 
     const teardown = this.#teardown;
@@ -435,46 +444,53 @@ export class PortSupervisor {
     }
 
     let port: SerialPort | undefined;
-    try {
-      port = await withDeadline(
-        findGrantedPort(this.environment.serial, this.configuration, this.logger),
-        this.environment.clock,
-        {
-          timeoutMs: this.configuration.connection.openTimeoutMs,
-          code: SerialBrokerErrorCode.OPEN_TIMEOUT,
-          message: 'Listing the granted ports did not complete in time',
-          configName: this.configuration.name,
-          context: { attempt },
-        },
-      );
-    } catch (error) {
+    do {
+      this.#deviceConnectedWhileListing = false;
+      try {
+        port = await withDeadline(
+          findGrantedPort(this.environment.serial, this.configuration, this.logger),
+          this.environment.clock,
+          {
+            timeoutMs: this.configuration.connection.openTimeoutMs,
+            code: SerialBrokerErrorCode.OPEN_TIMEOUT,
+            message: 'Listing the granted ports did not complete in time',
+            configName: this.configuration.name,
+            context: { attempt },
+          },
+        );
+      } catch (error) {
+        if (this.#isStale(generation)) {
+          return;
+        }
+        if (
+          error instanceof SerialBrokerError &&
+          error.code === SerialBrokerErrorCode.OPEN_TIMEOUT
+        ) {
+          // A browser that never answers is a failed attempt, like a port that never opens.
+          this.#handleConnectionLoss('listing-timed-out', error);
+          return;
+        }
+        this.#report(
+          new SerialBrokerError(
+            SerialBrokerErrorCode.WEB_SERIAL_UNAVAILABLE,
+            `Could not enumerate serial ports: ${describeUnknown(error)}`,
+            {
+              configName: this.configuration.name,
+              context: { attempt },
+              timestamp: this.environment.clock.now(),
+              cause: error,
+            },
+          ),
+        );
+      }
+
       if (this.#isStale(generation)) {
         return;
       }
-      if (error instanceof SerialBrokerError && error.code === SerialBrokerErrorCode.OPEN_TIMEOUT) {
-        // A browser that never answers is a failed attempt, like a port that never opens.
-        this.#handleConnectionLoss('listing-timed-out', error);
-        return;
-      }
-      this.#report(
-        new SerialBrokerError(
-          SerialBrokerErrorCode.WEB_SERIAL_UNAVAILABLE,
-          `Could not enumerate serial ports: ${describeUnknown(error)}`,
-          { configName: this.configuration.name, cause: error },
-        ),
-      );
-    }
-
-    if (this.#isStale(generation)) {
-      return;
-    }
-
-    if (port === undefined && this.#takeDeviceConnectedWhileListing()) {
-      // The list was taken before the device arrived. Look again, rather than wait for a
-      // connect event that has already happened.
-      void this.#connect(attempt);
-      return;
-    }
+      // A device plugged in while the list was being taken may be missing from it. Looking again
+      // is part of this attempt - not another one counted against `maxAttempts` - rather than a
+      // wait for a connect event that has already happened.
+    } while (port === undefined && this.#takeDeviceConnectedWhileListing());
 
     if (port === undefined && this.#isFoundPortDetached()) {
       // The browser does not list a detached port. The device is away, not the permission, so
@@ -509,8 +525,8 @@ export class PortSupervisor {
     this.#state = { kind: 'opening', port, opened };
 
     try {
-      // No `onTimeout` close: an open that outlives its deadline is closed by the loss handler,
-      // or by `stop()`, once it settles - closing while it is pending does not stop it opening.
+      // An open that outlives its deadline is closed by the loss handler, or by `stop()`, once it
+      // settles - closing while it is pending does not stop it opening.
       await withDeadline(opened, this.environment.clock, {
         timeoutMs: this.configuration.connection.openTimeoutMs,
         code: SerialBrokerErrorCode.OPEN_TIMEOUT,
@@ -769,7 +785,7 @@ export class PortSupervisor {
 
     const timer = this.environment.clock.setTimer(() => {
       if (this.#state.kind === 'reconnecting') {
-        void this.#connect(this.#backoff.attempt);
+        void this.#connect();
       }
     }, delayMs);
 
@@ -846,22 +862,30 @@ export class PortSupervisor {
   }
 
   /**
-   * Runs one teardown step, bounded and swallowing its failure.
+   * Runs one teardown step, bounded, recording its failure rather than raising it.
    *
    * Teardown runs on paths where something has already gone wrong; a step that fails or hangs
    * must not prevent the remaining steps or the caller that is waiting for all of them.
    */
-  async #closeStep(operation: Promise<unknown>, what: string): Promise<void> {
+  async #closeStep(operation: Promise<unknown>, step: string): Promise<void> {
     try {
       await withDeadline(operation, this.environment.clock, {
         timeoutMs: this.configuration.connection.openTimeoutMs,
         code: SerialBrokerErrorCode.OPEN_TIMEOUT,
-        message: `Timed out while ${what}`,
+        message: `Timed out while ${step}`,
         configName: this.configuration.name,
       });
-    } catch {
-      // Expected when the device has already gone. The caller is tearing down precisely
-      // because something is wrong and is already reporting why.
+    } catch (error) {
+      // Not reported: expected when the device has already gone, and the caller is tearing down
+      // precisely because something is wrong and is already reporting why. But a close that
+      // failed can leave the device open, and the `InvalidStateError` the next open then meets
+      // is unexplainable without this record.
+      this.logger.debug('a teardown step failed', {
+        configName: this.configuration.name,
+        event: 'supervisor.teardown-failed',
+        step,
+        error: describeUnknown(error),
+      });
     }
   }
 

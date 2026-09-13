@@ -11,6 +11,8 @@ import { BrowserHarness, VirtualTab } from '../harness/browser-harness.js';
 import { READER, READER_OPTIONS } from '../harness/devices.js';
 import { FakeClock, flushMicrotasks } from '../harness/fake-clock.js';
 import { FakeLockManager } from '../harness/fake-locks.js';
+import { domException } from '../harness/fake-serial.js';
+import { fieldsOfEvent, recordingLogger } from '../harness/recording-logger.js';
 
 /**
  * Defects in how the tab holding the port connects, loses and hands over the connection, found in
@@ -21,6 +23,8 @@ import { FakeLockManager } from '../harness/fake-locks.js';
 interface SerialTiming {
   /** `getPorts()` never answers while this is set. */
   listingHangs: boolean;
+  /** `getPorts()` rejects with this while it is set, as under a restrictive permissions policy. */
+  listingFailsWith: Error | undefined;
   /**
    * Milliseconds, on the harness clock, that `open()` takes to settle after the device is opened.
    *
@@ -46,7 +50,12 @@ function openSlowTab(
   harness: BrowserHarness,
   id: string,
 ): { tab: VirtualTab; timing: SerialTiming } {
-  const timing: SerialTiming = { listingHangs: false, openDelayMs: 0, closeDelayMs: 0 };
+  const timing: SerialTiming = {
+    listingHangs: false,
+    listingFailsWith: undefined,
+    openDelayMs: 0,
+    closeDelayMs: 0,
+  };
   const environment = harness.createEnvironment(id);
   const serial = environment.serial;
   const patched = new WeakSet<SerialPort>();
@@ -65,6 +74,9 @@ function openSlowTab(
         return await new Promise<never>(() => {
           /* intentionally never settles */
         });
+      }
+      if (timing.listingFailsWith !== undefined) {
+        throw timing.listingFailsWith;
       }
       const ports = await serial.getPorts();
       for (const port of ports) {
@@ -162,6 +174,96 @@ describe('listing the granted ports', () => {
     expect(tab.client.getStatus('Reader').status).toBe(SerialBrokerStatus.Connecting);
     expect(connectionState(tab)).toBe('opening');
     expect(tab.client.diagnostics()?.configurations[0]?.connection?.nextAttemptAt).toBeUndefined();
+  });
+});
+
+describe('an attempt to connect', () => {
+  it('looks again for a device plugged in during the listing as part of the same attempt', async () => {
+    const harness = new BrowserHarness();
+    const device = harness.serial.addDevice(READER.vendorId, READER.productId);
+    harness.serial.grant(device);
+    harness.serial.unplug(device);
+    harness.serial.onListingPorts = () => {
+      harness.serial.onListingPorts = undefined;
+      harness.serial.plug(device);
+    };
+
+    const tab = harness.openTab();
+    await tab.setup('Reader', READER_OPTIONS);
+
+    // Counted twice, a configuration allowed one attempt would give up after a first attempt that
+    // only had to look again.
+    expect(tab.client.getStatus('Reader').status).toBe(SerialBrokerStatus.Open);
+    expect(tab.client.diagnostics()?.configurations[0]?.connection?.attempt).toBe(1);
+  });
+
+  it('numbers an attempt alike in its error, its log record and the diagnostics', async () => {
+    const { logger, records } = recordingLogger();
+    const harness = new BrowserHarness({ logger });
+    const device = harness.serial.addDevice(READER.vendorId, READER.productId);
+    harness.serial.grant(device);
+    device.faults.failOpenWith = 'InvalidStateError';
+
+    const tab = harness.openTab();
+    await tab.setup('Reader', READER_OPTIONS);
+
+    const [failure] = tab.recordFor('Reader').errors;
+    expect(failure?.error.context['attempt']).toBe(1);
+    expect(fieldsOfEvent(records, 'supervisor.reconnect')[0]?.['attempt']).toBe(1);
+    expect(tab.client.diagnostics()?.configurations[0]?.connection?.attempt).toBe(1);
+  });
+
+  it('reports ports that cannot be listed with the time it happened', async () => {
+    const harness = new BrowserHarness();
+    const { tab, timing } = openSlowTab(harness, 'slow-tab');
+    timing.listingFailsWith = domException('SecurityError', 'Access to serial is disallowed');
+
+    await tab.setup('Reader', READER_OPTIONS);
+
+    const [failure] = tab.recordFor('Reader').errors;
+    expect(failure?.error.code).toBe(SerialBrokerErrorCode.WEB_SERIAL_UNAVAILABLE);
+    expect(failure?.error.timestamp).toBe(harness.clock.now());
+  });
+});
+
+describe('a device plugged in again', () => {
+  it('is logged when it revives a configuration that had given up', async () => {
+    const { logger, records } = recordingLogger();
+    const harness = new BrowserHarness({ logger });
+    const device = harness.serial.addDevice(READER.vendorId, READER.productId);
+    harness.serial.grant(device);
+    device.faults.failOpenWith = 'NetworkError';
+    const tab = harness.openTab();
+    await tab.setup('Reader', { ...READER_OPTIONS, connection: { maxAttempts: 1 } });
+    expect(tab.client.getStatus('Reader').status).toBe(SerialBrokerStatus.Failed);
+
+    device.faults.failOpenWith = undefined;
+    harness.serial.plug(device);
+    await harness.settle();
+
+    expect(tab.client.getStatus('Reader').status).toBe(SerialBrokerStatus.Open);
+    expect(fieldsOfEvent(records, 'supervisor.device-connected')).toHaveLength(1);
+  });
+});
+
+describe('closing a lost connection', () => {
+  it('records a teardown step that failed, which the next open may run into', async () => {
+    const { logger, records } = recordingLogger();
+    const harness = new BrowserHarness({ logger });
+    const device = harness.serial.addDevice(READER.vendorId, READER.productId);
+    harness.serial.grant(device);
+    const tab = harness.openTab();
+    await tab.setup('Reader', READER_OPTIONS);
+
+    harness.serial.unplug(device);
+    await harness.settle();
+
+    // The reader of a stream that errored cannot be cancelled cleanly. Nothing is reported for it -
+    // the unplugging already was - but a close that fails silently leaves nothing to go on when
+    // the next open finds the device still open.
+    expect(
+      fieldsOfEvent(records, 'supervisor.teardown-failed').map((fields) => fields['step']),
+    ).toContain('cancelling the reader');
   });
 });
 

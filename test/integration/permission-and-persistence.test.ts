@@ -66,6 +66,7 @@ describe('permission and persistence', () => {
 
     await expect(tab.client.requestAccess('Reader')).rejects.toMatchObject({
       code: SerialBrokerErrorCode.DEVICE_MISMATCH,
+      timestamp: harness.clock.now(),
     });
   });
 

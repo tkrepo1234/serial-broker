@@ -60,6 +60,7 @@ message.
 | `supervisor.open`                 | info  | The port opened.                                                                          |
 | `supervisor.reconnect`            | warn  | The connection was lost; the reason, attempt and delay are in the fields.                 |
 | `supervisor.device-connected`     | info  | The device reappeared, and a reconnect is attempted at once.                              |
+| `supervisor.teardown-failed`      | debug | Closing a lost connection failed or timed out at `step`; the next open may find it open.  |
 | `supervisor.sent`, `.received`    | debug | Traffic, with `byteLength`; with `logPayloads`, also `hex`.                               |
 | `matcher.none`                    | debug | No granted port matches the configured device.                                            |
 | `matcher.ambiguous`               | warn  | Several granted ports match; the first is used.                                           |
