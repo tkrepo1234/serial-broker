@@ -27,6 +27,8 @@ coordinate with each other. See
 - A `BroadcastChannel` fallback for contexts without `SharedWorker`, such as Chrome for
   Android, functionally equivalent to the default. It also takes over when the worker script
   fails to load, replaying what the tab sent before the failure.
+- Tabs that die without saying goodbye are forgotten by the worker: every tab sends a heartbeat,
+  and the worker drops one that has been silent for three minutes.
 - An opt-in structured logger. The library writes nothing to the console uninvited.
 - A read-only diagnostics entry point, `serial-broker/diagnostics`. Every tab of the origin
   reports its role, connection state, reconnect timing, pending writes, listeners and effective
@@ -38,6 +40,6 @@ coordinate with each other. See
 
 ### Notes
 
-- Wire protocol version: **3**. Version 1 was never released; 2 added the diagnostics request and
-  report, 3 the broker's `welcome`. Remembered configurations are stored per protocol version, so
-  those remembered by a build on version 2 are not restored.
+- Wire protocol version: **4**. Version 1 was never released; 2 added the diagnostics request and
+  report, 3 the broker's `welcome`, 4 the `heartbeat`. Remembered configurations are stored per
+  protocol version, so those remembered by an earlier build are not restored.

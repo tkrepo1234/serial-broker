@@ -340,6 +340,7 @@ export class ConfigurationSession {
 
       case 'hello':
       case 'welcome':
+      case 'heartbeat':
       case 'goodbye':
       case 'attach':
       case 'detach':

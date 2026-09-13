@@ -7,6 +7,8 @@ export interface BrokerHost {
   /** Delivers a message to exactly one participant. Must not throw. */
   deliver(clientId: ClientId, message: ProtocolMessage): void;
   readonly logger: ScopedLogger;
+  /** The current time in milliseconds, to tell when a participant was last heard from. */
+  now(): number;
 }
 
 /** Per-configuration bookkeeping. Deliberately almost nothing. */
@@ -42,6 +44,8 @@ interface ConfigurationState {
 export class Broker {
   readonly #configurations = new Map<string, ConfigurationState>();
   readonly #clients = new Set<ClientId>();
+  /** When each participant last sent anything. Any message counts, not only heartbeats. */
+  readonly #lastHeardFrom = new Map<ClientId, number>();
 
   constructor(private readonly host: BrokerHost) {}
 
@@ -53,6 +57,7 @@ export class Broker {
   /** Registers a newly connected participant. */
   handleConnect(clientId: ClientId): void {
     this.#clients.add(clientId);
+    this.#lastHeardFrom.set(clientId, this.host.now());
     this.host.logger.debug('participant connected', { clientId, event: 'broker.connect' });
   }
 
@@ -65,6 +70,7 @@ export class Broker {
    */
   handleDisconnect(clientId: ClientId): void {
     this.#clients.delete(clientId);
+    this.#lastHeardFrom.delete(clientId);
 
     for (const [configName, state] of this.#configurations) {
       state.participants.delete(clientId);
@@ -85,6 +91,7 @@ export class Broker {
   /** Routes one decoded message from `clientId`. */
   handleMessage(clientId: ClientId, message: ProtocolMessage): void {
     this.#clients.add(clientId);
+    this.#lastHeardFrom.set(clientId, this.host.now());
 
     switch (message.type) {
       case 'hello':
@@ -97,6 +104,10 @@ export class Broker {
           from: BROKER_ID,
           to: clientId,
         });
+        return;
+
+      case 'heartbeat':
+        this.#restore(clientId, message.configNames, message.ownedConfigNames);
         return;
 
       case 'welcome':
@@ -135,10 +146,37 @@ export class Broker {
     }
   }
 
+  /**
+   * Forgets every participant that has sent nothing for `timeoutMs`.
+   *
+   * A tab that crashes, is killed or has its renderer discarded never says goodbye, and a
+   * `MessagePort` reports no closing. Participants send heartbeats instead (ADR-0021), so one
+   * that stays silent is gone - or throttled so hard that forgetting it costs nothing its next
+   * heartbeat does not restore.
+   *
+   * @returns The participants forgotten, so the host can drop what it keeps for them.
+   */
+  forgetSilent(timeoutMs: number): ClientId[] {
+    const now = this.host.now();
+    const silent = [...this.#lastHeardFrom]
+      .filter(([, heardAt]) => now - heardAt >= timeoutMs)
+      .map(([clientId]) => clientId);
+
+    for (const clientId of silent) {
+      this.host.logger.info('forgot a participant that fell silent', {
+        clientId,
+        event: 'broker.forgot-silent',
+      });
+      this.handleDisconnect(clientId);
+    }
+    return silent;
+  }
+
   /** Drops all state. */
   dispose(): void {
     this.#configurations.clear();
     this.#clients.clear();
+    this.#lastHeardFrom.clear();
   }
 
   // --- Participation ---------------------------------------------------------------------
@@ -156,6 +194,35 @@ export class Broker {
     // Nothing beyond bookkeeping: a joining context asks the owner for the current status
     // itself, so that the broker and the broker-less fallback behave identically (ADR-0007).
     this.#stateFor(configName).participants.add(clientId);
+  }
+
+  /**
+   * Re-establishes what a heartbeat says about its sender.
+   *
+   * Idempotent, so it changes nothing while the broker is in step, and it heals a participant the
+   * broker forgot while it was only silent. Ownership is filled in, never taken over: the Web Lock
+   * decides who owns a port (ADR-0005), and a heartbeat can be older than a successor's claim.
+   */
+  #restore(
+    clientId: ClientId,
+    configNames: readonly string[],
+    ownedConfigNames: readonly string[],
+  ): void {
+    for (const configName of configNames) {
+      this.#stateFor(configName).participants.add(clientId);
+    }
+    for (const configName of ownedConfigNames) {
+      const state = this.#stateFor(configName);
+      state.participants.add(clientId);
+      if (state.owner === undefined) {
+        state.owner = clientId;
+        this.host.logger.info('ownership restored from a heartbeat', {
+          clientId,
+          configName,
+          event: 'broker.owner-restored',
+        });
+      }
+    }
   }
 
   #detach(clientId: ClientId, configName: string): void {

@@ -155,6 +155,14 @@ export class BrowserHarness {
   readonly locks = new FakeLockManager();
   readonly bus: FakeBus;
   readonly clock = new FakeClock();
+  /**
+   * Time for the message bus: the heartbeats tabs send and the worker's sweep (ADR-0021).
+   *
+   * Separate from {@link clock}, so that a test asserting on the library's own timers - "no
+   * reconnect is scheduled any more" - is not disturbed by the bus's, and a test about heartbeats
+   * moves this one.
+   */
+  readonly busClock = new FakeClock();
   readonly storage = new FakeStorage();
 
   readonly #tabs = new Map<string, VirtualTab>();
@@ -162,7 +170,11 @@ export class BrowserHarness {
   #nextIdNumber = 0;
 
   constructor(private readonly options: HarnessOptions = {}) {
-    this.bus = new FakeBus(options.transport ?? 'sharedworker', options.workerScript ?? 'loads');
+    this.bus = new FakeBus(
+      options.transport ?? 'sharedworker',
+      options.workerScript ?? 'loads',
+      this.busClock,
+    );
   }
 
   /** Opens a new tab of the same origin. */

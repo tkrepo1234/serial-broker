@@ -5,6 +5,7 @@ import type { SerialBrokerError } from '../../src/core/errors.js';
 import { NOOP_LOGGER, ScopedLogger } from '../../src/core/logger.js';
 import { createBrowserEnvironment, isSupported } from '../../src/environment/browser.js';
 import type { ClientId } from '../../src/protocol/messages.js';
+import { FakeClock } from '../harness/fake-clock.js';
 
 /**
  * The composition root, which is the one file allowed to read a global.
@@ -121,6 +122,7 @@ function transportRequest(): Parameters<
     onDecodeFailure: () => undefined,
     onTransportError: () => undefined,
     logger: new ScopedLogger(NOOP_LOGGER, {}),
+    clock: new FakeClock(),
   };
 }
 

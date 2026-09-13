@@ -44,6 +44,9 @@ const isNonEmptyString = (value: unknown): value is string =>
 const isFiniteNumber = (value: unknown): value is number =>
   typeof value === 'number' && Number.isFinite(value);
 
+const isNameList = (value: unknown): value is readonly string[] =>
+  Array.isArray(value) && value.every(isNonEmptyString);
+
 const isStatus = (value: unknown): value is SerialBrokerStatus =>
   typeof value === 'string' && (Object.values(SerialBrokerStatus) as string[]).includes(value);
 
@@ -109,6 +112,14 @@ function decodeChecked(raw: unknown): DecodeResult {
     case 'welcome':
     case 'goodbye':
       return { ok: true, message: raw as unknown as ProtocolMessage };
+
+    case 'heartbeat':
+      if (!isNameList(raw['configNames'])) {
+        return malformed(type, 'configNames');
+      }
+      return isNameList(raw['ownedConfigNames'])
+        ? { ok: true, message: raw as unknown as ProtocolMessage }
+        : malformed(type, 'ownedConfigNames');
 
     case 'attach':
     case 'detach':

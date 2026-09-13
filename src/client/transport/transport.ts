@@ -1,3 +1,4 @@
+import type { Clock } from '../../core/clock.js';
 import type { ScopedLogger } from '../../core/logger.js';
 import type { DecodeFailure } from '../../protocol/decode.js';
 import type { ClientId, ProtocolMessage } from '../../protocol/messages.js';
@@ -61,6 +62,8 @@ export interface TransportRequest {
   /** Receives transport-level failures, such as the worker script failing to load. */
   readonly onTransportError: (error: unknown) => void;
   readonly logger: ScopedLogger;
+  /** Time, for the heartbeats a `SharedWorker` participant sends (ADR-0021). */
+  readonly clock: Clock;
   /** URL of the broker script. Ignored by the fallback. */
   readonly workerUrl?: string | URL | undefined;
 }

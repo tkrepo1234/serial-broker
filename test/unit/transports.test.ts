@@ -11,14 +11,17 @@ import {
 } from '../../src/client/transport/shared-worker-transport.js';
 import type { TransportRequest } from '../../src/client/transport/transport.js';
 import { NOOP_LOGGER, ScopedLogger } from '../../src/core/logger.js';
+import { HEARTBEAT_INTERVAL_MS } from '../../src/protocol/heartbeat.js';
 import type { ClientId, ProtocolMessage } from '../../src/protocol/messages.js';
 import { PROTOCOL_VERSION } from '../../src/protocol/version.js';
+import { FakeClock } from '../harness/fake-clock.js';
 
 const SELF = 'self' as ClientId;
 const PEER = 'peer' as ClientId;
 
 interface Recorder {
   readonly request: TransportRequest;
+  readonly clock: FakeClock;
   readonly messages: ProtocolMessage[];
   readonly decodeFailures: unknown[];
   readonly transportErrors: unknown[];
@@ -28,8 +31,10 @@ function recorder(): Recorder {
   const messages: ProtocolMessage[] = [];
   const decodeFailures: unknown[] = [];
   const transportErrors: unknown[] = [];
+  const clock = new FakeClock();
 
   return {
+    clock,
     messages,
     decodeFailures,
     transportErrors,
@@ -39,6 +44,7 @@ function recorder(): Recorder {
       onDecodeFailure: (failure) => decodeFailures.push(failure),
       onTransportError: (error) => transportErrors.push(error),
       logger: new ScopedLogger(NOOP_LOGGER, {}),
+      clock,
     },
   };
 }
@@ -436,5 +442,50 @@ describe('SharedWorkerTransport, while its script is starting', () => {
 
     expect(loadFailures).toHaveLength(0);
     expect(transportErrors).toHaveLength(1);
+  });
+});
+
+describe('SharedWorkerTransport heartbeats', () => {
+  function start(): ReturnType<typeof recorder> &
+    ReturnType<typeof fakePort> & { transport: SharedWorkerTransport } {
+    const rec = recorder();
+    const fake = fakePort();
+    const worker: SharedWorkerLike = { port: fake.port, addEventListener: () => undefined };
+    const transport = new SharedWorkerTransport(rec.request, () => worker, 'fake://worker');
+    return { ...rec, ...fake, transport };
+  }
+
+  it('tells the broker periodically what this context takes part in and owns', async () => {
+    const { transport, posted, clock } = start();
+    transport.attach('Reader');
+    transport.attach('Printer');
+    transport.setOwnership('Reader', true);
+    transport.detach('Printer');
+    posted.length = 0;
+
+    await clock.advance(HEARTBEAT_INTERVAL_MS);
+
+    expect(posted).toEqual([
+      expect.objectContaining({
+        type: 'heartbeat',
+        configNames: ['Reader'],
+        ownedConfigNames: ['Reader'],
+      }),
+    ]);
+
+    transport.setOwnership('Reader', false);
+    await clock.advance(HEARTBEAT_INTERVAL_MS);
+    expect(posted.at(-1)).toMatchObject({ configNames: ['Reader'], ownedConfigNames: [] });
+  });
+
+  it('stops sending heartbeats once closed', async () => {
+    const { transport, posted, clock } = start();
+
+    transport.close();
+    posted.length = 0;
+    await clock.advance(3 * HEARTBEAT_INTERVAL_MS);
+
+    expect(posted).toEqual([]);
+    expect(clock.pendingTimerCount).toBe(0);
   });
 });

@@ -10,6 +10,7 @@ import { ScopedLogger } from '../../src/core/logger.js';
 import type { LogFields, LogLevel } from '../../src/core/types.js';
 import type { ClientId, ProtocolMessage } from '../../src/protocol/messages.js';
 import { PROTOCOL_VERSION } from '../../src/protocol/version.js';
+import { FakeClock } from '../harness/fake-clock.js';
 
 const SELF = 'self' as ClientId;
 
@@ -83,6 +84,7 @@ function setUp(options: { fallbackThrows?: boolean } = {}): {
     onMessage: () => undefined,
     onDecodeFailure: () => undefined,
     onTransportError: (error) => transportErrors.push(error),
+    clock: new FakeClock(),
     logger: new ScopedLogger(
       { log: (level, _message, fields) => logs.push({ level, fields }) },
       {},

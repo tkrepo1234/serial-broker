@@ -56,6 +56,21 @@ export interface WelcomeMessage extends Envelope {
 /** The sender identity the broker uses. It is not a context and never appears in a report. */
 export const BROKER_ID = 'serial-broker/broker' as ClientId;
 
+/**
+ * Tells the broker, periodically, that a participant is still there and what it takes part in.
+ *
+ * A `MessagePort` reports nothing when the tab behind it dies, so a participant that stops sending
+ * heartbeats is forgotten (ADR-0021). Carrying its configurations lets a heartbeat also restore a
+ * participant the broker forgot while it was only silent.
+ */
+export interface HeartbeatMessage extends Envelope {
+  readonly type: 'heartbeat';
+  /** Every configuration the sender takes part in. */
+  readonly configNames: readonly string[];
+  /** The configurations whose port the sender holds. */
+  readonly ownedConfigNames: readonly string[];
+}
+
 /** Declares interest in a configuration, so its events are routed to this context. */
 export interface AttachMessage extends Envelope {
   readonly type: 'attach';
@@ -187,6 +202,7 @@ export interface GoodbyeMessage extends Envelope {
 export type ProtocolMessage =
   | HelloMessage
   | WelcomeMessage
+  | HeartbeatMessage
   | AttachMessage
   | DetachMessage
   | OwnerClaimedMessage

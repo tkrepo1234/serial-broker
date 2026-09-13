@@ -1,5 +1,6 @@
 import { NOOP_LOGGER, ScopedLogger } from '../core/logger.js';
 import { decodeMessage, describeDecodeFailure } from '../protocol/decode.js';
+import { SILENT_PARTICIPANT_TIMEOUT_MS, SWEEP_INTERVAL_MS } from '../protocol/heartbeat.js';
 import type { ClientId, ProtocolMessage } from '../protocol/messages.js';
 
 import { Broker } from './broker.js';
@@ -38,11 +39,12 @@ const broker = new Broker({
     try {
       port.postMessage(message);
     } catch {
-      // A port belonging to a context that has just gone away. The disconnect handler will
-      // clean it up; failing the whole delivery loop over it would punish every other tab.
+      // A port belonging to a context that has just gone away. The sweep below forgets it;
+      // failing the whole delivery loop over it would punish every other tab.
     }
   },
   logger,
+  now: () => Date.now(),
 });
 
 /** Every live port, by the identity of the context behind it. */
@@ -92,9 +94,9 @@ function register(port: MessagePort, clientId: ClientId): void {
   ports.set(clientId, port);
   broker.handleConnect(clientId);
 
-  // There is no port-close event, so the only reliable signal that a context has gone is the
-  // port erroring on delivery or the context saying goodbye. `messageerror` covers the case
-  // where a context sends something uncloneable and is likely to be in trouble.
+  // There is no port-close event. A context that leaves politely says goodbye; one that dies
+  // stops sending heartbeats, and the sweep forgets it (ADR-0021). `messageerror` covers the
+  // case where a context sends something uncloneable and is likely to be in trouble.
   port.addEventListener('messageerror', () => {
     disconnect(port, clientId);
   });
@@ -111,3 +113,16 @@ function disconnect(port: MessagePort, clientId: ClientId): void {
     // Closing an already-closed port throws in some engines and means nothing here.
   }
 }
+
+// A port reports nothing when the tab behind it dies, so participants that stay silent past the
+// timeout are forgotten here (ADR-0021). Their port is dropped from the tables, never closed: a tab
+// that was only throttled keeps its connection, and its next message registers it again.
+setInterval(() => {
+  for (const clientId of broker.forgetSilent(SILENT_PARTICIPANT_TIMEOUT_MS)) {
+    const port = ports.get(clientId);
+    ports.delete(clientId);
+    if (port !== undefined) {
+      identities.delete(port);
+    }
+  }
+}, SWEEP_INTERVAL_MS);

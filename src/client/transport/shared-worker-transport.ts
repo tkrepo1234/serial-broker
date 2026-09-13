@@ -1,5 +1,7 @@
+import type { TimerHandle } from '../../core/clock.js';
 import { DisposalStack } from '../../core/disposable.js';
 import { decodeMessage } from '../../protocol/decode.js';
+import { HEARTBEAT_INTERVAL_MS } from '../../protocol/heartbeat.js';
 import type { ProtocolMessage } from '../../protocol/messages.js';
 import { brokerChannelName, PROTOCOL_VERSION } from '../../protocol/version.js';
 
@@ -41,8 +43,9 @@ export interface WorkerStartup {
  * The transport itself is thin: it owns one `MessagePort`, validates everything arriving on
  * it, and forwards what survives. Routing is the broker's job (ADR-0006).
  *
- * `attach`, `detach` and `setOwnership` become messages rather than local state, because the
- * broker is the thing that needs to know.
+ * `attach` and `detach` become messages, because the broker is the thing that needs to know. A
+ * heartbeat repeats both, with what this context owns, so the broker can forget a context that
+ * died and restore one it forgot while it was only silent (ADR-0021).
  */
 export class SharedWorkerTransport implements Transport {
   readonly kind = 'sharedworker' as const;
@@ -53,6 +56,9 @@ export class SharedWorkerTransport implements Transport {
   readonly #request: TransportRequest;
   readonly #startup: WorkerStartup | undefined;
   #isReady = false;
+  readonly #attached = new Set<string>();
+  readonly #owned = new Set<string>();
+  #heartbeat: TimerHandle | undefined;
 
   /**
    * @param startup - When given, a script that fails to load before the broker answers is
@@ -103,6 +109,13 @@ export class SharedWorkerTransport implements Transport {
       from: this.clientId,
       to: 'all',
     });
+
+    this.#scheduleHeartbeat();
+    this.#disposal.add(() => {
+      if (this.#heartbeat !== undefined) {
+        request.clock.clearTimer(this.#heartbeat);
+      }
+    });
   }
 
   /** {@inheritDoc Transport.send} */
@@ -122,6 +135,7 @@ export class SharedWorkerTransport implements Transport {
 
   /** {@inheritDoc Transport.attach} */
   attach(configName: string): void {
+    this.#attached.add(configName);
     this.send({
       type: 'attach',
       v: PROTOCOL_VERSION,
@@ -133,6 +147,8 @@ export class SharedWorkerTransport implements Transport {
 
   /** {@inheritDoc Transport.detach} */
   detach(configName: string): void {
+    this.#attached.delete(configName);
+    this.#owned.delete(configName);
     this.send({
       type: 'detach',
       v: PROTOCOL_VERSION,
@@ -143,9 +159,14 @@ export class SharedWorkerTransport implements Transport {
   }
 
   /** {@inheritDoc Transport.setOwnership} */
-  setOwnership(_configName: string, _isOwner: boolean): void {
-    // Nothing to do: the broker learns of ownership from the `owner-claimed` and
-    // `owner-released` messages the client already sends, and routes `to: 'owner'` itself.
+  setOwnership(configName: string, isOwner: boolean): void {
+    // No message: the broker learns of ownership from the `owner-claimed` and `owner-released`
+    // messages the client already sends. It is only remembered for the heartbeat.
+    if (isOwner) {
+      this.#owned.add(configName);
+    } else {
+      this.#owned.delete(configName);
+    }
   }
 
   /** {@inheritDoc Transport.close} */
@@ -162,6 +183,23 @@ export class SharedWorkerTransport implements Transport {
     });
 
     this.#disposal.disposeAll();
+  }
+
+  #scheduleHeartbeat(): void {
+    this.#heartbeat = this.#request.clock.setTimer(() => {
+      if (this.#disposal.isDisposed) {
+        return;
+      }
+      this.send({
+        type: 'heartbeat',
+        v: PROTOCOL_VERSION,
+        from: this.clientId,
+        to: 'all',
+        configNames: [...this.#attached],
+        ownedConfigNames: [...this.#owned],
+      });
+      this.#scheduleHeartbeat();
+    }, HEARTBEAT_INTERVAL_MS);
   }
 
   #receive(raw: unknown): void {

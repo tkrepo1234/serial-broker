@@ -87,6 +87,7 @@ export class DiagnosticsObserver {
         });
       },
       logger: this.#logger,
+      clock: environment.clock,
     });
   }
 

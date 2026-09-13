@@ -1,5 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import {
+  HEARTBEAT_INTERVAL_MS,
+  SILENT_PARTICIPANT_TIMEOUT_MS,
+  SWEEP_INTERVAL_MS,
+} from '../../src/protocol/heartbeat.js';
 import type { ClientId, ProtocolMessage } from '../../src/protocol/messages.js';
 import { PROTOCOL_VERSION } from '../../src/protocol/version.js';
 
@@ -50,6 +55,8 @@ function envelope(from: string, to: string, extra: Record<string, unknown>): unk
 let connect: (event: { ports: readonly unknown[] }) => void;
 
 beforeEach(async () => {
+  // The worker sweeps on an interval and reads the time: both are driven by the test.
+  vi.useFakeTimers();
   const self = {} as { onconnect: ((event: { ports: readonly unknown[] }) => void) | null };
   vi.stubGlobal('self', self);
 
@@ -62,6 +69,7 @@ beforeEach(async () => {
 });
 
 afterEach(() => {
+  vi.useRealTimers();
   vi.unstubAllGlobals();
 });
 
@@ -82,6 +90,40 @@ describe('serial-broker.worker', () => {
     // The welcome is how a tab learns that this script loaded at all (ADR-0007).
     expect(alice.posted).toEqual([expect.objectContaining({ type: 'welcome', to: 'alice' })]);
     expect(bob.posted).toHaveLength(0);
+  });
+
+  it('forgets a port that falls silent, and knows it again from its next message', () => {
+    const alice = createPort();
+    const bob = createPort();
+    connect({ ports: [alice] });
+    connect({ ports: [bob] });
+    alice.deliver(envelope('alice', 'all', { type: 'attach', configName: 'Reader' }));
+    bob.deliver(envelope('bob', 'all', { type: 'attach', configName: 'Reader' }));
+
+    // Bob keeps sending heartbeats; Alice's tab has stopped.
+    const bobHeartbeat = { type: 'heartbeat', configNames: ['Reader'], ownedConfigNames: [] };
+    for (
+      let elapsed = 0;
+      elapsed < SILENT_PARTICIPANT_TIMEOUT_MS + SWEEP_INTERVAL_MS;
+      elapsed += HEARTBEAT_INTERVAL_MS
+    ) {
+      vi.advanceTimersByTime(HEARTBEAT_INTERVAL_MS);
+      bob.deliver(envelope('bob', 'all', bobHeartbeat));
+    }
+    bob.deliver(envelope('bob', 'all', { type: 'status-request', configName: 'Reader' }));
+    expect(alice.posted).toHaveLength(0);
+    expect(alice.closed).toBe(false);
+
+    // Alice was only throttled. Her heartbeat brings her back.
+    alice.deliver(
+      envelope('alice', 'all', {
+        type: 'heartbeat',
+        configNames: ['Reader'],
+        ownedConfigNames: [],
+      }),
+    );
+    bob.deliver(envelope('bob', 'all', { type: 'status-request', configName: 'Reader' }));
+    expect(alice.posted).toHaveLength(1);
   });
 
   it('ignores a connect event with no port', () => {

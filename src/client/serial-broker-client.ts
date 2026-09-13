@@ -322,6 +322,7 @@ export class SerialBrokerClient {
         );
       },
       logger: this.#logger,
+      clock: this.environment.clock,
     });
 
     this.#transport = transport;

@@ -9,8 +9,11 @@ import {
 import type { Transport, TransportRequest } from '../../src/client/transport/transport.js';
 import { NOOP_LOGGER, ScopedLogger } from '../../src/core/logger.js';
 import { decodeMessage } from '../../src/protocol/decode.js';
+import { SILENT_PARTICIPANT_TIMEOUT_MS, SWEEP_INTERVAL_MS } from '../../src/protocol/heartbeat.js';
 import type { ClientId, ProtocolMessage } from '../../src/protocol/messages.js';
 import { Broker } from '../../src/worker/broker.js';
+
+import type { FakeClock } from './fake-clock.js';
 
 type MessageListener = (event: { readonly data: unknown }) => void;
 
@@ -42,7 +45,7 @@ export class FakeWorkerHost {
   /** Every message the broker received, for assertions about protocol traffic. */
   readonly received: ProtocolMessage[] = [];
 
-  constructor() {
+  constructor(private readonly clock: FakeClock) {
     this.#broker = new Broker({
       deliver: (clientId, message) => {
         const listener = this.#ports.get(clientId);
@@ -60,7 +63,31 @@ export class FakeWorkerHost {
         }, message);
       },
       logger: new ScopedLogger(NOOP_LOGGER, {}),
+      now: () => clock.now(),
     });
+    this.#scheduleSweep();
+  }
+
+  /** Participants the broker currently knows. */
+  get clientCount(): number {
+    return this.#broker.clientCount;
+  }
+
+  /**
+   * Simulates a context dying: its port delivers nothing any more, and the broker is not told.
+   *
+   * A real worker never learns that a tab died. It forgets the tab only once its heartbeats have
+   * stopped for long enough (ADR-0021), which is what the sweep here does too.
+   */
+  silence(clientId: ClientId): void {
+    this.#ports.delete(clientId);
+  }
+
+  #scheduleSweep(): void {
+    this.clock.setTimer(() => {
+      this.#broker.forgetSilent(SILENT_PARTICIPANT_TIMEOUT_MS);
+      this.#scheduleSweep();
+    }, SWEEP_INTERVAL_MS);
   }
 
   /** Connects a context's port. */
@@ -159,10 +186,12 @@ export type TransportMode = 'sharedworker' | 'broadcastchannel';
  * rather than an untested branch (ADR-0007).
  */
 export class FakeBus {
-  readonly workerHost = new FakeWorkerHost();
+  readonly workerHost: FakeWorkerHost;
   readonly broadcastHub = new FakeBroadcastHub();
 
   readonly #workerFailures: ((event: unknown) => void)[] = [];
+  /** Contexts that died: nothing they send reaches the worker any more. */
+  readonly #killed = new Set<string>();
 
   /**
    * @param mode - Which transport the tabs start on.
@@ -173,7 +202,11 @@ export class FakeBus {
   constructor(
     readonly mode: TransportMode,
     readonly workerScript: 'loads' | 'fails' = 'loads',
-  ) {}
+    /** Time for the bus: the heartbeats tabs send and the worker's sweep. */
+    readonly clock: FakeClock,
+  ) {
+    this.workerHost = new FakeWorkerHost(clock);
+  }
 
   /** Reports every worker script that did not load, as the browser's `error` event does. */
   failWorkerScripts(): void {
@@ -191,18 +224,24 @@ export class FakeBus {
 
   /** Simulates a context vanishing without cleanup. */
   killContext(contextId: string, clientId: ClientId): void {
-    this.workerHost.disconnect(clientId);
+    // A real worker is never told that a tab died: the port simply stops, in both directions, and
+    // the broker learns of it only when the tab's heartbeats stop arriving (ADR-0021).
+    this.#killed.add(contextId);
+    this.workerHost.silence(clientId);
     this.broadcastHub.killContext(contextId);
   }
 
-  #createWorkerTransport(contextId: string, request: TransportRequest): Transport {
+  #createWorkerTransport(contextId: string, tabRequest: TransportRequest): Transport {
+    // Heartbeats run on the bus's own clock, so that tests asserting on the library's timers are
+    // not disturbed by them.
+    const request: TransportRequest = { ...tabRequest, clock: this.clock };
     const clientId = request.clientId;
     const loads = this.workerScript === 'loads';
 
     const port: MessagePortLike = {
       postMessage: (message) => {
         // A port to a worker whose script never ran accepts messages and delivers none.
-        if (loads) {
+        if (loads && !this.#killed.has(contextId)) {
           this.workerHost.send(clientId, structuredClone(message));
         }
       },

@@ -101,10 +101,6 @@ The verified defects were fixed in `6d31c59`. What remains needs a decision or i
 
 ### Decisions
 
-- **Crashed tabs are never forgotten by the worker.** A tab that dies without `goodbye` stays in
-  the broker's participants, and as owner until a successor claims. Options: a heartbeat, or a
-  per-tab Web Lock the worker waits on. The test harness hides this: killing a tab tells the
-  broker, which a real worker never learns.
 - **Saved configurations are keyed by the protocol version**, so every protocol change discards
   them although their format did not change. Give storage its own schema version.
 - **`configure()` only takes effect before the first call of any kind**, and `exists()` /
@@ -120,8 +116,7 @@ The verified defects were fixed in `6d31c59`. What remains needs a decision or i
 
 - A device plugged in while ports are being enumerated is missed; `getPorts()` has no deadline.
 - `bufferSize` is not part of the settings compared for `CONFIGURATION_CONFLICT`.
-- The harness diverges from browsers in ways that hide bugs: killed tabs keep timers and bus
-  access, the fake picker ignores filters, and the fake `close()` always succeeds.
+- The harness diverges from browsers in ways that hide bugs: killed tabs keep their timers, the fake picker ignores filters, and the fake `close()` always succeeds.
 - Packaging: the emulator needs Node's type stripping (newer than `engines` says), and CommonJS
   consumers get ES-module type definitions.
 - Emulator: `attachedPort` is never cleared, bytes sent while no host is attached are queued and

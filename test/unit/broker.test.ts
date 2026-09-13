@@ -14,13 +14,15 @@ interface Delivery {
   readonly message: ProtocolMessage;
 }
 
-function createBroker(): { broker: Broker; delivered: Delivery[] } {
+function createBroker(): { broker: Broker; delivered: Delivery[]; time: { now: number } } {
   const delivered: Delivery[] = [];
+  const time = { now: 0 };
   const broker = new Broker({
     deliver: (to, message) => delivered.push({ to, message }),
     logger: new ScopedLogger(NOOP_LOGGER, {}),
+    now: () => time.now,
   });
-  return { broker, delivered };
+  return { broker, delivered, time };
 }
 
 function message(
@@ -40,6 +42,13 @@ const claim = (from: ClientId, configName = 'Reader'): ProtocolMessage =>
 /** A routable message with no side effects, used to observe where the broker sends things. */
 const probe = (from: ClientId, to: ProtocolMessage['to'], configName = 'Reader'): ProtocolMessage =>
   message(from, to, { type: 'status-request', configName } as never);
+
+const heartbeat = (
+  from: ClientId,
+  configNames: readonly string[],
+  ownedConfigNames: readonly string[],
+): ProtocolMessage =>
+  message(from, 'all', { type: 'heartbeat', configNames, ownedConfigNames } as never);
 
 /**
  * The broker in isolation.
@@ -268,5 +277,52 @@ describe('Broker', () => {
     broker.handleMessage(ALICE, message(ALICE, 'all', { type: 'welcome' } as never));
 
     expect(delivered).toHaveLength(0);
+  });
+
+  it('forgets a participant that has sent nothing for the timeout, its ownership included', () => {
+    const { broker, delivered, time } = createBroker();
+    broker.handleMessage(ALICE, attach(ALICE));
+    broker.handleMessage(ALICE, claim(ALICE));
+    broker.handleMessage(BOB, attach(BOB));
+
+    time.now += 60_000;
+    broker.handleMessage(BOB, heartbeat(BOB, ['Reader'], []));
+    time.now += 60_000;
+
+    expect(broker.forgetSilent(100_000)).toEqual([ALICE]);
+    delivered.length = 0;
+    broker.handleMessage(BOB, probe(BOB, 'owner'));
+    broker.handleMessage(BOB, probe(BOB, 'all'));
+
+    expect(delivered).toEqual([]);
+    expect(broker.clientCount).toBe(1);
+  });
+
+  it('restores a forgotten participant from its heartbeat, without taking over a claimed port', () => {
+    const { broker, delivered, time } = createBroker();
+    broker.handleMessage(ALICE, claim(ALICE));
+    time.now += 200_000;
+    broker.forgetSilent(180_000);
+    broker.handleMessage(BOB, claim(BOB));
+
+    // Alice was only throttled; her heartbeat still says she owns the port.
+    broker.handleMessage(ALICE, heartbeat(ALICE, ['Reader'], ['Reader']));
+    broker.handleMessage(CAROL, attach(CAROL));
+    delivered.length = 0;
+    broker.handleMessage(CAROL, probe(CAROL, 'owner'));
+    broker.handleMessage(CAROL, probe(CAROL, 'all'));
+
+    expect(delivered.map((entry) => entry.to)).toEqual([BOB, BOB, ALICE]);
+  });
+
+  it('fills in an owner it does not know from a heartbeat', () => {
+    const { broker, delivered } = createBroker();
+    broker.handleMessage(ALICE, heartbeat(ALICE, ['Reader'], ['Reader']));
+    broker.handleMessage(BOB, attach(BOB));
+    delivered.length = 0;
+
+    broker.handleMessage(BOB, probe(BOB, 'owner'));
+
+    expect(delivered.map((entry) => entry.to)).toEqual([ALICE]);
   });
 });
