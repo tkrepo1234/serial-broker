@@ -39,7 +39,16 @@ run(process.execPath, [
 retitle('docs/site/api/reference/index/index.md', 'serial-broker');
 retitle('docs/site/api/reference/diagnostics/index.md', 'serial-broker/diagnostics');
 unlinkRowAnchors(join(root, 'docs', 'site', 'api', 'reference'));
-run(python, ['-m', 'sphinx', '-b', 'html', '--keep-going', 'docs/site', 'docs/site/_build/html']);
+run(python, [
+  '-m',
+  'sphinx',
+  '-b',
+  'html',
+  '--fail-on-warning',
+  '--keep-going',
+  'docs/site',
+  'docs/site/_build/html',
+]);
 
 process.stdout.write('\nBuilt docs/site/_build/html/index.html\n');
 

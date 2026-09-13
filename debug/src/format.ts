@@ -5,6 +5,7 @@
  * rather than eyeballed.
  */
 
+import { SerialBrokerError } from '../../src/core/errors.js';
 import type { EffectiveSettings } from '../../src/diagnostics.js';
 
 /** Control characters that still count as printable text in serial traffic. */
@@ -124,9 +125,30 @@ export function statusLabel(status: string | undefined): string {
 /** A configuration's device as `0x1a86:7523`, or `any port`. */
 export function summarizeDevice(settings: EffectiveSettings): string {
   const { device } = settings;
-  return 'any' in device
-    ? 'any port'
-    : `${formatUsbId(device.vendorId)}:${formatUsbId(device.productId).slice(2)}`;
+  return 'any' in device ? 'any port' : formatDevice(device.vendorId, device.productId);
+}
+
+/**
+ * A USB device as `0x1a86:7523`: the vendor ID in full, the product ID without a second `0x`.
+ *
+ * One rendering for the list, the settings and the port facts, so the same device never looks
+ * like two.
+ */
+export function formatDevice(vendorId: number | undefined, productId: number | undefined): string {
+  return `${formatUsbId(vendorId)}:${formatUsbId(productId).replace(/^0x/, '')}`;
+}
+
+/**
+ * Why something failed, in one line: the error code and what to do about it for a serial-broker
+ * error, the message for anything else.
+ *
+ * @returns The line, and for a serial-broker error its message as a longer explanation.
+ */
+export function describeError(error: unknown): { readonly text: string; readonly detail: string } {
+  if (error instanceof SerialBrokerError) {
+    return { text: `${error.code}: ${error.remediation}`, detail: error.message };
+  }
+  return { text: error instanceof Error ? error.message : String(error), detail: '' };
 }
 
 /** A configuration's device and line settings on one line: `0x1a86:7523 · 9600 8N1`. */

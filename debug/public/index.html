@@ -801,16 +801,6 @@
         Changes take effect with <b>Apply and reload</b>. <b>Copy link</b> puts these settings into
         the page address, so the page opens elsewhere with the same settings.
       </p>
-      <div class="actions">
-        <button
-          type="button"
-          class="secondary small"
-          popovertarget="help-worker-url"
-          popovertargetaction="hide"
-        >
-          Close
-        </button>
-      </div>
     </div>
     <div id="help-transport" class="help-text" popover>
       <h3>Transport</h3>
@@ -833,16 +823,6 @@
         Use what your application uses: tabs on a SharedWorker and tabs on a BroadcastChannel do not
         hear each other.
       </p>
-      <div class="actions">
-        <button
-          type="button"
-          class="secondary small"
-          popovertarget="help-transport"
-          popovertargetaction="hide"
-        >
-          Close
-        </button>
-      </div>
     </div>
     <div id="help-log-payloads" class="help-text" popover>
       <h3>Log payload bytes</h3>
@@ -855,16 +835,6 @@
         It affects this page only. Transfers are logged by the tab that holds the port, so bytes
         appear here while this page holds it.
       </p>
-      <div class="actions">
-        <button
-          type="button"
-          class="secondary small"
-          popovertarget="help-log-payloads"
-          popovertargetaction="hide"
-        >
-          Close
-        </button>
-      </div>
     </div>
     <div id="help-browser" class="help-text" popover>
       <h3>Browser</h3>
@@ -874,16 +844,6 @@
         exactly one tab holds each port.
       </p>
       <p>A red dot means serial-broker cannot run in this browser.</p>
-      <div class="actions">
-        <button
-          type="button"
-          class="secondary small"
-          popovertarget="help-browser"
-          popovertargetaction="hide"
-        >
-          Close
-        </button>
-      </div>
     </div>
     <div id="help-bus" class="help-text" popover>
       <h3>Message bus</h3>
@@ -892,16 +852,6 @@
         possible, a <b>BroadcastChannel</b> where there is none. One of the two is enough, so a
         single missing one is only a warning.
       </p>
-      <div class="actions">
-        <button
-          type="button"
-          class="secondary small"
-          popovertarget="help-bus"
-          popovertargetaction="hide"
-        >
-          Close
-        </button>
-      </div>
     </div>
     <div id="help-this-tab" class="help-text" popover>
       <h3>This tab</h3>
@@ -909,16 +859,6 @@
         This page's identity on the message bus, which the other tabs show in short form, and the
         bus it uses. A page joins the bus when it connects to its first configuration.
       </p>
-      <div class="actions">
-        <button
-          type="button"
-          class="secondary small"
-          popovertarget="help-this-tab"
-          popovertargetaction="hide"
-        >
-          Close
-        </button>
-      </div>
     </div>
     <div id="help-protocol" class="help-text" popover>
       <h3>Protocol version</h3>
@@ -927,16 +867,6 @@
         Tabs on different versions do not see each other at all, and each of them tries to hold the
         device. After such an update, reload every tab.
       </p>
-      <div class="actions">
-        <button
-          type="button"
-          class="secondary small"
-          popovertarget="help-protocol"
-          popovertargetaction="hide"
-        >
-          Close
-        </button>
-      </div>
     </div>
     <div id="help-locks" class="help-text" popover>
       <h3>Port locks</h3>
@@ -948,16 +878,6 @@
         The browser names tabs differently from the rest of this page, so the holder is not named
         here; a configuration's <b>Overview</b> shows it.
       </p>
-      <div class="actions">
-        <button
-          type="button"
-          class="secondary small"
-          popovertarget="help-locks"
-          popovertargetaction="hide"
-        >
-          Close
-        </button>
-      </div>
     </div>
     <div id="help-ports" class="help-text" popover>
       <h3>Granted ports</h3>
@@ -967,16 +887,6 @@
         <b>Disconnect and forget device</b>
         removes a port from this list.
       </p>
-      <div class="actions">
-        <button
-          type="button"
-          class="secondary small"
-          popovertarget="help-ports"
-          popovertargetaction="hide"
-        >
-          Close
-        </button>
-      </div>
     </div>
     <div id="help-status" class="help-text" popover>
       <h3>Status</h3>
@@ -1007,16 +917,6 @@
         tab that has the device open; a <b>waiting</b> tab uses it through that tab and takes over
         if it goes away.
       </p>
-      <div class="actions">
-        <button
-          type="button"
-          class="secondary small"
-          popovertarget="help-status"
-          popovertargetaction="hide"
-        >
-          Close
-        </button>
-      </div>
     </div>
     <div id="help-actions" class="help-text" popover>
       <h3>Actions</h3>
@@ -1048,16 +948,6 @@
           connection asks for the port again.
         </dd>
       </dl>
-      <div class="actions">
-        <button
-          type="button"
-          class="secondary small"
-          popovertarget="help-actions"
-          popovertargetaction="hide"
-        >
-          Close
-        </button>
-      </div>
     </div>
     <div id="help-send" class="help-text" popover>
       <h3>Sending</h3>
@@ -1075,16 +965,6 @@
         <dd>The line ending many text devices expect after a command.</dd>
       </dl>
       <p>The bytes reach the device through whichever tab holds the port.</p>
-      <div class="actions">
-        <button
-          type="button"
-          class="secondary small"
-          popovertarget="help-send"
-          popovertargetaction="hide"
-        >
-          Close
-        </button>
-      </div>
     </div>
     <div id="help-traffic" class="help-text" popover>
       <h3>Traffic</h3>
@@ -1093,16 +973,6 @@
         received, data sent and which tab sent it, status changes, errors, and which tab holds the
         port. The last 500 entries are kept.
       </p>
-      <div class="actions">
-        <button
-          type="button"
-          class="secondary small"
-          popovertarget="help-traffic"
-          popovertargetaction="hide"
-        >
-          Close
-        </button>
-      </div>
     </div>
 
     <template id="detailTemplate">
@@ -1358,7 +1228,7 @@
             </div>
             <div>
               <label for="bufferSize">Buffer size (bytes)</label>
-              <input id="bufferSize" name="bufferSize" placeholder="255" />
+              <input id="bufferSize" name="bufferSize" />
             </div>
           </div>
           <h3 class="group">
@@ -1375,27 +1245,27 @@
           <div class="grid">
             <div>
               <label for="initialDelayMs">First retry delay (ms)</label>
-              <input id="initialDelayMs" name="connection.initialDelayMs" placeholder="250" />
+              <input id="initialDelayMs" name="connection.initialDelayMs" />
             </div>
             <div>
               <label for="factor">Backoff factor</label>
-              <input id="factor" name="connection.factor" placeholder="2" />
+              <input id="factor" name="connection.factor" />
             </div>
             <div>
               <label for="maxDelayMs">Max retry delay (ms)</label>
-              <input id="maxDelayMs" name="connection.maxDelayMs" placeholder="30000" />
+              <input id="maxDelayMs" name="connection.maxDelayMs" />
             </div>
             <div>
               <label for="jitter">Jitter (0–1)</label>
-              <input id="jitter" name="connection.jitter" placeholder="0.5" />
+              <input id="jitter" name="connection.jitter" />
             </div>
             <div>
               <label for="maxAttempts">Max attempts</label>
-              <input id="maxAttempts" name="connection.maxAttempts" placeholder="Infinity" />
+              <input id="maxAttempts" name="connection.maxAttempts" />
             </div>
             <div>
               <label for="stableAfterMs">Stable after (ms)</label>
-              <input id="stableAfterMs" name="connection.stableAfterMs" placeholder="5000" />
+              <input id="stableAfterMs" name="connection.stableAfterMs" />
             </div>
           </div>
           <h3 class="group">
@@ -1412,19 +1282,15 @@
           <div class="grid">
             <div>
               <label for="openTimeoutMs">Open timeout (ms)</label>
-              <input id="openTimeoutMs" name="connection.openTimeoutMs" placeholder="10000" />
+              <input id="openTimeoutMs" name="connection.openTimeoutMs" />
             </div>
             <div>
               <label for="writeTimeoutMs">Write timeout (ms)</label>
-              <input id="writeTimeoutMs" name="connection.writeTimeoutMs" placeholder="5000" />
+              <input id="writeTimeoutMs" name="connection.writeTimeoutMs" />
             </div>
             <div>
               <label for="maxWriteChunkBytes">Write chunk (bytes)</label>
-              <input
-                id="maxWriteChunkBytes"
-                name="connection.maxWriteChunkBytes"
-                placeholder="4096"
-              />
+              <input id="maxWriteChunkBytes" name="connection.maxWriteChunkBytes" />
             </div>
           </div>
           <h3 class="group">
@@ -1441,7 +1307,7 @@
           <div class="grid">
             <div>
               <label for="encoding">Text encoding</label>
-              <input id="encoding" name="encoding" placeholder="utf-8" />
+              <input id="encoding" name="encoding" />
             </div>
           </div>
           <div class="row" style="margin-top: 1rem">
@@ -1470,16 +1336,6 @@
           or a virtual COM port, choose <b>Any port, no USB identity</b>: the configuration then
           accepts whatever port is chosen.
         </p>
-        <div class="actions">
-          <button
-            type="button"
-            class="secondary small"
-            popovertarget="help-device"
-            popovertargetaction="hide"
-          >
-            Close
-          </button>
-        </div>
       </div>
       <div id="help-line" class="help-text" popover>
         <h3>Line settings</h3>
@@ -1499,16 +1355,6 @@
             bursts.
           </dd>
         </dl>
-        <div class="actions">
-          <button
-            type="button"
-            class="secondary small"
-            popovertarget="help-line"
-            popovertargetaction="hide"
-          >
-            Close
-          </button>
-        </div>
       </div>
       <div id="help-reconnect" class="help-text" popover>
         <h3>Reconnecting</h3>
@@ -1525,16 +1371,6 @@
           <dt>Stable after</dt>
           <dd>How long a connection must hold before the attempt count starts over.</dd>
         </dl>
-        <div class="actions">
-          <button
-            type="button"
-            class="secondary small"
-            popovertarget="help-reconnect"
-            popovertargetaction="hide"
-          >
-            Close
-          </button>
-        </div>
       </div>
       <div id="help-timeouts" class="help-text" popover>
         <h3>Timeouts and writes</h3>
@@ -1552,16 +1388,6 @@
             device that loses the end of large writes.
           </dd>
         </dl>
-        <div class="actions">
-          <button
-            type="button"
-            class="secondary small"
-            popovertarget="help-timeouts"
-            popovertargetaction="hide"
-          >
-            Close
-          </button>
-        </div>
       </div>
       <div id="help-text" class="help-text" popover>
         <h3>Text and memory</h3>
@@ -1579,16 +1405,6 @@
             browser keeps the device permission either way.
           </dd>
         </dl>
-        <div class="actions">
-          <button
-            type="button"
-            class="secondary small"
-            popovertarget="help-text"
-            popovertargetaction="hide"
-          >
-            Close
-          </button>
-        </div>
       </div>
     </dialog>
 

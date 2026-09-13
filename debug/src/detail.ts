@@ -1,4 +1,3 @@
-import { SerialBrokerError } from '../../src/core/errors.js';
 import type {
   ConfigurationDiagnostics,
   EffectiveSettings,
@@ -8,10 +7,11 @@ import type {
 import { element } from './dom.js';
 import { EventLog } from './event-log.js';
 import {
+  describeError,
   describePayload,
   formatBytes,
   formatRelative,
-  formatUsbId,
+  formatDevice,
   formatValue,
   parseHexBytes,
   shortClientId,
@@ -312,13 +312,9 @@ export class ConfigurationDetail {
   /** Shows why an action failed, with the remediation serial-broker gives for it. */
   showError(error: unknown): void {
     const message = this.#parts.message;
-    if (error instanceof SerialBrokerError) {
-      message.textContent = `${error.code}: ${error.remediation}`;
-      message.title = error.message;
-    } else {
-      message.textContent = error instanceof Error ? error.message : String(error);
-      message.title = '';
-    }
+    const { text, detail } = describeError(error);
+    message.textContent = text;
+    message.title = detail;
     message.className = 'message error';
     message.hidden = false;
   }
@@ -447,12 +443,7 @@ function settingGroups(settings: EffectiveSettings): HTMLElement[] {
     [
       'Device and line',
       [
-        [
-          'Device',
-          'any' in device
-            ? 'any port'
-            : `${formatUsbId(device.vendorId)}:${formatUsbId(device.productId).slice(2)}`,
-        ],
+        ['Device', 'any' in device ? 'any port' : formatDevice(device.vendorId, device.productId)],
         ['Baud rate', formatValue(serial.baudRate)],
         ['Data bits', formatValue(serial.dataBits)],
         ['Stop bits', formatValue(serial.stopBits)],

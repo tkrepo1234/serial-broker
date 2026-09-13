@@ -114,14 +114,6 @@ The verified defects were fixed in `6d31c59` and the commits after it. What rema
 
 ### Refactorings
 
-- One set of protocol guards (`decode.ts` and `decode-diagnostics.ts` each define them, and they
-  already differ); one conversion from a configuration to setup options (`toOptions`,
-  `toStorable`, `describeSettings`); a shared base for the two transports; `configNameOf()`.
-- Test helpers duplicated across files: recording logger, fake ports, message envelopes,
-  transport request recorders, the device constant; `facade.test.ts` could use the harness fakes.
-- Debugging surface: one `formatDevice()` and one error description; placeholders filled from
-  the library's defaults; a generated Close button for the help popovers; "Decode text" starts
-  checked although the dialog says blank means default.
-- Dead code: unused getters (`PortSupervisor.status`, `isOpen`), `ConfigurationSession.#disposal`,
-  `TransportRequest.workerUrl`, the `docs:api` script, the no-op `exclude` in
-  `tsconfig.build.json`, duplicated `.prettierignore` entries.
+Done on 2026-09-13: shared protocol guards, one conversion to setup options, a shared message
+sender for both transports, `configNameOf()`, shared test helpers, the debugging surface's
+duplicates, and the dead code.

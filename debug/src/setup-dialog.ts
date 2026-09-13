@@ -1,9 +1,10 @@
-import { SerialBrokerError } from '../../src/core/errors.js';
 import type { EffectiveSettings } from '../../src/diagnostics.js';
 
+import { describeError } from './format.js';
 import {
   buildSetupOptions,
   defaultFormValues,
+  defaultPlaceholders,
   DEVICE_PRESETS,
   deviceChoiceFor,
   formValuesFor,
@@ -64,6 +65,13 @@ export class SetupDialog {
     this.#editNote = part('editNote');
     this.#submitButton = part('submit') as HTMLButtonElement;
     this.#moreSummary = part('moreSummary');
+
+    for (const [name, placeholder] of Object.entries(defaultPlaceholders())) {
+      const input = form.elements.namedItem(name);
+      if (input instanceof HTMLInputElement) {
+        input.placeholder = placeholder;
+      }
+    }
 
     const device = this.#field('device') as HTMLSelectElement;
     device.append(
@@ -154,12 +162,9 @@ export class SetupDialog {
   }
 
   #showError(reason: unknown): void {
-    this.#error.textContent =
-      reason instanceof SerialBrokerError
-        ? `${reason.message}. ${reason.remediation}`
-        : reason instanceof Error
-          ? reason.message
-          : String(reason);
+    const { text, detail } = describeError(reason);
+    // The message names the rejected field, which is what someone filling in a form needs first.
+    this.#error.textContent = detail === '' ? text : `${detail}. ${text}`;
     this.#error.hidden = false;
   }
 

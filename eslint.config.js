@@ -13,7 +13,6 @@ export default defineConfig(
       'dist/**',
       'coverage/**',
       'node_modules/**',
-      'docs/api/**',
       // The documentation site's Python environment and build output (ADR-0020).
       'docs/.venv/**',
       'docs/site/_build/**',

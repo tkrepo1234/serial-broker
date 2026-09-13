@@ -29,3 +29,30 @@ jobs:
           name: coverage
           path: coverage/
           retention-days: 7
+
+  docs:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+          cache: pip
+          cache-dependency-path: docs/site/requirements.txt
+
+      - run: npm ci
+
+      # The same virtual environment `npm run docs` looks for locally (ADR-0020). The build fails
+      # on any Sphinx warning, so a broken cross-reference cannot land unnoticed.
+      - run: |
+          python -m venv docs/.venv
+          docs/.venv/bin/python -m pip install -r docs/site/requirements.txt
+
+      - run: npm run docs

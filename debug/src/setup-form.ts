@@ -1,4 +1,8 @@
-import { DEFAULT_CONNECTION_SETTINGS } from '../../src/core/defaults.js';
+import {
+  DEFAULT_CONNECTION_SETTINGS,
+  DEFAULT_ENCODING_SETTINGS,
+  DEFAULT_SERIAL_SETTINGS,
+} from '../../src/core/defaults.js';
 import type { EffectiveSettings } from '../../src/core/diagnostics.js';
 import type { ConnectionSettings } from '../../src/core/types.js';
 
@@ -64,9 +68,29 @@ export function defaultFormValues(): SetupFormValues {
     flowControl: '',
     connection: blankConnection(),
     encoding: '',
-    decodeText: true,
+    // A checkbox cannot be left blank, so it starts at the library's default instead.
+    decodeText: DEFAULT_ENCODING_SETTINGS.decodeText,
     persist: true,
   };
+}
+
+/**
+ * The library's default for each field that may be left blank, as the text an input shows as
+ * its placeholder.
+ *
+ * Read from the library's own defaults, so the dialog cannot promise a default the library no
+ * longer applies.
+ */
+export function defaultPlaceholders(): Readonly<Record<string, string>> {
+  const placeholders: Record<string, string> = {};
+  for (const [field, value] of Object.entries(DEFAULT_SERIAL_SETTINGS)) {
+    placeholders[field] = String(value);
+  }
+  for (const field of CONNECTION_FIELDS) {
+    placeholders[`connection.${field}`] = String(DEFAULT_CONNECTION_SETTINGS[field]);
+  }
+  placeholders['encoding'] = DEFAULT_ENCODING_SETTINGS.encoding;
+  return placeholders;
 }
 
 /**

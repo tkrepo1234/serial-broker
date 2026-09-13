@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  describeError,
   describePayload,
   formatDetail,
+  formatDevice,
   formatRelative,
   formatUsbId,
   formatValue,
@@ -17,9 +19,15 @@ import { buildConfigurationViews } from '../../debug/src/model.js';
 import {
   buildSetupOptions,
   defaultFormValues,
+  defaultPlaceholders,
   deviceChoiceFor,
   formValuesFor,
 } from '../../debug/src/setup-form.js';
+import {
+  DEFAULT_CONNECTION_SETTINGS,
+  DEFAULT_ENCODING_SETTINGS,
+  DEFAULT_SERIAL_SETTINGS,
+} from '../../src/core/defaults.js';
 import type {
   ConfigurationDiagnostics,
   DiagnosticsSnapshot,
@@ -27,6 +35,7 @@ import type {
 } from '../../src/core/diagnostics.js';
 import { describeSettings } from '../../src/core/diagnostics.js';
 import { SerialBrokerErrorCode } from '../../src/core/error-codes.js';
+import { SerialBrokerError } from '../../src/core/errors.js';
 import { normalizeConfiguration } from '../../src/core/validation.js';
 
 import { sampleReport } from './fixtures/diagnostics-report.js';
@@ -180,9 +189,26 @@ describe('debugging surface: new and edited configurations', () => {
       device: { vendorId: 0x1a86, productId: 0x7523 },
       serial: { baudRate: 9600 },
       connection: {},
-      encoding: { decodeText: true },
+      // A checkbox cannot be left blank, so it starts at the library's default.
+      encoding: { decodeText: DEFAULT_ENCODING_SETTINGS.decodeText },
       persist: true,
     });
+  });
+
+  it("offers the library's own defaults as placeholders for every field that may be left blank", () => {
+    const placeholders = defaultPlaceholders();
+
+    expect(placeholders).toMatchObject({
+      bufferSize: String(DEFAULT_SERIAL_SETTINGS.bufferSize),
+      'connection.maxAttempts': 'Infinity',
+      'connection.writeTimeoutMs': String(DEFAULT_CONNECTION_SETTINGS.writeTimeoutMs),
+      encoding: DEFAULT_ENCODING_SETTINGS.encoding,
+    });
+    // Blank fields are left out of the options, so each placeholder is what the library applies.
+    const running = normalizeConfiguration('Device', buildSetupOptions(defaultFormValues()));
+    expect(String(running.connection.maxWriteChunkBytes)).toBe(
+      placeholders['connection.maxWriteChunkBytes'],
+    );
   });
 
   it('passes every typed value through, including hex IDs and an unlimited attempt budget', () => {
@@ -202,7 +228,7 @@ describe('debugging surface: new and edited configurations', () => {
       device: { any: true },
       serial: { baudRate: 9600, dataBits: 7, parity: 'even', flowControl: 'hardware' },
       connection: { maxAttempts: Number.POSITIVE_INFINITY, jitter: 0.25 },
-      encoding: { encoding: 'windows-1252', decodeText: true },
+      encoding: { encoding: 'windows-1252', decodeText: false },
     });
   });
 
@@ -318,12 +344,25 @@ describe('debugging surface: formatting', () => {
     expect(summarizeSettings(settings)).toBe('0x0403:6001 · 19200 8E2');
   });
 
+  it('describes a failure by its code and remediation, and anything else by its message', () => {
+    const error = new SerialBrokerError(SerialBrokerErrorCode.OPEN_TIMEOUT, 'Opening timed out');
+
+    expect(describeError(error)).toEqual({
+      text: `OPEN_TIMEOUT: ${error.remediation}`,
+      detail: 'Opening timed out',
+    });
+    expect(describeError(new Error('boom'))).toEqual({ text: 'boom', detail: '' });
+    expect(describeError('plain')).toEqual({ text: 'plain', detail: '' });
+  });
+
   it('renders values the way an operator reads them', () => {
     expect(formatValue(Number.POSITIVE_INFINITY)).toBe('∞');
     expect(formatValue(undefined)).toBe('—');
     expect(formatValue(false)).toBe('no');
     expect(formatUsbId(0x1a86)).toBe('0x1a86');
     expect(formatUsbId(undefined)).toBe('—');
+    expect(formatDevice(0x0403, 0x6001)).toBe('0x0403:6001');
+    expect(formatDevice(0x0403, undefined)).toBe('0x0403:—');
     expect(shortClientId('c-12-3f1a9e0b-aaaa-bbbb')).toBe('c-12-3f…-bbbb');
     expect(formatDetail({ data: Uint8Array.of(1, 2), max: Infinity })).toBe(
       '{\n  "data": "01 02",\n  "max": "Infinity"\n}',

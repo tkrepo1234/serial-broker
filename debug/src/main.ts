@@ -24,7 +24,7 @@ import { ConfigurationStore } from '../../src/storage/configuration-store.js';
 import { ConfigurationDetail, type DetailHost } from './detail.js';
 import { byId, element } from './dom.js';
 import { EventLog } from './event-log.js';
-import { formatUsbId, shortClientId } from './format.js';
+import { describeError, formatDevice, shortClientId } from './format.js';
 import {
   LIBRARY_SETTINGS_KEY,
   linkWithSettings,
@@ -46,6 +46,17 @@ const settings = resolveLibrarySettings(
   readStorage(LIBRARY_SETTINGS_KEY),
   new URL('../serial-broker.worker.js', import.meta.url).href,
 );
+
+// Every help text closes the same way, so its Close button is added here rather than written out
+// once per help text in the page.
+for (const help of document.querySelectorAll<HTMLElement>('.help-text[popover]')) {
+  const close = element('button', {
+    className: 'secondary small',
+    text: 'Close',
+    attributes: { type: 'button', popovertarget: help.id, popovertargetaction: 'hide' },
+  });
+  help.append(element('div', { className: 'actions' }, [close]));
+}
 
 const pageLog = new EventLog(byId('log'), 1_000);
 let logLevel: LogLevel = 'info';
@@ -72,7 +83,7 @@ try {
   diagnostics = openDiagnostics({ workerUrl: settings.workerUrl, transport: settings.transport });
 } catch (error) {
   const banner = byId('banner');
-  banner.textContent = `serial-broker cannot run in this browser: ${describeError(error)}`;
+  banner.textContent = `serial-broker cannot run in this browser: ${describeError(error).text}`;
   banner.hidden = false;
   byId('newButton').hidden = true;
 }
@@ -456,11 +467,11 @@ async function describePorts(): Promise<string> {
         const info = port.getInfo();
         return info.usbVendorId === undefined
           ? 'no USB identity'
-          : `${formatUsbId(info.usbVendorId)}:${formatUsbId(info.usbProductId).slice(2)}`;
+          : formatDevice(info.usbVendorId, info.usbProductId);
       })
       .join(', ');
   } catch (error) {
-    return describeError(error);
+    return describeError(error).text;
   }
 }
 
@@ -483,16 +494,9 @@ function logFailure(action: string, error: unknown): void {
   pageLog.add(
     'error',
     'error',
-    `Could not ${action}: ${describeError(error)}`,
+    `Could not ${action}: ${describeError(error).text}`,
     error instanceof SerialBrokerError ? error.toJSON() : undefined,
   );
-}
-
-function describeError(error: unknown): string {
-  if (error instanceof SerialBrokerError) {
-    return `${error.code} - ${error.remediation}`;
-  }
-  return error instanceof Error ? error.message : String(error);
 }
 
 function readStorage(key: string): string | null {
