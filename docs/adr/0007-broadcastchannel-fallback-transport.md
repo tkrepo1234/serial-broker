@@ -1,6 +1,6 @@
 # ADR-0007: Fall back to BroadcastChannel when SharedWorker is unavailable
 
-- **Status:** Accepted
+- **Status:** Accepted, amended by [ADR-0024](./0024-keep-the-worker-handshake-version-independent.md)
 - **Date:** 2026-09-12
 
 ## Context

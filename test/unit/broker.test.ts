@@ -315,6 +315,25 @@ describe('Broker', () => {
     expect(delivered.map((entry) => entry.to)).toEqual([BOB, BOB, ALICE]);
   });
 
+  it('answers a heartbeat with a welcome to its sender, so the tab knows the broker still runs', () => {
+    const { broker, delivered } = createBroker();
+    broker.handleMessage(BOB, attach(BOB));
+
+    broker.handleMessage(ALICE, heartbeat(ALICE, ['Reader'], []));
+
+    // Without an answer a tab could not tell a worker that died from one with nothing to route.
+    expect(delivered).toEqual([
+      {
+        to: ALICE,
+        message: expect.objectContaining({
+          type: 'welcome',
+          from: BROKER_ID,
+          to: ALICE,
+        }) as unknown,
+      },
+    ]);
+  });
+
   it('fills in an owner it does not know from a heartbeat', () => {
     const { broker, delivered } = createBroker();
     broker.handleMessage(ALICE, heartbeat(ALICE, ['Reader'], ['Reader']));

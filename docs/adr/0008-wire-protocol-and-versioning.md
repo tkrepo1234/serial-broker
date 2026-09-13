@@ -1,6 +1,7 @@
 # ADR-0008: Version the wire protocol independently
 
-- **Status:** Accepted, amended by [ADR-0023](./0023-announce-the-protocol-version.md)
+- **Status:** Accepted, amended by [ADR-0023](./0023-announce-the-protocol-version.md) and
+  [ADR-0024](./0024-keep-the-worker-handshake-version-independent.md)
 - **Date:** 2026-09-12
 
 > **Amendment (ADR-0023).** Rule 2 is reached rarely, because rule 3 keeps the versions from ever

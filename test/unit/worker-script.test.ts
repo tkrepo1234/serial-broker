@@ -57,6 +57,38 @@ describe('serial-broker.worker', () => {
     expect(bob.posted).toHaveLength(0);
   });
 
+  it('answers a hello in another protocol version with a welcome in its own, and nothing more', () => {
+    const alice = new FakeMessagePort();
+    const bob = new FakeMessagePort();
+    connect({ ports: [alice] });
+    connect({ ports: [bob] });
+    bob.deliver(envelope('bob', 'all', { type: 'attach', configName: 'Reader' }));
+
+    // A tab of another build that was served this worker script: a copied file left over from an
+    // earlier release, or a cached one (ADR-0024).
+    const otherVersion = { v: PROTOCOL_VERSION + 1, from: 'alice', to: 'all' };
+    alice.deliver({ ...otherVersion, type: 'hello' });
+    alice.deliver({ ...otherVersion, type: 'attach', configName: 'Reader' });
+    bob.deliver(envelope('bob', 'all', { type: 'status-request', configName: 'Reader' }));
+
+    // The welcome carries this worker's version, which is how the tab learns that the two differ.
+    // Everything else the tab says is still dropped, so it never takes part.
+    expect(alice.posted).toEqual([
+      expect.objectContaining({ type: 'welcome', v: PROTOCOL_VERSION, to: 'alice' }),
+    ]);
+    expect(bob.posted).toHaveLength(0);
+  });
+
+  it('does not answer a hello in another protocol version that names no sender', () => {
+    const alice = new FakeMessagePort();
+    connect({ ports: [alice] });
+
+    alice.deliver({ v: PROTOCOL_VERSION + 1, to: 'all', type: 'hello' });
+    alice.deliver({ v: PROTOCOL_VERSION + 1, from: '', to: 'all', type: 'hello' });
+
+    expect(alice.posted).toHaveLength(0);
+  });
+
   it('forgets a port that falls silent, and knows it again from its next message', () => {
     const alice = new FakeMessagePort();
     const bob = new FakeMessagePort();
@@ -88,7 +120,97 @@ describe('serial-broker.worker', () => {
       }),
     );
     bob.deliver(envelope('bob', 'all', { type: 'status-request', configName: 'Reader' }));
-    expect(alice.posted).toHaveLength(1);
+    // The broker answers her heartbeat, and routes to her again.
+    expect(alice.posted).toEqual([
+      expect.objectContaining({ type: 'welcome' }),
+      expect.objectContaining({ type: 'status-request' }),
+    ]);
+  });
+
+  it('keeps a port whose message failed to clone, and goes on routing to it', () => {
+    const alice = new FakeMessagePort();
+    const bob = new FakeMessagePort();
+    connect({ ports: [alice] });
+    connect({ ports: [bob] });
+    alice.deliver(envelope('alice', 'all', { type: 'attach', configName: 'Reader' }));
+    alice.deliver(envelope('alice', 'all', { type: 'owner-claimed', configName: 'Reader' }));
+    bob.deliver(envelope('bob', 'all', { type: 'attach', configName: 'Reader' }));
+    alice.posted.length = 0;
+
+    // One message from the owner could not be cloned. Only that message is lost: closing the port
+    // would cut the owner off for good, with nothing to tell it so (ADR-0021).
+    alice.failToClone();
+    bob.deliver(
+      envelope('bob', 'owner', {
+        type: 'write-request',
+        configName: 'Reader',
+        requestId: 'w-1',
+        payload: new Uint8Array([1]),
+      }),
+    );
+
+    expect(alice.closed).toBe(false);
+    expect(alice.posted).toEqual([expect.objectContaining({ type: 'write-request' })]);
+  });
+
+  it('listens for clone failures on a port once, however often the port is forgotten and returns', () => {
+    const alice = new FakeMessagePort();
+    connect({ ports: [alice] });
+    const heartbeat = { type: 'heartbeat', configNames: ['Reader'], ownedConfigNames: [] };
+    alice.deliver(envelope('alice', 'all', heartbeat));
+
+    // A throttled tab: forgotten by the sweep, restored by its next heartbeat - three times over.
+    for (let round = 0; round < 3; round += 1) {
+      vi.advanceTimersByTime(SILENT_PARTICIPANT_TIMEOUT_MS + SWEEP_INTERVAL_MS);
+      alice.deliver(envelope('alice', 'all', heartbeat));
+    }
+
+    expect(alice.listenerCount('messageerror')).toBe(1);
+  });
+
+  it('answers a heartbeat on the port it came from', () => {
+    const alice = new FakeMessagePort();
+    const bob = new FakeMessagePort();
+    connect({ ports: [alice] });
+    connect({ ports: [bob] });
+    bob.deliver(envelope('bob', 'all', { type: 'attach', configName: 'Reader' }));
+
+    alice.deliver(
+      envelope('alice', 'all', {
+        type: 'heartbeat',
+        configNames: ['Reader'],
+        ownedConfigNames: [],
+      }),
+    );
+
+    // A tab that hears nothing back gives up on the worker and starts a new one (ADR-0021).
+    expect(alice.posted).toEqual([expect.objectContaining({ type: 'welcome', to: 'alice' })]);
+    expect(bob.posted).toHaveLength(0);
+  });
+
+  it('routes to the port a context came back on, even after a late message on the one it left', () => {
+    const oldPort = new FakeMessagePort();
+    const newPort = new FakeMessagePort();
+    const bob = new FakeMessagePort();
+    const heartbeat = { type: 'heartbeat', configNames: ['Reader'], ownedConfigNames: [] };
+    connect({ ports: [oldPort] });
+    oldPort.deliver(envelope('alice', 'all', heartbeat));
+    vi.advanceTimersByTime(SILENT_PARTICIPANT_TIMEOUT_MS + SWEEP_INTERVAL_MS);
+
+    // Alice's tab gave up on this worker while it was stuck, and connected again. A message still
+    // queued on her old port arrives after the new port was registered.
+    connect({ ports: [newPort] });
+    newPort.deliver(envelope('alice', 'all', heartbeat));
+    oldPort.deliver(envelope('alice', 'all', heartbeat));
+    newPort.deliver(envelope('alice', 'all', heartbeat));
+    oldPort.posted.length = 0;
+    newPort.posted.length = 0;
+
+    connect({ ports: [bob] });
+    bob.deliver(envelope('bob', 'all', { type: 'status-request', configName: 'Reader' }));
+
+    expect(newPort.posted).toEqual([expect.objectContaining({ type: 'status-request' })]);
+    expect(oldPort.posted).toHaveLength(0);
   });
 
   it('ignores a connect event with no port', () => {

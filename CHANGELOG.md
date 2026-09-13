@@ -31,6 +31,9 @@ coordinate with each other. See
   and the worker drops one that has been silent for three minutes.
 - Tabs on different protocol versions detect each other: every tab announces its version on a
   channel no version renames, and a mismatch is reported as `PROTOCOL_VERSION_MISMATCH`.
+- A worker script of another protocol version - a copied worker file from another release, or a
+  cached one - is reported as `PROTOCOL_VERSION_MISMATCH`, and the tabs move to `BroadcastChannel`
+  instead of staying cut off from each other with nothing reported.
 - An opt-in structured logger. The library writes nothing to the console uninvited.
 - A read-only diagnostics entry point, `serial-broker/diagnostics`. Every tab of the origin
   reports its role, connection state, reconnect timing, pending writes, listeners and effective
@@ -39,11 +42,16 @@ coordinate with each other. See
 - A debugging surface, shipped as static content in `dist/debug/`: one card per configuration on
   the origin, with the tabs running it, its traffic and settings, and the action that fits -
   join, choose a device, release. It sets nothing up on its own.
+- Tabs notice a worker that died - crashed, ended for memory, or terminated from
+  `chrome://inspect` - because it stops answering their heartbeats. Each reports
+  `BROKER_UNAVAILABLE` once and connects to a new worker, where it takes up its part again.
 
 ### Notes
 
-- Wire protocol version: **4**. Version 1 was never released; 2 added the diagnostics request and
-  report, 3 the broker's `welcome`, 4 the `heartbeat`.
+- Wire protocol version: **5**. Version 1 was never released; 2 added the diagnostics request and
+  report, 3 the broker's `welcome`, 4 the `heartbeat`, and 5 has the broker answer every heartbeat
+  with a `welcome` and freezes the shape of `hello` and `welcome` for every later version
+  ([ADR-0024](./docs/adr/0024-keep-the-worker-handshake-version-independent.md)).
 - Remembered configurations are stored under a key with a version of its own,
   `serial-broker/configurations/v1`, so a protocol change no longer discards them. Configurations
   remembered under the earlier, protocol-versioned keys are moved there when they are first read.

@@ -7,10 +7,12 @@ import {
   type SharedWorkerLike,
 } from '../../src/client/transport/shared-worker-transport.js';
 import type { Transport, TransportRequest } from '../../src/client/transport/transport.js';
+import type { Clock } from '../../src/core/clock.js';
 import { NOOP_LOGGER, ScopedLogger } from '../../src/core/logger.js';
 import { decodeMessage } from '../../src/protocol/decode.js';
 import { SILENT_PARTICIPANT_TIMEOUT_MS, SWEEP_INTERVAL_MS } from '../../src/protocol/heartbeat.js';
-import type { ClientId, ProtocolMessage } from '../../src/protocol/messages.js';
+import { BROKER_ID, type ClientId, type ProtocolMessage } from '../../src/protocol/messages.js';
+import { PROTOCOL_VERSION } from '../../src/protocol/version.js';
 import { Broker } from '../../src/worker/broker.js';
 
 import type { FakeClock } from './fake-clock.js';
@@ -42,6 +44,7 @@ function deliver(listener: MessageListener, message: unknown): void {
 export class FakeWorkerHost {
   readonly #ports = new Map<ClientId, MessageListener>();
   readonly #broker: Broker;
+  #isCrashed = false;
   /** Every message the broker received, for assertions about protocol traffic. */
   readonly received: ProtocolMessage[] = [];
 
@@ -83,8 +86,24 @@ export class FakeWorkerHost {
     this.#ports.delete(clientId);
   }
 
+  /**
+   * Simulates the worker itself dying: it crashed, was ended for memory, or was terminated from
+   * `chrome://inspect`.
+   *
+   * Nobody is told. Its ports deliver nothing in either direction any more, its broker's state is
+   * gone, and it runs no code - not even its sweep.
+   */
+  crash(): void {
+    this.#isCrashed = true;
+    this.#ports.clear();
+    this.#broker.dispose();
+  }
+
   #scheduleSweep(): void {
     this.clock.setTimer(() => {
+      if (this.#isCrashed) {
+        return;
+      }
       this.#broker.forgetSilent(SILENT_PARTICIPANT_TIMEOUT_MS);
       this.#scheduleSweep();
     }, SWEEP_INTERVAL_MS);
@@ -92,18 +111,32 @@ export class FakeWorkerHost {
 
   /** Connects a context's port. */
   connect(clientId: ClientId, listener: MessageListener): void {
+    if (this.#isCrashed) {
+      return;
+    }
     this.#ports.set(clientId, listener);
     this.#broker.handleConnect(clientId);
   }
 
-  /** Simulates a context vanishing: its port is gone and the broker is told. */
-  disconnect(clientId: ClientId): void {
+  /**
+   * Simulates a context closing its port: the port is gone and the broker is told.
+   *
+   * Only the port given: a context that has already connected again on another port keeps that
+   * one, whichever of the two it closes first.
+   */
+  disconnect(clientId: ClientId, listener: MessageListener): void {
+    if (this.#ports.get(clientId) !== listener) {
+      return;
+    }
     this.#ports.delete(clientId);
     this.#broker.handleDisconnect(clientId);
   }
 
   /** Feeds a message from a context into the broker, validating it first as the worker does. */
   send(clientId: ClientId, raw: unknown): void {
+    if (this.#isCrashed) {
+      return;
+    }
     const result = decodeMessage(raw);
     if (!result.ok) {
       return;
@@ -179,6 +212,18 @@ export class FakeBroadcastHub {
 export type TransportMode = 'sharedworker' | 'broadcastchannel';
 
 /**
+ * What the browser runs when a tab starts the `SharedWorker`.
+ *
+ * - `'loads'`: this build's worker script, hosting the real broker.
+ * - `'fails'`: nothing, until {@link FakeBus.failWorkerScripts} delivers the browser's error
+ *   event, as for a script that answers 404.
+ * - `'other-version'`: a worker script of an earlier protocol version, such as a copied worker
+ *   file left over from an older release. It drops everything a tab says, and keeps only the
+ *   frozen part of the handshake: it answers `hello` with a welcome in its own version (ADR-0024).
+ */
+export type WorkerScript = 'loads' | 'fails' | 'other-version';
+
+/**
  * The message bus shared by every simulated context in a test.
  *
  * Holds both implementations so the same scenario can be run against each without the test
@@ -186,26 +231,29 @@ export type TransportMode = 'sharedworker' | 'broadcastchannel';
  * rather than an untested branch (ADR-0007).
  */
 export class FakeBus {
-  readonly workerHost: FakeWorkerHost;
   readonly broadcastHub = new FakeBroadcastHub();
 
+  #workerHost: FakeWorkerHost;
   readonly #workerFailures: ((event: unknown) => void)[] = [];
-  /** Contexts that died: nothing they send reaches the worker any more. */
+  /** Contexts that died: nothing they send reaches the worker any more, and their timers stop. */
   readonly #killed = new Set<string>();
 
   /**
    * @param mode - Which transport the tabs start on.
-   * @param workerScript - In `sharedworker` mode, whether the worker script loads. With
-   *   `'fails'`, nothing a tab sends reaches the broker until {@link failWorkerScripts} delivers
-   *   the browser's error event.
+   * @param workerScript - In `sharedworker` mode, which worker script the browser runs.
    */
   constructor(
     readonly mode: TransportMode,
-    readonly workerScript: 'loads' | 'fails' = 'loads',
+    readonly workerScript: WorkerScript = 'loads',
     /** Time for the bus: the heartbeats tabs send and the worker's sweep. */
     readonly clock: FakeClock,
   ) {
-    this.workerHost = new FakeWorkerHost(clock);
+    this.#workerHost = new FakeWorkerHost(clock);
+  }
+
+  /** The worker a tab reaches if it starts one now: the first, or the one since the last crash. */
+  get workerHost(): FakeWorkerHost {
+    return this.#workerHost;
   }
 
   /** Reports every worker script that did not load, as the browser's `error` event does. */
@@ -213,6 +261,18 @@ export class FakeBus {
     for (const fail of this.#workerFailures.splice(0)) {
       fail({ type: 'error' });
     }
+  }
+
+  /**
+   * Simulates the worker dying while tabs are connected to it.
+   *
+   * As in a browser, the tabs are not told: their ports simply go dead. The next tab to start the
+   * worker - one opened later, or one that gave up on the dead one (ADR-0021) - starts a new one,
+   * which knows nothing of the tabs that were connected to the old.
+   */
+  crashWorker(): void {
+    this.#workerHost.crash();
+    this.#workerHost = new FakeWorkerHost(this.clock);
   }
 
   /** Builds the transport a simulated context should use. */
@@ -227,38 +287,105 @@ export class FakeBus {
     // A real worker is never told that a tab died: the port simply stops, in both directions, and
     // the broker learns of it only when the tab's heartbeats stop arriving (ADR-0021).
     this.#killed.add(contextId);
-    this.workerHost.silence(clientId);
+    this.#workerHost.silence(clientId);
     this.broadcastHub.killContext(contextId);
   }
 
   #createWorkerTransport(contextId: string, tabRequest: TransportRequest): Transport {
     // Heartbeats run on the bus's own clock, so that tests asserting on the library's timers are
     // not disturbed by them.
-    const request: TransportRequest = { ...tabRequest, clock: this.clock };
-    const clientId = request.clientId;
+    const request: TransportRequest = { ...tabRequest, clock: this.#clockFor(contextId) };
+
+    // Wrapped exactly as the browser environment wraps it, so every scenario in this mode also
+    // runs through the path that waits for the broker's welcome (ADR-0007).
+    return new FallbackTransport(
+      request,
+      (workerRequest, startup) =>
+        new SharedWorkerTransport(
+          workerRequest,
+          () => this.#startWorker(contextId, workerRequest.clientId),
+          'fake://worker',
+          startup,
+        ),
+      (fallbackRequest) =>
+        new BroadcastChannelTransport(fallbackRequest, (name) =>
+          this.broadcastHub.create(name, contextId),
+        ),
+    );
+  }
+
+  /** The bus clock as one context sees it: a killed context runs no code, so its timers stop. */
+  #clockFor(contextId: string): Clock {
+    return {
+      now: () => this.clock.now(),
+      setTimer: (callback, delayMs) =>
+        this.clock.setTimer(() => {
+          if (!this.#killed.has(contextId)) {
+            callback();
+          }
+        }, delayMs),
+      clearTimer: (handle) => {
+        this.clock.clearTimer(handle);
+      },
+    };
+  }
+
+  /**
+   * What `new SharedWorker` hands a tab: a new port, to the worker running now.
+   *
+   * Called for every worker a tab starts, so a tab that gave up on a crashed worker reaches the one
+   * started since, and its old port stays connected to the dead one.
+   */
+  #startWorker(contextId: string, clientId: ClientId): SharedWorkerLike {
+    const host = this.#workerHost;
     const loads = this.workerScript === 'loads';
+    /** The tab's end of the port. */
+    let tabListener: MessageListener | undefined;
 
     const port: MessagePortLike = {
       postMessage: (message) => {
-        // A port to a worker whose script never ran accepts messages and delivers none.
-        if (loads && !this.#killed.has(contextId)) {
-          this.workerHost.send(clientId, structuredClone(message));
+        if (this.#killed.has(contextId)) {
+          return;
+        }
+        if (loads) {
+          host.send(clientId, structuredClone(message));
+          return;
+        }
+        // A port to a worker whose script never ran accepts messages and delivers none. A worker of
+        // another version drops them too, but answers the frozen handshake (ADR-0024).
+        if (
+          this.workerScript === 'other-version' &&
+          tabListener !== undefined &&
+          (message as { readonly type?: unknown }).type === 'hello'
+        ) {
+          deliver(tabListener, {
+            type: 'welcome',
+            v: PROTOCOL_VERSION - 1,
+            from: BROKER_ID,
+            to: clientId,
+          });
         }
       },
       start: () => {
         /* nothing to do: this fake delivers as soon as a listener is registered */
       },
       close: () => {
-        this.workerHost.disconnect(clientId);
+        if (loads && tabListener !== undefined) {
+          host.disconnect(clientId, tabListener);
+        }
       },
       addEventListener: (type: string, listener: unknown) => {
-        if (type === 'message' && loads) {
-          this.workerHost.connect(clientId, listener as MessageListener);
+        if (type !== 'message') {
+          return;
+        }
+        tabListener = listener as MessageListener;
+        if (loads) {
+          host.connect(clientId, tabListener);
         }
       },
     } as MessagePortLike;
 
-    const worker: SharedWorkerLike = {
+    return {
       port,
       addEventListener: (_type, listener) => {
         if (!loads) {
@@ -266,17 +393,5 @@ export class FakeBus {
         }
       },
     };
-
-    // Wrapped exactly as the browser environment wraps it, so every scenario in this mode also
-    // runs through the path that waits for the broker's welcome (ADR-0007).
-    return new FallbackTransport(
-      request,
-      (workerRequest, startup) =>
-        new SharedWorkerTransport(workerRequest, () => worker, 'fake://worker', startup),
-      (fallbackRequest) =>
-        new BroadcastChannelTransport(fallbackRequest, (name) =>
-          this.broadcastHub.create(name, contextId),
-        ),
-    );
   }
 }

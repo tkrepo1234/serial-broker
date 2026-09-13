@@ -57,8 +57,12 @@ The bus is an interface, `Transport`, with two implementations [ADR-0006, ADR-00
 
 - **`SharedWorkerTransport`** connects to a `SharedWorker` running the `Broker`. The broker tracks
   which tabs participate in which configuration and which tab last claimed ownership, and routes
-  each message to `all` participants of a configuration, to its `owner`, or to one tab. A tab that dies sends no goodbye, so every tab on the worker also
-  sends a heartbeat, and the broker forgets one that stays silent for three minutes [ADR-0021].
+  each message to `all` participants of a configuration, to its `owner`, or to one tab. A tab that
+  dies sends no goodbye, so every tab on the worker also sends a heartbeat, and the broker forgets
+  one that stays silent for three minutes. The worker can die too, and tells nobody: the broker
+  answers every heartbeat, and a tab whose last three heartbeats went unanswered reports
+  `BROKER_UNAVAILABLE`, starts a new worker, and restores its part there with a heartbeat
+  [ADR-0021].
 - **`BroadcastChannelTransport`** sends every message to every tab; each tab keeps a message only
   if it is addressed to a configuration it participates in, to a configuration it owns, or to its
   own identifier.
@@ -72,25 +76,31 @@ the broker's `welcome` arrives, the wrapper keeps everything the tab sent. If th
 first, none of it reached anyone, and it is replayed over a `BroadcastChannel` — exactly once, in
 order — before the tab carries on there.
 
+The same happens when the worker script is of another protocol version, such as a copied worker
+file left over from an earlier release. The `hello` and the `welcome` are the one exchange whose
+shape no version may change: a worker answers every `hello`, whatever its version, with a `welcome`
+in its own. A tab that receives a message in another version on the worker's port reports
+`PROTOCOL_VERSION_MISMATCH` and falls back as above [ADR-0024].
+
 ## The protocol between tabs
 
 Every message carries `{ v, from, to, type }` and is validated completely on arrival; anything
 malformed is dropped [ADR-0008].
 
-| Message                                     | Sent by                 | Purpose                                                              |
-| ------------------------------------------- | ----------------------- | -------------------------------------------------------------------- |
-| `hello`, `goodbye`                          | every tab               | Announce a tab to the broker; leave cleanly.                         |
-| `welcome`                                   | the broker              | Answers `hello`, which proves the worker script runs.                |
-| `heartbeat`                                 | every tab on the worker | Keeps a tab known to the broker, and restores what it takes part in. |
-| `attach`, `detach`                          | every tab               | Start or stop participating in a configuration.                      |
-| `owner-claimed`, `owner-released`           | the owner               | Ownership changed.                                                   |
-| `status-request`                            | a tab that just set up  | Asks the owner to restate the status.                                |
-| `status`                                    | the owner               | The connection status changed.                                       |
-| `write-request`                             | a participant           | Asks the owner to write.                                             |
-| `write-started`, `write-result`             | the owner               | The write began; how it ended.                                       |
-| `data-received`, `data-sent`                | the owner               | Traffic, to every participant.                                       |
-| `error`                                     | any tab                 | A failure every participant should know about.                       |
-| `diagnostics-request`, `diagnostics-report` | an observer; every tab  | The diagnostics collection [ADR-0018].                               |
+| Message                                     | Sent by                 | Purpose                                                                     |
+| ------------------------------------------- | ----------------------- | --------------------------------------------------------------------------- |
+| `hello`, `goodbye`                          | every tab               | Announce a tab to the broker; leave cleanly.                                |
+| `welcome`                                   | the broker              | Answers `hello` and every `heartbeat`: the worker script runs and is alive. |
+| `heartbeat`                                 | every tab on the worker | Keeps a tab known to the broker, and restores what it takes part in.        |
+| `attach`, `detach`                          | every tab               | Start or stop participating in a configuration.                             |
+| `owner-claimed`, `owner-released`           | the owner               | Ownership changed.                                                          |
+| `status-request`                            | a tab that just set up  | Asks the owner to restate the status.                                       |
+| `status`                                    | the owner               | The connection status changed.                                              |
+| `write-request`                             | a participant           | Asks the owner to write.                                                    |
+| `write-started`, `write-result`             | the owner               | The write began; how it ended.                                              |
+| `data-received`, `data-sent`                | the owner               | Traffic, to every participant.                                              |
+| `error`                                     | any tab                 | A failure every participant should know about.                              |
+| `diagnostics-request`, `diagnostics-report` | an observer; every tab  | The diagnostics collection [ADR-0018].                                      |
 
 The protocol version is part of every message, of the lock names, and of the name of the worker and
 the channel, and it is incremented on any change to a message. Tabs on different versions therefore
@@ -185,3 +195,4 @@ in a real browser, with real or emulated hardware [ADR-0017].
 | 0021 | Forget tabs that stop sending heartbeats                                            |
 | 0022 | Version stored configurations separately from the protocol                          |
 | 0023 | Announce the protocol version on an unversioned channel                             |
+| 0024 | Keep the handshake with the worker readable by every protocol version               |

@@ -4,7 +4,10 @@ import {
   FallbackTransport,
   MAX_REPLAYED_MESSAGES,
 } from '../../src/client/transport/fallback-transport.js';
-import type { WorkerStartup } from '../../src/client/transport/shared-worker-transport.js';
+import type {
+  WorkerLoadFailure,
+  WorkerStartup,
+} from '../../src/client/transport/shared-worker-transport.js';
 import type { Transport } from '../../src/client/transport/transport.js';
 import type { LogFields } from '../../src/core/types.js';
 import type { ClientId, ProtocolMessage } from '../../src/protocol/messages.js';
@@ -75,7 +78,7 @@ function setUp(options: { fallbackThrows?: boolean } = {}): {
   records: LogRecord[];
   transportErrors: unknown[];
   ready: () => void;
-  failToLoad: () => void;
+  failToLoad: (reason?: WorkerLoadFailure) => void;
 } {
   const { logger, records } = recordingLogger();
   const { request, transportErrors } = recordTransportRequest(SELF, logger);
@@ -105,11 +108,26 @@ function setUp(options: { fallbackThrows?: boolean } = {}): {
     records,
     transportErrors,
     ready: () => startup?.onReady(),
-    failToLoad: () => startup?.onLoadFailed(LOAD_ERROR),
+    failToLoad: (reason = 'worker-script-failed') => startup?.onLoadFailed(LOAD_ERROR, reason),
   };
 }
 
 describe('FallbackTransport', () => {
+  it('names in its log why the worker could not be used', () => {
+    const { records, failToLoad } = setUp();
+
+    failToLoad('worker-other-protocol-version');
+
+    expect(records).toContainEqual([
+      'warn',
+      expect.any(String),
+      expect.objectContaining({
+        event: 'environment.transport-fallback',
+        reason: 'worker-other-protocol-version',
+      }) as LogFields,
+    ]);
+  });
+
   it('uses the SharedWorker transport while its script is starting', () => {
     const { transport, worker, fallback } = setUp();
 

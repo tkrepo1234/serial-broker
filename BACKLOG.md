@@ -4,6 +4,33 @@ Work that is agreed but not yet started. Ordered by when it becomes relevant, no
 
 ---
 
+## Tell tabs what they missed while the worker was gone
+
+**Found 2026-09-13, while making tabs reconnect to a new worker (ADR-0021, amended).**
+
+A tab whose heartbeats go unanswered now connects its transport to a new worker by itself, with
+`hello` and a heartbeat. Nothing above the transport learns that it did, so nothing lost in the gap
+is asked for again:
+
+- A tab that reaches the new worker before the owner does sends its `status-request` into a broker
+  that knows no owner, where it is dropped. Once the owner arrives, nothing restates the status, so
+  the tab shows what it knew before - or nothing, if it set up during the gap - until the status
+  next changes.
+- A write dispatched into the dead worker counts as handed to the owner, and `PendingWrites` only
+  dispatches it again on `owner-claimed`. It ends in `WRITE_TIMEOUT`, although it may never have
+  reached the owner.
+- Status changes and errors broadcast during the gap are not repeated.
+
+Sketch: a `TransportRequest.onReconnected` callback, on which the client sends `status-request` for
+every configuration and hands on writes that have not started. Handing a write on again needs the
+owner to recognise a request id it has already seen, or a write the dying worker did deliver could
+run twice. It touches `src/client/serial-broker-client.ts`, `configuration-session.ts` and
+`pending-writes.ts`, which is why it was left out of the transport change. The scenario to extend is
+`test/integration/multi-tab/worker-restart.test.ts` ("are joined by a tab opened after the crash":
+let that tab write).
+
+---
+
 ## After beta: a full developer documentation site
 
 **Requested by Tim, 2026-09-12. Explicitly scheduled for after the beta phase — then started early

@@ -1,5 +1,6 @@
 import { NOOP_LOGGER, ScopedLogger } from '../core/logger.js';
 import { decodeMessage, describeDecodeFailure } from '../protocol/decode.js';
+import { helloSenderOf, welcomeFor } from '../protocol/handshake.js';
 import { SILENT_PARTICIPANT_TIMEOUT_MS, SWEEP_INTERVAL_MS } from '../protocol/heartbeat.js';
 import type { ClientId, ProtocolMessage } from '../protocol/messages.js';
 
@@ -12,10 +13,12 @@ import { Broker } from './broker.js';
  * open - that is the entire reason it exists. Every tab connects a `MessagePort` to it, and
  * it routes between them (ADR-0006).
  *
- * It deliberately holds no important state: if the browser were to discard and restart it,
- * participants re-announce themselves with their next message and nothing is lost. The things
- * that must not be lost - which context owns the port, what happens to an in-flight write -
- * are held by the Web Lock and by the context that issued the write (ADR-0005, ADR-0013).
+ * It deliberately holds no important state. If the worker dies - it crashed, the browser ended it,
+ * or someone terminated it - no tab is told: their ports simply go quiet. The broker answers every
+ * heartbeat, so each tab notices within a few heartbeats, starts a new worker, and restores its
+ * part there with a heartbeat (ADR-0021). What is lost is the traffic in between. The things that
+ * must not be lost - which context owns the port, what happens to an in-flight write - are held by
+ * the Web Lock and by the context that issued the write (ADR-0005, ADR-0013).
  *
  * This file never imports the Web Serial API. It cannot: `navigator.serial` is not exposed to
  * workers, which is the constraint the whole architecture is built around (ADR-0004).
@@ -60,6 +63,17 @@ self.onconnect = (event): void => {
     handleMessage(port, messageEvent.data);
   });
 
+  // One message that could not be cloned is lost, and only that message. Added here, once per
+  // port, because a port is forgotten and registered again every time its tab is throttled past
+  // the sweep. The port stays open: closing it would cut a live tab - perhaps the owner - off from
+  // every other for good, and nothing would tell it so, which is why ADR-0021 never closes ports.
+  port.addEventListener('messageerror', () => {
+    logger.warn('dropped a message that could not be cloned', {
+      clientId: identities.get(port),
+      event: 'worker.message-error',
+    });
+  });
+
   // A `SharedWorker` port does not deliver anything until it is started.
   port.start();
 };
@@ -68,6 +82,27 @@ function handleMessage(port: MessagePort, raw: unknown): void {
   const result = decodeMessage(raw);
 
   if (!result.ok) {
+    // A tab of another protocol version, which the browser started on this script: a worker file
+    // copied from another release, or one kept by a cache. Its hello is the one message every
+    // version answers. The welcome carries this worker's version, and so tells the tab that nothing
+    // it sends arrives here; the tab is not registered, and nothing else it says is routed
+    // (ADR-0024).
+    const otherVersionSender =
+      result.failure.reason === 'version-mismatch' ? helloSenderOf(raw) : undefined;
+    if (otherVersionSender !== undefined) {
+      logger.warn('answered a tab on another protocol version', {
+        clientId: otherVersionSender,
+        event: 'worker.other-protocol-version',
+        reason: describeDecodeFailure(result.failure),
+      });
+      try {
+        port.postMessage(welcomeFor(otherVersionSender));
+      } catch {
+        // The tab has already gone, and nothing else is owed to it.
+      }
+      return;
+    }
+
     // Nothing can be done about a message this worker cannot parse, and it must not be
     // allowed to take the broker down: dropping it keeps every other tab working.
     logger.warn('dropped a message', { reason: describeDecodeFailure(result.failure) });
@@ -86,20 +121,18 @@ function handleMessage(port: MessagePort, raw: unknown): void {
 }
 
 function register(port: MessagePort, clientId: ClientId): void {
-  if (identities.get(port) === clientId) {
+  // Both directions are checked. A tab that gave up on this worker while it hung connects again on
+  // a new port, and a message still queued on its old port can arrive after the sweep forgot it.
+  // The tab's next message on its new port has to win the table back.
+  if (identities.get(port) === clientId && ports.get(clientId) === port) {
     return;
   }
 
+  // There is no port-close event. A context that leaves politely says goodbye; one that dies
+  // stops sending heartbeats, and the sweep forgets it (ADR-0021).
   identities.set(port, clientId);
   ports.set(clientId, port);
   broker.handleConnect(clientId);
-
-  // There is no port-close event. A context that leaves politely says goodbye; one that dies
-  // stops sending heartbeats, and the sweep forgets it (ADR-0021). `messageerror` covers the
-  // case where a context sends something uncloneable and is likely to be in trouble.
-  port.addEventListener('messageerror', () => {
-    disconnect(port, clientId);
-  });
 }
 
 function disconnect(port: MessagePort, clientId: ClientId): void {
