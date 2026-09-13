@@ -66,6 +66,19 @@ Every code is described in [Errors](../errors.md).
 configuration in one tab and keeps the browser's permission; `forgetDevice: true` revokes it, so
 the next setup asks the user again.
 
+## Using the device from one window at a time
+
+With `maxTabs: 1`, one tab uses the configuration and every other tab waits with the status
+`queued`. The tab that has waited longest takes over when the one using it is closed, crashes, or
+releases the configuration:
+
+```{literalinclude} code/features/exclusive.ts
+:language: ts
+```
+
+Every tab has to pass the same `maxTabs`. See
+[Limiting how many tabs use a port](../shared-ports.md#limiting-how-many-tabs-use-a-port).
+
 ## Library-wide settings, logging, and ports without USB identity
 
 ```{literalinclude} code/features/setup-options.ts

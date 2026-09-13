@@ -15,6 +15,9 @@ function present(status: SerialBrokerStatus): Presentation {
       return { text: 'Connecting…', tone: 'busy' };
     case 'awaiting-permission':
       return { text: 'Choose the device to connect', tone: 'problem' };
+    case 'queued':
+      // Only with `maxTabs`: other windows use the device, and this one waits for its turn.
+      return { text: 'In use in another window', tone: 'busy' };
     case 'failed':
       return { text: 'Device not reachable', tone: 'problem' };
     default:
