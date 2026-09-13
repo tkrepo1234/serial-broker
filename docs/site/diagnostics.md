@@ -116,6 +116,9 @@ answered. A tab answers once it has set up at least one configuration. The snaps
   how many are waiting, how many were handed to the tab holding the port, how many had started.
 - **For the tab holding the port:** the connection's internal state, the attempt count, when the
   next attempt is due, when the port opened, the writes queued at the port, and bytes in and out.
+  The state is `opening` for the whole of an attempt — while the previous connection finishes
+  closing, while the granted ports are listed, and while the port opens. The next attempt is due
+  only while the state is `reconnecting`; during an attempt nothing is scheduled.
 - **The Web Locks** serial-broker holds and waits for, where the browser can list them. The browser
   identifies the tabs in this list differently from serial-broker, so the two cannot be matched up.
 

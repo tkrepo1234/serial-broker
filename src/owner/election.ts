@@ -78,6 +78,14 @@ export class OwnershipElection {
 
     void this.locks
       .request(lockName, { mode: 'exclusive', signal: abort.signal }, async () => {
+        // The browser grants the lock and runs this callback in separate steps. A `stop()` in
+        // between found no release to resolve and a request its abort no longer affects, so this
+        // is the last place to notice it: returning lets the lock go at once, where waiting would
+        // hold it until the tab closes.
+        if (this.#isStopped) {
+          return;
+        }
+
         // Granted. Everything from here until `release` resolves runs with exclusive
         // ownership of this configuration, guaranteed by the browser rather than by us.
         const release = createSignal();

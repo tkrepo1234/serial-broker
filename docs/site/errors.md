@@ -206,8 +206,11 @@ driver that has stopped responding.
 **Do:** when it repeats, unplug the device and plug it in again.
 
 `DEVICE_DISCONNECTED` (retryable)
-: **Arises** when the device is unplugged or switched off, or ends the connection.
-**Do:** nothing. The connection returns when the device does; the status shows `reconnecting`.
+: **Arises** when the device is unplugged or switched off, or ends the connection. Only the port
+the tab holds counts: unplugging another port that the configuration also matches raises nothing.
+**Do:** nothing. The connection returns when the device does; the status shows `reconnecting` for
+as long as the device stays away. It is reported once, not for every retry that does not find the
+device, and those retries count towards `maxAttempts`.
 
 `READ_FAILED` (retryable)
 : **Arises** when reading from the device fails for a reason other than a disconnect — often a

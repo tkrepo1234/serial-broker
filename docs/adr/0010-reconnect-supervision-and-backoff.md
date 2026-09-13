@@ -77,3 +77,39 @@ Additionally:
 
 Scenario matrix rows 8 and 9; backoff schedules are asserted exactly with a seeded random
 source and fake timers.
+
+## Amendment (2026-09-13)
+
+A review found paths where the decision above did not hold. The decision is unchanged; these
+points make it precise.
+
+- **An unplugged device keeps the configuration `reconnecting`.** `getPorts()` does not list a
+  port whose USB device is detached, and the immediate retry used to read that as "never granted"
+  and stop in `awaiting-permission` - showing the application a permission button that does
+  nothing, and putting the device beyond `maxAttempts`. A port missing from the list is now a
+  failed attempt, with backoff, when the platform fired `disconnect` for the port the owner had
+  found and has fired no `connect` since. A permission revoked in site settings, or by
+  `forget()`, makes the port disappear without a `disconnect` event, and still leads to
+  `awaiting-permission`. The read error and the event reach the page separately, so a
+  `disconnect` that arrives after a retry already concluded `awaiting-permission` moves the
+  configuration on to `reconnecting`. A `connect` event clears the note: a replugged device has a
+  new port object, and it cannot be told whether it is the same one.
+
+  _Alternative rejected:_ treating a missing port as absent whenever the device had been opened in
+  this owner's lifetime. It needs no event, but it turns a revoked permission into retries forever
+  under the default `maxAttempts`, with no prompt the user could answer.
+
+- **Device events concern the port the owner holds.** The client routes events by device filter,
+  which an `any` filter or two identical adapters also match. The supervisor acts on a
+  `disconnect` only when the event's target is the port it found. A `null` target is taken to be
+  that port: a missed disconnect stalls a connection, a spurious one costs a reconnect.
+- **An attempt waits for the previous connection to be closed.** In Chromium `close()` is a round
+  trip to the browser process, and `open()` before it returns fails with `InvalidStateError`. The
+  next attempt, and stopping, wait for that teardown, bounded by `openTimeoutMs` per step.
+  Stopping also waits for an `open()` still pending and closes the port once it settles, because
+  the ownership lock is released right after (ADR-0005). An abandoned `open()` is closed when it
+  settles, not while it is pending.
+- **Looking for the port is part of an attempt.** Listing the granted ports has a state of its own
+  in the supervisor, so a listing that times out is a failed attempt followed by another, and never
+  mistaken for an attempt already scheduled. Diagnostics report it as `opening`, keeping the set of
+  states that peers on the same protocol version accept.
