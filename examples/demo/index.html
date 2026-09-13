@@ -250,9 +250,11 @@
     </fieldset>
 
     <fieldset>
-      <legend>
-        Traffic <button id="clear" class="secondary" style="float: right">Clear</button>
-      </legend>
+      <legend>Traffic</legend>
+      <!-- Outside the legend: a floated button inside one overlaps the legend's own text. -->
+      <div class="row" style="justify-content: flex-end; margin-bottom: 0.75rem">
+        <button id="clear" class="secondary">Clear</button>
+      </div>
       <div id="log" role="log" aria-live="polite"></div>
     </fieldset>
 
