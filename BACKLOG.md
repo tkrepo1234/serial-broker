@@ -33,12 +33,6 @@ that fails to load now falls back to `BroadcastChannel` too (ADR-0007, amended).
 for `RECONNECT_EXHAUSTED` advised a second `setup()`, which is a no-op. Open, and documented as
 they are:
 
-- **Tabs on different protocol versions cannot detect each other.** The version is part of every
-  lock and bus name, so `PROTOCOL_VERSION_MISMATCH` is practically never raised; the symptom is a
-  tab that cannot open the device. A version-independent announcement channel would make the
-  mismatch visible.
-- **Codes that are never raised:** `MALFORMED_MESSAGE`, `OWNERSHIP_TRANSFER_TIMEOUT`, `UNKNOWN`.
-  Either raise them where they apply or remove them before 1.0, while that is still cheap.
 - **`STORAGE_CORRUPT` during `restore()` in a fresh tab only reaches the log**, because no
   configuration exists yet to deliver `onError` to.
 
@@ -101,16 +95,16 @@ The verified defects were fixed in `6d31c59` and the commits after it. What rema
 
 ### Decisions
 
-- **Saved configurations are keyed by the protocol version**, so every protocol change discards
-  them although their format did not change. Give storage its own schema version.
-- **`configure()` only takes effect before the first call that builds the client.** Decide whether
-  a late `configure()` should warn. (`exists`, `names`, `release` and `releaseAll` no longer build
-  one while nothing is set up.)
-- **Error codes that are never raised:** `MALFORMED_MESSAGE`, `OWNERSHIP_TRANSFER_TIMEOUT`,
-  `UNKNOWN`. Raise or remove before 1.0.
-- **A listener that throws is reported in every tab** (`LISTENER_THREW` is broadcast).
-- **Tabs on different protocol versions cannot detect each other** (see "Found while writing the
-  chapters").
+Decided by Tim on 2026-09-13 and done:
+
+- Stored configurations have a storage version of their own and are moved from the old keys
+  ([ADR-0022](./docs/adr/0022-version-stored-configurations-separately.md)).
+- `MALFORMED_MESSAGE` and `OWNERSHIP_TRANSFER_TIMEOUT` are removed; `UNKNOWN` is what a code
+  reported by a later version becomes.
+- `LISTENER_THREW` is reported in the listener's own tab only.
+- Tabs announce their protocol version on an unversioned channel
+  ([ADR-0023](./docs/adr/0023-announce-the-protocol-version.md)).
+- A late `configure()` logs `facade.late-configure`.
 
 ### Refactorings
 

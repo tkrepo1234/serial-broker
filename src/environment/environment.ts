@@ -1,3 +1,4 @@
+import type { BroadcastChannelFactory } from '../client/transport/broadcast-channel-transport.js';
 import type { Transport, TransportRequest } from '../client/transport/transport.js';
 import type { Clock, IdGenerator } from '../core/clock.js';
 import type { ScopedLogger } from '../core/logger.js';
@@ -26,6 +27,13 @@ export interface SerialBrokerEnvironment {
   readonly storage: KeyValueStorage;
   /** Opens the message bus. */
   readonly createTransport: (request: TransportRequest) => Transport;
+  /**
+   * Opens a `BroadcastChannel`, for the version announcement (ADR-0023).
+   *
+   * Absent where the platform has none. Tabs on other protocol versions then go unnoticed, which
+   * costs a diagnosis and nothing else.
+   */
+  readonly createBroadcastChannel?: BroadcastChannelFactory | undefined;
   /** Time, in every form the library needs it. */
   readonly clock: Clock;
   /** Returns a value in `[0, 1)`. Used only for reconnect jitter. */

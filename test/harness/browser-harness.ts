@@ -253,6 +253,7 @@ export class BrowserHarness {
       locks: this.locks.forContext(contextId),
       storage: this.storage,
       createTransport: (request) => this.bus.createTransport(contextId, request),
+      createBroadcastChannel: (name) => this.bus.broadcastHub.create(name, contextId),
       logPayloads: this.options.logPayloads ?? false,
       // A killed tab runs no code: its timers are dropped rather than fired, as the browser
       // drops them with the tab.

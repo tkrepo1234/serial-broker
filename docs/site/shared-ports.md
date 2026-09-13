@@ -206,10 +206,14 @@ connected to different workers, cannot see each other, and will compete for the 
 
 Tabs that run different versions of serial-broker's internal message protocol do not coordinate
 with each other: they use different lock names and different workers, and each group behaves as if
-it were alone. Because they never exchange a message, they cannot notice each other either. What
-shows is the consequence: each group has a tab trying to hold the device, and the group that comes
-second cannot open it and keeps reconnecting. After deploying a version that changes the protocol,
-reload every open tab. The changelog says when that is necessary.
+it were alone. Each group has a tab trying to hold the device, and the group that comes second
+cannot open it and keeps reconnecting.
+
+They do notice each other. When a tab sets up its first configuration, it announces its protocol
+version on a channel whose name no version changes, and it answers every announcement from another
+version. A tab that learns of another version reports `PROTOCOL_VERSION_MISMATCH` through `onError`,
+once per version. After deploying a version that changes the protocol, reload every open tab. The
+changelog says when that is necessary.
 
 ## What to watch out for
 

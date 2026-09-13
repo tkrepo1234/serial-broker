@@ -1,7 +1,3 @@
-| [0016](./0016-non-usb-devices.md) | Support ports that are not USB devices | Accepted |
-| [0015](./0015-text-and-binary-payloads.md) | Deliver bytes, offer text as a configured convenience | Accepted |
-| [0016](./0016-non-usb-devices.md) | Support ports that are not USB devices | Accepted |
-
 # Architecture Decision Records
 
 Every architectural decision in this library is recorded here, using a
@@ -20,8 +16,8 @@ because of a decision references it in a comment (`// See ADR-0005.`).
 | [0005](./0005-owner-election-via-web-locks.md)               | Elect the port owner with the Web Locks API                                         | Accepted        |
 | [0006](./0006-sharedworker-as-message-broker.md)             | Use a SharedWorker as the message broker                                            | Accepted        |
 | [0007](./0007-broadcastchannel-fallback-transport.md)        | Fall back to BroadcastChannel when SharedWorker is unavailable                      | Accepted        |
-| [0008](./0008-wire-protocol-and-versioning.md)               | Version the wire protocol independently                                             | Accepted        |
-| [0009](./0009-device-identity-and-permission-persistence.md) | Identify devices by USB IDs, persist configuration, rely on browser permission      | Accepted        |
+| [0008](./0008-wire-protocol-and-versioning.md)               | Version the wire protocol independently                                             | Amended by 0023 |
+| [0009](./0009-device-identity-and-permission-persistence.md) | Identify devices by USB IDs, persist configuration, rely on browser permission      | Amended by 0022 |
 | [0010](./0010-reconnect-supervision-and-backoff.md)          | Supervise the connection with bounded exponential backoff                           | Accepted        |
 | [0011](./0011-encapsulation-boundary.md)                     | Expose nothing about the coordination mechanism                                     | Amended by 0018 |
 | [0012](./0012-error-model.md)                                | One error type, stable codes, mandatory remediation                                 | Accepted        |
@@ -29,8 +25,10 @@ because of a decision references it in a comment (`// See ADR-0005.`).
 | [0014](./0014-dependency-injection-of-the-environment.md)    | Inject the browser environment for testability                                      | Accepted        |
 | [0015](./0015-text-and-binary-payloads.md)                   | Deliver bytes, offer text as a configured convenience                               | Accepted        |
 | [0016](./0016-non-usb-devices.md)                            | Support ports that are not USB devices                                              | Accepted        |
+| [0017](./0017-usbip-device-emulator.md)                      | Emulate a USB serial device over USB/IP for testing without hardware                | Accepted        |
+| [0018](./0018-diagnostics-observer.md)                       | Expose coordination internals to operators through a diagnostics observer           | Accepted        |
+| [0019](./0019-ship-the-debugging-surface.md)                 | Ship the debugging surface in the package, as static content                        | Accepted        |
 | [0020](./0020-documentation-toolchain.md)                    | Build the developer documentation with Sphinx, MyST and a TSDoc-generated reference | Accepted        |
 | [0021](./0021-forget-silent-participants.md)                 | Forget tabs that stop sending heartbeats                                            | Accepted        |
-| [0019](./0019-ship-the-debugging-surface.md)                 | Ship the debugging surface in the package, as static content                        | Accepted        |
-| [0018](./0018-diagnostics-observer.md)                       | Expose coordination internals to operators through a diagnostics observer           | Accepted        |
-| [0017](./0017-usbip-device-emulator.md)                      | Emulate a USB serial device over USB/IP for testing without hardware                | Accepted        |
+| [0022](./0022-version-stored-configurations-separately.md)   | Version stored configurations separately from the protocol                          | Accepted        |
+| [0023](./0023-announce-the-protocol-version.md)              | Announce the protocol version on an unversioned channel                             | Accepted        |

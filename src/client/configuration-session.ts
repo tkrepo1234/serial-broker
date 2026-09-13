@@ -60,7 +60,9 @@ export class ConfigurationSession {
 
     this.#emitter = new EventEmitter(
       (error) => {
-        this.#emitError(error);
+        // Reported in this tab only: the listener is this tab's code, and no other tab can do
+        // anything about it.
+        this.#emitError(error, { broadcast: false });
       },
       () => environment.clock.now(),
     );

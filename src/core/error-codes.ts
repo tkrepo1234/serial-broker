@@ -66,10 +66,6 @@ export const SerialBrokerErrorCode = {
   // --- Coordination ----------------------------------------------------------------------
   /** A peer context runs an incompatible wire protocol version. See ADR-0008. */
   PROTOCOL_VERSION_MISMATCH: 'PROTOCOL_VERSION_MISMATCH',
-  /** A message on the shared bus was malformed and was dropped. */
-  MALFORMED_MESSAGE: 'MALFORMED_MESSAGE',
-  /** Ownership did not settle within the transfer deadline. */
-  OWNERSHIP_TRANSFER_TIMEOUT: 'OWNERSHIP_TRANSFER_TIMEOUT',
 
   // --- Storage ---------------------------------------------------------------------------
   /** Persisted configuration could not be read or written. Operation continues in memory. */
@@ -82,7 +78,10 @@ export const SerialBrokerErrorCode = {
   LISTENER_THREW: 'LISTENER_THREW',
   /** An internal invariant was violated. This is a bug in this library; please report it. */
   INTERNAL_INVARIANT: 'INTERNAL_INVARIANT',
-  /** An error that could not be mapped to any of the above. `cause` holds the original. */
+  /**
+   * An error this version cannot classify: a code reported by a tab that runs a later version of
+   * serial-broker, which is kept in `context.reportedCode`.
+   */
   UNKNOWN: 'UNKNOWN',
 } as const;
 
@@ -142,10 +141,6 @@ export const REMEDIATION: Record<SerialBrokerErrorCode, string> = {
     'The tab that owned the port closed mid-write, so it is unknown whether the device received the bytes. Only repeat the command if it is idempotent for your device.',
   PROTOCOL_VERSION_MISMATCH:
     'Another tab runs a different version of this library. Reload all tabs of this application after deploying a version with a protocol change.',
-  MALFORMED_MESSAGE:
-    'A message on the shared channel could not be parsed and was ignored. If this persists, another script on this origin is using the same channel name.',
-  OWNERSHIP_TRANSFER_TIMEOUT:
-    'No tab took ownership of the port in time. This resolves itself when any tab with this configuration becomes responsive again.',
   STORAGE_UNAVAILABLE:
     'localStorage is not writable, so the configuration will not be restored after a reload. Everything else keeps working. Common in private windows and sandboxed iframes.',
   STORAGE_CORRUPT:
@@ -155,7 +150,7 @@ export const REMEDIATION: Record<SerialBrokerErrorCode, string> = {
   INTERNAL_INVARIANT:
     'This is a bug in serial-broker. Please report it with the `context` object and the steps that triggered it.',
   UNKNOWN:
-    'An unmapped error occurred; the original is in `cause`. Please report it so it can be mapped to a specific code.',
+    'Another tab reported an error this version of serial-broker does not know; `context.reportedCode` holds its code. That tab runs a later version: reload every tab of the application.',
 };
 
 /**

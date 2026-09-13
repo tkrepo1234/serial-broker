@@ -44,27 +44,30 @@ message.
 
 ### What is logged
 
-| Event                            | Level | When                                                                                  |
-| -------------------------------- | ----- | ------------------------------------------------------------------------------------- |
-| `client.setup`                   | info  | A configuration was set up in this tab.                                               |
-| `client.restore`                 | info  | Remembered configurations were restored.                                              |
-| `client.release`                 | info  | A configuration was released in this tab.                                             |
-| `client.error`                   | error | A failure not tied to one configuration, such as a message bus failure.               |
-| `client.malformed-message`       | warn  | A message from another tab could not be read and was dropped.                         |
-| `client.forget-failed`           | warn  | The browser could not revoke a device permission.                                     |
-| `election.acquired`              | info  | This tab now holds the port.                                                          |
-| `election.released`              | info  | This tab gave the port up.                                                            |
-| `election.failed`                | warn  | Requesting the ownership lock failed; the tab requests it again.                      |
-| `supervisor.open`                | info  | The port opened.                                                                      |
-| `supervisor.reconnect`           | warn  | The connection was lost; the reason, attempt and delay are in the fields.             |
-| `supervisor.device-connected`    | info  | The device reappeared, and a reconnect is attempted at once.                          |
-| `supervisor.sent`, `.received`   | debug | Traffic, with `byteLength`; with `logPayloads`, also `hex`.                           |
-| `matcher.none`                   | debug | No granted port matches the configured device.                                        |
-| `matcher.ambiguous`              | warn  | Several granted ports match; the first is used.                                       |
-| `environment.transport-fallback` | warn  | `SharedWorker` is unavailable or its script did not load; `BroadcastChannel` is used. |
-| `storage.unavailable`            | warn  | A read or write to `localStorage` failed; configurations may not be remembered.       |
-| `storage.invalid-entry`          | warn  | A remembered configuration was invalid and discarded.                                 |
-| `storage.corrupt`                | warn  | The stored configurations could not be read and were discarded.                       |
+| Event                             | Level | When                                                                                      |
+| --------------------------------- | ----- | ----------------------------------------------------------------------------------------- |
+| `client.setup`                    | info  | A configuration was set up in this tab.                                                   |
+| `client.restore`                  | info  | Remembered configurations were restored.                                                  |
+| `client.release`                  | info  | A configuration was released in this tab.                                                 |
+| `client.error`                    | error | A failure not tied to one configuration, such as a message bus failure.                   |
+| `client.malformed-message`        | warn  | A message from another tab could not be read and was dropped.                             |
+| `client.forget-failed`            | warn  | The browser could not revoke a device permission.                                         |
+| `client.announcement-unavailable` | warn  | The version announcement cannot be used; tabs on other protocol versions go unnoticed.    |
+| `facade.late-configure`           | warn  | `configure()` was called after the client was built; its options apply after `dispose()`. |
+| `election.acquired`               | info  | This tab now holds the port.                                                              |
+| `election.released`               | info  | This tab gave the port up.                                                                |
+| `election.failed`                 | warn  | Requesting the ownership lock failed; the tab requests it again.                          |
+| `supervisor.open`                 | info  | The port opened.                                                                          |
+| `supervisor.reconnect`            | warn  | The connection was lost; the reason, attempt and delay are in the fields.                 |
+| `supervisor.device-connected`     | info  | The device reappeared, and a reconnect is attempted at once.                              |
+| `supervisor.sent`, `.received`    | debug | Traffic, with `byteLength`; with `logPayloads`, also `hex`.                               |
+| `matcher.none`                    | debug | No granted port matches the configured device.                                            |
+| `matcher.ambiguous`               | warn  | Several granted ports match; the first is used.                                           |
+| `environment.transport-fallback`  | warn  | `SharedWorker` is unavailable or its script did not load; `BroadcastChannel` is used.     |
+| `storage.unavailable`             | warn  | A read or write to `localStorage` failed; configurations may not be remembered.           |
+| `storage.invalid-entry`           | warn  | A remembered configuration was invalid and discarded.                                     |
+| `storage.corrupt`                 | warn  | The stored configurations could not be read and were discarded.                           |
+| `storage.migrated`                | info  | Remembered configurations were moved from the key an earlier build used.                  |
 
 Payload bytes never appear above `debug`, and at `debug` only with `logPayloads: true`.
 
@@ -185,9 +188,10 @@ The device does not accept data: it is switched off behind a powered adapter, `f
 `'hardware'` with a device that never signals ready, or the line settings are wrong.
 
 **A tab keeps reconnecting while the device is connected and works in another tab.**
-Most often the tabs run different versions of serial-broker: they cannot see each other, both try
-to hold the device, and the second cannot open it. The debugging surface only shows the tabs on its
-own version. Reload every tab. If all tabs are current, another program has the device open.
+Most often the tabs run different versions of serial-broker: they cannot share the port, both try
+to hold the device, and the second cannot open it. Such tabs report `PROTOCOL_VERSION_MISMATCH`. The
+debugging surface only shows the tabs on its own version. Reload every tab. If all tabs are current,
+another program has the device open.
 
 **Received text contains replacement characters.**
 The line settings or `encoding` do not match the device.

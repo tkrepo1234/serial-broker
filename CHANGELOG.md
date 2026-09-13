@@ -29,6 +29,8 @@ coordinate with each other. See
   fails to load, replaying what the tab sent before the failure.
 - Tabs that die without saying goodbye are forgotten by the worker: every tab sends a heartbeat,
   and the worker drops one that has been silent for three minutes.
+- Tabs on different protocol versions detect each other: every tab announces its version on a
+  channel no version renames, and a mismatch is reported as `PROTOCOL_VERSION_MISMATCH`.
 - An opt-in structured logger. The library writes nothing to the console uninvited.
 - A read-only diagnostics entry point, `serial-broker/diagnostics`. Every tab of the origin
   reports its role, connection state, reconnect timing, pending writes, listeners and effective
@@ -41,5 +43,7 @@ coordinate with each other. See
 ### Notes
 
 - Wire protocol version: **4**. Version 1 was never released; 2 added the diagnostics request and
-  report, 3 the broker's `welcome`, 4 the `heartbeat`. Remembered configurations are stored per
-  protocol version, so those remembered by an earlier build are not restored.
+  report, 3 the broker's `welcome`, 4 the `heartbeat`.
+- Remembered configurations are stored under a key with a version of its own,
+  `serial-broker/configurations/v1`, so a protocol change no longer discards them. Configurations
+  remembered under the earlier, protocol-versioned keys are moved there when they are first read.

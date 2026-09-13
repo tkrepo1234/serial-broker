@@ -191,14 +191,25 @@ export function deserializeError(serialized: SerializedSerialBrokerError): Seria
       ? undefined
       : Object.assign(new Error(serialized.cause.message), { name: serialized.cause.name });
 
-  return new SerialBrokerError(serialized.code, serialized.message, {
-    configName: serialized.configName,
-    context: serialized.context,
-    remediation: serialized.remediation,
-    isRetryable: serialized.isRetryable,
-    timestamp: serialized.timestamp,
-    cause,
-  });
+  // Adding a code does not change the protocol, so a tab on a later version can report one this
+  // version does not know. It is classified as UNKNOWN rather than passed on as a code no
+  // application branch can expect, and the code it had is kept.
+  const isKnown = (Object.values(SerialBrokerErrorCode) as string[]).includes(serialized.code);
+
+  return new SerialBrokerError(
+    isKnown ? serialized.code : SerialBrokerErrorCode.UNKNOWN,
+    serialized.message,
+    {
+      configName: serialized.configName,
+      context: isKnown
+        ? serialized.context
+        : { ...serialized.context, reportedCode: serialized.code },
+      remediation: serialized.remediation,
+      isRetryable: serialized.isRetryable,
+      timestamp: serialized.timestamp,
+      cause,
+    },
+  );
 }
 
 /** Narrows an unknown value to a serialized error, for use at message boundaries. */

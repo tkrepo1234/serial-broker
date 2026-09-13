@@ -1,6 +1,6 @@
 # ADR-0009: Identify devices by USB IDs, persist configuration, rely on browser permission
 
-- **Status:** Accepted
+- **Status:** Accepted, amended by [ADR-0022](./0022-version-stored-configurations-separately.md)
 - **Date:** 2026-09-12
 
 ## Context
@@ -25,7 +25,8 @@ devices yields `usbVendorId` and `usbProductId` - a _device type_, not a device 
 
 - A configuration is `{ name, device, serial, ... }` and is persisted in `localStorage` under
   `serial-broker/v<PROTOCOL_VERSION>/configurations`, validated on read and discarded
-  per-entry if malformed.
+  per-entry if malformed. (Amended by ADR-0022: the key carries a storage version of its own,
+  `serial-broker/configurations/v<STORAGE_SCHEMA_VERSION>`.)
 - On `setup()`, the library calls `getPorts()` and selects the first port whose `getInfo()`
   matches the configured vendor and product IDs. If one is found, it opens it - no prompt, no
   user gesture, no application code.

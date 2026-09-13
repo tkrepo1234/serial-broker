@@ -14,7 +14,8 @@ export type ListenerErrorReporter = (error: SerialBrokerError) => void;
  * - **Re-entrancy safe.** Dispatch iterates a snapshot of the listener set, so a listener that
  *   calls `subscribe()` or `unsubscribe()` - or `send()`, which can synchronously emit -
  *   cannot corrupt the iteration or receive an event it registered for during that dispatch.
- * - **Fault isolating.** A listener that throws is caught, reported once as `LISTENER_THREW`,
+ * - **Fault isolating.** A listener that throws is caught, reported once as `LISTENER_THREW` in
+ *   its own tab,
  *   and the remaining listeners still receive the event.
  */
 export class EventEmitter {

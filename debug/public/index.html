@@ -864,8 +864,9 @@
       <h3>Protocol version</h3>
       <p>The version of the messages tabs exchange. Updates that change those messages raise it.</p>
       <p>
-        Tabs on different versions do not see each other at all, and each of them tries to hold the
-        device. After such an update, reload every tab.
+        Tabs on different versions cannot share the device: each of them tries to hold it. They
+        report <code>PROTOCOL_VERSION_MISMATCH</code> when they notice each other, and this page
+        only lists the tabs on its own version. After such an update, reload every tab.
       </p>
     </div>
     <div id="help-locks" class="help-text" popover>

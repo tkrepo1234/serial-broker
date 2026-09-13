@@ -7,6 +7,7 @@ import {
   isSerializedError,
   isSerialBrokerError,
   SerialBrokerError,
+  type SerializedSerialBrokerError,
 } from '../../src/core/errors.js';
 
 describe('SerialBrokerError', () => {
@@ -97,6 +98,24 @@ describe('error serialization', () => {
 
     expect((revived.cause as Error).name).toBe('NetworkError');
     expect((revived.cause as Error).message).toBe('The device has been lost');
+  });
+
+  it('classifies a code this version does not know as UNKNOWN, keeping the reported code', () => {
+    // A tab on a later version may have a code this one lacks: adding one is not a protocol change.
+    const fromLaterVersion = {
+      ...new SerialBrokerError(SerialBrokerErrorCode.WRITE_FAILED, 'a future failure', {
+        context: { detail: 1 },
+        remediation: 'Do what the later version says.',
+      }).toJSON(),
+      code: 'SOME_FUTURE_CODE',
+    };
+
+    const revived = deserializeError(fromLaterVersion as SerializedSerialBrokerError);
+
+    expect(revived.code).toBe(SerialBrokerErrorCode.UNKNOWN);
+    expect(revived.context).toEqual({ detail: 1, reportedCode: 'SOME_FUTURE_CODE' });
+    expect(revived.message).toBe('a future failure');
+    expect(revived.remediation).toBe('Do what the later version says.');
   });
 
   it('serializes a cause that is not an Error at all', () => {

@@ -21,10 +21,12 @@ SerialBroker.subscribe('Scale', 'onError', (event) => {
 Where such an event is delivered depends on where it arose:
 
 - **A failure of the connection** arises in the tab holding the port and is delivered in **every**
-  tab that has the configuration set up. So is a listener that threw, in whichever tab.
-- **A failure of one tab's environment** — its message bus, its storage, a message from a tab on
-  another protocol version — is delivered only in that tab, to each of its configurations. If the
-  tab has none set up yet, it only reaches the [log](diagnostics.md#logging).
+  tab that has the configuration set up.
+- **A listener that threw** is delivered only in the tab whose listener it was: no other tab can do
+  anything about it.
+- **A failure of one tab's environment** — its message bus, its storage, a tab on another protocol
+  version — is delivered only in that tab, to each of its configurations. If the tab has none set
+  up yet, it only reaches the [log](diagnostics.md#logging).
 
 A listener registered for `onError` that throws is not reported again, to avoid an endless loop.
 
@@ -263,17 +265,15 @@ state. See
 ### Coordination between tabs
 
 `PROTOCOL_VERSION_MISMATCH`
-: **Delivered through `onError`** in a tab that receives a message from a tab on another version of
-serial-broker's message protocol.
-**Context:** `theirVersion`.
-**Do:** reload every tab of the application. Tabs on different versions normally use different
-lock and bus names and never exchange a message at all, so the absence of this error does not
-prove that every tab is current; see
+: **Delivered through `onError`** in a tab that learns of a tab on another version of serial-broker's
+message protocol, once per version. Every tab announces its version when it sets up its first
+configuration, and answers the announcements of tabs on other versions; see
 [Tabs running different versions](shared-ports.md#tabs-running-different-versions).
+**Context:** `theirVersion`.
+**Do:** reload every tab of the application.
 
-`MALFORMED_MESSAGE`, `OWNERSHIP_TRANSFER_TIMEOUT`
-: **Not raised by this version.** A message that cannot be read is dropped and logged as
-`client.malformed-message`. Handle these codes like any code the application does not know.
+A message from another tab that cannot be read raises no error: it is dropped and logged as
+`client.malformed-message`.
 
 ### Remembering configurations
 
@@ -296,8 +296,8 @@ entries are discarded.
 ### serial-broker itself
 
 `LISTENER_THREW`
-: **Delivered through `onError`** in every tab when an application listener threw. The other
-listeners still received the event.
+: **Delivered through `onError`** in the tab whose listener threw. The other listeners still
+received the event, and other tabs are not told.
 **Context:** `event`, the event the listener was registered for; `cause` is the exception.
 **Do:** fix the listener.
 
@@ -307,5 +307,8 @@ serial-broker.
 **Do:** report it with `context` and the steps that led to it.
 
 `UNKNOWN`
-: **Not raised by this version.** Reserved for a failure that cannot be mapped to a specific code,
-with the original in `cause`.
+: **Delivered through `onError`** when another tab reports an error with a code this version of
+serial-broker does not know. That tab runs a later version, to which the code was added.
+**Context:** `reportedCode`, the code the other tab reported, next to that error's own context. The
+message and the remediation are the other tab's.
+**Do:** reload every tab of the application, so that all of them run the same version.

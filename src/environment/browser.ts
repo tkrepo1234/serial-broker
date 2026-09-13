@@ -56,6 +56,8 @@ export function createBrowserEnvironment(
     locks: requireLocks(),
     storage: createStorage(),
     createTransport: (request) => createTransport(request, options, logger),
+    createBroadcastChannel:
+      typeof BroadcastChannel === 'undefined' ? undefined : (name) => new BroadcastChannel(name),
     clock: BROWSER_CLOCK,
     random: () => Math.random(),
     newId: createIdGenerator(),

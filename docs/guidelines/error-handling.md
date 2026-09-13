@@ -54,7 +54,8 @@ so that other tabs learn about it too.
 - An error crosses the `onError` channel exactly once per occurrence per tab. The owner does
   not re-broadcast an error that the origin tab already received directly.
 - Errors from application event listeners are caught, wrapped with code
-  `LISTENER_THREW`, and reported — but never rethrown into the library's own control flow.
+  `LISTENER_THREW`, and reported in the listener's own tab only — but never rethrown into the
+  library's own control flow.
 - Errors during disposal are collected and reported as a single `AggregateError`-shaped
   context. Disposal never fails.
 

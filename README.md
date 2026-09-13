@@ -307,9 +307,9 @@ on would break every guarantee above.
   strictly ordered and never interleaved. Across tabs, whoever gets there first wins — if you
   need command atomicity across tabs, build it on top.
 - **Mixed library versions partition.** Tabs running different wire protocol versions do not
-  coordinate with each other and cannot see each other: the group that comes second cannot open
-  the device and keeps reconnecting. Reload all tabs after deploying a version that changes the
-  protocol.
+  coordinate with each other: the group that comes second cannot open the device and keeps
+  reconnecting. They detect each other and report `PROTOCOL_VERSION_MISMATCH`; reload all tabs
+  after deploying a version that changes the protocol.
 
 ## How it works
 

@@ -4,7 +4,29 @@ import { describeUnknown, SerialBrokerError } from '../core/errors.js';
 import type { ScopedLogger } from '../core/logger.js';
 import { normalizeConfiguration, toSetupOptions } from '../core/validation.js';
 import type { KeyValueStorage } from '../environment/environment.js';
-import { storageKey } from '../protocol/version.js';
+
+/**
+ * Version of the stored format, independent of the protocol version (ADR-0022).
+ *
+ * Stored entries are the options `setup()` accepts and are validated again on every read, so a
+ * change to the message protocol leaves them usable. This is incremented only for a change to what
+ * is stored that the validation on read cannot absorb.
+ */
+export const STORAGE_SCHEMA_VERSION = 1;
+
+/** Key under which configurations are persisted. */
+export function storageKey(): string {
+  return `serial-broker/configurations/v${String(STORAGE_SCHEMA_VERSION)}`;
+}
+
+/**
+ * Keys used before storage had a version of its own, when the key carried the protocol version.
+ *
+ * Newest first: were several present, the most recent build's configurations are the ones kept.
+ */
+export const LEGACY_STORAGE_KEYS: readonly string[] = [4, 3, 2, 1].map(
+  (protocolVersion) => `serial-broker/v${String(protocolVersion)}/configurations`,
+);
 
 /** Reported when persistence fails. Never fatal: the library keeps working in memory. */
 export type StorageProblemReporter = (error: SerialBrokerError) => void;
@@ -131,11 +153,40 @@ export class ConfigurationStore {
 
   #read(): string | undefined {
     try {
-      return this.storage.getItem(storageKey()) ?? undefined;
+      return this.storage.getItem(storageKey()) ?? this.#moveLegacyEntries();
     } catch (error) {
       this.#reportUnavailable('read', error);
       return undefined;
     }
+  }
+
+  /**
+   * Moves configurations remembered under a protocol-versioned key to the current key, once.
+   *
+   * Their format is unchanged, and they are validated on the way in like any other entry. The old
+   * keys are removed afterwards, so nothing is moved twice and no key lingers that no version of
+   * the library reads any more.
+   */
+  #moveLegacyEntries(): string | undefined {
+    const present = LEGACY_STORAGE_KEYS.flatMap((key) => {
+      const value = this.storage.getItem(key);
+      return value === null ? [] : [{ key, value }];
+    });
+    const newest = present[0];
+    if (newest === undefined) {
+      return undefined;
+    }
+
+    // Written before the old keys are removed: a write that fails must not lose them.
+    this.storage.setItem(storageKey(), newest.value);
+    for (const { key } of present) {
+      this.storage.removeItem(key);
+    }
+    this.logger.info('moved remembered configurations to the current storage key', {
+      event: 'storage.migrated',
+      from: newest.key,
+    });
+    return newest.value;
   }
 
   #write(all: Record<string, unknown>): void {

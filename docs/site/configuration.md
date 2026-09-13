@@ -195,8 +195,9 @@ The browser remembers the device permission independently of this option.
 ## `configure()`
 
 Library-wide options. Call `configure()` before any other `SerialBroker` method: the first of them
-creates serial-broker's internal client with the options set so far, and later calls to
-`configure()` do not reach it. Options passed in several calls are merged.
+creates serial-broker's internal client with the options set so far. A later `configure()` does not
+reach that client; it logs the warning `facade.late-configure`, and its options apply only after
+`dispose()`. Options passed in several calls are merged.
 
 `workerUrl`
 : The URL of `serial-broker.worker.js`. Needed only when the bundler does not emit the script by

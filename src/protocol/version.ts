@@ -6,8 +6,10 @@
  * a participant that misreads one field can send bytes to a device that nobody asked for.
  *
  * Contexts running different protocol versions do not federate: the version is part of the
- * lock name and the broker channel name, so they partition into independent groups and report
- * `PROTOCOL_VERSION_MISMATCH` rather than corrupting each other. See ADR-0008.
+ * lock name and the broker channel name, so they partition into independent groups rather than
+ * corrupting each other (ADR-0008). They still learn of each other through the version
+ * announcement, whose channel carries no version, and report `PROTOCOL_VERSION_MISMATCH`
+ * (ADR-0023).
  */
 export const PROTOCOL_VERSION = 4;
 
@@ -27,9 +29,4 @@ export function ownerLockName(configName: string): string {
 /** Name of the `SharedWorker` instance, and of the `BroadcastChannel` in the fallback. */
 export function brokerChannelName(): string {
   return `${NAMESPACE}/broker/v${String(PROTOCOL_VERSION)}`;
-}
-
-/** Key under which configurations are persisted. */
-export function storageKey(): string {
-  return `${NAMESPACE}/v${String(PROTOCOL_VERSION)}/configurations`;
 }

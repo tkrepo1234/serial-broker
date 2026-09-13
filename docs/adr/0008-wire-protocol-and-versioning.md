@@ -1,7 +1,11 @@
 # ADR-0008: Version the wire protocol independently
 
-- **Status:** Accepted
+- **Status:** Accepted, amended by [ADR-0023](./0023-announce-the-protocol-version.md)
 - **Date:** 2026-09-12
+
+> **Amendment (ADR-0023).** Rule 2 is reached rarely, because rule 3 keeps the versions from ever
+> exchanging a message. Tabs therefore also announce their protocol version on a channel whose name
+> carries no version, and report a mismatch from that.
 
 ## Context
 

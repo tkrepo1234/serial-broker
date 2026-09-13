@@ -255,7 +255,8 @@ export interface SerialBrokerApi {
    * Applies library-wide settings.
    *
    * Must be called **before any other method**: the settings are read when the internal client
-   * is built, by the first call that needs one, and calling this afterwards has no effect on it.
+   * is built, by the first call that needs one. Called afterwards, it logs a warning
+   * (`facade.late-configure`), and its settings apply only after {@link SerialBrokerApi.dispose}.
    * `exists`, `names`, `release` and `releaseAll` build no client while nothing is set up.
    *
    * @param options - Merged into the current settings; omitted fields are left alone.
@@ -408,6 +409,12 @@ export const SerialBroker: SerialBrokerApi = {
   /** {@inheritDoc SerialBrokerApi.configure} */
   configure(options) {
     globalOptions = { ...globalOptions, ...options };
+    // The client has already read the settings it was built with. Silence would leave an
+    // application wondering why its worker URL or logger is not used.
+    instance?.logger.warn(
+      'configure() was called after serial-broker started; the settings apply after dispose()',
+      { event: 'facade.late-configure', options: Object.keys(options).join(', ') },
+    );
   },
 
   /** {@inheritDoc SerialBrokerApi.isSupported} */

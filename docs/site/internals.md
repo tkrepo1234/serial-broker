@@ -92,10 +92,13 @@ malformed is dropped [ADR-0008].
 | `error`                                     | any tab                 | A failure every participant should know about.                       |
 | `diagnostics-request`, `diagnostics-report` | an observer; every tab  | The diagnostics collection [ADR-0018].                               |
 
-The protocol version is part of every message, of the lock names, of the name of the worker and
-the channel, and of the storage key, and it is incremented on any change to a message. Tabs on
-different versions therefore never exchange messages or contend for the same lock — which also
-means they cannot detect each other, and both will try to open the device.
+The protocol version is part of every message, of the lock names, and of the name of the worker and
+the channel, and it is incremented on any change to a message. Tabs on different versions therefore
+never exchange messages or contend for the same lock, and both will try to open the device. So that
+they can still detect each other, every tab also announces its protocol version on
+`serial-broker/announcements`, a channel whose name and single message never change [ADR-0023].
+Remembered configurations carry a storage version of their own, so they survive a protocol change
+[ADR-0022].
 
 ## The connection
 

@@ -21,6 +21,11 @@ import {
 } from '../core/validation.js';
 import type { SerialBrokerEnvironment } from '../environment/environment.js';
 import { matchesDevice } from '../owner/port-matcher.js';
+import {
+  ANNOUNCEMENT_CHANNEL_NAME,
+  decodeAnnouncement,
+  versionAnnouncement,
+} from '../protocol/announcement.js';
 import { describeDecodeFailure, type DecodeFailure } from '../protocol/decode.js';
 import {
   configNameOf,
@@ -32,6 +37,7 @@ import { PROTOCOL_VERSION } from '../protocol/version.js';
 import { ConfigurationStore } from '../storage/configuration-store.js';
 
 import { ConfigurationSession } from './configuration-session.js';
+import type { BroadcastChannelLike } from './transport/broadcast-channel-transport.js';
 import type { Transport } from './transport/transport.js';
 
 /**
@@ -65,6 +71,11 @@ export class SerialBrokerClient {
   /** This context's identity on the bus. Diagnostics only; never exposed publicly. */
   get clientId(): string {
     return this.#clientId;
+  }
+
+  /** The logger this context writes to, for the facade's own warnings. */
+  get logger(): ScopedLogger {
+    return this.#logger;
   }
 
   /** Which transport ended up being used. Diagnostics and tests only. */
@@ -339,8 +350,66 @@ export class SerialBrokerClient {
     this.#transport = transport;
 
     this.#listenForDeviceChanges();
+    this.#announceProtocolVersion();
 
     return transport;
+  }
+
+  /**
+   * Announces this context's protocol version, and reports a tab that announces a different one.
+   *
+   * Tabs on different protocol versions share no lock, worker or bus (ADR-0008), so without this
+   * they never learn of each other - and both try to hold the device. The announcement travels on
+   * the one channel whose name carries no version (ADR-0023). Every tab announces itself once and
+   * answers each announcement from another version, so a tab opened later still learns of the tabs
+   * already open; a reply is never answered, so two versions cannot keep each other talking.
+   */
+  #announceProtocolVersion(): void {
+    const createChannel = this.environment.createBroadcastChannel;
+    if (createChannel === undefined) {
+      return;
+    }
+
+    let channel: BroadcastChannelLike;
+    try {
+      channel = createChannel(ANNOUNCEMENT_CHANNEL_NAME);
+    } catch (error) {
+      this.#logger.warn('cannot detect tabs on other protocol versions', {
+        event: 'client.announcement-unavailable',
+        reason: describeUnknown(error),
+      });
+      return;
+    }
+
+    const announce = (isReply: boolean): void => {
+      try {
+        channel.postMessage(versionAnnouncement(PROTOCOL_VERSION, isReply));
+      } catch (error) {
+        this.#logger.warn('cannot detect tabs on other protocol versions', {
+          event: 'client.announcement-unavailable',
+          reason: describeUnknown(error),
+        });
+      }
+    };
+
+    channel.addEventListener('message', (event) => {
+      const announcement = decodeAnnouncement(event.data);
+      if (announcement === undefined || announcement.protocolVersion === PROTOCOL_VERSION) {
+        return;
+      }
+      this.#reportPeerVersion(
+        announcement.protocolVersion,
+        `it announced protocol version ${String(announcement.protocolVersion)}`,
+      );
+      if (!announcement.isReply) {
+        announce(true);
+      }
+    });
+
+    this.#disposal.add(() => {
+      channel.close();
+    });
+    announce(false);
   }
 
   /**
@@ -423,22 +492,7 @@ export class SerialBrokerClient {
     const description = describeDecodeFailure(failure);
 
     if (failure.reason === 'version-mismatch') {
-      // Loud, and exactly once per distinct peer version: a mixed deployment is a real
-      // problem the application has to fix, and two groups may both try to own the device.
-      if (this.#reportedPeerVersions.has(failure.theirVersion)) {
-        return;
-      }
-      this.#reportedPeerVersions.add(failure.theirVersion);
-      this.#reportGlobal(
-        new SerialBrokerError(
-          SerialBrokerErrorCode.PROTOCOL_VERSION_MISMATCH,
-          `Another tab runs an incompatible version of this library: ${description}`,
-          {
-            context: { theirVersion: failure.theirVersion },
-            timestamp: this.environment.clock.now(),
-          },
-        ),
-      );
+      this.#reportPeerVersion(failure.theirVersion, description);
       return;
     }
 
@@ -446,6 +500,26 @@ export class SerialBrokerClient {
       event: 'client.malformed-message',
       reason: description,
     });
+  }
+
+  /**
+   * Reports a tab on another protocol version, however it was noticed.
+   *
+   * Loud, and exactly once per distinct peer version: a mixed deployment is a real problem the
+   * application has to fix, and two groups may both try to own the device.
+   */
+  #reportPeerVersion(theirVersion: unknown, detail: string): void {
+    if (this.#reportedPeerVersions.has(theirVersion)) {
+      return;
+    }
+    this.#reportedPeerVersions.add(theirVersion);
+    this.#reportGlobal(
+      new SerialBrokerError(
+        SerialBrokerErrorCode.PROTOCOL_VERSION_MISMATCH,
+        `Another tab runs an incompatible version of this library: ${detail}`,
+        { context: { theirVersion }, timestamp: this.environment.clock.now() },
+      ),
+    );
   }
 
   /** Reports an error that is not tied to a single configuration. */

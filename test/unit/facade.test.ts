@@ -167,6 +167,28 @@ describe('SerialBroker', () => {
     SerialBroker.configure({});
   });
 
+  it('warns when configure() comes too late to reach the client, and applies it after dispose()', async () => {
+    const first = recordingLogger();
+    const second = recordingLogger();
+
+    SerialBroker.configure({ logger: first.logger });
+    await SerialBroker.setup('Reader', READER_OPTIONS);
+    SerialBroker.configure({ logger: second.logger });
+
+    // The warning goes to the logger in use: the new one has not reached anything yet.
+    expect(fieldsOfEvent(first.records, 'facade.late-configure')).toEqual([
+      expect.objectContaining({ options: 'logger' }),
+    ]);
+
+    await SerialBroker.dispose();
+    await SerialBroker.setup('Reader', READER_OPTIONS);
+
+    expect(second.records.some(([, message]) => message.includes('configuration registered'))).toBe(
+      true,
+    );
+    SerialBroker.configure({});
+  });
+
   it('passes logPayloads through, so traffic records carry the bytes', async () => {
     const { logger, records } = recordingLogger();
 
