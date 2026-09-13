@@ -6,13 +6,14 @@ that matter, and they must be **deterministic**.
 
 ## Levels
 
-| Level             | Location                      | What it proves                                                                                                                     | Rule                                                               |
-| ----------------- | ----------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
-| **Unit**          | `test/unit/`                  | One module in isolation: backoff maths, validation, codecs, protocol encode/decode.                                                | No fakes beyond the module's own dependencies. Fast (< 5 ms each). |
-| **Integration**   | `test/integration/`           | Several real modules against the simulated browser harness: a single tab end-to-end, reconnect, write queueing.                    | Uses the harness, never the real DOM.                              |
-| **Multi-context** | `test/integration/multi-tab/` | The actual product claim: N simulated tabs sharing one port, ownership failover, broadcast fan-out, interlocking under contention. | Mandatory for every change to `owner/`, `worker/` or `client/`.    |
-| **Type**          | `test/types/`                 | The public surface type-checks as documented and rejects misuse.                                                                   | `expectTypeOf` assertions; failures are compile errors.            |
-| **Manual**        | `examples/demo/`              | Real Chromium, real hardware. Documented, checklisted, never a substitute for the above.                                           | Recorded in `docs/manual-test-plan.md`.                            |
+| Level               | Location                      | What it proves                                                                                                                     | Rule                                                                                     |
+| ------------------- | ----------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| **Unit**            | `test/unit/`                  | One module in isolation: backoff maths, validation, codecs, protocol encode/decode.                                                | No fakes beyond the module's own dependencies. Fast (< 5 ms each).                       |
+| **Integration**     | `test/integration/`           | Several real modules against the simulated browser harness: a single tab end-to-end, reconnect, write queueing.                    | Uses the harness, never the real DOM.                                                    |
+| **Multi-context**   | `test/integration/multi-tab/` | The actual product claim: N simulated tabs sharing one port, ownership failover, broadcast fan-out, interlocking under contention. | Mandatory for every change to `owner/`, `worker/` or `client/`.                          |
+| **Type**            | `test/types/`                 | The public surface type-checks as documented and rejects misuse.                                                                   | `expectTypeOf` assertions; failures are compile errors.                                  |
+| **Emulated device** | `emulator/`                   | Real Chromium and the real Windows serial stack against a USB device whose failures are scriptable.                                | Its own tests live in `emulator/test/`; runs are recorded in `docs/manual-test-plan.md`. |
+| **Manual**          | `examples/demo/`              | Real Chromium, real hardware. Documented, checklisted, never a substitute for the above.                                           | Recorded in `docs/manual-test-plan.md`.                                                  |
 
 ## Determinism is mandatory
 

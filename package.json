@@ -39,7 +39,8 @@
   },
   "scripts": {
     "build": "tsup && tsc -p tsconfig.build.json",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit && tsc -p emulator",
+    "emulator": "node emulator/src/main.ts",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "format": "prettier --write .",

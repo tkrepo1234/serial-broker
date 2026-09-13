@@ -1,0 +1,16 @@
+{
+  // The emulator is a Node program, not part of the browser library: it gets Node's types and
+  // none of the DOM's, and it runs straight from source with Node's type stripping, which is
+  // why imports carry their .ts extension and only erasable syntax is allowed.
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "lib": ["ES2023"],
+    "types": ["node"],
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+    "allowImportingTsExtensions": true,
+    "erasableSyntaxOnly": true,
+    "noEmit": true
+  },
+  "include": ["src/**/*.ts", "test/**/*.ts"]
+}

@@ -114,7 +114,7 @@ export default defineConfig(
   //
   // None of these relaxations apply to `src/`, where every one of these rules is on.
   {
-    files: ['test/**/*.ts'],
+    files: ['test/**/*.ts', 'emulator/test/**/*.ts'],
     rules: {
       '@typescript-eslint/no-non-null-assertion': 'off',
       '@typescript-eslint/no-unnecessary-condition': 'off',

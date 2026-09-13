@@ -7,7 +7,9 @@ export default defineConfig({
     // instead of silently working in production and lying under a DOM emulator.
     environment: 'node',
     globals: false,
-    include: ['test/**/*.test.ts'],
+    // The USB/IP device emulator is a development tool, not part of the library: its tests run
+    // here, and its sources stay out of the coverage gates below, which measure the library.
+    include: ['test/**/*.test.ts', 'emulator/test/**/*.test.ts'],
     reporters: ['default'],
     coverage: {
       provider: 'v8',
