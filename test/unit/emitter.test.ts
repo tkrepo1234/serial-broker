@@ -145,17 +145,49 @@ describe('EventEmitter', () => {
     }).not.toThrow();
   });
 
-  it('survives a listener clearing every subscription mid-dispatch', () => {
+  it('does not deliver to a listener that another removed earlier in this dispatch', () => {
     const { emitter } = createEmitter();
+    const removed = vi.fn();
+
+    emitter.add('onReceive', () => {
+      emitter.remove('onReceive', removed);
+    });
+    emitter.add('onReceive', removed);
+    emitter.emit('onReceive', receiveEvent('x'));
+
+    // Its removal told it that it hears nothing more; the snapshot must not overrule that.
+    expect(removed).not.toHaveBeenCalled();
+  });
+
+  it('delivers nothing more once a listener clears every subscription mid-dispatch', () => {
+    const { emitter } = createEmitter();
+    const after = vi.fn();
 
     emitter.add('onReceive', () => {
       emitter.clear();
     });
-    emitter.add('onReceive', vi.fn());
+    emitter.add('onReceive', after);
+    emitter.emit('onReceive', receiveEvent('x'));
 
-    expect(() => {
-      emitter.emit('onReceive', receiveEvent('x'));
-    }).not.toThrow();
+    // `clear()` is how a released configuration stops its events.
+    expect(after).not.toHaveBeenCalled();
+  });
+
+  it('keeps delivering when a listener throws a value that cannot be described', () => {
+    const { emitter, reported } = createEmitter();
+    const { proxy, revoke } = Proxy.revocable({}, {});
+    revoke();
+    const survivor = vi.fn();
+
+    emitter.add('onReceive', () => {
+      // Typed as an Error only to satisfy the linter: application code throws whatever it likes.
+      throw proxy as Error;
+    });
+    emitter.add('onReceive', survivor);
+    emitter.emit('onReceive', receiveEvent('x'));
+
+    expect(survivor).toHaveBeenCalledOnce();
+    expect(reported.map((error) => error.code)).toEqual([SerialBrokerErrorCode.LISTENER_THREW]);
   });
 
   it('does nothing when nobody is listening', () => {

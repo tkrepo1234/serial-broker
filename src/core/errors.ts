@@ -174,11 +174,19 @@ function serializeCause(cause: unknown): SerializedCause | undefined {
     return undefined;
   }
 
-  if (cause instanceof Error) {
-    const serialized: SerializedCause = { name: cause.name, message: cause.message };
-    // `DOMException` is how Web Serial reports every failure, and its `name` is the part
-    // worth keeping - it is what the error mapping table keys on.
-    return isDomException(cause) ? { ...serialized, domExceptionName: cause.name } : serialized;
+  try {
+    if (cause instanceof Error) {
+      // Widened: the types say string, but a hostile error may carry a Symbol as its name.
+      const fields = cause as { name: unknown; message: unknown };
+      const name = String(fields.name);
+      const serialized: SerializedCause = { name, message: String(fields.message) };
+      // `DOMException` is how Web Serial reports every failure, and its `name` is the part
+      // worth keeping - it is what the error mapping table keys on.
+      return isDomException(cause) ? { ...serialized, domExceptionName: name } : serialized;
+    }
+  } catch {
+    // A cause with a throwing `name` getter, or a revoked proxy that cannot even be asked whether
+    // it is an Error. `toJSON()` is how an error reaches other tabs, so it must not throw either.
   }
 
   return { name: 'NonError', message: describeUnknown(cause) };
@@ -255,44 +263,48 @@ function isSerializedCause(value: unknown): boolean {
  * with `String(value)` yields `[object Object]`, which helps nobody.
  */
 export function describeUnknown(value: unknown): string {
-  if (value instanceof Error) {
-    try {
-      // `String` rather than plain interpolation: a hostile error may carry a Symbol as its name,
-      // and a getter may throw. This function is what reports such errors, so it must not throw.
-      const { name, message } = value as { name: unknown; message: unknown };
-      return `${String(name)}: ${String(message)}`;
-    } catch {
-      return Object.prototype.toString.call(value);
+  // This function is what reports hostile values, so it must not throw for any of them. Every
+  // step can: `instanceof` and even `Object.prototype.toString` throw for a revoked proxy, a
+  // getter may throw, and `String` throws for an object whose `toString` does.
+  try {
+    if (value instanceof Error) {
+      try {
+        // `String` rather than plain interpolation: a hostile error may carry a Symbol as its name.
+        const { name, message } = value as { name: unknown; message: unknown };
+        return `${String(name)}: ${String(message)}`;
+      } catch {
+        return Object.prototype.toString.call(value);
+      }
     }
-  }
-  if (typeof value === 'string') {
-    return value;
-  }
-  if (typeof value === 'object' && value !== null) {
-    try {
-      // `JSON.stringify` is typed as returning `string`, but returns `undefined` for values
-      // it cannot represent. The cast restores the truth the lib declaration hides.
-      const json = JSON.stringify(value) as string | undefined;
-      return json ?? Object.prototype.toString.call(value);
-    } catch {
-      // Circular structures and objects with throwing getters are both realistic here;
-      // the fallback is intentionally dull but always succeeds.
-      return Object.prototype.toString.call(value);
+    if (typeof value === 'string') {
+      return value;
     }
+    if (typeof value === 'object' && value !== null) {
+      try {
+        // `JSON.stringify` is typed as returning `string`, but returns `undefined` for values
+        // it cannot represent. The cast restores the truth the lib declaration hides.
+        const json = JSON.stringify(value) as string | undefined;
+        return json ?? Object.prototype.toString.call(value);
+      } catch {
+        // Circular structures and objects with throwing getters are both realistic here.
+        return Object.prototype.toString.call(value);
+      }
+    }
+    return String(value);
+  } catch {
+    return 'a value that cannot be described';
   }
-  return String(value);
 }
 
 /**
  * Detects a `DOMException` without depending on the global existing.
  *
  * The library runs in test environments that have no DOM globals at all (ADR-0014), so a bare
- * `instanceof DOMException` would throw a `ReferenceError` rather than return `false`.
+ * `instanceof DOMException` would throw a `ReferenceError` rather than return `false`. The tag
+ * is what Web IDL gives every `DOMException`, in any realm. An own `code` is no sign of one: a
+ * `DOMException` inherits its `code`, while Node's system errors and many application errors
+ * carry one of their own.
  */
 function isDomException(error: Error): boolean {
-  // This library's own error also has an own `code`, and is not a DOMException.
-  return (
-    !(error instanceof SerialBrokerError) &&
-    (error.constructor.name === 'DOMException' || Object.hasOwn(error, 'code'))
-  );
+  return Object.prototype.toString.call(error) === '[object DOMException]';
 }
