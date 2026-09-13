@@ -4,30 +4,26 @@ Work that is agreed but not yet started. Ordered by when it becomes relevant, no
 
 ---
 
-## Tell tabs what they missed while the worker was gone
+## Open findings from the bug hunt of 2026-09-13
 
-**Found 2026-09-13, while making tabs reconnect to a new worker (ADR-0021, amended).**
+Everything confirmed in the bug hunt is fixed. What remains is either unconfirmed or needs a real
+browser or real hardware to settle:
 
-A tab whose heartbeats go unanswered now connects its transport to a new worker by itself, with
-`hello` and a heartbeat. Nothing above the transport learns that it did, so nothing lost in the gap
-is asked for again:
-
-- A tab that reaches the new worker before the owner does sends its `status-request` into a broker
-  that knows no owner, where it is dropped. Once the owner arrives, nothing restates the status, so
-  the tab shows what it knew before - or nothing, if it set up during the gap - until the status
-  next changes.
-- A write dispatched into the dead worker counts as handed to the owner, and `PendingWrites` only
-  dispatches it again on `owner-claimed`. It ends in `WRITE_TIMEOUT`, although it may never have
-  reached the owner.
-- Status changes and errors broadcast during the gap are not repeated.
-
-Sketch: a `TransportRequest.onReconnected` callback, on which the client sends `status-request` for
-every configuration and hands on writes that have not started. Handing a write on again needs the
-owner to recognise a request id it has already seen, or a write the dying worker did deliver could
-run twice. It touches `src/client/serial-broker-client.ts`, `configuration-session.ts` and
-`pending-writes.ts`, which is why it was left out of the transport change. The scenario to extend is
-`test/integration/multi-tab/worker-restart.test.ts` ("are joined by a tab opened after the crash":
-let that tab write).
+- **What a dead worker swallowed is only partly asked for again.** After reconnecting, the tab
+  holding the port restates its status and writes that had not started are handed on (the owner
+  recognises repeats). Errors and traffic broadcast into the dead worker are not repeated, and a
+  write handed on this way may reach the device after a later write of the same tab that did get
+  through - the ordering guarantee of ADR-0013 holds only while the bus delivers.
+- **Two tabs saving configurations at the same moment may overwrite each other's entry.** `save()`
+  and `remove()` rewrite one `localStorage` record, and Chromium commits `localStorage` across
+  renderer processes asynchronously. Unconfirmed: it needs a real multi-process browser. The fix
+  would be one key per configuration plus an index, or merging on the `storage` event.
+- **An unplugged device versus a revoked permission** (ADR-0010, amended) is told apart by the
+  `disconnect` event. That Chromium sends no `disconnect` when a permission is revoked in site
+  settings is assumed, not verified.
+- **The back/forward cache and the debugging surface's observer.** The observer is no longer closed
+  when the page is only cached; whether a page with an open `SharedWorker` or `BroadcastChannel`
+  enters the cache at all depends on the browser.
 
 ---
 

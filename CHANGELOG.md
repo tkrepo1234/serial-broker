@@ -44,7 +44,16 @@ coordinate with each other. See
   join, choose a device, release. It sets nothing up on its own.
 - Tabs notice a worker that died - crashed, ended for memory, or terminated from
   `chrome://inspect` - because it stops answering their heartbeats. Each reports
-  `BROKER_UNAVAILABLE` once and connects to a new worker, where it takes up its part again.
+  `BROKER_UNAVAILABLE` once and connects to a new worker, where it takes up its part again. The tab
+  holding the port restates its status there, and writes lost with the old worker are handed on.
+- A write reaches the device at most once, also when the tab holding the port changes while other
+  tabs have not yet heard of it: the new owner recognises a request it has already accepted.
+- An unplugged device keeps the status `reconnecting`, and `maxAttempts` applies to it. Only a port
+  that disappears without a `disconnect` event - a revoked permission - leads to
+  `awaiting-permission`.
+- Errors not tied to a configuration that arrive while nothing listens for `onError` - a corrupt
+  remembered configuration found by `restore()` in a fresh tab, another protocol version noticed
+  while nothing was set up - are kept for the first `onError` listener.
 
 ### Notes
 
