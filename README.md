@@ -29,7 +29,7 @@ the coordination is deliberately invisible.
 
 ## What it does
 
-|                                     |                                                                                                                             |
+| Capability                          | What it means                                                                                                               |
 | ----------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
 | **Shares one port across tabs**     | Every tab can read and write. Writes from any tab reach the device exactly once.                                            |
 | **Survives the owning tab closing** | Including a crash, an out-of-memory kill or a closed laptop — no unload handler required.                                   |
@@ -192,7 +192,7 @@ Treat the list as extensible: handle an unrecognised status gracefully rather th
 
 ### The rest
 
-|                            |                                                                                                                                       |
+| Method                     | What it does                                                                                                                          |
 | -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
 | `release(name, options?)`  | Stop using a configuration in this tab. Other tabs keep working. Pass `{ forgetDevice: true }` to also revoke the browser permission. |
 | `releaseAll(options?)`     | The same for every configuration.                                                                                                     |

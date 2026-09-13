@@ -26,3 +26,11 @@
 .rst-content code.literal {
   overflow-wrap: anywhere;
 }
+
+/* The at-a-glance illustration, embedded inline so it uses the theme's fonts. */
+.rst-content svg.ssg {
+  display: block;
+  width: 100%;
+  height: auto;
+  margin: 0 0 24px;
+}

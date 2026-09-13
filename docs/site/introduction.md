@@ -27,7 +27,7 @@ what it means for an application, is the subject of [How shared ports behave](sh
 
 ## Features
 
-|                                |                                                                                                                    |
+| Feature                        | What it gives you                                                                                                  |
 | ------------------------------ | ------------------------------------------------------------------------------------------------------------------ |
 | **Shared port**                | Every tab reads and writes. Writes from any tab reach the device once.                                             |
 | **Failover**                   | Ownership moves to another tab when the holding tab goes away, however it goes away.                               |
