@@ -290,25 +290,35 @@
         color: var(--muted);
         cursor: pointer;
       }
-      dl.settings {
+      /* A configuration's settings, laid out like the setup dialog: a small label above each value. */
+      .setting-groups {
         display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr));
-        gap: 0.2rem 1.5rem;
-        margin: 0.5rem 0 0;
+        grid-template-columns: repeat(auto-fill, minmax(16rem, 1fr));
+        gap: 1rem 2rem;
+        margin: 0.75rem 0 0;
+      }
+      .setting-group h3 {
         font-size: 0.85rem;
+        font-weight: 600;
+        margin: 0 0 0.4rem;
       }
-      dl.settings div {
-        display: flex;
-        justify-content: space-between;
-        gap: 0.5rem;
-        border-bottom: 1px solid var(--line);
-        padding: 0.1rem 0;
+      .setting-group dl {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(7rem, 1fr));
+        gap: 0.45rem 1rem;
+        margin: 0;
       }
-      dl.settings dt,
+      .setting-group dt {
+        font-size: 0.75rem;
+        color: var(--muted);
+      }
+      .setting-group dd {
+        margin: 0;
+        font-size: 0.9rem;
+      }
       dl.facts dt {
         color: var(--muted);
       }
-      dl.settings dd,
       dl.facts dd {
         margin: 0;
       }
@@ -343,7 +353,7 @@
         border: 1px solid var(--line);
         border-radius: 8px;
         padding: 0.75rem;
-        height: 11rem;
+        max-height: 11rem;
         overflow-y: auto;
         font: 13px/1.45 var(--mono);
         white-space: pre-wrap;
@@ -351,6 +361,17 @@
       }
       .log.tall {
         height: 18rem;
+        max-height: none;
+      }
+      /* An empty log takes one line and says what will appear, instead of a large blank box. */
+      .log:empty::before {
+        content: attr(data-empty);
+        color: var(--muted);
+        font-family:
+          system-ui,
+          -apple-system,
+          'Segoe UI',
+          sans-serif;
       }
       .entry {
         display: grid;
@@ -425,6 +446,70 @@
         gap: 0.5rem;
         margin-top: 1.25rem;
       }
+      h3.group {
+        font-size: 0.85rem;
+        font-weight: 600;
+        margin: 1.1rem 0 0.5rem;
+      }
+
+      /* Explanations: a small "?" beside a label opens a short text about it. */
+      button.help {
+        display: inline-grid;
+        place-items: center;
+        width: 1.1rem;
+        height: 1.1rem;
+        padding: 0;
+        margin: 0 0 0 0.3rem;
+        border: 1px solid var(--line);
+        border-radius: 50%;
+        background: transparent;
+        color: var(--muted);
+        font-size: 0.7rem;
+        font-weight: 700;
+        line-height: 1;
+        vertical-align: 0.05em;
+        cursor: help;
+      }
+      button.help:hover,
+      button.help:focus-visible {
+        border-color: var(--accent);
+        color: var(--accent);
+      }
+      .help-text {
+        width: min(30rem, calc(100vw - 2rem));
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 1.1rem 1.35rem;
+        background: var(--bg);
+        color: var(--fg);
+        font-size: 0.9rem;
+        box-shadow: 0 10px 30px rgb(0 0 0 / 0.18);
+      }
+      .help-text::backdrop {
+        background: rgb(0 0 0 / 0.12);
+      }
+      .help-text h3 {
+        font-size: 1rem;
+        margin: 0 0 0.6rem;
+      }
+      .help-text p {
+        margin: 0 0 0.6rem;
+      }
+      .help-text dl {
+        display: grid;
+        grid-template-columns: max-content 1fr;
+        gap: 0.35rem 1rem;
+        margin: 0 0 0.6rem;
+      }
+      .help-text dt {
+        font-weight: 600;
+      }
+      .help-text dd {
+        margin: 0;
+      }
+      .help-text .actions {
+        margin-top: 0.75rem;
+      }
     </style>
   </head>
   <body>
@@ -448,11 +533,31 @@
       <legend>Settings</legend>
       <div class="row">
         <div class="wide">
-          <label for="workerUrl">Worker URL</label>
+          <label for="workerUrl"
+            >Worker URL
+            <button
+              type="button"
+              class="help"
+              popovertarget="help-worker-url"
+              aria-label="About the worker URL"
+            >
+              ?
+            </button></label
+          >
           <input id="workerUrl" spellcheck="false" />
         </div>
         <div>
-          <label for="transport">Transport</label>
+          <label for="transport"
+            >Transport
+            <button
+              type="button"
+              class="help"
+              popovertarget="help-transport"
+              aria-label="About the transport"
+            >
+              ?
+            </button></label
+          >
           <select id="transport">
             <option value="auto">auto</option>
             <option value="sharedworker">SharedWorker</option>
@@ -461,7 +566,17 @@
         </div>
       </div>
       <div class="row" style="margin-top: 0.75rem; align-items: center">
-        <label class="check"><input id="logPayloads" type="checkbox" /> Log payload bytes</label>
+        <label class="check"
+          ><input id="logPayloads" type="checkbox" /> Log payload bytes
+          <button
+            type="button"
+            class="help"
+            popovertarget="help-log-payloads"
+            aria-label="About logging payload bytes"
+          >
+            ?
+          </button></label
+        >
         <div></div>
         <div class="fixed">
           <button id="copyLink" type="button" class="secondary">Copy link</button>
@@ -500,8 +615,317 @@
           <button id="clearLog" type="button" class="secondary">Clear</button>
         </div>
       </div>
-      <div id="log" class="log tall" role="log"></div>
+      <div id="log" class="log tall" role="log" data-empty="No records yet."></div>
     </details>
+
+    <div id="help-worker-url" class="help-text" popover>
+      <h3>Worker URL</h3>
+      <p>
+        The address of <code>serial-broker.worker.js</code> that your application loads. Tabs only
+        find each other through the same worker, so enter exactly the URL your application uses.
+        With any other URL this page starts a worker of its own and shows none of your tabs.
+      </p>
+      <p>
+        Changes take effect with <b>Apply and reload</b>. <b>Copy link</b> puts these settings into
+        the page address, so the page opens elsewhere with the same settings.
+      </p>
+      <div class="actions">
+        <button
+          type="button"
+          class="secondary small"
+          popovertarget="help-worker-url"
+          popovertargetaction="hide"
+        >
+          Close
+        </button>
+      </div>
+    </div>
+    <div id="help-transport" class="help-text" popover>
+      <h3>Transport</h3>
+      <p>How this page talks to the tabs of your application.</p>
+      <dl>
+        <dt>auto</dt>
+        <dd>
+          A SharedWorker; a BroadcastChannel where the browser has no SharedWorker, refuses to
+          create one, or cannot load the worker script. The default.
+        </dd>
+        <dt>SharedWorker</dt>
+        <dd>
+          Always the worker. If it cannot be used, you get an error instead of a fallback, which
+          makes a worker script that is not served visible.
+        </dd>
+        <dt>BroadcastChannel</dt>
+        <dd>Always the channel, as if there were no SharedWorker.</dd>
+      </dl>
+      <p>
+        Use what your application uses: tabs on a SharedWorker and tabs on a BroadcastChannel do not
+        hear each other.
+      </p>
+      <div class="actions">
+        <button
+          type="button"
+          class="secondary small"
+          popovertarget="help-transport"
+          popovertargetaction="hide"
+        >
+          Close
+        </button>
+      </div>
+    </div>
+    <div id="help-log-payloads" class="help-text" popover>
+      <h3>Log payload bytes</h3>
+      <p>
+        Adds the bytes of every transfer to this page's log, as hex, in <code>debug</code> records.
+        Off by default, because serial traffic can carry card numbers and PINs. Byte counts are
+        logged either way.
+      </p>
+      <p>
+        It affects this page only. Transfers are logged by the tab that holds the port, so bytes
+        appear here while this page holds it.
+      </p>
+      <div class="actions">
+        <button
+          type="button"
+          class="secondary small"
+          popovertarget="help-log-payloads"
+          popovertargetaction="hide"
+        >
+          Close
+        </button>
+      </div>
+    </div>
+    <div id="help-browser" class="help-text" popover>
+      <h3>Browser</h3>
+      <p>
+        What serial-broker needs from this browser. A <b>secure context</b> is a page served over
+        HTTPS or from localhost. <b>Web Serial</b> opens the ports. <b>Web Locks</b> make sure
+        exactly one tab holds each port.
+      </p>
+      <p>A red dot means serial-broker cannot run in this browser.</p>
+      <div class="actions">
+        <button
+          type="button"
+          class="secondary small"
+          popovertarget="help-browser"
+          popovertargetaction="hide"
+        >
+          Close
+        </button>
+      </div>
+    </div>
+    <div id="help-bus" class="help-text" popover>
+      <h3>Message bus</h3>
+      <p>
+        How the tabs of this origin talk to each other. A <b>SharedWorker</b> is used where
+        possible, a <b>BroadcastChannel</b> where there is none. One of the two is enough, so a
+        single missing one is only a warning.
+      </p>
+      <div class="actions">
+        <button
+          type="button"
+          class="secondary small"
+          popovertarget="help-bus"
+          popovertargetaction="hide"
+        >
+          Close
+        </button>
+      </div>
+    </div>
+    <div id="help-this-tab" class="help-text" popover>
+      <h3>This tab</h3>
+      <p>
+        This page's identity on the message bus, which the other tabs show in short form, and the
+        bus it uses. A page joins the bus with its first configuration.
+      </p>
+      <div class="actions">
+        <button
+          type="button"
+          class="secondary small"
+          popovertarget="help-this-tab"
+          popovertargetaction="hide"
+        >
+          Close
+        </button>
+      </div>
+    </div>
+    <div id="help-protocol" class="help-text" popover>
+      <h3>Protocol version</h3>
+      <p>The version of the messages tabs exchange. Updates that change those messages raise it.</p>
+      <p>
+        Tabs on different versions do not see each other at all, and each of them tries to hold the
+        device. After such an update, reload every tab.
+      </p>
+      <div class="actions">
+        <button
+          type="button"
+          class="secondary small"
+          popovertarget="help-protocol"
+          popovertargetaction="hide"
+        >
+          Close
+        </button>
+      </div>
+    </div>
+    <div id="help-locks" class="help-text" popover>
+      <h3>Port locks</h3>
+      <p>
+        The Web Locks that decide which tab holds each port, by configuration name. <b>held</b>: a
+        tab holds the port. <b>waiting</b>: tabs queued to take over when it goes away.
+      </p>
+      <p>
+        The browser names tabs differently from the rest of this page, so the holder is not named
+        here; the cards show it.
+      </p>
+      <div class="actions">
+        <button
+          type="button"
+          class="secondary small"
+          popovertarget="help-locks"
+          popovertargetaction="hide"
+        >
+          Close
+        </button>
+      </div>
+    </div>
+    <div id="help-ports" class="help-text" popover>
+      <h3>Granted ports</h3>
+      <p>
+        Serial ports this browser already allows this site to use, by USB vendor and product ID. A
+        configuration connects to a matching port without asking. <b>Forget device</b> removes a
+        port from this list.
+      </p>
+      <div class="actions">
+        <button
+          type="button"
+          class="secondary small"
+          popovertarget="help-ports"
+          popovertargetaction="hide"
+        >
+          Close
+        </button>
+      </div>
+    </div>
+    <div id="help-status" class="help-text" popover>
+      <h3>Status and tabs</h3>
+      <dl>
+        <dt>idle</dt>
+        <dd>Set up, not trying to connect yet.</dd>
+        <dt>awaiting-permission</dt>
+        <dd>
+          No port this browser allows matches the device. Choose it once with <b>Choose device…</b>.
+        </dd>
+        <dt>connecting</dt>
+        <dd>Opening the port.</dd>
+        <dt>open</dt>
+        <dd>Connected: data can be sent and is received.</dd>
+        <dt>reconnecting</dt>
+        <dd>The connection was lost and is being restored.</dd>
+        <dt>failed</dt>
+        <dd>
+          Reconnecting gave up after the maximum number of attempts. It starts again when the device
+          is plugged back in.
+        </dd>
+        <dt>not running</dt>
+        <dd>Remembered from an earlier visit, but no tab has it set up.</dd>
+      </dl>
+      <p>
+        Each row below is a tab with this configuration. <b>holds the port</b> is the tab that has
+        the device open; a <b>waiting</b> tab uses it through that tab and takes over if it goes
+        away. The rest of the row shows when the port opened, the next reconnect attempt, bytes in
+        and out, and writes still waiting.
+      </p>
+      <div class="actions">
+        <button
+          type="button"
+          class="secondary small"
+          popovertarget="help-status"
+          popovertargetaction="hide"
+        >
+          Close
+        </button>
+      </div>
+    </div>
+    <div id="help-actions" class="help-text" popover>
+      <h3>Actions</h3>
+      <dl>
+        <dt>Join</dt>
+        <dd>
+          Sets this configuration up in this page too, with the same settings, so you can send from
+          here. Called <b>Start here</b> when no tab runs it.
+        </dd>
+        <dt>Choose device…</dt>
+        <dd>
+          Shows the browser's port picker. Only the tab that holds the port can show it, and the
+          browser remembers the choice.
+        </dd>
+        <dt>Release</dt>
+        <dd>
+          Stops using the configuration in this page and forgets it for reloads. Other tabs carry
+          on; if this page held the port, another tab takes it over. The browser keeps its
+          permission for the device, so setting it up again needs no prompt.
+        </dd>
+        <dt>Forget device</dt>
+        <dd>
+          Does the same as Release, and also revokes this browser's permission for the device. The
+          next setup asks for the port again.
+        </dd>
+      </dl>
+      <div class="actions">
+        <button
+          type="button"
+          class="secondary small"
+          popovertarget="help-actions"
+          popovertargetaction="hide"
+        >
+          Close
+        </button>
+      </div>
+    </div>
+    <div id="help-send" class="help-text" popover>
+      <h3>Sending</h3>
+      <dl>
+        <dt>text</dt>
+        <dd>
+          Sends what you type as UTF-8, followed by the line ending chosen under <b>Append</b>.
+        </dd>
+        <dt>hex bytes</dt>
+        <dd>
+          Sends exactly the bytes you type, such as <code>02 FF 03</code>, <code>02ff03</code> or
+          <code>0x02,0xff</code>. Nothing is appended.
+        </dd>
+        <dt>Append</dt>
+        <dd>The line ending many text devices expect after a command.</dd>
+      </dl>
+      <p>The bytes reach the device through whichever tab holds the port.</p>
+      <div class="actions">
+        <button
+          type="button"
+          class="secondary small"
+          popovertarget="help-send"
+          popovertargetaction="hide"
+        >
+          Close
+        </button>
+      </div>
+    </div>
+    <div id="help-traffic" class="help-text" popover>
+      <h3>Traffic</h3>
+      <p>
+        What crosses the bus for this configuration while this page is open, from every tab: data
+        received, data sent and which tab sent it, status changes, errors, and which tab holds the
+        port. The last 500 entries are kept.
+      </p>
+      <div class="actions">
+        <button
+          type="button"
+          class="secondary small"
+          popovertarget="help-traffic"
+          popovertargetaction="hide"
+        >
+          Close
+        </button>
+      </div>
+    </div>
 
     <template id="cardTemplate">
       <fieldset>
@@ -510,6 +934,14 @@
           <p class="status">
             <span data-part="dot" class="dot"></span><span data-part="status"></span>
           </p>
+          <button
+            type="button"
+            class="help"
+            popovertarget="help-status"
+            aria-label="About the status and the tabs"
+          >
+            ?
+          </button>
           <span data-part="summary" class="summary"></span>
           <button data-part="choose" type="button">Choose device…</button>
           <button data-part="join" type="button">Join</button>
@@ -521,6 +953,14 @@
             title="Release, and revoke this browser's permission for the device"
           >
             Forget device
+          </button>
+          <button
+            type="button"
+            class="help"
+            popovertarget="help-actions"
+            aria-label="About these actions"
+          >
+            ?
           </button>
         </div>
         <p data-part="hint" class="hint"></p>
@@ -539,6 +979,14 @@
           <div class="fixed">
             <label
               >As
+              <button
+                type="button"
+                class="help"
+                popovertarget="help-send"
+                aria-label="About sending"
+              >
+                ?
+              </button>
               <select data-part="mode">
                 <option value="text">text</option>
                 <option value="hex">hex bytes</option>
@@ -560,14 +1008,33 @@
         </form>
 
         <div data-part="trafficTitle" class="section-title">
-          <span>Traffic <span data-part="trafficCount"></span></span>
+          <span
+            >Traffic <span data-part="trafficCount"></span>
+            <button
+              type="button"
+              class="help"
+              popovertarget="help-traffic"
+              aria-label="About the traffic"
+            >
+              ?
+            </button></span
+          >
           <button data-part="clear" type="button" class="secondary small">Clear</button>
         </div>
-        <div data-part="traffic" class="log" role="log"></div>
+        <div
+          data-part="traffic"
+          class="log"
+          role="log"
+          data-empty="Nothing yet. Data, writes, status changes and errors from every tab appear here."
+        ></div>
 
         <details class="settings">
           <summary>Settings<span data-part="settingsNote"></span></summary>
-          <dl data-part="settings" class="settings"></dl>
+          <p class="hint">
+            What this configuration runs with, defaults included. <b>differs between tabs</b> means
+            tabs set it up with different settings; the tab holding the port opens it with its own.
+          </p>
+          <div data-part="settings" class="setting-groups"></div>
         </details>
       </fieldset>
     </template>
@@ -581,11 +1048,31 @@
             <input id="name" name="name" required />
           </div>
           <div>
-            <label for="device">Device</label>
+            <label for="device"
+              >Device
+              <button
+                type="button"
+                class="help"
+                popovertarget="help-device"
+                aria-label="About the device"
+              >
+                ?
+              </button></label
+            >
             <select id="device" name="device"></select>
           </div>
           <div>
-            <label for="baudRate">Baud rate</label>
+            <label for="baudRate"
+              >Baud rate
+              <button
+                type="button"
+                class="help"
+                popovertarget="help-line"
+                aria-label="About the line settings"
+              >
+                ?
+              </button></label
+            >
             <input id="baudRate" name="baudRate" list="baudRates" />
             <datalist id="baudRates">
               <option value="9600"></option>
@@ -607,6 +1094,17 @@
 
         <details class="more">
           <summary>More options — leave blank for the default</summary>
+          <h3 class="group">
+            Line
+            <button
+              type="button"
+              class="help"
+              popovertarget="help-line"
+              aria-label="About the line settings"
+            >
+              ?
+            </button>
+          </h3>
           <div class="grid">
             <div>
               <label for="dataBits">Data bits</label>
@@ -645,10 +1143,19 @@
               <label for="bufferSize">Buffer size (bytes)</label>
               <input id="bufferSize" name="bufferSize" placeholder="255" />
             </div>
-            <div>
-              <label for="encoding">Text encoding</label>
-              <input id="encoding" name="encoding" placeholder="utf-8" />
-            </div>
+          </div>
+          <h3 class="group">
+            Reconnecting
+            <button
+              type="button"
+              class="help"
+              popovertarget="help-reconnect"
+              aria-label="About reconnecting"
+            >
+              ?
+            </button>
+          </h3>
+          <div class="grid">
             <div>
               <label for="initialDelayMs">First retry delay (ms)</label>
               <input id="initialDelayMs" name="connection.initialDelayMs" placeholder="250" />
@@ -673,6 +1180,19 @@
               <label for="stableAfterMs">Stable after (ms)</label>
               <input id="stableAfterMs" name="connection.stableAfterMs" placeholder="5000" />
             </div>
+          </div>
+          <h3 class="group">
+            Timeouts and writes
+            <button
+              type="button"
+              class="help"
+              popovertarget="help-timeouts"
+              aria-label="About timeouts and writes"
+            >
+              ?
+            </button>
+          </h3>
+          <div class="grid">
             <div>
               <label for="openTimeoutMs">Open timeout (ms)</label>
               <input id="openTimeoutMs" name="connection.openTimeoutMs" placeholder="10000" />
@@ -690,6 +1210,23 @@
               />
             </div>
           </div>
+          <h3 class="group">
+            Text and memory
+            <button
+              type="button"
+              class="help"
+              popovertarget="help-text"
+              aria-label="About text and memory"
+            >
+              ?
+            </button>
+          </h3>
+          <div class="grid">
+            <div>
+              <label for="encoding">Text encoding</label>
+              <input id="encoding" name="encoding" placeholder="utf-8" />
+            </div>
+          </div>
           <div class="row" style="margin-top: 1rem">
             <label class="check"><input type="checkbox" name="decodeText" /> Decode text</label>
             <label class="check"
@@ -704,6 +1241,138 @@
           <button type="submit">Set up</button>
         </div>
       </form>
+      <div id="help-device" class="help-text" popover>
+        <h3>Device</h3>
+        <p>
+          Which device the configuration connects to. Choose a common adapter to fill in its USB
+          IDs, or enter the <b>vendor ID</b> and <b>product ID</b> the device reports, such as
+          <code>0x1a86</code>. The IDs name a kind of device, not a particular one.
+        </p>
+        <p>
+          For a port with no USB identity, such as a built-in RS-232 port, a Bluetooth serial port
+          or a virtual COM port, choose <b>Any port, no USB identity</b>: the configuration then
+          accepts whatever port is chosen.
+        </p>
+        <div class="actions">
+          <button
+            type="button"
+            class="secondary small"
+            popovertarget="help-device"
+            popovertargetaction="hide"
+          >
+            Close
+          </button>
+        </div>
+      </div>
+      <div id="help-line" class="help-text" popover>
+        <h3>Line settings</h3>
+        <p>
+          Baud rate, data bits, stop bits and parity must match the device exactly; its manual gives
+          them. A mismatch does not fail, it produces garbage.
+        </p>
+        <dl>
+          <dt>Flow control</dt>
+          <dd>
+            <b>hardware</b> uses RTS/CTS. Only if the device and cable support it: otherwise every
+            write waits and times out.
+          </dd>
+          <dt>Buffer size</dt>
+          <dd>
+            The read buffer the browser allocates. Raise it only for a device that sends large
+            bursts.
+          </dd>
+        </dl>
+        <div class="actions">
+          <button
+            type="button"
+            class="secondary small"
+            popovertarget="help-line"
+            popovertargetaction="hide"
+          >
+            Close
+          </button>
+        </div>
+      </div>
+      <div id="help-reconnect" class="help-text" popover>
+        <h3>Reconnecting</h3>
+        <p>
+          When the connection is lost, the tab holding the port tries again: at once, then after the
+          <b>first retry delay</b>, each wait multiplied by the <b>backoff factor</b> up to the
+          <b>max retry delay</b>. Each wait falls at random between the <b>jitter</b> fraction of it
+          and all of it, so devices that failed together do not retry in step. When the browser
+          reports the device plugged back in, it tries at once.
+        </p>
+        <dl>
+          <dt>Max attempts</dt>
+          <dd>Attempts before the status becomes <b>failed</b>. Infinity never gives up.</dd>
+          <dt>Stable after</dt>
+          <dd>How long a connection must hold before the attempt count starts over.</dd>
+        </dl>
+        <div class="actions">
+          <button
+            type="button"
+            class="secondary small"
+            popovertarget="help-reconnect"
+            popovertargetaction="hide"
+          >
+            Close
+          </button>
+        </div>
+      </div>
+      <div id="help-timeouts" class="help-text" popover>
+        <h3>Timeouts and writes</h3>
+        <dl>
+          <dt>Open timeout</dt>
+          <dd>
+            How long opening or closing the port may take. A driver that hangs counts as a failed
+            attempt.
+          </dd>
+          <dt>Write timeout</dt>
+          <dd>How long a send may take, including waiting for a connection.</dd>
+          <dt>Write chunk</dt>
+          <dd>
+            Large sends are handed to the device in pieces of at most this size. Lower it for a
+            device that loses the end of large writes.
+          </dd>
+        </dl>
+        <div class="actions">
+          <button
+            type="button"
+            class="secondary small"
+            popovertarget="help-timeouts"
+            popovertargetaction="hide"
+          >
+            Close
+          </button>
+        </div>
+      </div>
+      <div id="help-text" class="help-text" popover>
+        <h3>Text and memory</h3>
+        <dl>
+          <dt>Text encoding</dt>
+          <dd>How received bytes are decoded into text.</dd>
+          <dt>Decode text</dt>
+          <dd>
+            Adds the decoded text to received data, so traffic shows characters rather than only
+            bytes.
+          </dd>
+          <dt>Remember across reloads</dt>
+          <dd>
+            Stores the configuration in this browser, so it can be set up again after a reload. The
+            browser keeps the device permission either way.
+          </dd>
+        </dl>
+        <div class="actions">
+          <button
+            type="button"
+            class="secondary small"
+            popovertarget="help-text"
+            popovertargetaction="hide"
+          >
+            Close
+          </button>
+        </div>
+      </div>
     </dialog>
 
     <script type="module" src="./debug.js"></script>

@@ -20,7 +20,7 @@ remembered from an earlier visit. A card shows:
 - the traffic of every tab, and all of its settings, one click away.
 
 _New configuration_ opens a short dialog: name, device, baud rate. Every other option of
-`setup()` is under _More options_. Settings — worker URL, transport, payload logging — and the
+`setup()` is under _More options_. A **?** beside a setting or a section opens a short explanation of it. Settings — worker URL, transport, payload logging — and the
 browser checks, port locks and granted ports are behind the _Settings_ button. The log
 is at the bottom.
 

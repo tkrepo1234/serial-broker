@@ -306,6 +306,30 @@ function capability(
   ]);
 }
 
+/** The explanation each fact in the settings panel opens. */
+const FACT_HELP: Readonly<Record<string, string>> = {
+  Browser: 'help-browser',
+  'Message bus': 'help-bus',
+  'This tab': 'help-this-tab',
+  'Protocol version': 'help-protocol',
+  'Port locks': 'help-locks',
+  'Granted ports': 'help-ports',
+};
+
+/** A "?" that opens the explanation of a fact, where it has one. */
+function helpFor(term: string): HTMLButtonElement[] {
+  const popoverId = FACT_HELP[term];
+  return popoverId === undefined
+    ? []
+    : [
+        element('button', {
+          className: 'help',
+          text: '?',
+          attributes: { type: 'button', popovertarget: popoverId, 'aria-label': `About ${term}` },
+        }),
+      ];
+}
+
 async function renderFacts(): Promise<void> {
   const hasSharedWorker = typeof SharedWorker !== 'undefined';
   const hasBroadcastChannel = typeof BroadcastChannel !== 'undefined';
@@ -340,7 +364,7 @@ async function renderFacts(): Promise<void> {
   ];
   byId('facts').replaceChildren(
     ...facts.flatMap(([term, value]) => [
-      element('dt', { text: term }),
+      element('dt', {}, [term, ...helpFor(term)]),
       typeof value === 'string' ? element('dd', { text: value }) : element('dd', {}, [value]),
     ]),
   );

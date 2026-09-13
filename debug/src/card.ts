@@ -178,7 +178,7 @@ export class ConfigurationCard {
 
     const settingsKey = view.settings === undefined ? '' : JSON.stringify(view.settings);
     if (settingsKey !== this.#settingsKey && view.settings !== undefined) {
-      parts.settings.replaceChildren(...settingsEntries(view.settings));
+      parts.settings.replaceChildren(...settingGroups(view.settings));
       this.#settingsKey = settingsKey;
     }
     parts.settingsNote.replaceChildren(
@@ -360,28 +360,69 @@ function tabDetail(configuration: ConfigurationDiagnostics, now: number): string
   return parts.join(' · ');
 }
 
-function settingsEntries(settings: EffectiveSettings): HTMLElement[] {
-  const { device } = settings;
-  const entries: [string, string][] = [
+/** The settings, grouped and labelled as the setup dialog asks for them. */
+function settingGroups(settings: EffectiveSettings): HTMLElement[] {
+  const { device, serial, connection, encoding } = settings;
+  const ms = (value: number): string => `${formatValue(value)} ms`;
+  const bytes = (value: number): string => `${formatValue(value)} bytes`;
+
+  const groups: [string, [string, string][]][] = [
     [
-      'device',
-      'any' in device
-        ? 'any port'
-        : `${formatUsbId(device.vendorId)} : ${formatUsbId(device.productId)}`,
+      'Device and line',
+      [
+        [
+          'Device',
+          'any' in device
+            ? 'any port'
+            : `${formatUsbId(device.vendorId)}:${formatUsbId(device.productId).slice(2)}`,
+        ],
+        ['Baud rate', formatValue(serial.baudRate)],
+        ['Data bits', formatValue(serial.dataBits)],
+        ['Stop bits', formatValue(serial.stopBits)],
+        ['Parity', serial.parity],
+        ['Flow control', serial.flowControl],
+        ['Buffer size', bytes(serial.bufferSize)],
+      ],
     ],
-    ...Object.entries(settings.serial).map(([key, value]): [string, string] => [
-      key,
-      formatValue(value),
-    ]),
-    ...Object.entries(settings.connection).map(([key, value]): [string, string] => [
-      key,
-      formatValue(value),
-    ]),
-    ['encoding', settings.encoding.encoding],
-    ['decodeText', formatValue(settings.encoding.decodeText)],
-    ['persist', formatValue(settings.persist)],
+    [
+      'Reconnecting',
+      [
+        ['First retry delay', ms(connection.initialDelayMs)],
+        ['Backoff factor', formatValue(connection.factor)],
+        ['Max retry delay', ms(connection.maxDelayMs)],
+        ['Jitter', formatValue(connection.jitter)],
+        ['Max attempts', formatValue(connection.maxAttempts)],
+        ['Stable after', ms(connection.stableAfterMs)],
+      ],
+    ],
+    [
+      'Timeouts and writes',
+      [
+        ['Open timeout', ms(connection.openTimeoutMs)],
+        ['Write timeout', ms(connection.writeTimeoutMs)],
+        ['Write chunk', bytes(connection.maxWriteChunkBytes)],
+      ],
+    ],
+    [
+      'Text and memory',
+      [
+        ['Text encoding', encoding.encoding],
+        ['Decode text', formatValue(encoding.decodeText)],
+        ['Remembered', formatValue(settings.persist)],
+      ],
+    ],
   ];
-  return entries.map(([key, value]) =>
-    element('div', {}, [element('dt', { text: key }), element('dd', { text: value })]),
+
+  return groups.map(([title, entries]) =>
+    element('section', { className: 'setting-group' }, [
+      element('h3', { text: title }),
+      element(
+        'dl',
+        {},
+        entries.map(([label, value]) =>
+          element('div', {}, [element('dt', { text: label }), element('dd', { text: value })]),
+        ),
+      ),
+    ]),
   );
 }
