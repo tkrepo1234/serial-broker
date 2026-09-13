@@ -53,11 +53,17 @@ const broker = new Broker({
 /** Every live port, by the identity of the context behind it. */
 const ports = new Map<ClientId, MessagePort>();
 
+/** When each port connected, as a count of connections: a later port has a higher number. */
+const connectionOrder = new WeakMap<MessagePort, number>();
+let connectionCount = 0;
+
 self.onconnect = (event): void => {
   const port = event.ports[0];
   if (port === undefined) {
     return;
   }
+  connectionCount += 1;
+  connectionOrder.set(port, connectionCount);
 
   port.addEventListener('message', (messageEvent: MessageEvent<unknown>) => {
     handleMessage(port, messageEvent.data);
@@ -121,10 +127,19 @@ function handleMessage(port: MessagePort, raw: unknown): void {
 }
 
 function register(port: MessagePort, clientId: ClientId): void {
-  // Both directions are checked. A tab that gave up on this worker while it hung connects again on
-  // a new port, and a message still queued on its old port can arrive after the sweep forgot it.
-  // The tab's next message on its new port has to win the table back.
-  if (identities.get(port) === clientId && ports.get(clientId) === port) {
+  const registered = ports.get(clientId);
+  if (registered === port && identities.get(port) === clientId) {
+    return;
+  }
+
+  // A tab that gave up on this worker while it hung connects again on a new port, and a message
+  // still queued on the port it left can arrive after the new one was registered. The message is
+  // routed like any other, but the port it came on never takes the tab's place back: until the
+  // tab's next message, everything for it would go into a port it has closed.
+  if (
+    registered !== undefined &&
+    (connectionOrder.get(registered) ?? 0) > (connectionOrder.get(port) ?? 0)
+  ) {
     return;
   }
 

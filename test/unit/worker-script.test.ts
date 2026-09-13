@@ -198,11 +198,33 @@ describe('serial-broker.worker', () => {
     vi.advanceTimersByTime(SILENT_PARTICIPANT_TIMEOUT_MS + SWEEP_INTERVAL_MS);
 
     // Alice's tab gave up on this worker while it was stuck, and connected again. A message still
-    // queued on her old port arrives after the new port was registered.
+    // queued on her old port arrives after the new port was registered, and nothing follows it.
     connect({ ports: [newPort] });
     newPort.deliver(envelope('alice', 'all', heartbeat));
     oldPort.deliver(envelope('alice', 'all', heartbeat));
+    oldPort.posted.length = 0;
+    newPort.posted.length = 0;
+
+    connect({ ports: [bob] });
+    bob.deliver(envelope('bob', 'all', { type: 'status-request', configName: 'Reader' }));
+
+    expect(newPort.posted).toEqual([expect.objectContaining({ type: 'status-request' })]);
+    expect(oldPort.posted).toHaveLength(0);
+  });
+
+  it('keeps routing to the port a context came back on when its old port speaks once more', () => {
+    const oldPort = new FakeMessagePort();
+    const newPort = new FakeMessagePort();
+    const bob = new FakeMessagePort();
+    const heartbeat = { type: 'heartbeat', configNames: ['Reader'], ownedConfigNames: [] };
+    connect({ ports: [oldPort] });
+    oldPort.deliver(envelope('alice', 'all', heartbeat));
+
+    // No sweep in between: the worker hung for less than the timeout, and Alice's tab gave up on it
+    // all the same, after three unanswered heartbeats (ADR-0021).
+    connect({ ports: [newPort] });
     newPort.deliver(envelope('alice', 'all', heartbeat));
+    oldPort.deliver(envelope('alice', 'all', heartbeat));
     oldPort.posted.length = 0;
     newPort.posted.length = 0;
 
