@@ -243,6 +243,25 @@ Every record carries `clientId` and `configName`, so records from several tabs c
 correlated in one console. Payload bytes never appear above `debug` level — serial traffic
 routinely carries card numbers and PINs.
 
+## Diagnostics
+
+When something is wrong in a deployment, the question is usually the one this API refuses to
+answer: which tab has the port, and what is it doing? A separate entry point answers it for
+operators, without the application having to change:
+
+```ts
+import { openDiagnostics } from 'serial-broker/diagnostics';
+
+const diagnostics = openDiagnostics({ workerUrl: '/assets/serial-broker.worker.js' });
+const { participants, locks } = await diagnostics.collect();
+```
+
+Every tab reports its role, status, effective settings, listeners and pending writes; the owner
+adds its connection state, reconnect attempts, when it will next try, and bytes in and out. The
+observer takes no part in ownership, so looking never moves the port. Pass the same `workerUrl` and
+`transport` as the application, or it will be looking at an empty bus. See
+[ADR-0018](./docs/adr/0018-diagnostics-observer.md).
+
 ## What this library does not do
 
 It wraps the transport and nothing else. It delivers byte chunks exactly as they arrive, with

@@ -1,5 +1,6 @@
 import type { Clock, TimerHandle } from '../core/clock.js';
 import { createSignal, type Signal } from '../core/deadline.js';
+import type { PendingWritesDiagnostics } from '../core/diagnostics.js';
 import { SerialBrokerErrorCode } from '../core/error-codes.js';
 import { SerialBrokerError } from '../core/errors.js';
 import type { RequestId } from '../protocol/messages.js';
@@ -70,6 +71,21 @@ export class PendingWrites {
   /** Number of writes issued here and not yet settled. */
   get size(): number {
     return this.#writes.size;
+  }
+
+  /** How far the outstanding writes have got, for a diagnostics report (ADR-0018). */
+  diagnostics(): PendingWritesDiagnostics {
+    let dispatched = 0;
+    let started = 0;
+    for (const pending of this.#writes.values()) {
+      if (pending.isDispatched) {
+        dispatched += 1;
+      }
+      if (pending.started) {
+        started += 1;
+      }
+    }
+    return { total: this.#writes.size, dispatched, started };
   }
 
   /**

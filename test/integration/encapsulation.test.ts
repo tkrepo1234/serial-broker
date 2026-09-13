@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { SerialBrokerErrorCode } from '../../src/core/error-codes.js';
 import { SerialBrokerStatus } from '../../src/core/types.js';
+import * as publicApi from '../../src/index.js';
 import { BrowserHarness } from '../harness/browser-harness.js';
 
 const READER = { vendorId: 0x1a86, productId: 0x7523 };
@@ -109,6 +110,16 @@ describe('encapsulation', () => {
     for (const value of Object.values(snapshot)) {
       expect(typeof value === 'object' && value !== null && 'getInfo' in value).toBe(false);
     }
+  });
+
+  it('keeps diagnostics out of the main entry point', () => {
+    // Diagnostics reveal exactly what this boundary withholds, so they live behind an entry point
+    // of their own, where code has to reach for them on purpose (ADR-0018).
+    const exported = Object.keys(publicApi).map((key) => key.toLowerCase());
+
+    expect(exported.some((key) => key.includes('diagnostic') || key.includes('observer'))).toBe(
+      false,
+    );
   });
 
   it('reports a status an application can act on, with no coordination vocabulary in it', async () => {

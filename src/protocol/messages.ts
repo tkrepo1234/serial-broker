@@ -1,3 +1,4 @@
+import type { ParticipantDiagnostics } from '../core/diagnostics.js';
 import type { SerializedSerialBrokerError } from '../core/errors.js';
 import type { SerialBrokerStatus } from '../core/types.js';
 
@@ -144,6 +145,25 @@ export interface StatusRequestMessage extends Envelope {
   readonly configName: string;
 }
 
+/**
+ * Asks every context on the bus to describe itself.
+ *
+ * Carries no configuration name on purpose: the question is who is there and what they are
+ * doing, which no single configuration can answer. Sent by a diagnostics observer, which is not
+ * a participant and takes no part in ownership (ADR-0018).
+ */
+export interface DiagnosticsRequestMessage extends Envelope {
+  readonly type: 'diagnostics-request';
+  readonly requestId: RequestId;
+}
+
+/** One context's answer to a {@link DiagnosticsRequestMessage}, addressed to the observer. */
+export interface DiagnosticsReportMessage extends Envelope {
+  readonly type: 'diagnostics-report';
+  readonly requestId: RequestId;
+  readonly report: ParticipantDiagnostics;
+}
+
 /** Sent by a context that is shutting down gracefully. */
 export interface GoodbyeMessage extends Envelope {
   readonly type: 'goodbye';
@@ -164,6 +184,8 @@ export type ProtocolMessage =
   | StatusMessage
   | ErrorMessage
   | StatusRequestMessage
+  | DiagnosticsRequestMessage
+  | DiagnosticsReportMessage
   | GoodbyeMessage;
 
 /** Discriminator values, for exhaustiveness checks. */

@@ -1,5 +1,6 @@
 import { assertNever } from '../core/assert.js';
 import type { NormalizedConfiguration } from '../core/defaults.js';
+import { describeSettings, type ConfigurationDiagnostics } from '../core/diagnostics.js';
 import { DisposalStack } from '../core/disposable.js';
 import { EventEmitter } from '../core/emitter.js';
 import { SerialBrokerErrorCode } from '../core/error-codes.js';
@@ -197,6 +198,27 @@ export class ConfigurationSession {
   }
 
   /**
+   * Describes this configuration in this context, for a diagnostics report.
+   *
+   * Everything {@link getStatus} deliberately withholds is here - the role, the pending writes,
+   * the owner's connection - because this goes to an operator's diagnostics view, never to the
+   * application's code (ADR-0018).
+   */
+  diagnostics(): ConfigurationDiagnostics {
+    return {
+      name: this.configuration.name,
+      role: this.#election.isOwner ? 'owner' : 'participant',
+      status: this.#status,
+      statusSince: this.#statusSince,
+      lastErrorCode: this.#lastErrorCode,
+      settings: describeSettings(this.configuration),
+      listeners: this.#emitter.listenerCounts(),
+      pendingWrites: this.#writes.diagnostics(),
+      connection: this.#supervisor?.diagnostics(),
+    };
+  }
+
+  /**
    * Writes to the device, wherever the port happens to live.
    *
    * @returns A promise that settles when the owner reports the outcome. The delivery guarantee
@@ -323,6 +345,12 @@ export class ConfigurationSession {
       case 'attach':
       case 'detach':
         // Presence bookkeeping, handled by the broker or the transport. Nothing to do here.
+        return;
+
+      case 'diagnostics-request':
+      case 'diagnostics-report':
+        // Addressed to a context rather than to a configuration: the client answers requests
+        // itself, and reports go to observers, which have no sessions (ADR-0018).
         return;
 
       default:

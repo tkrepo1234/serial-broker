@@ -52,6 +52,17 @@ export class EventEmitter {
     return listeners !== undefined && listeners.size > 0;
   }
 
+  /** How many listeners each event has, for a diagnostics report (ADR-0018). */
+  listenerCounts(): Record<SerialBrokerEventName, number> {
+    const count = (event: SerialBrokerEventName): number => this.#listeners.get(event)?.size ?? 0;
+    return {
+      onReceive: count('onReceive'),
+      onSend: count('onSend'),
+      onError: count('onError'),
+      onStatusChange: count('onStatusChange'),
+    };
+  }
+
   /**
    * Delivers `payload` to every listener of `event`.
    *

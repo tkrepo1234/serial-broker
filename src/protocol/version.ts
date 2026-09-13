@@ -9,7 +9,7 @@
  * lock name and the broker channel name, so they partition into independent groups and report
  * `PROTOCOL_VERSION_MISMATCH` rather than corrupting each other. See ADR-0008.
  */
-export const PROTOCOL_VERSION = 1;
+export const PROTOCOL_VERSION = 2;
 
 /** Prefix for every name this library claims in a shared namespace. */
 const NAMESPACE = 'serial-broker';

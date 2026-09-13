@@ -1,5 +1,6 @@
 import { copyBytes } from '../core/bytes.js';
 import type { NormalizedConfiguration } from '../core/defaults.js';
+import type { ParticipantDiagnostics } from '../core/diagnostics.js';
 import { DisposalStack } from '../core/disposable.js';
 import { SerialBrokerErrorCode } from '../core/error-codes.js';
 import { describeUnknown, SerialBrokerError } from '../core/errors.js';
@@ -17,7 +18,8 @@ import { isDeviceCompatible, normalizeConfiguration, validateName } from '../cor
 import type { SerialBrokerEnvironment } from '../environment/environment.js';
 import { matchesDevice } from '../owner/port-matcher.js';
 import { describeDecodeFailure, type DecodeFailure } from '../protocol/decode.js';
-import type { ClientId, ProtocolMessage } from '../protocol/messages.js';
+import type { ClientId, ProtocolMessage, RequestId } from '../protocol/messages.js';
+import { PROTOCOL_VERSION } from '../protocol/version.js';
 import { ConfigurationStore } from '../storage/configuration-store.js';
 
 import { ConfigurationSession } from './configuration-session.js';
@@ -59,6 +61,26 @@ export class SerialBrokerClient {
   /** Which transport ended up being used. Diagnostics and tests only. */
   get transportKind(): 'sharedworker' | 'broadcastchannel' | undefined {
     return this.#transport?.kind;
+  }
+
+  /**
+   * Describes this context and every configuration it has set up, for a diagnostics report.
+   *
+   * @returns `undefined` before the first `setup()`, when this context is not on the bus and
+   *   has nothing to describe.
+   */
+  diagnostics(): ParticipantDiagnostics | undefined {
+    const transport = this.#transport;
+    if (transport === undefined) {
+      return undefined;
+    }
+    return {
+      clientId: this.#clientId,
+      transport: transport.kind,
+      protocolVersion: PROTOCOL_VERSION,
+      reportedAt: this.environment.clock.now(),
+      configurations: [...this.#sessions.values()].map((session) => session.diagnostics()),
+    };
   }
 
   /**
@@ -353,12 +375,33 @@ export class SerialBrokerClient {
   }
 
   #routeMessage(message: ProtocolMessage): void {
+    if (message.type === 'diagnostics-request') {
+      this.#answerDiagnostics(message.from, message.requestId);
+      return;
+    }
+
     const configName = 'configName' in message ? message.configName : undefined;
     if (configName === undefined) {
       return;
     }
 
     this.#sessions.get(configName)?.handleMessage(message);
+  }
+
+  /** Answers an observer. Reached only through the bus, so a transport exists. */
+  #answerDiagnostics(observer: ClientId, requestId: RequestId): void {
+    const report = this.diagnostics();
+    if (report === undefined) {
+      return;
+    }
+    this.#transport?.send({
+      type: 'diagnostics-report',
+      v: PROTOCOL_VERSION,
+      from: this.#clientId,
+      to: observer,
+      requestId,
+      report,
+    });
   }
 
   #handleDecodeFailure(failure: DecodeFailure): void {

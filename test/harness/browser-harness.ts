@@ -1,3 +1,4 @@
+import { DiagnosticsObserver } from '../../src/client/diagnostics-observer.js';
 import { SerialBrokerClient } from '../../src/client/serial-broker-client.js';
 import { ScopedLogger, NOOP_LOGGER } from '../../src/core/logger.js';
 import type {
@@ -167,6 +168,19 @@ export class BrowserHarness {
     const tab = new VirtualTab(id, client, this);
     this.#tabs.set(id, tab);
     return tab;
+  }
+
+  /**
+   * Opens a diagnostics observer on the same origin (ADR-0018).
+   *
+   * Not a tab in the library's sense: it has an identity on the bus, but no configuration, no
+   * port and no place in any election.
+   */
+  openObserver(): DiagnosticsObserver {
+    this.#nextTabNumber += 1;
+    return new DiagnosticsObserver(
+      this.createEnvironment(`observer${String(this.#nextTabNumber)}`),
+    );
   }
 
   /** Every tab still open. */

@@ -2,6 +2,7 @@ import type {
   LockLike,
   LockManagerLike,
   LockRequestOptions,
+  LockSnapshotLike,
 } from '../../src/environment/environment.js';
 
 interface QueuedRequest {
@@ -43,6 +44,21 @@ export class FakeLockManager {
         options: LockRequestOptions,
         callback: (lock: LockLike | null) => Promise<T>,
       ): Promise<T> => await this.#request(contextId, name, options, callback),
+      query: async (): Promise<LockSnapshotLike> => this.#snapshot(),
+    };
+  }
+
+  /** What `LockManager.query()` would report: holders and queued requests, per lock. */
+  #snapshot(): LockSnapshotLike {
+    return {
+      held: [...this.#held].map(([name, lock]) => ({
+        name,
+        mode: lock.mode,
+        clientId: lock.contextId,
+      })),
+      pending: [...this.#queues].flatMap(([name, queue]) =>
+        queue.map((request) => ({ name, mode: request.mode, clientId: request.contextId })),
+      ),
     };
   }
 

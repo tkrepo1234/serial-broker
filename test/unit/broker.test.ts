@@ -232,6 +232,21 @@ describe('Broker', () => {
     expect(broker.clientCount).toBe(1);
   });
 
+  it('delivers a diagnostics request to every connected context but the sender, attached or not', () => {
+    const { broker, delivered } = createBroker();
+    broker.handleMessage(ALICE, attach(ALICE));
+    broker.handleConnect(BOB);
+    broker.handleMessage(CAROL, message(CAROL, 'all', { type: 'hello' } as never));
+
+    broker.handleMessage(
+      CAROL,
+      message(CAROL, 'all', { type: 'diagnostics-request', requestId: 'd1' } as never),
+    );
+
+    // The observer asking shares no configuration with anyone and must hear from everyone.
+    expect(delivered.map((entry) => entry.to)).toEqual([ALICE, BOB]);
+  });
+
   it('ignores hello, which exists only to announce a context', () => {
     const { broker, delivered } = createBroker();
 

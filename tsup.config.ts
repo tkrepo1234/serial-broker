@@ -1,9 +1,12 @@
 import { defineConfig } from 'tsup';
 
 /**
- * Two entry points, deliberately:
+ * Three entry points, deliberately:
  *
  * - `index` is the library consumed by the application.
+ * - `diagnostics` is the read-only observer behind `serial-broker/diagnostics` (ADR-0018). It
+ *   shares no state with `index` by design, so bundling it separately duplicates nothing that
+ *   matters.
  * - `serial-broker.worker` is the broker script. It must be a separately addressable file,
  *   because a `SharedWorker` is identified by its script URL: a bundled-in `Blob` URL would
  *   differ per tab and each tab would get its own, unshared worker. See ADR-0006.
@@ -11,6 +14,7 @@ import { defineConfig } from 'tsup';
 export default defineConfig({
   entry: {
     index: 'src/index.ts',
+    diagnostics: 'src/diagnostics.ts',
     'serial-broker.worker': 'src/worker/serial-broker.worker.ts',
   },
   format: ['esm', 'cjs'],

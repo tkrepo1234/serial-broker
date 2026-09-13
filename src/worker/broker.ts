@@ -111,6 +111,10 @@ export class Broker {
         this.#route(message, clientId);
         return;
 
+      case 'diagnostics-request':
+        this.#deliverToEveryone(message, clientId);
+        return;
+
       default:
         this.#route(message, clientId);
         return;
@@ -214,6 +218,20 @@ export class Broker {
     for (const participant of state.participants) {
       if (participant !== sender) {
         this.host.deliver(participant, message);
+      }
+    }
+  }
+
+  /**
+   * Delivers to every connected context except the sender, whether attached to anything or not.
+   *
+   * Only a diagnostics request travels this way. It asks every context to describe itself, and
+   * the observer asking has no configuration in common with anyone (ADR-0018).
+   */
+  #deliverToEveryone(message: ProtocolMessage, sender: ClientId): void {
+    for (const client of this.#clients) {
+      if (client !== sender) {
+        this.host.deliver(client, message);
       }
     }
   }

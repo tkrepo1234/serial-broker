@@ -78,6 +78,14 @@ export interface LockManagerLike {
     options: LockRequestOptions,
     callback: (lock: LockLike | null) => Promise<T>,
   ): Promise<T>;
+
+  /**
+   * Lists the locks held and requested across the origin.
+   *
+   * Optional, and used only by diagnostics (ADR-0018). Nothing about ownership is ever derived
+   * from it: a snapshot of a lock manager is stale the moment it is taken.
+   */
+  query?(): Promise<LockSnapshotLike>;
 }
 
 /** Options accepted by {@link LockManagerLike.request}. */
@@ -87,6 +95,19 @@ export interface LockRequestOptions {
   readonly signal?: AbortSignal;
   /** Returns `null` to the callback instead of queueing, when the lock is already held. */
   readonly ifAvailable?: boolean;
+}
+
+/** What `LockManager.query()` reports. Every field is optional in the specification. */
+export interface LockSnapshotLike {
+  readonly held?: readonly LockInfoLike[];
+  readonly pending?: readonly LockInfoLike[];
+}
+
+/** One entry of a {@link LockSnapshotLike}. */
+export interface LockInfoLike {
+  readonly name?: string;
+  readonly mode?: 'exclusive' | 'shared';
+  readonly clientId?: string;
 }
 
 /** A granted lock. Only its name is of interest. */

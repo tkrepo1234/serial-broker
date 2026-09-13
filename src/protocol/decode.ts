@@ -2,6 +2,7 @@ import { assertNever } from '../core/assert.js';
 import { isSerializedError } from '../core/errors.js';
 import { SerialBrokerStatus } from '../core/types.js';
 
+import { isParticipantDiagnostics } from './decode-diagnostics.js';
 import type { ClientId, MessageTarget, ProtocolMessage, RequestId } from './messages.js';
 import { PROTOCOL_VERSION } from './version.js';
 
@@ -237,6 +238,19 @@ function decodeChecked(raw: unknown): DecodeResult {
       return isFiniteNumber(raw['timestamp'])
         ? { ok: true, message: raw as unknown as ProtocolMessage }
         : malformed(type, 'timestamp');
+
+    case 'diagnostics-request':
+      return isNonEmptyString(raw['requestId'])
+        ? { ok: true, message: raw as unknown as ProtocolMessage }
+        : malformed(type, 'requestId');
+
+    case 'diagnostics-report':
+      if (!isNonEmptyString(raw['requestId'])) {
+        return malformed(type, 'requestId');
+      }
+      return isParticipantDiagnostics(raw['report'])
+        ? { ok: true, message: raw as unknown as ProtocolMessage }
+        : malformed(type, 'report');
 
     case 'error':
       if (!isSerializedError(raw['error'])) {

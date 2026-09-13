@@ -12,7 +12,9 @@ behaviour of the Web platform APIs this library wraps.
    of device, called this"_. It never learns which tab owns the port, that a `SharedWorker`
    exists, that a Web Lock is held, or that a reconnect is in flight beyond a coarse status.
    Anything that would let an application depend on the coordination mechanism is a design
-   defect. See [ADR-0011](../adr/0011-encapsulation-boundary.md).
+   defect. See [ADR-0011](../adr/0011-encapsulation-boundary.md). The one deliberate exception is
+   the read-only diagnostics observer, behind an entry point of its own, for operators rather
+   than application code ([ADR-0018](../adr/0018-diagnostics-observer.md)).
 
 2. **Name-addressed, not handle-addressed.** Every operation takes the configuration `name`.
    No object handle is returned that could outlive its configuration, be shared across tabs

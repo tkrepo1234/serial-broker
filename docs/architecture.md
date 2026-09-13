@@ -155,6 +155,22 @@ Every way a connection can be lost — a failed open, a failed write, a dead rea
 `disconnect` event — funnels into one handler, so there is exactly one backoff policy and one
 place to test it. See [ADR-0010](./adr/0010-reconnect-supervision-and-backoff.md).
 
+## Diagnostics
+
+The application-facing API hides all of the above (ADR-0011). An operator can see it through
+`serial-broker/diagnostics`, which opens a **diagnostics observer**: a context on the bus with no
+configuration and no place in any election, so observing never moves a port.
+
+```
+observer ──diagnostics-request──▶ every context on the bus (the broker delivers to all)
+         ◀─diagnostics-report──── each context with a configuration: role, status, settings,
+                                   listeners, pending writes; the owner adds its connection
+observer ──LockManager.query()──▶ the browser: who holds and who waits for each owner lock
+```
+
+A collection listens for a fixed window, because nothing says how many contexts exist. See
+[ADR-0018](./adr/0018-diagnostics-observer.md).
+
 ## What lives where, and why it is not somewhere else
 
 | Decision                           | Where it lives                      | Why not elsewhere                                                                                   |

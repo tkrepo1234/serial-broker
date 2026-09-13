@@ -3,6 +3,7 @@ import { chunkBytes, toHex } from '../core/bytes.js';
 import type { TimerHandle } from '../core/clock.js';
 import { ignoreRejection, withDeadline } from '../core/deadline.js';
 import type { NormalizedConfiguration } from '../core/defaults.js';
+import type { ConnectionDiagnostics } from '../core/diagnostics.js';
 import { SerialBrokerErrorCode } from '../core/error-codes.js';
 import { describeUnknown, SerialBrokerError } from '../core/errors.js';
 import type { ScopedLogger } from '../core/logger.js';
@@ -67,6 +68,12 @@ export class PortSupervisor {
   readonly #writes = new WriteQueue();
   /** Incremented on every connection attempt, so a stale async continuation can be ignored. */
   #generation = 0;
+  /** When the scheduled reconnect is due, while one is scheduled. Diagnostics only. */
+  #nextAttemptAt: number | undefined;
+  /** When the current connection opened, while one is open. Diagnostics only. */
+  #openedAt: number | undefined;
+  #bytesReceived = 0;
+  #bytesSent = 0;
 
   constructor(
     private readonly environment: SerialBrokerEnvironment,
@@ -83,6 +90,24 @@ export class PortSupervisor {
   /** `true` when the device is open and writes can be performed. */
   get isOpen(): boolean {
     return this.#state.kind === 'open';
+  }
+
+  /**
+   * Describes the connection for a diagnostics report (ADR-0018).
+   *
+   * Called on demand by an observer, never on a hot path, and nothing in the library branches
+   * on what it returns.
+   */
+  diagnostics(): ConnectionDiagnostics {
+    return {
+      state: this.#state.kind,
+      attempt: this.#backoff.attempt,
+      nextAttemptAt: this.#nextAttemptAt,
+      openedAt: this.#openedAt,
+      queuedWrites: this.#writes.depth,
+      bytesReceived: this.#bytesReceived,
+      bytesSent: this.#bytesSent,
+    };
   }
 
   /**
@@ -114,6 +139,8 @@ export class PortSupervisor {
     this.#generation += 1;
     const previous = this.#state;
     this.#state = { kind: 'stopped' };
+    this.#nextAttemptAt = undefined;
+    this.#openedAt = undefined;
 
     if (previous.kind === 'reconnecting' && previous.timer !== undefined) {
       this.environment.clock.clearTimer(previous.timer);
@@ -239,6 +266,7 @@ export class PortSupervisor {
         }
 
         bytesWritten += chunk.byteLength;
+        this.#bytesSent += chunk.byteLength;
       }
 
       this.#traceTraffic('sent', payload);
@@ -296,6 +324,7 @@ export class PortSupervisor {
 
     const generation = (this.#generation += 1);
     this.#backoff.recordAttempt();
+    this.#nextAttemptAt = undefined;
     this.#setStatus(SerialBrokerStatus.Connecting);
 
     let port: SerialPort | undefined;
@@ -391,6 +420,7 @@ export class PortSupervisor {
     };
 
     this.#backoff.recordConnected(this.environment.clock.now());
+    this.#openedAt = this.environment.clock.now();
     this.#setStatus(SerialBrokerStatus.Open);
     this.logger.info('port opened', {
       configName: this.configuration.name,
@@ -472,6 +502,7 @@ export class PortSupervisor {
     // A copy, because the application may retain or mutate what it receives and the stream
     // may reuse its buffer. See docs/guidelines/defensive-programming.md.
     const data = new Uint8Array(chunk);
+    this.#bytesReceived += data.byteLength;
     const text = decoder?.decode(chunk, { stream: true });
     this.#traceTraffic('received', data);
     this.callbacks.onData(data, text);
@@ -508,6 +539,7 @@ export class PortSupervisor {
     }
 
     this.#generation += 1;
+    this.#openedAt = undefined;
     this.#report(error);
     this.#backoff.recordDisconnected(
       this.environment.clock.now(),
@@ -561,6 +593,7 @@ export class PortSupervisor {
       }
     }, delayMs);
 
+    this.#nextAttemptAt = this.environment.clock.now() + delayMs;
     this.#state = { kind: 'reconnecting', timer };
     this.#setStatus(SerialBrokerStatus.Reconnecting);
   }

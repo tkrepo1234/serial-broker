@@ -1,6 +1,6 @@
 # ADR-0011: Expose nothing about the coordination mechanism
 
-- **Status:** Accepted
+- **Status:** Accepted, amended by [ADR-0018](./0018-diagnostics-observer.md)
 - **Date:** 2026-09-12
 
 ## Context

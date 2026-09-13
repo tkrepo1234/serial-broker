@@ -6,6 +6,8 @@ import { decodeMessage, describeDecodeFailure } from '../../src/protocol/decode.
 import type { ProtocolMessageType } from '../../src/protocol/messages.js';
 import { PROTOCOL_VERSION } from '../../src/protocol/version.js';
 
+import { sampleReport } from './fixtures/diagnostics-report.js';
+
 const BASE = { v: PROTOCOL_VERSION, from: 'c-1', to: 'all' };
 const ERROR_PAYLOAD = new SerialBrokerError(SerialBrokerErrorCode.WRITE_FAILED, 'x').toJSON();
 
@@ -52,6 +54,14 @@ const VALID: Record<ProtocolMessageType, Record<string, unknown>> = {
   },
   status: { ...BASE, type: 'status', configName: 'Reader', status: 'open', timestamp: 1 },
   error: { ...BASE, type: 'error', configName: 'Reader', error: ERROR_PAYLOAD, timestamp: 1 },
+  'diagnostics-request': { ...BASE, type: 'diagnostics-request', requestId: 'd-1' },
+  'diagnostics-report': {
+    ...BASE,
+    to: 'c-2',
+    type: 'diagnostics-report',
+    requestId: 'd-1',
+    report: sampleReport(),
+  },
 };
 
 /** Every message type paired with the fields it must have to be accepted. */
@@ -70,6 +80,8 @@ const REQUIRED_FIELDS: Record<ProtocolMessageType, readonly string[]> = {
   'data-sent': ['configName', 'payload', 'originClientId', 'timestamp'],
   status: ['configName', 'status', 'timestamp'],
   error: ['error', 'timestamp'],
+  'diagnostics-request': ['requestId'],
+  'diagnostics-report': ['requestId', 'report'],
 };
 
 const TYPES = Object.keys(VALID) as ProtocolMessageType[];

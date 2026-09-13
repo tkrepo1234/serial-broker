@@ -27,7 +27,12 @@ coordinate with each other. See
 - A `BroadcastChannel` fallback for contexts without `SharedWorker`, such as Chrome for
   Android, functionally equivalent to the default.
 - An opt-in structured logger. The library writes nothing to the console uninvited.
+- A read-only diagnostics entry point, `serial-broker/diagnostics`. Every tab of the origin
+  reports its role, connection state, reconnect timing, pending writes, listeners and effective
+  settings, and a configuration's traffic can be watched - without the observing page taking part
+  in ownership. The main entry point is unchanged and still reveals nothing of the kind.
 
 ### Notes
 
-- Wire protocol version: **1**.
+- Wire protocol version: **2**. Version 1 was never released; 2 adds the diagnostics request and
+  report.
