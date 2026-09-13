@@ -4,6 +4,7 @@ import { SerialBrokerErrorCode } from '../../src/core/error-codes.js';
 import type { SerialBrokerError } from '../../src/core/errors.js';
 import { createBrowserEnvironment, isSupported } from '../../src/environment/browser.js';
 import type { ClientId } from '../../src/protocol/messages.js';
+import { fieldsOfEvent, recordingLogger } from '../harness/recording-logger.js';
 import { recordTransportRequest } from '../harness/transport-doubles.js';
 
 /**
@@ -192,6 +193,28 @@ describe('createBrowserEnvironment', () => {
     expect(createBrowserEnvironment().createTransport(transportRequest()).kind).toBe(
       'broadcastchannel',
     );
+  });
+
+  it('says in the log that it fell back because SharedWorker is absent', () => {
+    stubBrowser({ sharedWorker: 'absent' });
+    const { logger, records } = recordingLogger();
+
+    createBrowserEnvironment().createTransport(
+      recordTransportRequest('c-1' as ClientId, logger).request,
+    );
+
+    // The selection is automatic, and reported, whatever made it (ADR-0007) - in the tab's own log,
+    // where the record carries the tab's clientId.
+    expect(fieldsOfEvent(records, 'environment.transport-fallback')).toHaveLength(1);
+  });
+
+  it('refuses to fall back when SharedWorker was demanded and the platform has none', () => {
+    stubBrowser({ sharedWorker: 'absent' });
+
+    // `transport: 'sharedworker'` never uses the channel; it exists to make a missing worker loud.
+    expect(() =>
+      createBrowserEnvironment({ transport: 'sharedworker' }).createTransport(transportRequest()),
+    ).toThrow(expect.objectContaining({ code: SerialBrokerErrorCode.BROKER_UNAVAILABLE }));
   });
 
   it('reports a failure instead of falling back when a transport was demanded', () => {

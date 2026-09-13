@@ -55,7 +55,7 @@ export function createBrowserEnvironment(
     serial: requireSerial(),
     locks: requireLocks(),
     storage: createStorage(),
-    createTransport: (request) => createTransport(request, options, logger),
+    createTransport: (request) => createTransport(request, options),
     createBroadcastChannel:
       typeof BroadcastChannel === 'undefined' ? undefined : (name) => new BroadcastChannel(name),
     clock: BROWSER_CLOCK,
@@ -101,8 +101,8 @@ function requireLocks(): LockManagerLike {
  *
  * Accessing `localStorage` throws outright in a sandboxed iframe and in some privacy
  * configurations - not on use, but on the property access itself. Everything here therefore
- * degrades to an in-memory store, and the library reports that configurations will not
- * survive a reload rather than failing.
+ * degrades to an in-memory store: configurations last as long as the page, and nothing is
+ * reported, because nothing the application could do would change it (docs/site/errors.md).
  */
 function createStorage(): KeyValueStorage {
   try {
@@ -129,17 +129,33 @@ function createStorage(): KeyValueStorage {
 /**
  * Chooses and constructs the message bus.
  *
- * `SharedWorker` first, because point-to-point routing is cheaper and presence is exact
- * (ADR-0006). `BroadcastChannel` when it is unavailable, when its construction throws, or when
- * its script fails to load - realistic outcomes of a strict CSP, an unusual bundler setup, or a
- * worker file that was not deployed (ADR-0007).
+ * `SharedWorker` first, because point-to-point routing is cheaper (ADR-0006). `BroadcastChannel`
+ * when it is unavailable, when its construction throws, or when its script fails to load -
+ * realistic outcomes of Chrome for Android, a strict CSP, an unusual bundler setup, or a worker
+ * file that was not deployed (ADR-0007). Every such switch is logged. `transport: 'sharedworker'`
+ * never switches: it exists to make a missing worker loud.
+ *
+ * Logged through the tab's own logger, as the switch after a failed script load is
+ * (`FallbackTransport`), so the record carries the tab's `clientId` like every other.
  */
-function createTransport(
-  request: TransportRequest,
-  options: BrowserEnvironmentOptions,
-  logger: ScopedLogger,
-): Transport {
+function createTransport(request: TransportRequest, options: BrowserEnvironmentOptions): Transport {
   const preference = options.transport ?? 'auto';
+
+  if (preference !== 'broadcastchannel' && typeof SharedWorker === 'undefined') {
+    if (preference === 'sharedworker') {
+      throw new SerialBrokerError(
+        SerialBrokerErrorCode.BROKER_UNAVAILABLE,
+        'The SharedWorker transport was requested, but this context has no SharedWorker',
+        {},
+      );
+    }
+    if (typeof BroadcastChannel !== 'undefined') {
+      request.logger.warn('SharedWorker unavailable; falling back to BroadcastChannel', {
+        event: 'environment.transport-fallback',
+        reason: 'this context has no SharedWorker',
+      });
+    }
+  }
 
   if (preference !== 'broadcastchannel' && typeof SharedWorker !== 'undefined') {
     try {
@@ -171,7 +187,7 @@ function createTransport(
           { cause: error },
         );
       }
-      logger.warn('SharedWorker unavailable; falling back to BroadcastChannel', {
+      request.logger.warn('SharedWorker unavailable; falling back to BroadcastChannel', {
         event: 'environment.transport-fallback',
         reason: String(error),
       });
