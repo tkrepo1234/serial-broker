@@ -26,6 +26,7 @@ import {
 import {
   DEFAULT_CONNECTION_SETTINGS,
   DEFAULT_ENCODING_SETTINGS,
+  DEFAULT_MAX_TABS,
   DEFAULT_SERIAL_SETTINGS,
 } from '../../src/core/defaults.js';
 import type {
@@ -91,6 +92,17 @@ describe('debugging surface: configurations', () => {
 
     expect([...(owning[0]?.actions ?? [])].sort()).toEqual(['choose-device', 'disconnect', 'edit']);
     expect([...(waiting[0]?.actions ?? [])].sort()).toEqual(['disconnect', 'edit']);
+  });
+
+  it('offers a tab queued for a place to disconnect and edit, never the device picker', () => {
+    const [view] = buildConfigurationViews({
+      thisTab: tab('c-1', { role: 'participant', status: 'queued', connection: undefined }),
+      snapshot: snapshotOf(tab('c-2', { status: 'awaiting-permission' })),
+      remembered: [],
+    });
+
+    expect([...(view?.actions ?? [])].sort()).toEqual(['disconnect', 'edit']);
+    expect(view?.tabs[0]?.configuration.status).toBe('queued');
   });
 
   it("uses this tab's own fresh report over its entry in an older collection, and lists it first", () => {
@@ -172,6 +184,22 @@ describe('debugging surface: new and edited configurations', () => {
     expect(normalizeConfiguration('Scale', buildSetupOptions(values))).toEqual(running);
   });
 
+  it('fills the form with a tab limit, finite or none, so saving changes nothing', () => {
+    for (const maxTabs of [3, Number.POSITIVE_INFINITY]) {
+      const running = normalizeConfiguration('Scale', {
+        device: { vendorId: 0x0403, productId: 0x6001 },
+        serial: { baudRate: 19_200 },
+        maxTabs,
+      });
+
+      const values = formValuesFor('Scale', describeSettings(running));
+
+      expect(values.maxTabs).toBe(String(maxTabs));
+      expect(buildSetupOptions(values)['maxTabs']).toBe(maxTabs);
+      expect(normalizeConfiguration('Scale', buildSetupOptions(values))).toEqual(running);
+    }
+  });
+
   it('fills the form for a port without USB identity', () => {
     const running = normalizeConfiguration('Panel', {
       device: { any: true },
@@ -193,6 +221,9 @@ describe('debugging surface: new and edited configurations', () => {
       encoding: { decodeText: DEFAULT_ENCODING_SETTINGS.decodeText },
       persist: true,
     });
+    expect(buildSetupOptions({ ...defaultFormValues(), maxTabs: '  ' })).not.toHaveProperty(
+      'maxTabs',
+    );
   });
 
   it("offers the library's own defaults as placeholders for every field that may be left blank", () => {
@@ -203,7 +234,9 @@ describe('debugging surface: new and edited configurations', () => {
       'connection.maxAttempts': 'Infinity',
       'connection.writeTimeoutMs': String(DEFAULT_CONNECTION_SETTINGS.writeTimeoutMs),
       encoding: DEFAULT_ENCODING_SETTINGS.encoding,
+      maxTabs: 'Infinity',
     });
+    expect(placeholders['maxTabs']).toBe(String(DEFAULT_MAX_TABS));
     // Blank fields are left out of the options, so each placeholder is what the library applies.
     const running = normalizeConfiguration('Device', buildSetupOptions(defaultFormValues()));
     expect(String(running.connection.maxWriteChunkBytes)).toBe(
@@ -345,6 +378,7 @@ describe('debugging surface: formatting', () => {
   it('names statuses in words, and a configuration no tab runs as not running', () => {
     expect(statusLabel('open')).toBe('Port open');
     expect(statusLabel('awaiting-permission')).toBe('Waiting for device');
+    expect(statusLabel('queued')).toBe('Queued for a place');
     expect(statusLabel(undefined)).toBe('Not running');
     expect(statusLabel('some-future-status')).toBe('some-future-status');
   });

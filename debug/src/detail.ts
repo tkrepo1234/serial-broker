@@ -362,6 +362,15 @@ function hintFor(view: ConfigurationView, now: number): string {
       ? 'Remembered from an earlier visit, and running in no tab. Connect to start it here.'
       : '';
   }
+  // Checked before the port's status: a page waiting for a place, or withdrawn over its limit, is
+  // not using the port whatever state the port is in.
+  const here = view.tabs.find((tab) => tab.isThisTab)?.configuration;
+  if (here?.status === 'queued') {
+    return 'This page is queued: the tab limit is reached. It moves up when another tab disconnects, closes or crashes; until then it receives nothing and what it sends waits.';
+  }
+  if (here?.status === 'failed' && here.lastErrorCode === 'CONFIGURATION_CONFLICT') {
+    return 'This page uses a different tab limit than the tab that holds the port, and withdrew. Edit the settings to use the same limit.';
+  }
   if (view.status === 'awaiting-permission') {
     return owner?.isThisTab === true
       ? 'No granted port matches this device. Choose it once; the browser remembers it.'
@@ -384,6 +393,12 @@ function hintFor(view: ConfigurationView, now: number): string {
 
 function tabRow(tab: TabView, now: number): HTMLTableRowElement {
   const configuration = tab.configuration;
+  const role =
+    configuration.role === 'owner'
+      ? 'holds the port'
+      : configuration.status === 'queued'
+        ? 'queued'
+        : 'waiting';
   return element('tr', {}, [
     element('td', {
       className: tab.isThisTab ? 'this-tab' : '',
@@ -392,7 +407,7 @@ function tabRow(tab: TabView, now: number): HTMLTableRowElement {
     }),
     element('td', {
       className: configuration.role === 'owner' ? 'holder' : 'waiting',
-      text: configuration.role === 'owner' ? 'holds the port' : 'waiting',
+      text: role,
     }),
     element('td', {}, [
       element('span', { className: 'status' }, [
@@ -479,6 +494,7 @@ function settingGroups(settings: EffectiveSettings): HTMLElement[] {
         ['Remembered', formatValue(settings.persist)],
       ],
     ],
+    ['Sharing', [['Tab limit', formatValue(settings.maxTabs)]]],
   ];
 
   return groups.map(([title, entries]) =>

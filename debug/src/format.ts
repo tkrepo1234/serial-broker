@@ -107,6 +107,8 @@ export function statusLabel(status: string | undefined): string {
       return 'Not running';
     case 'idle':
       return 'Idle';
+    case 'queued':
+      return 'Queued for a place';
     case 'awaiting-permission':
       return 'Waiting for device';
     case 'connecting':

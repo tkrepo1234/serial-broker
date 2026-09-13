@@ -1,6 +1,7 @@
 import {
   DEFAULT_CONNECTION_SETTINGS,
   DEFAULT_ENCODING_SETTINGS,
+  DEFAULT_MAX_TABS,
   DEFAULT_SERIAL_SETTINGS,
 } from '../../src/core/defaults.js';
 import type { EffectiveSettings } from '../../src/core/diagnostics.js';
@@ -36,6 +37,8 @@ export interface SetupFormValues {
   readonly encoding: string;
   readonly decodeText: boolean;
   readonly persist: boolean;
+  /** How many tabs may use the configuration at once: a number, `Infinity`, or blank. */
+  readonly maxTabs: string;
 }
 
 /** A USB device the form can be filled with. */
@@ -71,6 +74,7 @@ export function defaultFormValues(): SetupFormValues {
     // A checkbox cannot be left blank, so it starts at the library's default instead.
     decodeText: DEFAULT_ENCODING_SETTINGS.decodeText,
     persist: true,
+    maxTabs: '',
   };
 }
 
@@ -90,6 +94,7 @@ export function defaultPlaceholders(): Readonly<Record<string, string>> {
     placeholders[`connection.${field}`] = String(DEFAULT_CONNECTION_SETTINGS[field]);
   }
   placeholders['encoding'] = DEFAULT_ENCODING_SETTINGS.encoding;
+  placeholders['maxTabs'] = String(DEFAULT_MAX_TABS);
   return placeholders;
 }
 
@@ -136,6 +141,7 @@ export function formValuesFor(name: string, settings: EffectiveSettings): SetupF
     encoding: encoding.encoding,
     decodeText: encoding.decodeText,
     persist: settings.persist,
+    maxTabs: String(settings.maxTabs),
   };
 }
 
@@ -173,6 +179,7 @@ export function buildSetupOptions(values: SetupFormValues): Record<string, unkno
     connection,
     encoding: { ...optionalText('encoding', values.encoding), decodeText: values.decodeText },
     persist: values.persist,
+    ...optionalNumber('maxTabs', values.maxTabs),
   };
 }
 
@@ -197,6 +204,7 @@ export function readSetupForm(form: HTMLFormElement): SetupFormValues {
     encoding: textField(form, 'encoding'),
     decodeText: checkbox(form, 'decodeText').checked,
     persist: checkbox(form, 'persist').checked,
+    maxTabs: textField(form, 'maxTabs'),
   };
 }
 
@@ -220,6 +228,7 @@ export function writeSetupForm(form: HTMLFormElement, values: SetupFormValues): 
   set('encoding', values.encoding);
   checkbox(form, 'decodeText').checked = values.decodeText;
   checkbox(form, 'persist').checked = values.persist;
+  set('maxTabs', values.maxTabs);
 }
 
 function input(form: HTMLFormElement, name: string): HTMLInputElement | HTMLSelectElement {

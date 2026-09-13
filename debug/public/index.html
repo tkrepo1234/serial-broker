@@ -230,6 +230,11 @@
       .dot.failed {
         background: var(--bad);
       }
+      /* Waiting its turn by design, not in trouble: an outlined dot rather than a warning. */
+      .dot.queued {
+        background: transparent;
+        box-shadow: inset 0 0 0 2px var(--accent);
+      }
 
       /* Tables: the list of configurations, and the tabs using one. */
       table.configurations,
@@ -896,6 +901,11 @@
         <dd>Remembered from an earlier visit, but no tab uses it.</dd>
         <dt>Idle</dt>
         <dd>Set up, not trying to open the port yet.</dd>
+        <dt>Queued for a place</dt>
+        <dd>
+          As many tabs as the tab limit allows use the configuration already. This tab receives
+          nothing until one of them disconnects, closes or crashes, and then moves up.
+        </dd>
         <dt>Waiting for device</dt>
         <dd>
           No port this browser allows matches the device. Choose it once with
@@ -1317,6 +1327,23 @@
               ><input type="checkbox" name="persist" /> Remember across reloads</label
             >
           </div>
+          <h3 class="group">
+            Sharing
+            <button
+              type="button"
+              class="help"
+              popovertarget="help-sharing"
+              aria-label="About sharing between tabs"
+            >
+              ?
+            </button>
+          </h3>
+          <div class="grid">
+            <div>
+              <label for="maxTabs">Tab limit</label>
+              <input id="maxTabs" name="maxTabs" />
+            </div>
+          </div>
         </details>
 
         <p data-part="error" class="message error" hidden></p>
@@ -1406,6 +1433,23 @@
             browser keeps the device permission either way.
           </dd>
         </dl>
+      </div>
+      <div id="help-sharing" class="help-text" popover>
+        <h3>Tab limit</h3>
+        <p>
+          At most this many tabs use the configuration at the same time, the tab that holds the port
+          included. <code>1</code> gives one tab the device to itself. Leave it blank, or enter
+          Infinity, for no limit.
+        </p>
+        <p>
+          Further tabs wait with the status <b>Queued for a place</b>: they receive nothing, and
+          what they send waits. When a tab disconnects, closes or crashes, the tab that has waited
+          longest moves up.
+        </p>
+        <p>
+          Every tab must use the same limit. A tab with a different one than the tab holding the
+          port reports <code>CONFIGURATION_CONFLICT</code> and shows <b>Failed</b>.
+        </p>
       </div>
     </dialog>
 

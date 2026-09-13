@@ -454,7 +454,13 @@ function describeLocks(): string {
   if (locks === undefined) {
     return 'not listed by this browser';
   }
-  const names = [...new Set([...locks.held, ...locks.pending].map((lock) => lock.name))];
+  // Only the locks that decide who holds a port: a tab limit adds a lock per place and a gate,
+  // which would each read as the configuration's name here.
+  const ownership = (lock: { readonly name: string }): boolean =>
+    lock.name.split('/')[1] === 'owner';
+  const names = [
+    ...new Set([...locks.held, ...locks.pending].filter(ownership).map((lock) => lock.name)),
+  ];
   if (names.length === 0) {
     return 'none';
   }
