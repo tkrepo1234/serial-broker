@@ -1,5 +1,5 @@
 /**
- * The little DOM plumbing the debugging surface needs, so its panels read as what they show.
+ * The little DOM plumbing the debugging surface needs, so its code reads as what it shows.
  */
 
 /** Options for {@link element}. */
@@ -47,15 +47,6 @@ export function element<K extends keyof HTMLElementTagNameMap>(
   }
   created.append(...children);
   return created;
-}
-
-/** Creates a table row from cell contents. */
-export function row(cells: readonly (Node | string)[], className?: string): HTMLTableRowElement {
-  return element(
-    'tr',
-    className === undefined ? {} : { className },
-    cells.map((cell) => element('td', {}, [cell])),
-  );
 }
 
 /** Creates a small coloured label. */

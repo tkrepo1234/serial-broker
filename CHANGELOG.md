@@ -31,10 +31,9 @@ coordinate with each other. See
   reports its role, connection state, reconnect timing, pending writes, listeners and effective
   settings, and a configuration's traffic can be watched - without the observing page taking part
   in ownership. The main entry point is unchanged and still reveals nothing of the kind.
-
-- A debugging surface, shipped as static content in `dist/debug/`: every `setup()` and
-  `configure()` option, every status field, all events and log records for its own tab, and every
-  tab of the origin through the diagnostics observer. It sets nothing up on its own.
+- A debugging surface, shipped as static content in `dist/debug/`: one card per configuration on
+  the origin, with the tabs running it, its traffic and settings, and the action that fits -
+  join, choose a device, release. It sets nothing up on its own.
 
 ### Notes
 

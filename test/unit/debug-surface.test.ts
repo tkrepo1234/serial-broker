@@ -11,26 +11,142 @@ import {
   toHex,
 } from '../../debug/src/format.js';
 import { linkWithSettings, resolveLibrarySettings } from '../../debug/src/library-settings.js';
+import { buildConfigurationViews } from '../../debug/src/model.js';
 import {
   buildSetupOptions,
   defaultFormValues,
-  valuesFromSettings,
+  deviceChoiceFor,
 } from '../../debug/src/setup-form.js';
+import type {
+  ConfigurationDiagnostics,
+  DiagnosticsSnapshot,
+  ParticipantDiagnostics,
+} from '../../src/core/diagnostics.js';
 import { describeSettings } from '../../src/core/diagnostics.js';
 import { SerialBrokerErrorCode } from '../../src/core/error-codes.js';
 import { normalizeConfiguration } from '../../src/core/validation.js';
 
+import { sampleReport } from './fixtures/diagnostics-report.js';
+
+/** A tab reporting the sample configuration, with some of its fields replaced. */
+function tab(
+  clientId: string,
+  overrides: Partial<ConfigurationDiagnostics> = {},
+): ParticipantDiagnostics {
+  const report = sampleReport();
+  return { ...report, clientId, configurations: [{ ...report.configurations[0]!, ...overrides }] };
+}
+
+function snapshotOf(...participants: ParticipantDiagnostics[]): DiagnosticsSnapshot {
+  return { collectedAt: 0, observerClientId: 'd-1', participants, locks: undefined };
+}
+
 /**
  * The debugging surface's logic, away from the DOM.
  *
- * Its promise is transparency: what it shows is what the library holds, and what it sends is
- * what was typed. Both are easy to break quietly in formatting code, so they are pinned here.
+ * Its promise is that every card offers exactly what can be done from here, and that what it
+ * sends is what was typed. Both are easy to break quietly, so they are pinned here.
  */
-describe('debugging surface: setup form', () => {
-  it('leaves blank optional fields out, so the library applies its own defaults', () => {
-    const options = buildSetupOptions(defaultFormValues());
+describe('debugging surface: cards', () => {
+  it('offers to join a configuration only another tab runs, using that tab settings', () => {
+    const [view] = buildConfigurationViews({
+      thisTab: undefined,
+      snapshot: snapshotOf(tab('c-2')),
+      remembered: [],
+    });
 
-    expect(options).toEqual({
+    expect(view?.owner?.clientId).toBe('c-2');
+    expect(view?.isSetUpHere).toBe(false);
+    expect([...(view?.actions ?? [])]).toEqual(['join']);
+    expect(view?.settings).toEqual(sampleReport().configurations[0]?.settings);
+  });
+
+  it('offers the device picker only to the tab that holds the port and has no device yet', () => {
+    const owning = buildConfigurationViews({
+      thisTab: tab('c-1', { status: 'awaiting-permission' }),
+      snapshot: undefined,
+      remembered: [],
+    });
+    const waiting = buildConfigurationViews({
+      thisTab: tab('c-1', {
+        role: 'participant',
+        status: 'awaiting-permission',
+        connection: undefined,
+      }),
+      snapshot: snapshotOf(tab('c-2', { status: 'awaiting-permission' })),
+      remembered: [],
+    });
+
+    expect([...(owning[0]?.actions ?? [])].sort()).toEqual(['choose-device', 'release']);
+    expect([...(waiting[0]?.actions ?? [])]).toEqual(['release']);
+  });
+
+  it("uses this tab's own fresh report over its entry in an older collection, and lists it first", () => {
+    const [view] = buildConfigurationViews({
+      thisTab: tab('c-9', { role: 'participant', status: 'open', connection: undefined }),
+      snapshot: snapshotOf(
+        tab('c-1'),
+        tab('c-9', { role: 'participant', status: 'reconnecting', connection: undefined }),
+      ),
+      remembered: [],
+    });
+
+    expect(view?.tabs.map((entry) => [entry.clientId, entry.configuration.status])).toEqual([
+      ['c-9', 'open'],
+      ['c-1', 'open'],
+    ]);
+    expect(view?.tabs[0]?.isThisTab).toBe(true);
+  });
+
+  it('shows a remembered configuration nobody runs, ready to start', () => {
+    const settings = sampleReport().configurations[0]!.settings;
+
+    const [view] = buildConfigurationViews({
+      thisTab: undefined,
+      snapshot: snapshotOf(),
+      remembered: [{ name: 'Scale', settings }],
+    });
+
+    expect(view).toMatchObject({ name: 'Scale', status: undefined, isRemembered: true, settings });
+    expect(view?.tabs).toEqual([]);
+    expect([...(view?.actions ?? [])]).toEqual(['join']);
+  });
+
+  it('flags tabs that run the same configuration with different settings', () => {
+    const settings = sampleReport().configurations[0]!.settings;
+
+    const [view] = buildConfigurationViews({
+      thisTab: undefined,
+      snapshot: snapshotOf(
+        tab('c-1'),
+        tab('c-2', {
+          role: 'participant',
+          connection: undefined,
+          settings: { ...settings, connection: { ...settings.connection, maxDelayMs: 1_000 } },
+        }),
+      ),
+      remembered: [],
+    });
+
+    expect(view?.settingsDiffer).toBe(true);
+  });
+
+  it('can join with reported settings as they are, because setup accepts them unchanged', () => {
+    const running = normalizeConfiguration('Scale', {
+      device: { vendorId: 0x0403, productId: 0x6001 },
+      serial: { baudRate: 19_200, parity: 'odd', stopBits: 2 },
+      connection: { maxDelayMs: 1_000 },
+      encoding: { decodeText: false },
+      persist: false,
+    });
+
+    expect(normalizeConfiguration('Scale', describeSettings(running))).toEqual(running);
+  });
+});
+
+describe('debugging surface: new configuration', () => {
+  it('leaves blank optional fields out, so the library applies its own defaults', () => {
+    expect(buildSetupOptions(defaultFormValues())).toEqual({
       device: { vendorId: 0x1a86, productId: 0x7523 },
       serial: { baudRate: 9600 },
       connection: {},
@@ -71,19 +187,13 @@ describe('debugging surface: setup form', () => {
     );
   });
 
-  it('reproduces a running configuration exactly from its reported settings', () => {
-    const running = normalizeConfiguration('Scale', {
-      device: { vendorId: 0x0403, productId: 0x6001 },
-      serial: { baudRate: 19_200, parity: 'odd', stopBits: 2 },
-      connection: { maxDelayMs: 1_000, maxAttempts: 7 },
-      encoding: { decodeText: false },
-      persist: false,
-    });
+  it('recognises a preset from its IDs, and anything else as another device', () => {
+    const values = defaultFormValues();
 
-    const values = valuesFromSettings('Scale', describeSettings(running));
-    const rebuilt = normalizeConfiguration(values.name, buildSetupOptions(values));
-
-    expect(rebuilt).toEqual(running);
+    expect(deviceChoiceFor(values)).toBe('0');
+    expect(deviceChoiceFor({ ...values, vendorId: '0x1209', productId: '0x0001' })).toBe('3');
+    expect(deviceChoiceFor({ ...values, vendorId: '0xdead' })).toBe('custom');
+    expect(deviceChoiceFor({ ...values, deviceKind: 'any' })).toBe('any');
   });
 });
 

@@ -73,7 +73,7 @@ export function formatRelative(targetMs: number, nowMs: number): string {
     const seconds = Math.round((magnitude % 60_000) / 1_000);
     text = `${String(minutes)} min ${String(seconds)} s`;
   }
-  return delta >= 0 ? `in ${text}` : `${text} ago`;
+  return delta > 0 ? `in ${text}` : `${text} ago`;
 }
 
 /** Renders a USB vendor or product ID as `0x1a86`, or a dash when there is none. */

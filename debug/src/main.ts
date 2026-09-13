@@ -1,59 +1,45 @@
 /**
- * The debugging surface: every setting and every piece of status serial-broker has, on one page.
+ * The debugging surface: every configuration on this origin, as one card each, with what can be
+ * done about it right on the card.
  *
  * It ships in the package as static content under `dist/debug/`. Nothing serves it unless an
  * operator does. See debug/README.md and ADR-0019.
  *
- * It works on two levels at once, deliberately side by side:
- *
- * - **This tab** uses the library the way an application does, through the client, with every
- *   option exposed. What it shows is what an application can see.
- * - **The origin** is seen through the diagnostics observer, which takes no part in ownership and
- *   shows what ADR-0011 keeps from applications (ADR-0018).
- *
- * The page never sets anything up on its own: an operator opening it to look must not move a port.
+ * Cards are built from two sources: this tab's own client, which acts the way an application
+ * does, and the diagnostics observer, which sees every other tab without taking part in
+ * ownership (ADR-0018). The page never sets anything up on its own - opening it to look must not
+ * move a port.
  */
 
 import { SerialBrokerClient } from '../../src/client/serial-broker-client.js';
+import { describeSettings } from '../../src/core/diagnostics.js';
 import { SerialBrokerError } from '../../src/core/errors.js';
-import type { LogLevel, Logger, TransportKind, Unsubscribe } from '../../src/core/types.js';
-import type { EffectiveSettings, SerialBrokerDiagnostics } from '../../src/diagnostics.js';
+import type { Logger, LogLevel, TransportKind, Unsubscribe } from '../../src/core/types.js';
 import { openDiagnostics } from '../../src/diagnostics.js';
-import { createBrowserEnvironment, isSupported } from '../../src/environment/browser.js';
+import type { DiagnosticsSnapshot, SerialBrokerDiagnostics } from '../../src/diagnostics.js';
+import { createBrowserEnvironment } from '../../src/environment/browser.js';
 import type { SerialBrokerEnvironment } from '../../src/environment/environment.js';
 import { PROTOCOL_VERSION } from '../../src/protocol/version.js';
 import { ConfigurationStore } from '../../src/storage/configuration-store.js';
 
-import { DiagnosticsPanel } from './diagnostics-panel.js';
-import { byId, element, row } from './dom.js';
-import { EventLog, type EntryKind } from './event-log.js';
-import {
-  describePayload,
-  formatDetail,
-  formatUsbId,
-  formatValue,
-  parseHexBytes,
-  shortClientId,
-} from './format.js';
+import { ConfigurationCard, type CardHost } from './card.js';
+import { byId, element } from './dom.js';
+import { EventLog } from './event-log.js';
+import { formatRelative, formatUsbId, shortClientId } from './format.js';
 import {
   LIBRARY_SETTINGS_KEY,
   linkWithSettings,
   resolveLibrarySettings,
   type LibrarySettings,
 } from './library-settings.js';
-import {
-  buildSetupOptions,
-  defaultFormValues,
-  DEVICE_PRESETS,
-  readSetupForm,
-  valuesFromSettings,
-  writeSetupForm,
-} from './setup-form.js';
-import { TabPanel } from './tab-panel.js';
+import { buildConfigurationViews, type RememberedConfiguration } from './model.js';
+import { SetupDialog } from './setup-dialog.js';
 
+/** How often every tab is asked for a report. */
+const REFRESH_INTERVAL_MS = 2_000;
+/** How long each collection listens for answers; same-origin messages take well under 10 ms. */
+const COLLECT_WINDOW_MS = 300;
 const LOG_LEVELS: readonly LogLevel[] = ['debug', 'info', 'warn', 'error'];
-
-// --- Library settings --------------------------------------------------------------------------
 
 const settings = resolveLibrarySettings(
   new URLSearchParams(location.search),
@@ -61,25 +47,19 @@ const settings = resolveLibrarySettings(
   new URL('../serial-broker.worker.js', import.meta.url).href,
 );
 
-const tabLog = new EventLog(byId('tabLog'));
-const watchLog = new EventLog(byId('watchLog'));
+const libraryLog = new EventLog(byId('libraryLog'), 1_000);
 let logLevel: LogLevel = 'info';
-
-/** Every library log record from this tab goes into the page log, filtered by level. */
 const pageLogger: Logger = {
   log(level, message, fields) {
     if (LOG_LEVELS.indexOf(level) >= LOG_LEVELS.indexOf(logLevel)) {
-      tabLog.add(`log-${level}`, level, message, fields);
+      libraryLog.add(`log-${level}`, level, message, fields);
     }
   },
 };
 
-// --- The library, as an application uses it ----------------------------------------------------
-
 let environment: SerialBrokerEnvironment | undefined;
 let client: SerialBrokerClient | undefined;
 let diagnostics: SerialBrokerDiagnostics | undefined;
-const subscriptions = new Map<string, Unsubscribe[]>();
 
 try {
   environment = createBrowserEnvironment({
@@ -91,450 +71,249 @@ try {
   client = new SerialBrokerClient(environment);
   diagnostics = openDiagnostics({ workerUrl: settings.workerUrl, transport: settings.transport });
 } catch (error) {
-  reportFailure('start the library', error);
-  byId('supportBanner').hidden = false;
+  const banner = byId('banner');
+  banner.textContent = `The library cannot run here: ${describeError(error)}`;
+  banner.hidden = false;
+  byId('newButton').hidden = true;
 }
 
-const setupForm = byId('setupForm') as HTMLFormElement;
-const tabPanel = new TabPanel(
-  byId('tabRows'),
-  byId('sendTarget') as HTMLSelectElement,
-  requireClient,
-);
+// --- Cards ----------------------------------------------------------------------------------
 
-renderPlatform();
-renderLibrarySettings(settings);
-renderPresets();
-writeSetupForm(setupForm, defaultFormValues());
-renderRemembered();
-void renderPorts();
-tabPanel.render();
+const cardTemplate = byId('cardTemplate') as HTMLTemplateElement;
+const cards = new Map<string, { card: ConfigurationCard; stopWatching: Unsubscribe | undefined }>();
+let snapshot: DiagnosticsSnapshot | undefined;
+let collectedAt: number | undefined;
 
-// --- Setup form ---------------------------------------------------------------------------------
+const host: CardHost = {
+  join(name, joined) {
+    act(name, `set up "${name}"`, async () => {
+      await requireClient().setup(name, joined);
+    });
+  },
+  release(name, forgetDevice) {
+    act(name, `release "${name}"`, async () => {
+      await requireClient().release(name, { forgetDevice });
+    });
+  },
+  chooseDevice(name) {
+    const card = cards.get(name)?.card;
+    let pending: Promise<boolean>;
+    try {
+      pending = requireClient().requestAccess(name);
+    } catch (error) {
+      card?.showError(error);
+      return;
+    }
+    void pending.then(
+      (granted) => {
+        if (!granted) {
+          card?.showNotice('The picker was dismissed; nothing changed.');
+        }
+        refreshNow();
+      },
+      (error: unknown) => {
+        card?.showError(error);
+        logFailure(`choose a device for "${name}"`, error);
+      },
+    );
+  },
+  send(name, data) {
+    act(name, `send to "${name}"`, async () => {
+      await requireClient().send(name, data);
+    });
+  },
+};
 
-setupForm.addEventListener('submit', (event) => {
-  event.preventDefault();
-  const values = readSetupForm(setupForm);
-  void run(`set up "${values.name}"`, async () => {
-    await requireClient().setup(values.name, buildSetupOptions(values));
-    subscribeAll(values.name);
-    showResult(`"${values.name}" is set up. Watch its status in "This tab".`);
-  });
+const dialog = new SetupDialog(byId('setupDialog') as HTMLDialogElement, async (name, options) => {
+  await requireClient().setup(name, options);
+  refreshNow();
+});
+byId('newButton').addEventListener('click', () => {
+  dialog.open();
+});
+byId('emptyNewButton').addEventListener('click', () => {
+  dialog.open();
 });
 
-// `requestAccess` must run synchronously inside the click: any await before it spends the user
-// gesture and the browser refuses to show the picker.
-byId('grantButton').addEventListener('click', () => {
-  const { name } = readSetupForm(setupForm);
-  let pending: Promise<boolean>;
-  try {
-    pending = requireClient().requestAccess(name);
-  } catch (error) {
-    reportFailure(`request access for "${name}"`, error);
-    return;
+void refreshLoop();
+
+// --- Settings menu and log --------------------------------------------------------------------
+
+(byId('workerUrl') as HTMLInputElement).value = settings.workerUrl;
+(byId('transport') as HTMLSelectElement).value = settings.transport;
+(byId('logPayloads') as HTMLInputElement).checked = settings.logPayloads;
+
+byId('settingsMenu').addEventListener('toggle', () => {
+  if ((byId('settingsMenu') as HTMLDetailsElement).open) {
+    void renderFacts();
   }
-  void pending.then(
-    (granted) => {
-      showResult(granted ? `A device is available for "${name}".` : 'The picker was dismissed.');
-      afterChange();
+});
+
+byId('applySettings').addEventListener('click', () => {
+  writeStorage(LIBRARY_SETTINGS_KEY, JSON.stringify(readLibrarySettings()));
+  // Query parameters would override what was just saved, so the reload drops them.
+  location.replace(location.pathname);
+});
+
+byId('copyLink').addEventListener('click', () => {
+  const link = linkWithSettings(location.href, readLibrarySettings());
+  const note = byId('linkNote');
+  navigator.clipboard.writeText(link).then(
+    () => {
+      note.textContent = 'Link copied.';
     },
-    (error: unknown) => {
-      reportFailure(`request access for "${name}"`, error);
+    () => {
+      note.textContent = link;
     },
   );
-});
-
-byId('releaseButton').addEventListener('click', () => {
-  releaseConfiguration(readSetupForm(setupForm).name, false);
-});
-
-byId('forgetButton').addEventListener('click', () => {
-  releaseConfiguration(readSetupForm(setupForm).name, true);
-});
-
-byId('resetForm').addEventListener('click', () => {
-  writeSetupForm(setupForm, defaultFormValues());
-});
-
-byId('preset').addEventListener('change', (event) => {
-  const preset = DEVICE_PRESETS[Number((event.target as HTMLSelectElement).value)];
-  if (preset === undefined) {
-    return;
-  }
-  const values = readSetupForm(setupForm);
-  writeSetupForm(setupForm, {
-    ...values,
-    deviceKind: preset.vendorId === undefined ? 'any' : 'usb',
-    vendorId: preset.vendorId === undefined ? '' : formatUsbId(preset.vendorId),
-    productId: preset.productId === undefined ? '' : formatUsbId(preset.productId),
-  });
-});
-
-// --- This tab -----------------------------------------------------------------------------------
-
-byId('restoreButton').addEventListener('click', () => {
-  void run('restore remembered configurations', async () => {
-    const restored = await requireClient().restore();
-    restored.forEach(subscribeAll);
-    showResult(
-      restored.length === 0
-        ? 'Nothing to restore that is not already set up.'
-        : `Restored ${restored.join(', ')}.`,
-    );
-  });
-});
-
-byId('releaseAllButton').addEventListener('click', () => {
-  void run('release everything', async () => {
-    stopAllSubscriptions();
-    await requireClient().releaseAll();
-    showResult('Everything in this tab is released. Other tabs are unaffected.');
-  });
-});
-
-byId('disposeButton').addEventListener('click', () => {
-  void run('dispose the client', async () => {
-    stopAllSubscriptions();
-    await requireClient().dispose();
-    if (environment !== undefined) {
-      client = new SerialBrokerClient(environment);
-    }
-    showResult('The client was disposed and replaced by a fresh one, with a new bus identity.');
-  });
-});
-
-byId('sendButton').addEventListener('click', () => {
-  const target = tabPanel.selectedName;
-  if (target === undefined) {
-    showResult('Set a configuration up first; sends go to the one selected here.');
-    return;
-  }
-  const payload = (byId('payload') as HTMLInputElement).value;
-  const mode = (byId('payloadMode') as HTMLSelectElement).value;
-  const terminator = (byId('terminator') as HTMLSelectElement).value;
-  void run(`send to "${target}"`, async () => {
-    const data =
-      mode === 'hex' ? parseHexBytes(payload) : new TextEncoder().encode(payload + terminator);
-    await requireClient().send(target, data);
-  });
-});
-
-byId('payload').addEventListener('keydown', (event) => {
-  if (event.key === 'Enter') {
-    byId('sendButton').click();
-  }
-});
-
-wireLogFilters(byId('tabLogFilters'), tabLog);
-byId('clearTabLog').addEventListener('click', () => {
-  tabLog.clear();
 });
 
 (byId('logLevel') as HTMLSelectElement).addEventListener('change', (event) => {
   logLevel = (event.target as HTMLSelectElement).value as LogLevel;
 });
-
-// --- The origin ---------------------------------------------------------------------------------
-
-const diagnosticsPanel =
-  diagnostics === undefined
-    ? undefined
-    : new DiagnosticsPanel(
-        {
-          summary: byId('diagnosticsSummary'),
-          configurations: byId('diagnosticsConfigurations'),
-          locks: byId('diagnosticsLocks'),
-          knownNames: byId('knownNames') as HTMLDataListElement,
-        },
-        {
-          diagnostics,
-          ownClientId: () => (client?.names().length === 0 ? undefined : client?.clientId),
-          adoptSettings: adoptSettings,
-          reportFailure,
-        },
-      );
-
-const windowInput = byId('windowMs') as HTMLInputElement;
-const windowMs = (): number => Math.max(0, Math.round(Number(windowInput.value) || 500));
-
-byId('collectButton').addEventListener('click', () => {
-  void diagnosticsPanel?.collect(windowMs());
+byId('clearLog').addEventListener('click', () => {
+  libraryLog.clear();
 });
-
-const autoRefresh = byId('autoRefresh') as HTMLInputElement;
-const refreshInterval = byId('refreshInterval') as HTMLSelectElement;
-const applyAutoRefresh = (): void => {
-  diagnosticsPanel?.setAutoRefresh(
-    autoRefresh.checked ? Number(refreshInterval.value) : undefined,
-    windowMs,
-  );
-};
-autoRefresh.addEventListener('change', applyAutoRefresh);
-refreshInterval.addEventListener('change', applyAutoRefresh);
-
-let stopWatching: Unsubscribe | undefined;
-const watchButton = byId('watchButton') as HTMLButtonElement;
-watchButton.addEventListener('click', () => {
-  if (stopWatching !== undefined) {
-    stopWatching();
-    stopWatching = undefined;
-    watchButton.textContent = 'Watch';
-    watchLog.add('note', 'watch', 'Stopped watching.');
-    return;
-  }
-  const name = (byId('watchName') as HTMLInputElement).value.trim();
-  try {
-    stopWatching = requireDiagnostics().watch(name, (event) => {
-      const origin = shortClientId(event.from);
-      switch (event.kind) {
-        case 'received':
-          watchLog.add(
-            'received',
-            'received',
-            `${origin}: ${describePayload(event.data, event.text)}`,
-            undefined,
-            event.timestamp,
-          );
-          return;
-        case 'sent':
-          watchLog.add(
-            'sent',
-            'sent',
-            `${origin} wrote for ${shortClientId(event.originClientId)}: ${describePayload(event.data)}`,
-            undefined,
-            event.timestamp,
-          );
-          return;
-        case 'status':
-          watchLog.add(
-            'status',
-            'status',
-            `${origin}: ${event.status}`,
-            undefined,
-            event.timestamp,
-          );
-          return;
-        case 'error':
-          watchLog.add(
-            'error',
-            'error',
-            `${origin}: ${event.error.code} - ${event.error.message}`,
-            event.error.toJSON(),
-            event.timestamp,
-          );
-          return;
-        case 'owner-claimed':
-        case 'owner-released':
-          watchLog.add(
-            'ownership',
-            event.kind === 'owner-claimed' ? 'owner' : 'released',
-            `${origin} ${event.kind === 'owner-claimed' ? 'now owns the port' : 'gave the port up'}`,
-            undefined,
-            event.timestamp,
-          );
-          return;
-      }
-    });
-    watchButton.textContent = 'Stop watching';
-    watchLog.add('note', 'watch', `Watching "${name}" across every tab of this origin.`);
-  } catch (error) {
-    reportFailure(`watch "${name}"`, error);
-  }
-});
-byId('clearWatchLog').addEventListener('click', () => {
-  watchLog.clear();
-});
-
-// --- Library settings and platform --------------------------------------------------------------
-
-byId('applySettings').addEventListener('click', () => {
-  const next = readLibrarySettingsForm();
-  writeStorage(LIBRARY_SETTINGS_KEY, JSON.stringify(next));
-  // Query parameters would override what was just saved, so the reload drops them.
-  location.replace(location.pathname);
-});
-
-byId('settingsLink').addEventListener('click', () => {
-  const link = linkWithSettings(location.href, readLibrarySettingsForm());
-  (byId('settingsLinkText') as HTMLInputElement).value = link;
-});
-
-// --- Ports and remembered configurations --------------------------------------------------------
-
-byId('refreshPorts').addEventListener('click', () => {
-  void renderPorts();
-});
-if ('serial' in navigator) {
-  navigator.serial.addEventListener('connect', () => {
-    tabLog.add('note', 'device', 'A granted device was connected.');
-    void renderPorts();
-  });
-  navigator.serial.addEventListener('disconnect', () => {
-    tabLog.add('note', 'device', 'A granted device was disconnected.');
-    void renderPorts();
-  });
-}
-
-setInterval(() => {
-  tabPanel.render();
-  renderPlatform();
-}, 1_000);
 
 window.addEventListener('pagehide', () => {
   diagnostics?.close();
 });
 
-// --- Helpers -------------------------------------------------------------------------------------
+// --- Helpers ----------------------------------------------------------------------------------
 
-function requireClient(): SerialBrokerClient {
-  if (client === undefined) {
-    throw new Error('The library could not start in this browser; see the platform panel.');
-  }
-  return client;
+async function refreshLoop(): Promise<void> {
+  await refresh();
+  setTimeout(() => {
+    void refreshLoop();
+  }, REFRESH_INTERVAL_MS);
 }
 
-function requireDiagnostics(): SerialBrokerDiagnostics {
+/** Redraws from this tab's fresh state at once, then again when the other tabs have answered. */
+function refreshNow(): void {
+  render();
+  void refresh();
+}
+
+async function refresh(): Promise<void> {
+  if (diagnostics !== undefined) {
+    try {
+      snapshot = await diagnostics.collect(COLLECT_WINDOW_MS);
+      collectedAt = Date.now();
+    } catch (error) {
+      logFailure('ask the other tabs', error);
+    }
+  }
+  render();
+}
+
+function render(): void {
+  const now = Date.now();
+  const views = buildConfigurationViews({
+    thisTab: client?.diagnostics(),
+    snapshot,
+    remembered: remembered(),
+  });
+
+  const container = byId('cards');
+  const shown = new Set<string>();
+  views.forEach((view, index) => {
+    shown.add(view.name);
+    let entry = cards.get(view.name);
+    if (entry === undefined) {
+      const card = new ConfigurationCard(view.name, cardTemplate, host);
+      entry = { card, stopWatching: watch(card) };
+      cards.set(view.name, entry);
+    }
+    entry.card.update(view, now);
+    if (container.children[index] !== entry.card.element) {
+      container.insertBefore(entry.card.element, container.children[index] ?? null);
+    }
+  });
+  for (const [name, entry] of cards) {
+    if (!shown.has(name)) {
+      entry.stopWatching?.();
+      entry.card.element.remove();
+      cards.delete(name);
+    }
+  }
+
+  byId('empty').hidden = views.length > 0 || client === undefined;
+  byId('busStatus').textContent = [
+    diagnostics === undefined
+      ? 'no message bus'
+      : diagnostics.transport === 'sharedworker'
+        ? 'SharedWorker'
+        : 'BroadcastChannel',
+    `protocol ${String(PROTOCOL_VERSION)}`,
+    snapshot === undefined
+      ? 'asking the other tabs…'
+      : `${String(snapshot.participants.length)} tab(s) on the bus`,
+    collectedAt === undefined ? '' : `updated ${formatRelative(collectedAt, now)}`,
+  ]
+    .filter((part) => part !== '')
+    .join(' · ');
+}
+
+/** Streams a configuration's traffic from every tab into its card. */
+function watch(card: ConfigurationCard): Unsubscribe | undefined {
   if (diagnostics === undefined) {
-    throw new Error('Diagnostics could not start in this browser; see the platform panel.');
+    return undefined;
   }
-  return diagnostics;
-}
-
-/** Runs an action, reporting its failure the way the library reports it. */
-async function run(action: string, work: () => Promise<void>): Promise<void> {
   try {
-    await work();
+    return diagnostics.watch(card.name, (event) => {
+      card.addEvent(event, client?.clientId);
+    });
   } catch (error) {
-    reportFailure(action, error);
-  } finally {
-    afterChange();
+    logFailure(`watch "${card.name}"`, error);
+    return undefined;
   }
 }
 
-function afterChange(): void {
-  tabPanel.render();
-  renderPlatform();
-  renderRemembered();
-}
-
-function subscribeAll(name: string): void {
-  if (subscriptions.has(name)) {
-    return;
-  }
-  const current = requireClient();
-  subscriptions.set(name, [
-    current.subscribe(name, 'onReceive', (event) => {
-      tabLog.add(
-        'received',
-        'received',
-        `${name}: ${describePayload(event.data, event.text)}`,
-        { byteLength: event.data.byteLength, text: event.text },
-        event.timestamp,
-      );
-    }),
-    current.subscribe(name, 'onSend', (event) => {
-      const isLocal = event.origin === 'local';
-      tabLog.add(
-        isLocal ? 'sent' : 'sent-peer',
-        isLocal ? 'sent' : 'sent (peer)',
-        `${name}: ${describePayload(event.data)}`,
-        { byteLength: event.data.byteLength, origin: event.origin },
-        event.timestamp,
-      );
-    }),
-    current.subscribe(name, 'onStatusChange', (event) => {
-      tabLog.add(
-        'status',
-        'status',
-        `${name}: ${event.previousStatus} -> ${event.status}`,
-        undefined,
-        event.timestamp,
-      );
-      tabPanel.render();
-    }),
-    current.subscribe(name, 'onError', (event) => {
-      tabLog.add(
-        'error',
-        'error',
-        `${name}: ${event.error.code} - ${event.error.message}`,
-        event.error.toJSON(),
-        event.timestamp,
-      );
-    }),
-  ]);
-}
-
-function stopAllSubscriptions(): void {
-  for (const stops of subscriptions.values()) {
-    stops.forEach((stop) => {
-      stop();
-    });
-  }
-  subscriptions.clear();
-}
-
-function releaseConfiguration(name: string, forgetDevice: boolean): void {
-  void run(`release "${name}"`, async () => {
-    subscriptions.get(name)?.forEach((stop) => {
-      stop();
-    });
-    subscriptions.delete(name);
-    await requireClient().release(name, { forgetDevice });
-    showResult(
-      forgetDevice
-        ? `"${name}" is released and the browser's permission for its device is revoked.`
-        : `"${name}" is released in this tab. Other tabs keep using it.`,
-    );
+/** Runs a card's action, and shows a failure on that card in the library's words. */
+function act(name: string, action: string, work: () => Promise<void>): void {
+  void work().then(refreshNow, (error: unknown) => {
+    cards.get(name)?.card.showError(error);
+    logFailure(action, error);
+    render();
   });
 }
 
-function reportFailure(action: string, error: unknown): void {
-  if (error instanceof SerialBrokerError) {
-    tabLog.add(
-      'error',
-      'error',
-      `Could not ${action}: ${error.code} - ${error.message}`,
-      error.toJSON(),
-    );
-    showResult(`${error.code}: ${error.remediation}`, true);
-    return;
+function remembered(): RememberedConfiguration[] {
+  if (environment === undefined) {
+    return [];
   }
-  const message = error instanceof Error ? error.message : String(error);
-  tabLog.add('error', 'error', `Could not ${action}: ${message}`);
-  showResult(message, true);
+  const store = new ConfigurationStore(environment.storage, environment.logger, (error) => {
+    logFailure('read remembered configurations', error);
+  });
+  return store.load().map((configuration) => ({
+    name: configuration.name,
+    settings: describeSettings(configuration),
+  }));
 }
 
-function showResult(message: string, isFailure = false): void {
-  const result = byId('actionResult');
-  result.textContent = message;
-  result.classList.toggle('failure', isFailure);
-}
-
-function adoptSettings(name: string, adopted: EffectiveSettings): void {
-  writeSetupForm(setupForm, valuesFromSettings(name, adopted));
-  showResult(`The form now holds the settings "${name}" runs with. Set it up to join.`);
-  setupForm.scrollIntoView({ behavior: 'smooth', block: 'start' });
-}
-
-function renderPlatform(): void {
+async function renderFacts(): Promise<void> {
+  const check = (label: string, isPresent: boolean): string => `${isPresent ? '✓' : '✗'} ${label}`;
   const facts: [string, string][] = [
-    ['Secure context', formatValue(window.isSecureContext)],
-    ['Web Serial', formatValue('serial' in navigator)],
-    ['Web Locks', formatValue('locks' in navigator)],
-    ['SharedWorker', formatValue(typeof SharedWorker !== 'undefined')],
-    ['BroadcastChannel', formatValue(typeof BroadcastChannel !== 'undefined')],
-    ['isSupported()', formatValue(isSupported())],
-    ['Protocol version', String(PROTOCOL_VERSION)],
-    ['Transport requested', settings.transport],
     [
-      'Transport in use (this tab)',
-      client?.transportKind ?? 'not on the bus until the first setup',
+      'Platform',
+      [
+        check('secure context', window.isSecureContext),
+        check('Web Serial', 'serial' in navigator),
+        check('Web Locks', 'locks' in navigator),
+        check('SharedWorker', typeof SharedWorker !== 'undefined'),
+        check('BroadcastChannel', typeof BroadcastChannel !== 'undefined'),
+      ].join('   '),
     ],
-    ['Transport in use (observer)', diagnostics?.transport ?? '—'],
-    ['This tab on the bus', client?.transportKind === undefined ? '—' : client.clientId],
-    ['Configurations in this tab', String(client?.names().length ?? 0)],
+    [
+      'This tab',
+      client === undefined
+        ? '—'
+        : `${shortClientId(client.clientId)} · ${client.transportKind ?? 'joins the bus with its first setup'}`,
+    ],
+    ['Ownership locks', describeLocks()],
+    ['Granted ports', await describePorts()],
   ];
-  byId('platform').replaceChildren(
+  byId('facts').replaceChildren(
     ...facts.flatMap(([term, value]) => [
       element('dt', { text: term }),
       element('dd', { text: value }),
@@ -542,13 +321,47 @@ function renderPlatform(): void {
   );
 }
 
-function renderLibrarySettings(current: LibrarySettings): void {
-  (byId('workerUrl') as HTMLInputElement).value = current.workerUrl;
-  (byId('transport') as HTMLSelectElement).value = current.transport;
-  (byId('logPayloads') as HTMLInputElement).checked = current.logPayloads;
+function describeLocks(): string {
+  const locks = snapshot?.locks;
+  if (locks === undefined) {
+    return 'not listed by this browser';
+  }
+  const names = [...new Set([...locks.held, ...locks.pending].map((lock) => lock.name))];
+  if (names.length === 0) {
+    return 'none';
+  }
+  return names
+    .map((name) => {
+      const waiting = locks.pending.filter((lock) => lock.name === name).length;
+      const isHeld = locks.held.some((lock) => lock.name === name);
+      return `${name.split('/').pop() ?? name}: ${isHeld ? 'held' : 'free'}${waiting > 0 ? `, ${String(waiting)} waiting` : ''}`;
+    })
+    .join(' · ');
 }
 
-function readLibrarySettingsForm(): LibrarySettings {
+async function describePorts(): Promise<string> {
+  if (!('serial' in navigator)) {
+    return '—';
+  }
+  try {
+    const ports = await navigator.serial.getPorts();
+    if (ports.length === 0) {
+      return 'none yet';
+    }
+    return ports
+      .map((port) => {
+        const info = port.getInfo();
+        return info.usbVendorId === undefined
+          ? 'no USB identity'
+          : `${formatUsbId(info.usbVendorId)}:${formatUsbId(info.usbProductId).slice(2)}`;
+      })
+      .join(', ');
+  } catch (error) {
+    return describeError(error);
+  }
+}
+
+function readLibrarySettings(): LibrarySettings {
   return {
     workerUrl: (byId('workerUrl') as HTMLInputElement).value.trim(),
     transport: (byId('transport') as HTMLSelectElement).value as TransportKind,
@@ -556,102 +369,27 @@ function readLibrarySettingsForm(): LibrarySettings {
   };
 }
 
-function renderPresets(): void {
-  byId('preset').append(
-    ...DEVICE_PRESETS.map((preset, index) =>
-      element('option', { text: preset.label, attributes: { value: String(index) } }),
-    ),
+function requireClient(): SerialBrokerClient {
+  if (client === undefined) {
+    throw new Error('The library could not start in this browser.');
+  }
+  return client;
+}
+
+function logFailure(action: string, error: unknown): void {
+  libraryLog.add(
+    'error',
+    'error',
+    `Could not ${action}: ${describeError(error)}`,
+    error instanceof SerialBrokerError ? error.toJSON() : undefined,
   );
 }
 
-function renderRemembered(): void {
-  const rows = byId('rememberedRows');
-  if (environment === undefined) {
-    rows.replaceChildren();
-    return;
+function describeError(error: unknown): string {
+  if (error instanceof SerialBrokerError) {
+    return `${error.code} - ${error.remediation}`;
   }
-  const store = new ConfigurationStore(environment.storage, environment.logger, (error) => {
-    reportFailure('read remembered configurations', error);
-  });
-  const remembered = store.load();
-  rows.replaceChildren(
-    ...remembered.map((configuration) => {
-      const button = element('button', {
-        className: 'secondary small',
-        text: 'Use in form',
-        attributes: { type: 'button' },
-      });
-      button.addEventListener('click', () => {
-        adoptSettings(configuration.name, {
-          device:
-            configuration.device.kind === 'usb'
-              ? {
-                  vendorId: configuration.device.vendorId,
-                  productId: configuration.device.productId,
-                }
-              : { any: true },
-          serial: configuration.serial,
-          connection: configuration.connection,
-          encoding: configuration.encoding,
-          persist: configuration.persist,
-        });
-      });
-      return row([
-        element('strong', { text: configuration.name }),
-        configuration.device.kind === 'usb'
-          ? `${formatUsbId(configuration.device.vendorId)} : ${formatUsbId(configuration.device.productId)}`
-          : 'any port',
-        `${String(configuration.serial.baudRate)} baud`,
-        requireClient().exists(configuration.name) ? 'set up here' : 'not set up here',
-        button,
-      ]);
-    }),
-  );
-  if (remembered.length === 0) {
-    rows.append(row([element('em', { text: 'This origin remembers no configurations.' })]));
-  }
-}
-
-async function renderPorts(): Promise<void> {
-  const rows = byId('portRows');
-  if (!('serial' in navigator)) {
-    rows.replaceChildren(row([element('em', { text: 'This browser has no Web Serial.' })]));
-    return;
-  }
-  try {
-    const ports = await navigator.serial.getPorts();
-    rows.replaceChildren(
-      ...ports.map((port, index) => {
-        const info = port.getInfo();
-        return row([
-          String(index + 1),
-          info.usbVendorId === undefined
-            ? 'no USB identity'
-            : `${formatUsbId(info.usbVendorId)} : ${formatUsbId(info.usbProductId)}`,
-          port.readable === null ? 'closed in this tab' : 'open in this tab',
-          formatDetail(info),
-        ]);
-      }),
-    );
-    if (ports.length === 0) {
-      rows.append(row([element('em', { text: 'No port has been granted to this origin yet.' })]));
-    }
-  } catch (error) {
-    reportFailure('list granted ports', error);
-  }
-}
-
-function wireLogFilters(container: HTMLElement, log: EventLog): void {
-  for (const input of container.querySelectorAll('input[type="checkbox"]')) {
-    if (!(input instanceof HTMLInputElement)) {
-      continue;
-    }
-    input.addEventListener('change', () => {
-      for (const kind of (input.dataset['kinds'] ?? '').split(' ')) {
-        log.setVisible(kind as EntryKind, input.checked);
-      }
-    });
-  }
+  return error instanceof Error ? error.message : String(error);
 }
 
 function readStorage(key: string): string | null {
@@ -667,8 +405,6 @@ function writeStorage(key: string, value: string): void {
   try {
     localStorage.setItem(key, value);
   } catch (error) {
-    reportFailure('save the library settings', error);
+    logFailure('save the settings', error);
   }
 }
-
-export {};

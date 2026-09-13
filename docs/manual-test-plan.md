@@ -111,9 +111,9 @@ it proves the software path, not the electrical one.
 1. `npm run build`
 2. Serve the repository root over `http://localhost` — Web Serial refuses anything that is not
    a secure context, so a LAN address over plain HTTP will not do.
-3. Open `http://localhost:<port>/debug/` in Chrome — the debugging surface. Its _The origin_
-   panel shows which tab owns the port; use it to confirm the failover steps rather than
-   inferring them.
+3. Open `http://localhost:<port>/debug/` in Chrome — the debugging surface. Each card lists the
+   tabs running a configuration and which of them holds the port; use it to confirm the failover
+   steps rather than inferring them.
 4. Attach a USB-serial device. A CH340 adapter (`0x1a86` / `0x7523`) with its TX and RX pins
    bridged is ideal: everything sent comes straight back, so send and receive are visible in
    one window.
@@ -128,8 +128,8 @@ Each row corresponds to a row of the scenario matrix in
 Steps 1 and the `awaiting-permission` half of 2 were confirmed in the 2026-09-12 browser run;
 they are left unticked because the checklist is about a run **with** hardware.
 
-- [ ] **1.** Enter the device's IDs, click _Set up_. Status becomes `awaiting-permission` and
-      _Choose device…_ appears.
+- [ ] **1.** Click _New configuration_, enter the device's IDs, click _Set up_. The card shows
+      `awaiting-permission` and _Choose device…_.
 - [ ] **2.** Click _Choose device…_. Chrome shows its port picker, filtered to the configured
       device. Pick it: status becomes `open`.
 - [ ] **3.** Send `HELLO`. With TX/RX bridged, both a `sent` and a `received` line appear.
@@ -138,9 +138,10 @@ they are left unticked because the checklist is about a run **with** hardware.
 
 ### Several tabs
 
-- [ ] **5.** Open the debugging surface in a second and third tab, and set up the same configuration. Each reaches `open` without prompting.
-- [ ] **6.** Send from tab 2. All three tabs log it: `sent` in tab 2, `sent (peer)` in the
-      others. The device receives it **once**.
+- [ ] **5.** Open the debugging surface in a second and third tab and click _Join_ on the card.
+      Each reaches `open` without prompting.
+- [ ] **6.** Send from tab 2. Every tab's traffic shows it once, from tab 2. The device receives
+      it **once**.
 - [ ] **7.** Send from tab 3 while tab 1 is in the background. It still works.
 - [ ] **8.** Check Chrome's task manager: exactly one `SharedWorker` for the origin.
 
@@ -169,16 +170,15 @@ they are left unticked because the checklist is about a run **with** hardware.
 
 - [ ] **18.** Revoke the device in Chrome's site settings while connected. The tabs report the
       loss; after a reload the status is `awaiting-permission` again.
-- [ ] **19.** Click _Release_ with `forgetDevice` — verify the next `setup()` prompts again.
-      (Use _Release and forget device_.)
+- [ ] **19.** Choose _Release and forget the device_ in the card's ⋯ menu — verify the next
+      setup prompts again.
 
 ### Data
 
 - [ ] **20.** Send a payload larger than 4 KB. It arrives complete and in order.
 - [ ] **21.** Send non-ASCII text (`Grüße, 温度`). It round-trips correctly, including across a
       chunk boundary — send it repeatedly and quickly to make the split likely.
-- [ ] **22.** Send binary through the console:
-      send `02 FF 03` with _As: hex bytes_. The log shows it as hex.
+- [ ] **22.** Send `02 FF 03` with the send box set to _hex_. The traffic shows it as hex.
 
 ### Diagnostics
 
@@ -193,8 +193,8 @@ they are left unticked because the checklist is about a run **with** hardware.
 
 - [ ] **25.** Force it with `SerialBroker.configure({ transport: 'broadcastchannel' })` before
       `setup()`, then repeat steps 5, 6, 9 and 13. Behaviour must be indistinguishable.
-- [ ] **26.** If an Android device is available, open the debugging surface on Chrome for Android with an
-      OTG adapter. `SharedWorker` is absent there, so the fallback is what runs.
+- [ ] **26.** If an Android device is available, open the debugging surface on Chrome for Android
+      with an OTG adapter. `SharedWorker` is absent there, so the fallback is what runs.
 
 ## Recording a run
 

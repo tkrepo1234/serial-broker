@@ -1,5 +1,4 @@
 import { DEFAULT_CONNECTION_SETTINGS } from '../../src/core/defaults.js';
-import type { EffectiveSettings } from '../../src/core/diagnostics.js';
 import type { ConnectionSettings } from '../../src/core/types.js';
 
 /**
@@ -34,23 +33,22 @@ export interface SetupFormValues {
   readonly persist: boolean;
 }
 
-/** A device the form can be pre-filled with. */
+/** A USB device the form can be filled with. */
 export interface DevicePreset {
   readonly label: string;
-  readonly vendorId: number | undefined;
-  readonly productId: number | undefined;
+  readonly vendorId: string;
+  readonly productId: string;
 }
 
-/** Common USB-serial chips, the emulated device, and a port with no USB identity. */
+/** Common USB-serial chips, and the emulated device from `emulator/`. */
 export const DEVICE_PRESETS: readonly DevicePreset[] = [
-  { label: 'CH340 USB-serial adapter (0x1a86:0x7523)', vendorId: 0x1a86, productId: 0x7523 },
-  { label: 'FTDI FT232R (0x0403:0x6001)', vendorId: 0x0403, productId: 0x6001 },
-  { label: 'Silicon Labs CP210x (0x10c4:0xea60)', vendorId: 0x10c4, productId: 0xea60 },
-  { label: 'Emulated device from emulator/ (0x1209:0x0001)', vendorId: 0x1209, productId: 0x0001 },
-  { label: 'Any granted port, no USB identity', vendorId: undefined, productId: undefined },
+  { label: 'CH340 adapter', vendorId: '0x1a86', productId: '0x7523' },
+  { label: 'FTDI FT232R', vendorId: '0x0403', productId: '0x6001' },
+  { label: 'Silicon Labs CP210x', vendorId: '0x10c4', productId: '0xea60' },
+  { label: 'Emulated device (emulator/)', vendorId: '0x1209', productId: '0x0001' },
 ];
 
-/** What the form holds when the page opens. */
+/** What the form holds when the dialog opens. */
 export function defaultFormValues(): SetupFormValues {
   return {
     name: 'Device',
@@ -68,6 +66,22 @@ export function defaultFormValues(): SetupFormValues {
     decodeText: true,
     persist: true,
   };
+}
+
+/**
+ * Works out which entry of the device list describes the values: a preset's index, `'custom'`,
+ * or `'any'`.
+ */
+export function deviceChoiceFor(values: SetupFormValues): string {
+  if (values.deviceKind === 'any') {
+    return 'any';
+  }
+  const index = DEVICE_PRESETS.findIndex(
+    (preset) =>
+      preset.vendorId === values.vendorId.trim().toLowerCase() &&
+      preset.productId === values.productId.trim().toLowerCase(),
+  );
+  return index === -1 ? 'custom' : String(index);
 }
 
 /**
@@ -107,34 +121,6 @@ export function buildSetupOptions(values: SetupFormValues): Record<string, unkno
   };
 }
 
-/**
- * Fills the form from settings a configuration is running with - its own, or another tab's
- * from a diagnostics report - so what is running can be reproduced exactly.
- */
-export function valuesFromSettings(name: string, settings: EffectiveSettings): SetupFormValues {
-  const { device, serial, encoding } = settings;
-  const connection = blankConnection();
-  for (const field of CONNECTION_FIELDS) {
-    connection[field] = String(settings.connection[field]);
-  }
-  return {
-    name,
-    deviceKind: 'any' in device ? 'any' : 'usb',
-    vendorId: 'vendorId' in device ? toHexId(device.vendorId) : '',
-    productId: 'productId' in device ? toHexId(device.productId) : '',
-    baudRate: String(serial.baudRate),
-    dataBits: String(serial.dataBits),
-    stopBits: String(serial.stopBits),
-    parity: serial.parity,
-    bufferSize: String(serial.bufferSize),
-    flowControl: serial.flowControl,
-    connection,
-    encoding: encoding.encoding,
-    decodeText: encoding.decodeText,
-    persist: settings.persist,
-  };
-}
-
 /** Reads every field from the form element. */
 export function readSetupForm(form: HTMLFormElement): SetupFormValues {
   const connection = blankConnection();
@@ -143,7 +129,7 @@ export function readSetupForm(form: HTMLFormElement): SetupFormValues {
   }
   return {
     name: textField(form, 'name').trim(),
-    deviceKind: textField(form, 'deviceKind') === 'any' ? 'any' : 'usb',
+    deviceKind: textField(form, 'device') === 'any' ? 'any' : 'usb',
     vendorId: textField(form, 'vendorId'),
     productId: textField(form, 'productId'),
     baudRate: textField(form, 'baudRate'),
@@ -159,20 +145,12 @@ export function readSetupForm(form: HTMLFormElement): SetupFormValues {
   };
 }
 
-/** Writes every field into the form element. */
+/** Writes every field except the device list, which the dialog derives, into the form. */
 export function writeSetupForm(form: HTMLFormElement, values: SetupFormValues): void {
   const set = (name: string, value: string): void => {
-    const item = form.elements.namedItem(name);
-    if (item instanceof RadioNodeList) {
-      item.value = value;
-    } else if (item instanceof HTMLInputElement || item instanceof HTMLSelectElement) {
-      item.value = value;
-    } else {
-      throw new Error(`The setup form has no field named "${name}"`);
-    }
+    input(form, name).value = value;
   };
   set('name', values.name);
-  set('deviceKind', values.deviceKind);
   set('vendorId', values.vendorId);
   set('productId', values.productId);
   set('baudRate', values.baudRate);
@@ -189,15 +167,16 @@ export function writeSetupForm(form: HTMLFormElement, values: SetupFormValues): 
   checkbox(form, 'persist').checked = values.persist;
 }
 
-function textField(form: HTMLFormElement, name: string): string {
+function input(form: HTMLFormElement, name: string): HTMLInputElement | HTMLSelectElement {
   const item = form.elements.namedItem(name);
-  if (item instanceof RadioNodeList) {
-    return item.value;
-  }
   if (item instanceof HTMLInputElement || item instanceof HTMLSelectElement) {
-    return item.value;
+    return item;
   }
   throw new Error(`The setup form has no field named "${name}"`);
+}
+
+function textField(form: HTMLFormElement, name: string): string {
+  return input(form, name).value;
 }
 
 function checkbox(form: HTMLFormElement, name: string): HTMLInputElement {
@@ -227,8 +206,4 @@ function optionalNumber(key: string, text: string): Record<string, number> {
 
 function optionalText(key: string, text: string): Record<string, string> {
   return text.trim() === '' ? {} : { [key]: text.trim() };
-}
-
-function toHexId(value: number): string {
-  return `0x${value.toString(16).padStart(4, '0')}`;
 }

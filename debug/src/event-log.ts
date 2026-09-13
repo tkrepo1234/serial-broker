@@ -1,7 +1,7 @@
 import { details, element } from './dom.js';
 import { formatClock, formatDetail } from './format.js';
 
-/** What an entry is about. Each kind has its own colour and its own filter switch. */
+/** What an entry is about. Each kind has its own colour. */
 export type EntryKind =
   | 'received'
   | 'sent'
@@ -12,20 +12,18 @@ export type EntryKind =
   | 'log-debug'
   | 'log-info'
   | 'log-warn'
-  | 'log-error'
-  | 'note';
+  | 'log-error';
 
 /**
- * A scrolling, filterable log.
+ * A scrolling log.
  *
  * It keeps a bounded number of entries, because a page left open on a chatty device for a day
- * must not grow without limit, and it only follows the newest entry while the operator is
- * already looking at the bottom - scrolling up to read something must not be undone by traffic.
+ * must not grow without limit, and it only follows the newest entry while the user is already
+ * looking at the bottom - scrolling up to read something must not be undone by traffic.
  */
 export class EventLog {
   readonly #container: HTMLElement;
   readonly #maxEntries: number;
-  readonly #hidden = new Set<EntryKind>();
 
   /**
    * @param container - The element entries are appended to.
@@ -39,7 +37,7 @@ export class EventLog {
   /**
    * Appends an entry.
    *
-   * @param kind - Decides colour and filtering.
+   * @param kind - Decides the colour.
    * @param label - A short word for the kind column.
    * @param text - The one-line summary.
    * @param detail - Anything worth expanding: an error with its context, a log record's fields.
@@ -52,41 +50,25 @@ export class EventLog {
     detail?: unknown,
     timestamp = Date.now(),
   ): void {
-    const isAtBottom =
-      this.#container.scrollHeight - this.#container.scrollTop - this.#container.clientHeight < 24;
+    const container = this.#container;
+    const isAtBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 24;
 
     const body = element('span', { className: 'text' }, [text]);
     if (detail !== undefined) {
       body.append(details('details', formatDetail(detail)));
     }
-    const entry = element('div', { className: `entry kind-${kind}` }, [
-      element('span', { className: 'time', text: formatClock(timestamp) }),
-      element('span', { className: 'label', text: label }),
-      body,
-    ]);
-    entry.dataset['kind'] = kind;
-    entry.hidden = this.#hidden.has(kind);
-
-    this.#container.append(entry);
-    while (this.#container.childElementCount > this.#maxEntries) {
-      this.#container.firstElementChild?.remove();
+    container.append(
+      element('div', { className: `entry kind-${kind}` }, [
+        element('span', { className: 'time', text: formatClock(timestamp) }),
+        element('span', { className: 'label', text: label }),
+        body,
+      ]),
+    );
+    while (container.childElementCount > this.#maxEntries) {
+      container.firstElementChild?.remove();
     }
     if (isAtBottom) {
-      this.#container.scrollTop = this.#container.scrollHeight;
-    }
-  }
-
-  /** Shows or hides every entry of a kind, including those still to come. */
-  setVisible(kind: EntryKind, isVisible: boolean): void {
-    if (isVisible) {
-      this.#hidden.delete(kind);
-    } else {
-      this.#hidden.add(kind);
-    }
-    for (const entry of this.#container.children) {
-      if (entry instanceof HTMLElement && entry.dataset['kind'] === kind) {
-        entry.hidden = !isVisible;
-      }
+      container.scrollTop = container.scrollHeight;
     }
   }
 
