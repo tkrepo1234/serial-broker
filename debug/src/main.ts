@@ -25,7 +25,13 @@ import { ConfigurationStore } from '../../src/storage/configuration-store.js';
 import { ConfigurationDetail, type DetailHost } from './detail.js';
 import { byId, element } from './dom.js';
 import { EventLog } from './event-log.js';
-import { describeError, formatDevice, shortClientId } from './format.js';
+import {
+  describeError,
+  describeOwnershipLocks,
+  formatDevice,
+  plural,
+  shortClientId,
+} from './format.js';
 import {
   LIBRARY_SETTINGS_KEY,
   linkWithSettings,
@@ -60,7 +66,10 @@ for (const help of document.querySelectorAll<HTMLElement>('.help-text[popover]')
 }
 
 const pageLog = new EventLog(byId('log'), 1_000);
-let logLevel: LogLevel = 'info';
+const logLevelSelect = byId('logLevel') as HTMLSelectElement;
+// Read from the list rather than assumed: a browser that restores the form on reload can bring
+// back a level other than the one marked as selected.
+let logLevel: LogLevel = LOG_LEVELS.find((level) => level === logLevelSelect.value) ?? 'info';
 const pageLogger: Logger = {
   log(level, message, fields) {
     if (LOG_LEVELS.indexOf(level) >= LOG_LEVELS.indexOf(logLevel)) {
@@ -81,10 +90,16 @@ try {
     logPayloads: settings.logPayloads,
   });
   client = new SerialBrokerClient(environment);
-  diagnostics = openDiagnostics({ workerUrl: settings.workerUrl, transport: settings.transport });
+  // With the page's logger, so what the observer drops or fails at shows up in the page's log.
+  diagnostics = openDiagnostics({
+    workerUrl: settings.workerUrl,
+    transport: settings.transport,
+    logger: pageLogger,
+  });
 } catch (error) {
   const banner = byId('banner');
-  banner.textContent = `serial-broker cannot run in this browser: ${describeError(error).text}`;
+  // Not always the browser: a transport forced under Settings that this browser lacks fails too.
+  banner.textContent = `serial-broker could not start on this page: ${describeError(error).text}`;
   banner.hidden = false;
   byId('newButton').hidden = true;
 }
@@ -107,6 +122,13 @@ let rememberedCache: RememberedConfiguration[] | undefined;
 window.addEventListener('storage', () => {
   rememberedCache = undefined;
 });
+/**
+ * Configurations the setup dialog is replacing right now. Between disconnecting and connecting
+ * again one may be set up nowhere, and its detail view - with its traffic - is kept meanwhile.
+ */
+const replacing = new Set<string>();
+/** What the settings panel's facts showed last, so an unchanged panel is not rebuilt. */
+let factsShown = '';
 
 const list = new ConfigurationList(byId('configurationRows'), (name) => {
   selectedName = name;
@@ -165,6 +187,7 @@ const dialog = new SetupDialog(byId('setupDialog') as HTMLDialogElement, async (
       normalizeConfiguration(request.name, request.options);
       // Settings only change by connecting again: this page disconnects, and connects with the new
       // ones. Other tabs keep theirs.
+      replacing.add(request.replaces);
       await page.release(request.replaces);
     }
     await page.setup(request.name, request.options);
@@ -172,6 +195,10 @@ const dialog = new SetupDialog(byId('setupDialog') as HTMLDialogElement, async (
     // Also logged, because the dialog may have been closed before the answer arrived.
     logFailure(`set up "${request.name}"`, error);
     throw error;
+  } finally {
+    if (request.replaces !== undefined) {
+      replacing.delete(request.replaces);
+    }
   }
   selectedName = request.name;
   refreshNow();
@@ -201,10 +228,18 @@ settingsToggle.addEventListener('click', () => {
 });
 
 byId('applySettings').addEventListener('click', () => {
-  writeStorage(LIBRARY_SETTINGS_KEY, JSON.stringify(readSettingsForm()));
-  // Query parameters would override what was just saved, so the reload drops them.
-  location.replace(location.pathname);
+  const chosen = readSettingsForm();
+  const isSaved = writeStorage(LIBRARY_SETTINGS_KEY, JSON.stringify(chosen));
+  // Query parameters would override what was just saved, so the reload drops them. Where saving
+  // failed, the address is the one place the settings survive the reload in.
+  location.replace(isSaved ? location.pathname : linkWithSettings(location.href, chosen));
 });
+// A note about a copied link would otherwise describe settings that have changed since.
+for (const id of ['workerUrl', 'transport', 'logPayloads']) {
+  byId(id).addEventListener('input', () => {
+    byId('linkNote').textContent = '';
+  });
+}
 
 byId('copyLink').addEventListener('click', () => {
   const link = linkWithSettings(location.href, readSettingsForm());
@@ -219,12 +254,17 @@ byId('copyLink').addEventListener('click', () => {
   );
 });
 
-(byId('logLevel') as HTMLSelectElement).addEventListener('change', (event) => {
-  logLevel = (event.target as HTMLSelectElement).value as LogLevel;
+logLevelSelect.addEventListener('change', () => {
+  logLevel = logLevelSelect.value as LogLevel;
 });
 byId('clearLog').addEventListener('click', () => {
   pageLog.clear();
 });
+byId('log')
+  .closest('details')
+  ?.addEventListener('toggle', () => {
+    pageLog.revealed();
+  });
 
 window.addEventListener('pagehide', (event) => {
   // A page kept in the back/forward cache comes back with the same script state, and a closed
@@ -253,8 +293,14 @@ async function refreshLoop(): Promise<void> {
 function refreshNow(): void {
   // An action may have set something up or released it, which changes what is remembered.
   rememberedCache = undefined;
-  render();
-  void refresh();
+  Promise.resolve()
+    .then(async () => {
+      render();
+      await refresh();
+    })
+    .catch((error: unknown) => {
+      logFailure('refresh the page', error);
+    });
 }
 
 async function refresh(): Promise<void> {
@@ -276,7 +322,9 @@ function render(): void {
     remembered: remembered(),
   });
 
-  if (!views.some((view) => view.name === selectedName)) {
+  const isReplacing = (name: string | undefined): boolean =>
+    name !== undefined && replacing.has(name);
+  if (!views.some((view) => view.name === selectedName) && !isReplacing(selectedName)) {
     selectedName = views[0]?.name;
   }
 
@@ -293,7 +341,7 @@ function render(): void {
     entry.detail.update(view, now);
   }
   for (const [name, entry] of details) {
-    if (!shown.has(name)) {
+    if (!shown.has(name) && !isReplacing(name)) {
       entry.stopWatching?.();
       entry.detail.element.remove();
       details.delete(name);
@@ -308,8 +356,9 @@ function render(): void {
     container.replaceChildren(selected.element);
   }
 
-  byId('overview').hidden = views.length === 0;
-  byId('empty').hidden = views.length > 0 || client === undefined;
+  const hasAny = views.length > 0 || replacing.size > 0;
+  byId('overview').hidden = !hasAny;
+  byId('empty').hidden = hasAny || client === undefined;
   // Port locks and granted ports change while the panel is open.
   if (!byId('settingsPanel').hidden) {
     void renderFacts();
@@ -319,7 +368,8 @@ function render(): void {
   byId('busStatus').textContent =
     diagnostics === undefined || tabCount === undefined
       ? ''
-      : `${String(tabCount)} tab${tabCount === 1 ? '' : 's'} connected over ${transportName(diagnostics.transport)}.`;
+      : // "Answered" rather than "connected", which on this page means connected to a configuration.
+        `${plural(tabCount, 'tab')} answered over ${transportName(diagnostics.transport)}.`;
 }
 
 function transportName(transport: 'sharedworker' | 'broadcastchannel'): string {
@@ -389,7 +439,7 @@ function capability(
 const FACT_HELP: Readonly<Record<string, string>> = {
   Browser: 'help-browser',
   'Message bus': 'help-bus',
-  'This tab': 'help-this-tab',
+  'This page': 'help-this-page',
   'Protocol version': 'help-protocol',
   'Port locks': 'help-locks',
   'Granted ports': 'help-ports',
@@ -432,45 +482,30 @@ async function renderFacts(): Promise<void> {
       ]),
     ],
     [
-      'This tab',
+      'This page',
       client === undefined
         ? '—'
         : `${shortClientId(client.clientId)}, ${client.transportKind === undefined ? 'joins the bus with its first configuration' : transportName(client.transportKind)}`,
     ],
     ['Protocol version', String(PROTOCOL_VERSION)],
-    ['Port locks', describeLocks()],
+    ['Port locks', describeOwnershipLocks(snapshot?.locks, PROTOCOL_VERSION)],
     ['Granted ports', await describePorts()],
   ];
+  // Rebuilt only when something changed: the panel is redrawn every two seconds, and replacing its
+  // "?" buttons each time would take keyboard focus away from them.
+  const shown = JSON.stringify(
+    facts.map(([term, value]) => [term, typeof value === 'string' ? value : value.textContent]),
+  );
+  if (shown === factsShown) {
+    return;
+  }
+  factsShown = shown;
   byId('facts').replaceChildren(
     ...facts.flatMap(([term, value]) => [
       element('dt', {}, [term, ...helpFor(term)]),
       typeof value === 'string' ? element('dd', { text: value }) : element('dd', {}, [value]),
     ]),
   );
-}
-
-function describeLocks(): string {
-  const locks = snapshot?.locks;
-  if (locks === undefined) {
-    return 'not listed by this browser';
-  }
-  // Only the locks that decide who holds a port: a tab limit adds a lock per place and a gate,
-  // which would each read as the configuration's name here.
-  const ownership = (lock: { readonly name: string }): boolean =>
-    lock.name.split('/')[1] === 'owner';
-  const names = [
-    ...new Set([...locks.held, ...locks.pending].filter(ownership).map((lock) => lock.name)),
-  ];
-  if (names.length === 0) {
-    return 'none';
-  }
-  return names
-    .map((name) => {
-      const waiting = locks.pending.filter((lock) => lock.name === name).length;
-      const isHeld = locks.held.some((lock) => lock.name === name);
-      return `${name.split('/').pop() ?? name}: ${isHeld ? 'held' : 'free'}${waiting > 0 ? `, ${String(waiting)} waiting` : ''}`;
-    })
-    .join(' · ');
 }
 
 async function describePorts(): Promise<string> {
@@ -528,10 +563,13 @@ function readStorage(key: string): string | null {
   }
 }
 
-function writeStorage(key: string, value: string): void {
+/** @returns Whether the value was saved. */
+function writeStorage(key: string, value: string): boolean {
   try {
     localStorage.setItem(key, value);
+    return true;
   } catch (error) {
     logFailure('save the settings', error);
+    return false;
   }
 }

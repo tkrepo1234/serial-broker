@@ -1,3 +1,4 @@
+import { SerialBrokerErrorCode } from '../../src/core/error-codes.js';
 import type {
   ConfigurationDiagnostics,
   DiagnosticsSnapshot,
@@ -137,6 +138,54 @@ function describeConfiguration(
     settingsDiffer: new Set(tabs.map((tab) => JSON.stringify(tab.configuration.settings))).size > 1,
     actions,
   };
+}
+
+/** This page's part in a configuration, as the list and the detail summary name it. */
+export type PageState = 'connected' | 'queued' | 'withdrawn' | 'not connected';
+
+/** Works out this page's part in a configuration. */
+export function thisPageState(view: ConfigurationView): PageState {
+  const here = view.tabs.find((tab) => tab.isThisTab);
+  if (here === undefined) {
+    return 'not connected';
+  }
+  if (here.configuration.status === 'queued') {
+    return 'queued';
+  }
+  return isWithdrawn(here, view.owner) ? 'withdrawn' : 'connected';
+}
+
+/**
+ * Whether a tab gave the configuration up because the tab holding the port runs a different tab
+ * limit (ADR-0025). It stays `failed`, off the bus, until its settings change.
+ *
+ * A report has no flag for it, so it is recognised by its traces: `failed` with
+ * `CONFIGURATION_CONFLICT`, and a tab limit other than the holder's. The limit is what tells it
+ * apart: every tab that hears the conflict records its code, and a tab that follows a holder whose
+ * reconnecting gave up is `failed` too.
+ *
+ * @param owner - The tab holding the port, if any tab reports it.
+ */
+export function isWithdrawn(tab: TabView, owner: TabView | undefined): boolean {
+  const { configuration } = tab;
+  return (
+    configuration.role !== 'owner' &&
+    configuration.status === 'failed' &&
+    configuration.lastErrorCode === SerialBrokerErrorCode.CONFIGURATION_CONFLICT &&
+    // With no holder reported, the traces above are all there is to go by.
+    owner?.configuration.settings.maxTabs !== configuration.settings.maxTabs
+  );
+}
+
+/** A tab's part in a configuration: `holds the port`, `waiting`, `queued` or `withdrew`. */
+export function tabRole(tab: TabView, owner: TabView | undefined): string {
+  if (tab.configuration.role === 'owner') {
+    return 'holds the port';
+  }
+  if (tab.configuration.status === 'queued') {
+    return 'queued';
+  }
+  return isWithdrawn(tab, owner) ? 'withdrew' : 'waiting';
 }
 
 function byRelevance(a: TabView, b: TabView): number {

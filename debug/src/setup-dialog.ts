@@ -9,6 +9,7 @@ import {
   deviceChoiceFor,
   formValuesFor,
   readSetupForm,
+  rejectedField,
   writeSetupForm,
   type SetupFormValues,
 } from './setup-form.js';
@@ -29,8 +30,8 @@ export interface SetupRequest {
  * The dialog that creates a configuration, or edits the settings of one this page is connected to.
  *
  * The essentials - name, device, baud rate - are all that is visible; every other option waits
- * under "More options". A rejected value keeps the dialog open with the library's reason, so
- * nothing typed is lost.
+ * under "More options". A rejected value keeps the dialog open with the library's reason and the
+ * rejected field in view, so nothing typed is lost.
  */
 export class SetupDialog {
   readonly #dialog: HTMLDialogElement;
@@ -39,8 +40,15 @@ export class SetupDialog {
   readonly #title: HTMLElement;
   readonly #editNote: HTMLElement;
   readonly #submitButton: HTMLButtonElement;
+  readonly #more: HTMLDetailsElement;
   readonly #moreSummary: HTMLElement;
   #replaces: string | undefined;
+  /**
+   * Counts the times the dialog was opened and submitted. An answer that arrives after the dialog
+   * was cancelled and opened again belongs to the earlier request: it must neither close the new
+   * one nor show its error there.
+   */
+  #attempt = 0;
 
   /**
    * @param dialog - The `<dialog>` element, holding the setup form.
@@ -48,6 +56,7 @@ export class SetupDialog {
    */
   constructor(dialog: HTMLDialogElement, submit: (request: SetupRequest) => Promise<void>) {
     const form = dialog.querySelector('form');
+    const more = dialog.querySelector('details');
     const part = (key: string): HTMLElement => {
       const found = dialog.querySelector(`[data-part="${key}"]`);
       if (!(found instanceof HTMLElement)) {
@@ -55,11 +64,12 @@ export class SetupDialog {
       }
       return found;
     };
-    if (form === null) {
+    if (form === null || more === null) {
       throw new Error('The setup dialog is missing its form');
     }
     this.#dialog = dialog;
     this.#form = form;
+    this.#more = more;
     this.#error = part('error');
     this.#title = part('title');
     this.#editNote = part('editNote');
@@ -70,6 +80,13 @@ export class SetupDialog {
       const input = form.elements.namedItem(name);
       if (input instanceof HTMLInputElement) {
         input.placeholder = placeholder;
+      } else if (input instanceof HTMLSelectElement) {
+        // A list's blank entry leaves the choice to the library, named after what it applies,
+        // so it reads differently from choosing that same value explicitly.
+        const blank = [...input.options].find((option) => option.value === '');
+        if (blank !== undefined) {
+          blank.text = `${placeholder} (default)`;
+        }
       }
     }
 
@@ -89,7 +106,8 @@ export class SetupDialog {
     });
     for (const id of ['vendorId', 'productId']) {
       this.#field(id).addEventListener('input', () => {
-        device.value = 'custom';
+        // Typing a preset's IDs selects that preset, as opening the dialog on them would.
+        device.value = deviceChoiceFor(readSetupForm(form));
       });
     }
 
@@ -100,6 +118,9 @@ export class SetupDialog {
     form.addEventListener('submit', (event) => {
       event.preventDefault();
       const values = readSetupForm(form);
+      this.#attempt += 1;
+      const attempt = this.#attempt;
+      const isCurrent = (): boolean => attempt === this.#attempt;
       this.#submitButton.disabled = true;
       this.#error.hidden = true;
       void submit({
@@ -109,14 +130,20 @@ export class SetupDialog {
       })
         .then(
           () => {
-            dialog.close();
+            if (isCurrent()) {
+              dialog.close();
+            }
           },
           (reason: unknown) => {
-            this.#showError(reason);
+            if (isCurrent()) {
+              this.#showError(reason);
+            }
           },
         )
         .finally(() => {
-          this.#submitButton.disabled = false;
+          if (isCurrent()) {
+            this.#submitButton.disabled = false;
+          }
         });
     });
   }
@@ -148,10 +175,12 @@ export class SetupDialog {
   }
 
   #fill(values: SetupFormValues): void {
+    this.#attempt += 1;
     writeSetupForm(this.#form, values);
     (this.#field('device') as HTMLSelectElement).value = deviceChoiceFor(values);
     this.#syncDeviceInputs();
     this.#error.hidden = true;
+    this.#submitButton.disabled = false;
     this.#dialog.showModal();
   }
 
@@ -164,8 +193,17 @@ export class SetupDialog {
   #showError(reason: unknown): void {
     const { text, detail } = describeError(reason);
     // The message names the rejected field, which is what someone filling in a form needs first.
-    this.#error.textContent = detail === '' ? text : `${detail}. ${text}`;
+    this.#error.textContent = detail === '' ? text : `${detail.replace(/\.$/, '')}. ${text}`;
     this.#error.hidden = false;
+
+    const field = rejectedField(reason);
+    const control = field === undefined ? null : this.#form.elements.namedItem(field);
+    if (control instanceof HTMLElement) {
+      if (this.#more.contains(control)) {
+        this.#more.open = true;
+      }
+      control.focus();
+    }
   }
 
   #field(id: string): HTMLElement {

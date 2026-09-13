@@ -5,7 +5,10 @@ import {
   DEFAULT_SERIAL_SETTINGS,
 } from '../../src/core/defaults.js';
 import type { EffectiveSettings } from '../../src/core/diagnostics.js';
+import { SerialBrokerError } from '../../src/core/errors.js';
 import type { ConnectionSettings } from '../../src/core/types.js';
+
+import { formatUsbId } from './format.js';
 
 /**
  * The setup form: every option `setup()` accepts, as the strings and flags the inputs hold.
@@ -16,10 +19,10 @@ import type { ConnectionSettings } from '../../src/core/types.js';
  */
 
 /** A connection setting's name. */
-export type ConnectionField = keyof ConnectionSettings;
+type ConnectionField = keyof ConnectionSettings;
 
 /** Every connection setting, in the order the library documents them. */
-export const CONNECTION_FIELDS = Object.keys(DEFAULT_CONNECTION_SETTINGS) as ConnectionField[];
+const CONNECTION_FIELDS = Object.keys(DEFAULT_CONNECTION_SETTINGS) as ConnectionField[];
 
 /** Every field of the form. An empty string means "leave it to the library's default". */
 export interface SetupFormValues {
@@ -125,12 +128,11 @@ export function formValuesFor(name: string, settings: EffectiveSettings): SetupF
   for (const field of CONNECTION_FIELDS) {
     connectionText[field] = String(connection[field]);
   }
-  const hex = (value: number): string => `0x${value.toString(16).padStart(4, '0')}`;
   return {
     name,
     deviceKind: 'any' in device ? 'any' : 'usb',
-    vendorId: 'any' in device ? '' : hex(device.vendorId),
-    productId: 'any' in device ? '' : hex(device.productId),
+    vendorId: 'any' in device ? '' : formatUsbId(device.vendorId),
+    productId: 'any' in device ? '' : formatUsbId(device.productId),
     baudRate: String(serial.baudRate),
     dataBits: String(serial.dataBits),
     stopBits: String(serial.stopBits),
@@ -181,6 +183,46 @@ export function buildSetupOptions(values: SetupFormValues): Record<string, unkno
     persist: values.persist,
     ...optionalNumber('maxTabs', values.maxTabs),
   };
+}
+
+/**
+ * The form field a rejection from the library names: `baudRate`, `connection.jitter`, `vendorId`.
+ *
+ * The library names the rejected option in `context.argumentName`, as `options.serial.baudRate`.
+ * The dialog uses the field to show it, which matters for the options folded away under "More
+ * options": a message naming a field nobody can see is a dead end.
+ *
+ * @returns The field's name in the form, or `undefined` when the rejection names none.
+ */
+export function rejectedField(error: unknown): string | undefined {
+  if (!(error instanceof SerialBrokerError)) {
+    return undefined;
+  }
+  const argumentName = error.context['argumentName'];
+  if (typeof argumentName !== 'string') {
+    return undefined;
+  }
+  const [root, group, field] = argumentName.split('.');
+  if (root === 'name') {
+    return 'name';
+  }
+  if (root !== 'options') {
+    return undefined;
+  }
+  switch (group) {
+    case 'device':
+      return field === 'vendorId' || field === 'productId' ? field : 'device';
+    case 'serial':
+    case 'encoding':
+      return field;
+    case 'connection':
+      return field === undefined ? undefined : `connection.${field}`;
+    case 'persist':
+    case 'maxTabs':
+      return group;
+    default:
+      return undefined;
+  }
 }
 
 /** Reads every field from the form element. */

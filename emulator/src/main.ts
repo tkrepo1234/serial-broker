@@ -58,8 +58,8 @@ const { values: options } = parseArgs({
   options: {
     host: { type: 'string', default: '127.0.0.1' },
     port: { type: 'string', default: '3240' },
-    'vendor-id': { type: 'string', default: `0x${DEFAULT_VENDOR_ID.toString(16)}` },
-    'product-id': { type: 'string', default: `0x${DEFAULT_PRODUCT_ID.toString(16)}` },
+    'vendor-id': { type: 'string', default: hex4(DEFAULT_VENDOR_ID) },
+    'product-id': { type: 'string', default: hex4(DEFAULT_PRODUCT_ID) },
     usbip: { type: 'string', default: DEFAULT_USBIP_PATH },
     'no-attach': { type: 'boolean', default: false },
     help: { type: 'boolean', default: false },
@@ -73,8 +73,8 @@ if (options.help) {
 
 const device = new CdcAcmDevice(
   {
-    vendorId: parseId(options['vendor-id'], '--vendor-id'),
-    productId: parseId(options['product-id'], '--product-id'),
+    vendorId: parseUint16(options['vendor-id'], '--vendor-id'),
+    productId: parseUint16(options['product-id'], '--product-id'),
     manufacturer: 'serial-broker',
     product: 'serial-broker emulated device',
     serialNumber: 'EMULATOR-0001',
@@ -86,14 +86,23 @@ const device = new CdcAcmDevice(
 const attachedPort = new AttachedPort();
 const server = new UsbipServer(
   device,
-  { host: options.host, port: parseId(options.port, '--port') },
+  { host: options.host, port: parseUint16(options.port, '--port') },
   (event) => {
     attachedPort.recordServerEvent(event);
     log(describeServerEvent(event));
   },
 );
 
-await server.listen();
+try {
+  await server.listen();
+} catch {
+  // The cause, such as EADDRINUSE, is already logged as a server error. Without this, the
+  // rejection would end the process with a stack trace that says nothing about what to do.
+  log(
+    `cannot listen on ${options.host}:${options.port}; another USB/IP server or emulator may be using it (pass --port)`,
+  );
+  process.exit(1);
+}
 log(
   `device ${hex4(device.identity.vendorId)}:${hex4(device.identity.productId)}, bus ID ${BUS_ID}`,
 );
@@ -276,10 +285,12 @@ function describeStatus(status: DeviceStatus): string {
   ].join('\n         ');
 }
 
-function parseId(text: string, flag: string): number {
-  const value = Number(text);
+/** Reads a flag that holds a 16-bit value - a USB ID or a TCP port - in decimal or as `0x…`. */
+function parseUint16(text: string, flag: string): number {
+  // `Number('')` is 0, which would quietly turn an empty flag into ID 0 or a random port.
+  const value = text.trim() === '' ? Number.NaN : Number(text);
   if (!Number.isInteger(value) || value < 0 || value > 0xffff) {
-    process.stderr.write(`${flag} must be an integer from 0 to 0xffff, got "${text}".\n`);
+    process.stderr.write(`${flag} must be an integer from 0 to 65535 (0xffff), got "${text}".\n`);
     process.exit(2);
   }
   return value;

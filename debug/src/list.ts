@@ -1,6 +1,14 @@
 import { element } from './dom.js';
 import { statusLabel, summarizeDevice } from './format.js';
-import type { ConfigurationView } from './model.js';
+import { thisPageState, type ConfigurationView, type PageState } from './model.js';
+
+/** The "This page" column: whether this page is connected, and if so, whether it takes part. */
+const PAGE_STATE_LABELS: Readonly<Record<PageState, string>> = {
+  connected: 'Connected',
+  queued: 'Queued',
+  withdrawn: 'Withdrawn',
+  'not connected': '—',
+};
 
 /** One configuration's row, with the cells that change. */
 interface Row {
@@ -54,7 +62,7 @@ export class ConfigurationList {
       row.status.textContent = statusLabel(view.status);
       row.device.textContent = view.settings === undefined ? '—' : summarizeDevice(view.settings);
       row.tabs.textContent = String(view.tabs.length);
-      row.here.textContent = view.isSetUpHere ? 'Connected' : '—';
+      row.here.textContent = PAGE_STATE_LABELS[thisPageState(view)];
       row.element.classList.toggle('selected', isSelected);
       row.name.setAttribute('aria-current', String(isSelected));
 
