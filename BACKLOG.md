@@ -92,3 +92,52 @@ facing the serial-broker problem recognise this as the solution, whichever featu
 
 A first draft is in `design/at-a-glance.svg`. It was taken out of the documentation until it has
 been reworked; the rework has to match the documentation's colours and style.
+
+---
+
+## Open findings from the project review of 2026-09-13
+
+The verified defects were fixed in `6d31c59`. What remains needs a decision or is larger work.
+
+### Decisions
+
+- **Crashed tabs are never forgotten by the worker.** A tab that dies without `goodbye` stays in
+  the broker's participants, and as owner until a successor claims. Options: a heartbeat, or a
+  per-tab Web Lock the worker waits on. The test harness hides this: killing a tab tells the
+  broker, which a real worker never learns.
+- **Saved configurations are keyed by the protocol version**, so every protocol change discards
+  them although their format did not change. Give storage its own schema version.
+- **`configure()` only takes effect before the first call of any kind**, and `exists()` /
+  `names()` build the client (and throw in unsupported browsers). Decide whether read-only calls
+  should build it, and whether a late `configure()` should warn.
+- **Error codes that are never raised:** `MALFORMED_MESSAGE`, `OWNERSHIP_TRANSFER_TIMEOUT`,
+  `UNKNOWN`. Raise or remove before 1.0.
+- **A listener that throws is reported in every tab** (`LISTENER_THREW` is broadcast).
+- **Tabs on different protocol versions cannot detect each other** (see "Found while writing the
+  chapters").
+
+### Risks
+
+- A device plugged in while ports are being enumerated is missed; `getPorts()` has no deadline.
+- `bufferSize` is not part of the settings compared for `CONFIGURATION_CONFLICT`.
+- The harness diverges from browsers in ways that hide bugs: killed tabs keep timers and bus
+  access, the fake picker ignores filters, and the fake `close()` always succeeds.
+- Packaging: the emulator needs Node's type stripping (newer than `engines` says), and CommonJS
+  consumers get ES-module type definitions.
+- Emulator: `attachedPort` is never cleared, bytes sent while no host is attached are queued and
+  then dropped, OUT transfers have no length cap, the server's error listener is removed once
+  listening, and the USB/IP version is not checked.
+
+### Refactorings
+
+- One set of protocol guards (`decode.ts` and `decode-diagnostics.ts` each define them, and they
+  already differ); one conversion from a configuration to setup options (`toOptions`,
+  `toStorable`, `describeSettings`); a shared base for the two transports; `configNameOf()`.
+- Test helpers duplicated across files: recording logger, fake ports, message envelopes,
+  transport request recorders, the device constant; `facade.test.ts` could use the harness fakes.
+- Debugging surface: one `formatDevice()` and one error description; placeholders filled from
+  the library's defaults; a generated Close button for the help popovers; "Decode text" starts
+  checked although the dialog says blank means default.
+- Dead code: unused getters (`PortSupervisor.status`, `isOpen`), `ConfigurationSession.#disposal`,
+  `TransportRequest.workerUrl`, the `docs:api` script, the no-op `exclude` in
+  `tsconfig.build.json`, duplicated `.prettierignore` entries.
