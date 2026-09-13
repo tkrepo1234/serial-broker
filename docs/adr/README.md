@@ -19,7 +19,7 @@ because of a decision references it in a comment (`// See ADR-0005.`).
 | [0008](./0008-wire-protocol-and-versioning.md)                  | Version the wire protocol independently                                             | Amended by 0023, 0024 |
 | [0009](./0009-device-identity-and-permission-persistence.md)    | Identify devices by USB IDs, persist configuration, rely on browser permission      | Amended by 0022       |
 | [0010](./0010-reconnect-supervision-and-backoff.md)             | Supervise the connection with bounded exponential backoff                           | Accepted              |
-| [0011](./0011-encapsulation-boundary.md)                        | Expose nothing about the coordination mechanism                                     | Amended by 0018       |
+| [0011](./0011-encapsulation-boundary.md)                        | Expose nothing about the coordination mechanism                                     | Amended by 0018, 0025 |
 | [0012](./0012-error-model.md)                                   | One error type, stable codes, mandatory remediation                                 | Accepted              |
 | [0013](./0013-write-ordering-and-delivery-semantics.md)         | Per-participant write ordering with at-most-once delivery                           | Accepted              |
 | [0014](./0014-dependency-injection-of-the-environment.md)       | Inject the browser environment for testability                                      | Accepted              |
@@ -33,3 +33,4 @@ because of a decision references it in a comment (`// See ADR-0005.`).
 | [0022](./0022-version-stored-configurations-separately.md)      | Version stored configurations separately from the protocol                          | Accepted              |
 | [0023](./0023-announce-the-protocol-version.md)                 | Announce the protocol version on an unversioned channel                             | Accepted              |
 | [0024](./0024-keep-the-worker-handshake-version-independent.md) | Keep the handshake with the worker readable by every protocol version               | Accepted              |
+| [0025](./0025-limit-the-tabs-using-a-configuration.md)          | Limit how many tabs use a configuration at once                                     | Accepted              |

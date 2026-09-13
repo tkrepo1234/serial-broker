@@ -42,6 +42,10 @@ coordinate with each other. See
 - A debugging surface, shipped as static content in `dist/debug/`: one card per configuration on
   the origin, with the tabs running it, its traffic and settings, and the action that fits -
   join, choose a device, release. It sets nothing up on its own.
+- `maxTabs` limits how many tabs use a configuration at once, 1 for exclusive use. A tab beyond
+  the limit shows the new status `queued` and takes over, in arrival order, when a tab releases the
+  configuration, closes or crashes. A tab running a different limit reports
+  `CONFIGURATION_CONFLICT` and withdraws.
 - Tabs notice a worker that died - crashed, ended for memory, or terminated from
   `chrome://inspect` - because it stops answering their heartbeats. Each reports
   `BROKER_UNAVAILABLE` once and connects to a new worker, where it takes up its part again. The tab
@@ -57,10 +61,10 @@ coordinate with each other. See
 
 ### Notes
 
-- Wire protocol version: **5**. Version 1 was never released; 2 added the diagnostics request and
+- Wire protocol version: **6**. Version 1 was never released; 2 added the diagnostics request and
   report, 3 the broker's `welcome`, 4 the `heartbeat`, and 5 has the broker answer every heartbeat
   with a `welcome` and freezes the shape of `hello` and `welcome` for every later version
-  ([ADR-0024](./docs/adr/0024-keep-the-worker-handshake-version-independent.md)).
+  ([ADR-0024](./docs/adr/0024-keep-the-worker-handshake-version-independent.md)), and 6 adds the tab limit to the `status` message ([ADR-0025](./docs/adr/0025-limit-the-tabs-using-a-configuration.md)).
 - Remembered configurations are stored under a key with a version of its own,
   `serial-broker/configurations/v1`, so a protocol change no longer discards them. Configurations
   remembered under the earlier, protocol-versioned keys are moved there when they are first read.

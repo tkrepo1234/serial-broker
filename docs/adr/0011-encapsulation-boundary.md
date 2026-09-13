@@ -1,6 +1,7 @@
 # ADR-0011: Expose nothing about the coordination mechanism
 
-- **Status:** Accepted, amended by [ADR-0018](./0018-diagnostics-observer.md)
+- **Status:** Accepted, amended by [ADR-0018](./0018-diagnostics-observer.md) and
+  [ADR-0025](./0025-limit-the-tabs-using-a-configuration.md)
 - **Date:** 2026-09-12
 
 ## Context

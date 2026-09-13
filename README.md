@@ -37,6 +37,7 @@ the coordination is deliberately invisible.
 | **Remembers the device**            | The browser keeps the permission; this library keeps the configuration. A later visit connects with no prompt.              |
 | **Sends text and binary**           | Strings are UTF-8 encoded; bytes are passed through untouched. Received data is always bytes, optionally with decoded text. |
 | **Reports failures usefully**       | Every error carries a stable code, structured context, and a specific sentence saying what to do about it.                  |
+| **Limits who uses it**              | Optionally at most N tabs at once, 1 for exclusive use. The others wait and take over when a tab lets go, or crashes.       |
 
 ## Requirements
 
@@ -123,6 +124,7 @@ await SerialBroker.setup('Scale', {
     decodeText: true, // also deliver `text` on onReceive
   },
   persist: true, // restore this configuration after a reload
+  maxTabs: Infinity, // at most this many tabs use it at once; 1 for exclusive use
 });
 ```
 
@@ -179,15 +181,16 @@ from receiving the event.
 }
 ```
 
-| Status                | Meaning                                                              |
-| --------------------- | -------------------------------------------------------------------- |
-| `idle`                | Registered, not yet connecting.                                      |
-| `awaiting-permission` | No granted device matches. Call `requestAccess()` from a gesture.    |
-| `connecting`          | Opening a port.                                                      |
-| `open`                | Ready. Data can be sent and will be received.                        |
-| `reconnecting`        | The connection was lost; it is being re-established.                 |
-| `failed`              | Reconnection gave up. Revives automatically if the device reappears. |
-| `released`            | The configuration was released in this tab.                          |
+| Status                | Meaning                                                                 |
+| --------------------- | ----------------------------------------------------------------------- |
+| `idle`                | Registered, not yet connecting.                                         |
+| `queued`              | `maxTabs` other tabs use the configuration; this tab waits for a place. |
+| `awaiting-permission` | No granted device matches. Call `requestAccess()` from a gesture.       |
+| `connecting`          | Opening a port.                                                         |
+| `open`                | Ready. Data can be sent and will be received.                           |
+| `reconnecting`        | The connection was lost; it is being re-established.                    |
+| `failed`              | Reconnection gave up. Revives automatically if the device reappears.    |
+| `released`            | The configuration was released in this tab.                             |
 
 Treat the list as extensible: handle an unrecognised status gracefully rather than throwing.
 

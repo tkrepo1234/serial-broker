@@ -14,12 +14,13 @@ A configuration name is set up separately in every tab, and each tab may pass it
 **serial-broker does not compare options between tabs.** Which tab's options take effect depends
 on the option:
 
-| Options                                                         | Taken from                                                             |
-| --------------------------------------------------------------- | ---------------------------------------------------------------------- |
-| `device`, `serial`                                              | The tab that holds the port, when it opens it.                         |
-| `connection` except `writeTimeoutMs`, and `encoding.decodeText` | The tab that holds the port.                                           |
-| `connection.writeTimeoutMs`                                     | The tab that issued the write — and the holding tab's, for each chunk. |
-| `encoding.encoding` for sending, `persist`                      | Each tab for itself.                                                   |
+| Options                                                         | Taken from                                                                                |
+| --------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| `device`, `serial`                                              | The tab that holds the port, when it opens it.                                            |
+| `connection` except `writeTimeoutMs`, and `encoding.decodeText` | The tab that holds the port.                                                              |
+| `connection.writeTimeoutMs`                                     | The tab that issued the write — and the holding tab's, for each chunk.                    |
+| `encoding.encoding` for sending, `persist`                      | Each tab for itself.                                                                      |
+| `maxTabs`                                                       | Every tab alike. A tab running a different limit than the tab holding the port withdraws. |
 
 In practice: **pass the same options for a name in every tab.** An application that lets the user
 change them has to tell its other tabs, as the [full-featured example](examples/full-featured.md)
@@ -191,6 +192,21 @@ application has to encode the bytes itself.
   options, or one that should not outlive the page.
 
 The browser remembers the device permission independently of this option.
+
+## `maxTabs`
+
+- **Type:** integer, 1–100, or `Infinity`. **Default:** `Infinity`.
+- **What it does:** at most this many tabs of the origin use the configuration at the same time,
+  the tab holding the port included. A tab beyond the limit gets the status `queued`: it receives
+  nothing, and its writes wait for their deadline. As soon as another tab releases the
+  configuration, closes or crashes, the tab that has waited longest joins and carries on as any
+  other tab would. See [Limiting how many tabs use a port](shared-ports.md#limiting-how-many-tabs-use-a-port).
+- **Set it to `1`** when only one tab may drive the device at a time — a machine operated from
+  one screen. Larger values bound how many tabs follow the device's traffic.
+- **Keep in mind:** every tab has to pass the same value. A tab that finds the tab holding the port
+  running a different limit reports `CONFIGURATION_CONFLICT`, withdraws, and shows `failed`.
+  Only tabs of the same origin are counted; another program or site that holds the port only makes
+  opening it wait.
 
 ## `configure()`
 

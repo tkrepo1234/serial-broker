@@ -68,6 +68,10 @@ message.
 | `storage.invalid-entry`           | warn  | A remembered configuration was invalid and discarded.                                     |
 | `storage.corrupt`                 | warn  | The stored configurations could not be read and were discarded.                           |
 | `storage.migrated`                | info  | Remembered configurations were moved from the key an earlier build used.                  |
+| `slot.acquired`                   | info  | This tab took one of the `maxTabs` places and joins the configuration.                    |
+| `slot.released`                   | info  | This tab gave its place up.                                                               |
+| `slot.failed`                     | warn  | Requesting a place failed; the tab queues again.                                          |
+| `session.tab-limit-conflict`      | warn  | The tab holding the port runs a different `maxTabs`; this tab withdrew.                   |
 
 Payload bytes never appear above `debug`, and at `debug` only with `logPayloads: true`.
 
@@ -180,6 +184,11 @@ be reachable in production, do not deploy `dist/debug/` there.
 A tab only joins the bus with its first `setup()`. If tabs have set configurations up and still do
 not appear, the page and the application load the worker from different URLs, force different
 transports, or run different versions of serial-broker.
+
+**The status stays at `queued`.**
+`maxTabs` tabs use the configuration, and none of them lets go. The debugging surface lists them.
+A tab that is left open in the background holds its place as long as it has the configuration set
+up; closing it, or releasing the configuration there, admits the next tab.
 
 **The status stays at `awaiting-permission`.**
 No port the user granted matches the device. Call `requestAccess()` from a click, in the tab that

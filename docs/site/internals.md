@@ -20,6 +20,7 @@ diagnostics   src/diagnostics.ts          openDiagnostics: an observer, independ
 client        src/client/                 one tab's view of every configuration
   ├ session   configuration-session.ts    one configuration: events, writes, role
   ├ writes    pending-writes.ts           the delivery guarantee for writes this tab issued
+  ├ places    tab-slot.ts                 the tab limit: one Web Lock per place
   ├ observer  diagnostics-observer.ts     the read-only diagnostics participant
   └ transport transport/                  the message bus: SharedWorker or BroadcastChannel
   │
@@ -47,6 +48,11 @@ the owner for as long as it keeps the lock callback's promise pending; there is 
 it becomes the owner it creates a `PortSupervisor`, announces `owner-claimed` on the bus, and hands
 pending writes on. When it stops, it closes the port **before** releasing the lock, so the successor
 never finds the device still open.
+
+With a tab limit, a tab requests the ownership lock - and joins the bus - only while it holds one
+of `maxTabs` places, each the Web Lock `serial-broker/tab-slot/v<protocol>/<maxTabs>/<place>/<name>`.
+Waiting tabs queue at a gate lock and, holding it, request every place at once; the first granted is
+kept [ADR-0025].
 
 When a tab dies, the browser releases its lock and grants it to the longest-waiting request. The
 successor's `owner-claimed` is also the proof, to every other tab, that the previous owner is gone.
@@ -95,7 +101,7 @@ malformed is dropped [ADR-0008].
 | `attach`, `detach`                          | every tab               | Start or stop participating in a configuration.                             |
 | `owner-claimed`, `owner-released`           | the owner               | Ownership changed.                                                          |
 | `status-request`                            | a tab that just set up  | Asks the owner to restate the status.                                       |
-| `status`                                    | the owner               | The connection status changed.                                              |
+| `status`                                    | the owner               | The connection status changed, with the owner's tab limit.                  |
 | `write-request`                             | a participant           | Asks the owner to write.                                                    |
 | `write-started`, `write-result`             | the owner               | The write began; how it ended.                                              |
 | `data-received`, `data-sent`                | the owner               | Traffic, to every participant.                                              |
@@ -196,3 +202,4 @@ in a real browser, with real or emulated hardware [ADR-0017].
 | 0022 | Version stored configurations separately from the protocol                          |
 | 0023 | Announce the protocol version on an unversioned channel                             |
 | 0024 | Keep the handshake with the worker readable by every protocol version               |
+| 0025 | Limit how many tabs use a configuration at once                                     |

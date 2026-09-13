@@ -124,9 +124,12 @@ tab does not count. `release()` of a name that is not set up does nothing and ra
 
 `CONFIGURATION_CONFLICT`
 : **Raised by** `setup()` for a name already set up in this tab with a different device, baud rate,
-data bits, stop bits, parity, flow control or buffer size. Other differences are ignored, and identical
-options make the second `setup()` a no-op.
-**Context:** `existing` and `requested` device filters.
+data bits, stop bits, parity, flow control, buffer size or `maxTabs`. Other differences are ignored,
+and identical options make the second `setup()` a no-op.
+**Delivered through `onError`**, in every tab, when a tab finds the tab holding the port running
+the configuration with a different `maxTabs`. That tab withdraws and shows `failed`.
+**Context:** `existing` and `requested` device filters; for a differing tab limit, `maxTabs` of
+the tab that withdrew and `holdingTabMaxTabs` of the tab holding the port.
 **Do:** `release()` the configuration first, then set it up with the new options. See
 [Restoring, releasing and forgetting](examples/all-features.md#restoring-releasing-and-forgetting)
 for the typical case of a remembered configuration from an older version of the application.

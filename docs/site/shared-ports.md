@@ -201,6 +201,30 @@ adapters granted, serial-broker uses the first one and says so in the log. A con
 `device: { any: true }`, for ports that have no USB identity at all, cannot tell ports apart
 either.
 
+## Limiting how many tabs use a port
+
+By default every tab that sets a configuration up uses it. With `maxTabs`, at most that many do
+at the same time, the tab holding the port included; `maxTabs: 1` gives one tab exclusive use.
+
+```ts
+await SerialBroker.setup('Press', {
+  device: { vendorId: 0x0403, productId: 0x6001 },
+  serial: { baudRate: 115_200 },
+  maxTabs: 1,
+});
+```
+
+A tab beyond the limit shows the status `queued`. It receives nothing, and a write it issues waits
+for its deadline. When a tab releases the configuration, is closed or crashes, the tab that has
+waited longest takes its place and goes on exactly like a tab that was never queued — becoming the
+tab holding the port, if that place is free. The places are Web Locks, so the browser frees a
+crashed tab's place as it frees ownership, and no timeout is involved.
+
+Every tab has to pass the same limit. A tab that finds the tab holding the port running a different
+one reports `CONFIGURATION_CONFLICT` to every tab, withdraws, and shows `failed` until it is
+released and set up again with the same limit. Only tabs of this origin are counted: another
+program or site holding the port makes opening it wait, but does not take a place.
+
 ## The message bus
 
 Tabs exchange messages through a `SharedWorker` by default. The worker only routes messages: it
@@ -240,6 +264,7 @@ changelog says when that is necessary.
 - Use the same options for a configuration name in every tab. serial-broker does not compare them
   between tabs: the tab holding the port opens it with its own. See
   [Whose settings apply](configuration.md#whose-settings-apply).
+- Pass the same `maxTabs` in every tab, and show `queued` to the user as waiting, not as an error.
 - Handle status values you do not recognise gracefully: the list may grow.
 
 [web-locks]: https://developer.mozilla.org/en-US/docs/Web/API/Web_Locks_API
