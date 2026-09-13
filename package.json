@@ -13,6 +13,14 @@
     "usb-serial"
   ],
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tkrepo1234/serial-broker.git"
+  },
+  "bugs": {
+    "url": "https://github.com/tkrepo1234/serial-broker/issues"
+  },
+  "homepage": "https://github.com/tkrepo1234/serial-broker#readme",
   "type": "module",
   "sideEffects": false,
   "engines": {
