@@ -25,7 +25,7 @@ import { ConfigurationStore } from '../../src/storage/configuration-store.js';
 import { ConfigurationCard, type CardHost } from './card.js';
 import { byId, element } from './dom.js';
 import { EventLog } from './event-log.js';
-import { formatRelative, formatUsbId, shortClientId } from './format.js';
+import { formatUsbId, shortClientId } from './format.js';
 import {
   LIBRARY_SETTINGS_KEY,
   linkWithSettings,
@@ -47,12 +47,12 @@ const settings = resolveLibrarySettings(
   new URL('../serial-broker.worker.js', import.meta.url).href,
 );
 
-const libraryLog = new EventLog(byId('libraryLog'), 1_000);
+const pageLog = new EventLog(byId('log'), 1_000);
 let logLevel: LogLevel = 'info';
 const pageLogger: Logger = {
   log(level, message, fields) {
     if (LOG_LEVELS.indexOf(level) >= LOG_LEVELS.indexOf(logLevel)) {
-      libraryLog.add(`log-${level}`, level, message, fields);
+      pageLog.add(`log-${level}`, level, message, fields);
     }
   },
 };
@@ -72,7 +72,7 @@ try {
   diagnostics = openDiagnostics({ workerUrl: settings.workerUrl, transport: settings.transport });
 } catch (error) {
   const banner = byId('banner');
-  banner.textContent = `The library cannot run here: ${describeError(error)}`;
+  banner.textContent = `serial-broker cannot run in this browser: ${describeError(error)}`;
   banner.hidden = false;
   byId('newButton').hidden = true;
 }
@@ -82,7 +82,6 @@ try {
 const cardTemplate = byId('cardTemplate') as HTMLTemplateElement;
 const cards = new Map<string, { card: ConfigurationCard; stopWatching: Unsubscribe | undefined }>();
 let snapshot: DiagnosticsSnapshot | undefined;
-let collectedAt: number | undefined;
 
 const host: CardHost = {
   join(name, joined) {
@@ -137,26 +136,30 @@ byId('emptyNewButton').addEventListener('click', () => {
 
 void refreshLoop();
 
-// --- Settings menu and log --------------------------------------------------------------------
+// --- Settings and log -------------------------------------------------------------------------
 
 (byId('workerUrl') as HTMLInputElement).value = settings.workerUrl;
 (byId('transport') as HTMLSelectElement).value = settings.transport;
 (byId('logPayloads') as HTMLInputElement).checked = settings.logPayloads;
 
-byId('settingsMenu').addEventListener('toggle', () => {
-  if ((byId('settingsMenu') as HTMLDetailsElement).open) {
+const settingsToggle = byId('settingsToggle');
+settingsToggle.addEventListener('click', () => {
+  const panel = byId('settingsPanel');
+  panel.hidden = !panel.hidden;
+  settingsToggle.setAttribute('aria-expanded', String(!panel.hidden));
+  if (!panel.hidden) {
     void renderFacts();
   }
 });
 
 byId('applySettings').addEventListener('click', () => {
-  writeStorage(LIBRARY_SETTINGS_KEY, JSON.stringify(readLibrarySettings()));
+  writeStorage(LIBRARY_SETTINGS_KEY, JSON.stringify(readSettingsForm()));
   // Query parameters would override what was just saved, so the reload drops them.
   location.replace(location.pathname);
 });
 
 byId('copyLink').addEventListener('click', () => {
-  const link = linkWithSettings(location.href, readLibrarySettings());
+  const link = linkWithSettings(location.href, readSettingsForm());
   const note = byId('linkNote');
   navigator.clipboard.writeText(link).then(
     () => {
@@ -172,7 +175,7 @@ byId('copyLink').addEventListener('click', () => {
   logLevel = (event.target as HTMLSelectElement).value as LogLevel;
 });
 byId('clearLog').addEventListener('click', () => {
-  libraryLog.clear();
+  pageLog.clear();
 });
 
 window.addEventListener('pagehide', () => {
@@ -198,7 +201,6 @@ async function refresh(): Promise<void> {
   if (diagnostics !== undefined) {
     try {
       snapshot = await diagnostics.collect(COLLECT_WINDOW_MS);
-      collectedAt = Date.now();
     } catch (error) {
       logFailure('ask the other tabs', error);
     }
@@ -238,20 +240,16 @@ function render(): void {
   }
 
   byId('empty').hidden = views.length > 0 || client === undefined;
-  byId('busStatus').textContent = [
-    diagnostics === undefined
-      ? 'no message bus'
-      : diagnostics.transport === 'sharedworker'
-        ? 'SharedWorker'
-        : 'BroadcastChannel',
-    `protocol ${String(PROTOCOL_VERSION)}`,
-    snapshot === undefined
-      ? 'asking the other tabs…'
-      : `${String(snapshot.participants.length)} tab(s) on the bus`,
-    collectedAt === undefined ? '' : `updated ${formatRelative(collectedAt, now)}`,
-  ]
-    .filter((part) => part !== '')
-    .join(' · ');
+
+  const tabCount = snapshot?.participants.length;
+  byId('busStatus').textContent =
+    diagnostics === undefined || tabCount === undefined
+      ? ''
+      : `${String(tabCount)} tab${tabCount === 1 ? '' : 's'} connected over ${transportName(diagnostics.transport)}.`;
+}
+
+function transportName(transport: 'sharedworker' | 'broadcastchannel'): string {
+  return transport === 'sharedworker' ? 'SharedWorker' : 'BroadcastChannel';
 }
 
 /** Streams a configuration's traffic from every tab into its card. */
@@ -269,7 +267,7 @@ function watch(card: ConfigurationCard): Unsubscribe | undefined {
   }
 }
 
-/** Runs a card's action, and shows a failure on that card in the library's words. */
+/** Runs a card's action, and shows a failure on that card. */
 function act(name: string, action: string, work: () => Promise<void>): void {
   void work().then(refreshNow, (error: unknown) => {
     cards.get(name)?.card.showError(error);
@@ -295,7 +293,7 @@ async function renderFacts(): Promise<void> {
   const check = (label: string, isPresent: boolean): string => `${isPresent ? '✓' : '✗'} ${label}`;
   const facts: [string, string][] = [
     [
-      'Platform',
+      'Browser',
       [
         check('secure context', window.isSecureContext),
         check('Web Serial', 'serial' in navigator),
@@ -308,9 +306,10 @@ async function renderFacts(): Promise<void> {
       'This tab',
       client === undefined
         ? '—'
-        : `${shortClientId(client.clientId)} · ${client.transportKind ?? 'joins the bus with its first setup'}`,
+        : `${shortClientId(client.clientId)}, ${client.transportKind === undefined ? 'connects with its first configuration' : transportName(client.transportKind)}`,
     ],
-    ['Ownership locks', describeLocks()],
+    ['Protocol version', String(PROTOCOL_VERSION)],
+    ['Port locks', describeLocks()],
     ['Granted ports', await describePorts()],
   ];
   byId('facts').replaceChildren(
@@ -361,7 +360,7 @@ async function describePorts(): Promise<string> {
   }
 }
 
-function readLibrarySettings(): LibrarySettings {
+function readSettingsForm(): LibrarySettings {
   return {
     workerUrl: (byId('workerUrl') as HTMLInputElement).value.trim(),
     transport: (byId('transport') as HTMLSelectElement).value as TransportKind,
@@ -371,13 +370,13 @@ function readLibrarySettings(): LibrarySettings {
 
 function requireClient(): SerialBrokerClient {
   if (client === undefined) {
-    throw new Error('The library could not start in this browser.');
+    throw new Error('serial-broker could not start in this browser.');
   }
   return client;
 }
 
 function logFailure(action: string, error: unknown): void {
-  libraryLog.add(
+  pageLog.add(
     'error',
     'error',
     `Could not ${action}: ${describeError(error)}`,

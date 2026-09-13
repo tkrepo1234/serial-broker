@@ -5,7 +5,7 @@ import type {
   ObservedEvent,
 } from '../../src/diagnostics.js';
 
-import { badge, element } from './dom.js';
+import { element } from './dom.js';
 import { EventLog } from './event-log.js';
 import {
   describePayload,
@@ -27,14 +27,6 @@ export interface CardHost {
   send(name: string, data: Uint8Array<ArrayBuffer>): void;
 }
 
-const STATUS_TONES: Readonly<Record<string, string>> = {
-  open: 'ok',
-  connecting: 'warn',
-  reconnecting: 'warn',
-  'awaiting-permission': 'warn',
-  failed: 'bad',
-};
-
 const PARITY_LETTERS: Readonly<Record<string, string>> = { none: 'N', even: 'E', odd: 'O' };
 
 /**
@@ -49,6 +41,7 @@ export class ConfigurationCard {
   readonly #log: EventLog;
   readonly #encoder = new TextEncoder();
   readonly #parts: {
+    readonly dot: HTMLElement;
     readonly status: HTMLElement;
     readonly summary: HTMLElement;
     readonly hint: HTMLElement;
@@ -60,11 +53,13 @@ export class ConfigurationCard {
     readonly terminator: HTMLSelectElement;
     readonly settings: HTMLElement;
     readonly settingsNote: HTMLElement;
+    readonly traffic: HTMLElement;
+    readonly trafficTitle: HTMLElement;
     readonly trafficCount: HTMLElement;
     readonly choose: HTMLButtonElement;
     readonly join: HTMLButtonElement;
     readonly release: HTMLButtonElement;
-    readonly more: HTMLDetailsElement;
+    readonly forget: HTMLButtonElement;
   };
   #view: ConfigurationView | undefined;
   #settingsKey = '';
@@ -86,6 +81,7 @@ export class ConfigurationCard {
     this.element = root;
     this.#name = name;
     this.#parts = {
+      dot: part('dot'),
       status: part('status'),
       summary: part('summary'),
       hint: part('hint'),
@@ -97,14 +93,16 @@ export class ConfigurationCard {
       terminator: part('terminator') as HTMLSelectElement,
       settings: part('settings'),
       settingsNote: part('settingsNote'),
+      traffic: part('traffic'),
+      trafficTitle: part('trafficTitle'),
       trafficCount: part('trafficCount'),
       choose: part('choose') as HTMLButtonElement,
       join: part('join') as HTMLButtonElement,
       release: part('release') as HTMLButtonElement,
-      more: part('more') as HTMLDetailsElement,
+      forget: part('forget') as HTMLButtonElement,
     };
     part('name').textContent = name;
-    this.#log = new EventLog(part('traffic'), 500);
+    this.#log = new EventLog(this.#parts.traffic, 500);
 
     this.#parts.choose.addEventListener('click', () => {
       this.clearMessage();
@@ -121,8 +119,7 @@ export class ConfigurationCard {
       this.clearMessage();
       host.release(name, false);
     });
-    part('forget').addEventListener('click', () => {
-      this.#parts.more.open = false;
+    this.#parts.forget.addEventListener('click', () => {
       this.clearMessage();
       host.release(name, true);
     });
@@ -151,24 +148,33 @@ export class ConfigurationCard {
     });
   }
 
+  /** The configuration this card shows. */
+  get name(): string {
+    return this.#name;
+  }
+
   /** Redraws everything that depends on the latest reports. */
   update(view: ConfigurationView, now: number): void {
     this.#view = view;
     const parts = this.#parts;
 
+    parts.dot.className = `dot ${view.status ?? ''}`;
     parts.status.textContent = view.status ?? 'not running';
-    parts.status.className = `badge ${STATUS_TONES[view.status ?? ''] ?? 'neutral'}`;
     parts.summary.textContent = view.settings === undefined ? '' : summarize(view.settings);
 
     parts.choose.hidden = !view.actions.has('choose-device');
     parts.join.hidden = !view.actions.has('join');
     parts.join.textContent = view.tabs.length === 0 ? 'Start here' : 'Join';
     parts.release.hidden = !view.actions.has('release');
-    parts.more.hidden = parts.release.hidden;
+    parts.forget.hidden = parts.release.hidden;
 
     parts.hint.textContent = hintFor(view, now);
     parts.tabs.replaceChildren(...view.tabs.map((tab) => tabRow(tab, now)));
     parts.send.hidden = !view.isSetUpHere;
+    // A configuration no tab runs has no traffic to show; an empty box would only take room.
+    const hasNoTraffic = view.tabs.length === 0 && this.#eventCount === 0;
+    parts.traffic.hidden = hasNoTraffic;
+    parts.trafficTitle.hidden = hasNoTraffic;
 
     const settingsKey = view.settings === undefined ? '' : JSON.stringify(view.settings);
     if (settingsKey !== this.#settingsKey && view.settings !== undefined) {
@@ -176,20 +182,22 @@ export class ConfigurationCard {
       this.#settingsKey = settingsKey;
     }
     parts.settingsNote.replaceChildren(
-      view.settingsDiffer ? badge('differs between tabs', 'warn') : '',
+      view.settingsDiffer
+        ? element('span', { className: 'differs', text: 'differs between tabs' })
+        : '',
     );
   }
 
   /** Logs something that crossed the bus for this configuration, from any tab. */
   addEvent(event: ObservedEvent, thisTabId: string | undefined): void {
     const who = (clientId: string): string =>
-      clientId === thisTabId ? 'this tab' : shortClientId(clientId);
+      clientId === thisTabId ? 'this tab' : `tab ${shortClientId(clientId)}`;
 
     switch (event.kind) {
       case 'received':
         this.#log.add(
           'received',
-          'rx',
+          'received',
           describePayload(event.data, event.text),
           undefined,
           event.timestamp,
@@ -198,8 +206,8 @@ export class ConfigurationCard {
       case 'sent':
         this.#log.add(
           event.originClientId === thisTabId ? 'sent' : 'sent-peer',
-          'tx',
-          `${describePayload(event.data)}  · from ${who(event.originClientId)}`,
+          'sent',
+          `${describePayload(event.data)}  (${who(event.originClientId)})`,
           undefined,
           event.timestamp,
         );
@@ -211,7 +219,7 @@ export class ConfigurationCard {
         this.#log.add(
           'error',
           'error',
-          `${event.error.code}: ${event.error.message} · ${who(event.from)}`,
+          `${event.error.code}: ${event.error.message}  (${who(event.from)})`,
           event.error.toJSON(),
           event.timestamp,
         );
@@ -219,8 +227,8 @@ export class ConfigurationCard {
       case 'owner-claimed':
         this.#log.add(
           'ownership',
-          'owner',
-          `${who(event.from)} now holds the port`,
+          'port',
+          `now held by ${who(event.from)}`,
           undefined,
           event.timestamp,
         );
@@ -228,18 +236,18 @@ export class ConfigurationCard {
       case 'owner-released':
         this.#log.add(
           'ownership',
-          'owner',
-          `${who(event.from)} gave the port up`,
+          'port',
+          `given up by ${who(event.from)}`,
           undefined,
           event.timestamp,
         );
         break;
     }
     this.#eventCount += 1;
-    this.#parts.trafficCount.textContent = String(this.#eventCount);
+    this.#parts.trafficCount.textContent = `(${String(this.#eventCount)})`;
   }
 
-  /** Shows why an action failed, in the library's own words. */
+  /** Shows why an action failed, with the remediation serial-broker gives for it. */
   showError(error: unknown): void {
     const message = this.#parts.message;
     if (error instanceof SerialBrokerError) {
@@ -263,11 +271,6 @@ export class ConfigurationCard {
   clearMessage(): void {
     this.#parts.message.hidden = true;
   }
-
-  /** The configuration this card shows. */
-  get name(): string {
-    return this.#name;
-  }
 }
 
 function summarize(settings: EffectiveSettings): string {
@@ -288,7 +291,7 @@ function hintFor(view: ConfigurationView, now: number): string {
   }
   if (view.status === 'awaiting-permission') {
     return owner?.isThisTab === true
-      ? 'No granted port matches this device. Choose it once - the browser remembers it.'
+      ? 'No granted port matches this device. Choose it once; the browser remembers it.'
       : 'Waiting for a device. Only the tab that holds the port can open the picker.';
   }
   if (view.status === 'reconnecting') {
@@ -308,22 +311,23 @@ function hintFor(view: ConfigurationView, now: number): string {
 
 function tabRow(tab: TabView, now: number): HTMLTableRowElement {
   const configuration = tab.configuration;
-  return element('tr', tab.isThisTab ? { className: 'this-tab' } : {}, [
+  return element('tr', {}, [
+    element('td', {
+      className: tab.isThisTab ? 'this-tab' : '',
+      text: tab.isThisTab ? 'This tab' : `Tab ${shortClientId(tab.clientId)}`,
+      title: tab.clientId,
+    }),
+    element('td', {
+      className: configuration.role === 'owner' ? 'holder' : 'waiting',
+      text: configuration.role === 'owner' ? 'holds the port' : 'waiting',
+    }),
     element('td', {}, [
-      element('span', {
-        text: tab.isThisTab ? 'this tab' : shortClientId(tab.clientId),
-        title: tab.clientId,
-      }),
+      element('span', { className: 'status' }, [
+        element('span', { className: `dot ${configuration.status}` }),
+        configuration.status,
+      ]),
     ]),
-    element('td', {}, [
-      configuration.role === 'owner'
-        ? badge('holds the port', 'ok')
-        : element('span', { className: 'muted', text: 'waiting' }),
-    ]),
-    element('td', {}, [
-      badge(configuration.status, STATUS_TONES[configuration.status] ?? 'neutral'),
-    ]),
-    element('td', { className: 'muted', text: tabDetail(configuration, now) }),
+    element('td', { className: 'detail', text: tabDetail(configuration, now) }),
     element('td', { className: 'error-code', text: configuration.lastErrorCode ?? '' }),
   ]);
 }
@@ -342,8 +346,8 @@ function tabDetail(configuration: ConfigurationDiagnostics, now: number): string
       parts.push(`attempt ${String(connection.attempt)}`);
     }
     parts.push(
-      `rx ${formatBytes(connection.bytesReceived)}`,
-      `tx ${formatBytes(connection.bytesSent)}`,
+      `${formatBytes(connection.bytesReceived)} in`,
+      `${formatBytes(connection.bytesSent)} out`,
     );
     if (connection.queuedWrites > 0) {
       parts.push(`${String(connection.queuedWrites)} queued`);

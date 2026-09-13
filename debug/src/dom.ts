@@ -49,11 +49,6 @@ export function element<K extends keyof HTMLElementTagNameMap>(
   return created;
 }
 
-/** Creates a small coloured label. */
-export function badge(text: string, tone: string): HTMLSpanElement {
-  return element('span', { className: `badge ${tone}`, text });
-}
-
 /** Creates a `<details>` block with a summary and preformatted content. */
 export function details(summary: string, content: string): HTMLDetailsElement {
   return element('details', {}, [

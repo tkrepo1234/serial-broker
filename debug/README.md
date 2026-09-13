@@ -13,15 +13,15 @@ remembered from an earlier visit. A card shows:
   and when the next try is, running in other tabs;
 - **the button that fits the situation**: _Join_ a configuration other tabs run, _Start here_ a
   remembered one, _Choose device…_ when this tab holds the port but has no device yet, _Release_
-  when it runs here, and _Release and forget the device_ in the ⋯ menu;
+  when it runs here, and _Forget device_ to also revoke the browser's permission;
 - every tab that runs it — which one holds the port, which are waiting, bytes in and out,
   writes still pending, the last error;
 - a send box, when it runs in this tab;
 - the traffic of every tab, and all of its settings, one click away.
 
 _New configuration_ opens a short dialog: name, device, baud rate. Every other option of
-`setup()` is under _Advanced_. Library settings — worker URL, transport, payload logging — and the
-platform checks, ownership locks and granted ports are behind _Settings_. The library's own log
+`setup()` is under _More options_. Settings — worker URL, transport, payload logging — and the
+browser checks, port locks and granted ports are behind the _Settings_ button. The log
 is at the bottom.
 
 The page refreshes on its own and **sets nothing up on its own**: opening it to look never makes
