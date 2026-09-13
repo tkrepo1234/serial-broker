@@ -11,14 +11,21 @@ import {
   describePayload,
   formatBytes,
   formatRelative,
-  formatDevice,
   formatValue,
   parseHexBytes,
-  shortClientId,
+  plural,
   statusLabel,
+  summarizeDevice,
   summarizeSettings,
+  tabLabel,
 } from './format.js';
-import type { ConfigurationView, TabView } from './model.js';
+import {
+  isWithdrawn,
+  tabRole,
+  thisPageState,
+  type ConfigurationView,
+  type TabView,
+} from './model.js';
 
 /** What the detail view asks the page to do. Each call runs inside the click that caused it. */
 export interface DetailHost {
@@ -38,6 +45,9 @@ type Section = 'overview' | 'traffic' | 'settings';
 
 const SECTIONS: readonly Section[] = ['overview', 'traffic', 'settings'];
 
+/** Numbers the detail views, which all come from one template, so their element IDs differ. */
+let detailCount = 0;
+
 /**
  * Everything about one configuration, and everything that can be done with it from this page.
  *
@@ -50,6 +60,10 @@ export class ConfigurationDetail {
   readonly #name: string;
   readonly #log: EventLog;
   readonly #encoder = new TextEncoder();
+  readonly #sections: ReadonlyMap<
+    Section,
+    { readonly tab: HTMLElement; readonly panel: HTMLElement }
+  >;
   readonly #parts: {
     readonly dot: HTMLElement;
     readonly status: HTMLElement;
@@ -60,6 +74,7 @@ export class ConfigurationDetail {
     readonly choose: HTMLButtonElement;
     readonly menuButton: HTMLButtonElement;
     readonly menu: HTMLElement;
+    readonly menuEdit: HTMLButtonElement;
     readonly tabs: HTMLElement;
     readonly tabsTable: HTMLElement;
     readonly noTabs: HTMLElement;
@@ -83,13 +98,14 @@ export class ConfigurationDetail {
     if (!(root instanceof HTMLElement)) {
       throw new Error('The detail template is empty');
     }
-    const part = (key: string): HTMLElement => {
-      const found = root.querySelector(`[data-part="${key}"]`);
+    const find = (selector: string): HTMLElement => {
+      const found = root.querySelector(selector);
       if (!(found instanceof HTMLElement)) {
-        throw new Error(`The detail template is missing data-part="${key}"`);
+        throw new Error(`The detail template is missing ${selector}`);
       }
       return found;
     };
+    const part = (key: string): HTMLElement => find(`[data-part="${key}"]`);
 
     this.element = root;
     this.#name = name;
@@ -103,6 +119,7 @@ export class ConfigurationDetail {
       choose: part('choose') as HTMLButtonElement,
       menuButton: part('menuButton') as HTMLButtonElement,
       menu: part('menu'),
+      menuEdit: part('menuEdit') as HTMLButtonElement,
       tabs: part('tabs'),
       tabsTable: part('tabsTable'),
       noTabs: part('noTabs'),
@@ -120,42 +137,74 @@ export class ConfigurationDetail {
     part('name').textContent = name;
     this.#log = new EventLog(this.#parts.traffic, 500);
 
+    detailCount += 1;
+    const sections = new Map<Section, { tab: HTMLElement; panel: HTMLElement }>();
     for (const section of SECTIONS) {
-      root.querySelector(`[data-section="${section}"]`)?.addEventListener('click', () => {
+      const tab = find(`[data-section="${section}"]`);
+      const panel = find(`[data-panel="${section}"]`);
+      tab.id = `detail-${String(detailCount)}-${section}-tab`;
+      panel.id = `detail-${String(detailCount)}-${section}`;
+      tab.setAttribute('aria-controls', panel.id);
+      panel.setAttribute('aria-labelledby', tab.id);
+      tab.addEventListener('click', () => {
         this.#show(section);
       });
+      sections.set(section, { tab, panel });
     }
+    this.#sections = sections;
+    // The section bar works as a tab list does: the arrow keys move between sections, and Tab
+    // moves on into the open one.
+    find('[role="tablist"]').addEventListener('keydown', (event) => {
+      const next = step(SECTIONS, this.#shownSection(), event.key, 'ArrowLeft', 'ArrowRight');
+      if (next !== undefined) {
+        event.preventDefault();
+        this.#show(next);
+        sections.get(next)?.tab.focus();
+      }
+    });
     this.#show('overview');
 
     const parts = this.#parts;
     parts.connect.addEventListener('click', () => {
       const settings = this.#view?.settings;
       if (settings !== undefined) {
-        this.clearMessage();
+        this.#clearMessage();
         host.connect(name, settings);
       }
     });
     parts.choose.addEventListener('click', () => {
-      this.clearMessage();
+      this.#clearMessage();
       host.chooseDevice(name);
     });
 
-    parts.menuButton.addEventListener('click', () => {
-      parts.menu.togglePopover();
-    });
+    // The button opens the menu the way popovertarget does, which also closes it on a second
+    // click, tells assistive technology whether it is open, and returns focus to the button when
+    // it closes.
+    parts.menuButton.popoverTargetElement = parts.menu;
+    const menuItems = (): HTMLButtonElement[] =>
+      [...parts.menu.querySelectorAll<HTMLButtonElement>('button')].filter((item) => !item.hidden);
     parts.menu.addEventListener('toggle', () => {
-      // Opened as a popover, the menu is placed beneath its button rather than in the middle of
-      // the page.
       if (parts.menu.matches(':popover-open')) {
+        // Placed beneath its button rather than in the middle of the page.
         const anchor = parts.menuButton.getBoundingClientRect();
         parts.menu.style.top = `${String(anchor.bottom + 4)}px`;
         parts.menu.style.left = `${String(Math.max(8, anchor.right - parts.menu.offsetWidth))}px`;
+        menuItems()[0]?.focus();
+      }
+    });
+    parts.menu.addEventListener('keydown', (event) => {
+      const items = menuItems();
+      const current = items.find((item) => item === document.activeElement);
+      const next = step(items, current, event.key, 'ArrowUp', 'ArrowDown');
+      if (next !== undefined) {
+        event.preventDefault();
+        next.focus();
       }
     });
     const fromMenu = (action: () => void): (() => void) => {
       return () => {
         parts.menu.hidePopover();
-        this.clearMessage();
+        this.#clearMessage();
         action();
       };
     };
@@ -165,7 +214,7 @@ export class ConfigurationDetail {
         host.edit(name, settings);
       }
     };
-    part('menuEdit').addEventListener('click', fromMenu(edit));
+    parts.menuEdit.addEventListener('click', fromMenu(edit));
     part('menuDisconnect').addEventListener(
       'click',
       fromMenu(() => {
@@ -179,13 +228,13 @@ export class ConfigurationDetail {
       }),
     );
     parts.editSettings.addEventListener('click', () => {
-      this.clearMessage();
+      this.#clearMessage();
       edit();
     });
 
     parts.send.addEventListener('submit', (event) => {
       event.preventDefault();
-      this.clearMessage();
+      this.#clearMessage();
       let data: Uint8Array<ArrayBuffer>;
       try {
         data =
@@ -226,13 +275,14 @@ export class ConfigurationDetail {
     parts.connect.hidden = !actions.has('connect');
     parts.choose.hidden = !actions.has('choose-device');
     parts.menuButton.hidden = !actions.has('disconnect');
+    parts.menuEdit.hidden = !actions.has('edit');
     parts.editSettings.hidden = !actions.has('edit');
     if (parts.menuButton.hidden && parts.menu.matches(':popover-open')) {
       parts.menu.hidePopover();
     }
 
     parts.hint.textContent = hintFor(view, now);
-    parts.tabs.replaceChildren(...view.tabs.map((tab) => tabRow(tab, now)));
+    parts.tabs.replaceChildren(...view.tabs.map((tab) => tabRow(tab, view.owner, now)));
     parts.tabsTable.hidden = view.tabs.length === 0;
     parts.noTabs.hidden = view.tabs.length > 0;
     parts.send.hidden = !view.isSetUpHere;
@@ -252,8 +302,10 @@ export class ConfigurationDetail {
 
   /** Logs something that crossed the bus for this configuration, from any tab. */
   addEvent(event: ObservedEvent, thisTabId: string | undefined): void {
-    const who = (clientId: string): string =>
-      clientId === thisTabId ? 'this tab' : `tab ${shortClientId(clientId)}`;
+    const who = (clientId: string): string => {
+      const label = tabLabel(clientId, thisTabId);
+      return label.charAt(0).toLowerCase() + label.slice(1);
+    };
 
     switch (event.kind) {
       case 'received':
@@ -311,51 +363,71 @@ export class ConfigurationDetail {
 
   /** Shows why an action failed, with the remediation serial-broker gives for it. */
   showError(error: unknown): void {
-    const message = this.#parts.message;
     const { text, detail } = describeError(error);
-    message.textContent = text;
-    message.title = detail;
-    message.className = 'message error';
-    message.hidden = false;
+    this.#showMessage('error', text, detail);
   }
 
   /** Shows an outcome that is not a failure, such as a dismissed picker. */
   showNotice(text: string): void {
-    this.#parts.message.textContent = text;
-    this.#parts.message.title = '';
-    this.#parts.message.className = 'message notice';
-    this.#parts.message.hidden = false;
+    this.#showMessage('notice', text, '');
   }
 
-  clearMessage(): void {
+  #showMessage(kind: 'error' | 'notice', text: string, title: string): void {
+    const message = this.#parts.message;
+    message.textContent = text;
+    message.title = title;
+    message.className = `message ${kind}`;
+    message.hidden = false;
+  }
+
+  #clearMessage(): void {
     this.#parts.message.hidden = true;
   }
 
+  #shownSection(): Section | undefined {
+    return SECTIONS.find((section) => this.#sections.get(section)?.panel.hidden === false);
+  }
+
   #show(section: Section): void {
-    for (const candidate of SECTIONS) {
+    for (const [candidate, { tab, panel }] of this.#sections) {
       const isShown = candidate === section;
-      this.element
-        .querySelector(`[data-section="${candidate}"]`)
-        ?.setAttribute('aria-selected', String(isShown));
-      const panel = this.element.querySelector(`[data-panel="${candidate}"]`);
-      if (panel instanceof HTMLElement) {
-        panel.hidden = !isShown;
-      }
+      tab.setAttribute('aria-selected', String(isShown));
+      // Only the open section's tab is in the Tab order; the arrow keys reach the others.
+      tab.tabIndex = isShown ? 0 : -1;
+      panel.hidden = !isShown;
+    }
+    if (section === 'traffic') {
+      this.#log.revealed();
     }
   }
 }
 
+/** The item before or after `current` for an arrow key, wrapping around; `undefined` otherwise. */
+function step<T>(
+  items: readonly T[],
+  current: T | undefined,
+  key: string,
+  previousKey: string,
+  nextKey: string,
+): T | undefined {
+  const offset = key === nextKey ? 1 : key === previousKey ? -1 : 0;
+  if (offset === 0 || items.length === 0) {
+    return undefined;
+  }
+  const index = current === undefined ? -1 : items.indexOf(current);
+  const start = index === -1 ? (offset > 0 ? -1 : 0) : index;
+  return items[(start + offset + items.length) % items.length];
+}
+
 function summaryLine(view: ConfigurationView): string {
-  const tabs = `${String(view.tabs.length)} tab${view.tabs.length === 1 ? '' : 's'}`;
-  const here = view.isSetUpHere ? 'this page connected' : 'this page not connected';
+  const tabsAndPage = `${plural(view.tabs.length, 'tab')} · this page ${thisPageState(view)}`;
   return view.settings === undefined
-    ? `${tabs} · ${here}`
-    : `${summarizeSettings(view.settings)} · ${tabs} · ${here}`;
+    ? tabsAndPage
+    : `${summarizeSettings(view.settings)} · ${tabsAndPage}`;
 }
 
 function hintFor(view: ConfigurationView, now: number): string {
   const owner = view.owner;
-  const others = view.tabs.filter((tab) => !tab.isThisTab).length;
 
   if (view.tabs.length === 0) {
     return view.isRemembered
@@ -364,11 +436,11 @@ function hintFor(view: ConfigurationView, now: number): string {
   }
   // Checked before the port's status: a page waiting for a place, or withdrawn over its limit, is
   // not using the port whatever state the port is in.
-  const here = view.tabs.find((tab) => tab.isThisTab)?.configuration;
-  if (here?.status === 'queued') {
+  const here = view.tabs.find((tab) => tab.isThisTab);
+  if (here?.configuration.status === 'queued') {
     return 'This page is queued: the tab limit is reached. It moves up when another tab disconnects, closes or crashes; until then it receives nothing and what it sends waits.';
   }
-  if (here?.status === 'failed' && here.lastErrorCode === 'CONFIGURATION_CONFLICT') {
+  if (here !== undefined && isWithdrawn(here, owner)) {
     return 'This page uses a different tab limit than the tab that holds the port, and withdrew. Edit the settings to use the same limit.';
   }
   if (view.status === 'awaiting-permission') {
@@ -386,28 +458,22 @@ function hintFor(view: ConfigurationView, now: number): string {
     return 'Reconnecting gave up. It starts again when the device is plugged back in.';
   }
   if (!view.isSetUpHere) {
-    return `Running in ${String(others)} other tab${others === 1 ? '' : 's'}. Connect to use it from this page too.`;
+    return `Running in ${plural(view.tabs.length, 'other tab')}. Connect to use it from this page too.`;
   }
   return '';
 }
 
-function tabRow(tab: TabView, now: number): HTMLTableRowElement {
+function tabRow(tab: TabView, owner: TabView | undefined, now: number): HTMLTableRowElement {
   const configuration = tab.configuration;
-  const role =
-    configuration.role === 'owner'
-      ? 'holds the port'
-      : configuration.status === 'queued'
-        ? 'queued'
-        : 'waiting';
   return element('tr', {}, [
     element('td', {
       className: tab.isThisTab ? 'this-tab' : '',
-      text: tab.isThisTab ? 'This page' : `Tab ${shortClientId(tab.clientId)}`,
+      text: tabLabel(tab.clientId, tab.isThisTab ? tab.clientId : undefined),
       title: tab.clientId,
     }),
     element('td', {
       className: configuration.role === 'owner' ? 'holder' : 'waiting',
-      text: role,
+      text: tabRole(tab, owner),
     }),
     element('td', {}, [
       element('span', { className: 'status' }, [
@@ -438,19 +504,20 @@ function activity(configuration: ConfigurationDiagnostics, now: number): string 
       `${formatBytes(connection.bytesSent)} out`,
     );
     if (connection.queuedWrites > 0) {
-      parts.push(`${String(connection.queuedWrites)} queued`);
+      // Not "queued", which is a tab's status: these are writes waiting at the port.
+      parts.push(`${plural(connection.queuedWrites, 'write')} at the port`);
     }
   }
   const pending = configuration.pendingWrites;
   if (pending.total > 0) {
-    parts.push(`${String(pending.total)} write(s) waiting, ${String(pending.started)} started`);
+    parts.push(`${plural(pending.total, 'write')} waiting, ${String(pending.started)} started`);
   }
   return parts.join(' · ');
 }
 
 /** The settings, grouped and labelled as the setup dialog asks for them. */
 function settingGroups(settings: EffectiveSettings): HTMLElement[] {
-  const { device, serial, connection, encoding } = settings;
+  const { serial, connection, encoding } = settings;
   const ms = (value: number): string => `${formatValue(value)} ms`;
   const bytes = (value: number): string => `${formatValue(value)} bytes`;
 
@@ -458,7 +525,7 @@ function settingGroups(settings: EffectiveSettings): HTMLElement[] {
     [
       'Device and line',
       [
-        ['Device', 'any' in device ? 'any port' : formatDevice(device.vendorId, device.productId)],
+        ['Device', summarizeDevice(settings)],
         ['Baud rate', formatValue(serial.baudRate)],
         ['Data bits', formatValue(serial.dataBits)],
         ['Stop bits', formatValue(serial.stopBits)],
@@ -491,7 +558,7 @@ function settingGroups(settings: EffectiveSettings): HTMLElement[] {
       [
         ['Text encoding', encoding.encoding],
         ['Decode text', formatValue(encoding.decodeText)],
-        ['Remembered', formatValue(settings.persist)],
+        ['Remember across reloads', formatValue(settings.persist)],
       ],
     ],
     ['Sharing', [['Tab limit', formatValue(settings.maxTabs)]]],

@@ -756,6 +756,10 @@
         No configurations yet. One set up in any tab of this origin, or remembered from an earlier
         visit, appears here.
       </p>
+      <p>
+        If your application's tabs have configurations and none appear, this page uses another
+        worker URL or transport than they do: check <b>Settings</b>.
+      </p>
       <button id="emptyNewButton" type="button">New configuration</button>
     </div>
 
@@ -814,7 +818,8 @@
         <dt>auto</dt>
         <dd>
           A SharedWorker; a BroadcastChannel where the browser has no SharedWorker, refuses to
-          create one, or cannot load the worker script. The default.
+          create one, cannot load the worker script, or finds a worker of another protocol version.
+          The default.
         </dd>
         <dt>SharedWorker</dt>
         <dd>
@@ -854,15 +859,19 @@
       <h3>Message bus</h3>
       <p>
         How the tabs of this origin talk to each other. A <b>SharedWorker</b> is used where
-        possible, a <b>BroadcastChannel</b> where there is none. One of the two is enough, so a
-        single missing one is only a warning.
+        possible, a <b>BroadcastChannel</b> where there is none or its worker cannot be used. One of
+        the two is enough, so a single missing one is only a warning.
+      </p>
+      <p>
+        A worker that stops answering is replaced: every tab reports
+        <code>BROKER_UNAVAILABLE</code> once and carries on with a new one.
       </p>
     </div>
-    <div id="help-this-tab" class="help-text" popover>
-      <h3>This tab</h3>
+    <div id="help-this-page" class="help-text" popover>
+      <h3>This page</h3>
       <p>
-        This page's identity on the message bus, which the other tabs show in short form, and the
-        bus it uses. A page joins the bus when it connects to its first configuration.
+        This page's identity on the message bus, which the tables of tabs show in short form, and
+        the bus it uses. A page joins the bus when it connects to its first configuration.
       </p>
     </div>
     <div id="help-protocol" class="help-text" popover>
@@ -878,7 +887,8 @@
       <h3>Port locks</h3>
       <p>
         The Web Locks that decide which tab holds each port, by configuration name. <b>held</b>: a
-        tab holds the port. <b>waiting</b>: tabs queued to take over when it goes away.
+        tab holds the port. <b>waiting</b>: tabs lined up to take over when it goes away. A lock of
+        another protocol version is marked with it.
       </p>
       <p>
         The browser names tabs differently from the rest of this page, so the holder is not named
@@ -903,8 +913,8 @@
         <dd>Set up, not trying to open the port yet.</dd>
         <dt>Queued for a place</dt>
         <dd>
-          As many tabs as the tab limit allows use the configuration already. This tab receives
-          nothing until one of them disconnects, closes or crashes, and then moves up.
+          As many tabs as the tab limit allows use the configuration already. The tab receives
+          nothing, and what it sends waits, until one of them disconnects, closes or crashes.
         </dd>
         <dt>Waiting for device</dt>
         <dd>
@@ -920,13 +930,16 @@
         <dt>Failed</dt>
         <dd>
           Reconnecting gave up after the maximum number of attempts. It starts again when the device
-          is plugged back in.
+          is plugged back in. A tab that withdrew over a different tab limit shows it too.
         </dd>
+        <dt>Released</dt>
+        <dd>A tab stopped using the configuration. Seen in the traffic.</dd>
       </dl>
       <p>
         <b>Overview</b> lists every tab that uses the configuration. <b>holds the port</b> is the
         tab that has the device open; a <b>waiting</b> tab uses it through that tab and takes over
-        if it goes away.
+        if it goes away; a <b>queued</b> tab waits for a place; a tab that <b>withdrew</b> takes no
+        part until its tab limit matches.
       </p>
     </div>
     <div id="help-actions" class="help-text" popover>
@@ -935,7 +948,8 @@
         <dt>Connect</dt>
         <dd>
           Sets the configuration up in this page, with the settings shown, so you can send from
-          here. If no tab uses it yet, this page opens the port.
+          here. If no tab uses it yet, this page opens the port; if the tab limit is reached, this
+          page is queued for a place.
         </dd>
         <dt>Choose device…</dt>
         <dd>
@@ -949,8 +963,9 @@
         </dd>
         <dt>Disconnect</dt>
         <dd>
-          Stops using the configuration in this page and forgets it for reloads. Other tabs carry
-          on; if this page held the port, another tab takes it over. The browser keeps its
+          Stops using the configuration in this page. Other tabs carry on; if this page held the
+          port, another tab takes it over. It is also removed from what this browser remembers,
+          which every page of this origin shares, your application's included. The browser keeps its
           permission for the device, so connecting again needs no prompt.
         </dd>
         <dt>Disconnect and forget device</dt>
@@ -975,7 +990,10 @@
         <dt>Append</dt>
         <dd>The line ending many text devices expect after a command.</dd>
       </dl>
-      <p>The bytes reach the device through whichever tab holds the port.</p>
+      <p>
+        The bytes reach the device through whichever tab holds the port. While this page is queued
+        for a place, they wait.
+      </p>
     </div>
     <div id="help-traffic" class="help-text" popover>
       <h3>Traffic</h3>
@@ -1030,7 +1048,7 @@
           </div>
         </div>
         <p data-part="hint" class="hint"></p>
-        <p data-part="message" class="message" hidden></p>
+        <p data-part="message" class="message" role="status" hidden></p>
 
         <div class="section-bar" role="tablist">
           <button data-section="overview" type="button" role="tab">Overview</button>
@@ -1346,7 +1364,7 @@
           </div>
         </details>
 
-        <p data-part="error" class="message error" hidden></p>
+        <p data-part="error" class="message error" role="alert" hidden></p>
         <div class="actions">
           <button data-action="cancel" type="button" class="secondary">Cancel</button>
           <button data-part="submit" type="submit">Create and connect</button>

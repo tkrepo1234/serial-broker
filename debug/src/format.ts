@@ -6,7 +6,7 @@
  */
 
 import { SerialBrokerError } from '../../src/core/errors.js';
-import type { EffectiveSettings } from '../../src/diagnostics.js';
+import type { DiagnosticsSnapshot, EffectiveSettings } from '../../src/diagnostics.js';
 
 /** Control characters that still count as printable text in serial traffic. */
 const PRINTABLE_CONTROLS = new Set([0x09, 0x0a, 0x0d]);
@@ -218,9 +218,91 @@ export function formatDetail(value: unknown): string {
   return json ?? String(value);
 }
 
-/** Renders a byte count: `512 B`, `4.1 KB`. */
+/** Renders a byte count: `512 B`, `4.1 KB`, `2.3 MB`. */
 export function formatBytes(count: number): string {
-  return count < 1_024 ? `${String(count)} B` : `${(count / 1_024).toFixed(1)} KB`;
+  if (count < 1_024) {
+    return `${String(count)} B`;
+  }
+  // Rounded before the unit is chosen, as in formatRelative, so a count just below a megabyte
+  // reads "1.0 MB" rather than "1024.0 KB".
+  const kilobyteTenths = Math.round((count * 10) / 1_024);
+  if (kilobyteTenths < 10_240) {
+    return `${(kilobyteTenths / 10).toFixed(1)} KB`;
+  }
+  return `${(Math.round((count * 10) / 1_048_576) / 10).toFixed(1)} MB`;
+}
+
+/** A count with its noun: `1 tab`, `3 tabs`. */
+export function plural(count: number, noun: string): string {
+  return `${String(count)} ${noun}${count === 1 ? '' : 's'}`;
+}
+
+/**
+ * How the page names a tab: `This page` for itself, `Tab c-12-3f…-bbbb` for any other.
+ *
+ * One naming for the tabs table, the traffic and the hints, so this page never appears as "this
+ * tab" in one place and "This page" in another.
+ */
+export function tabLabel(clientId: string, thisTabId: string | undefined): string {
+  return clientId === thisTabId ? 'This page' : `Tab ${shortClientId(clientId)}`;
+}
+
+/**
+ * Which tab holds each port and how many wait for it, from the origin's Web Locks:
+ * `Scale: held, 2 waiting · Panel: free`.
+ *
+ * Only ownership locks count. A tab limit adds a lock per place and a gate, which would each read
+ * as the configuration's name here. A lock of another protocol version is marked with it: tabs on
+ * that version take the port under a lock of their own, so the same name can appear twice.
+ *
+ * @param locks - The snapshot's locks, or `undefined` where the browser cannot list them.
+ * @param protocolVersion - This page's protocol version.
+ */
+export function describeOwnershipLocks(
+  locks: DiagnosticsSnapshot['locks'],
+  protocolVersion: number,
+): string {
+  if (locks === undefined) {
+    return 'not listed by this browser';
+  }
+  // The format `ownerLockName()` in src/protocol/version.ts produces. Everything after the
+  // version is the configuration name, which may itself contain slashes.
+  const ownership = /^serial-broker\/owner\/v(\d+)\/(.+)$/s;
+  const entries = new Map<string, { label: string; isHeld: boolean; waiting: number }>();
+  const count = (lock: { readonly name: string }, isHeld: boolean): void => {
+    const match = ownership.exec(lock.name);
+    if (match === null) {
+      return;
+    }
+    const [, version = '', configName = ''] = match;
+    let entry = entries.get(lock.name);
+    if (entry === undefined) {
+      const label =
+        Number(version) === protocolVersion ? configName : `${configName} (protocol ${version})`;
+      entry = { label, isHeld: false, waiting: 0 };
+      entries.set(lock.name, entry);
+    }
+    if (isHeld) {
+      entry.isHeld = true;
+    } else {
+      entry.waiting += 1;
+    }
+  };
+  for (const lock of locks.held) {
+    count(lock, true);
+  }
+  for (const lock of locks.pending) {
+    count(lock, false);
+  }
+  if (entries.size === 0) {
+    return 'none';
+  }
+  return [...entries.values()]
+    .map(
+      ({ label, isHeld, waiting }) =>
+        `${label}: ${isHeld ? 'held' : 'free'}${waiting > 0 ? `, ${String(waiting)} waiting` : ''}`,
+    )
+    .join(' · ');
 }
 
 function isPrintable(text: string): boolean {

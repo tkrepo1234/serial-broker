@@ -2,26 +2,36 @@ import { describe, expect, it } from 'vitest';
 
 import {
   describeError,
+  describeOwnershipLocks,
   describePayload,
+  formatBytes,
   formatDetail,
   formatDevice,
   formatRelative,
   formatUsbId,
   formatValue,
   parseHexBytes,
+  plural,
   shortClientId,
   statusLabel,
   summarizeSettings,
+  tabLabel,
   toHex,
 } from '../../debug/src/format.js';
 import { linkWithSettings, resolveLibrarySettings } from '../../debug/src/library-settings.js';
-import { buildConfigurationViews } from '../../debug/src/model.js';
+import {
+  buildConfigurationViews,
+  isWithdrawn,
+  tabRole,
+  thisPageState,
+} from '../../debug/src/model.js';
 import {
   buildSetupOptions,
   defaultFormValues,
   defaultPlaceholders,
   deviceChoiceFor,
   formValuesFor,
+  rejectedField,
 } from '../../debug/src/setup-form.js';
 import {
   DEFAULT_CONNECTION_SETTINGS,
@@ -38,6 +48,7 @@ import { describeSettings } from '../../src/core/diagnostics.js';
 import { SerialBrokerErrorCode } from '../../src/core/error-codes.js';
 import { SerialBrokerError } from '../../src/core/errors.js';
 import { normalizeConfiguration } from '../../src/core/validation.js';
+import { ownerLockName, PROTOCOL_VERSION, tabSlotLockName } from '../../src/protocol/version.js';
 
 import { sampleReport } from './fixtures/diagnostics-report.js';
 
@@ -153,6 +164,59 @@ describe('debugging surface: configurations', () => {
     });
 
     expect(view?.settingsDiffer).toBe(true);
+  });
+
+  it('tells a tab that withdrew over its tab limit from one that follows a holder that failed', () => {
+    const settings = sampleReport().configurations[0]!.settings;
+    const conflict = SerialBrokerErrorCode.CONFIGURATION_CONFLICT;
+    const participant = { role: 'participant', connection: undefined } as const;
+
+    const [view] = buildConfigurationViews({
+      thisTab: tab('c-1', {
+        ...participant,
+        status: 'failed',
+        lastErrorCode: conflict,
+        settings: { ...settings, maxTabs: 2 },
+      }),
+      snapshot: snapshotOf(
+        tab('c-2', { status: 'failed' }),
+        // Heard the conflict, and follows the holder into `failed`, but runs the holder's limit.
+        tab('c-3', { ...participant, status: 'failed', lastErrorCode: conflict }),
+        tab('c-4', { ...participant, status: 'queued' }),
+      ),
+      remembered: [],
+    });
+
+    expect(view?.tabs.map((entry) => [entry.clientId, tabRole(entry, view.owner)])).toEqual([
+      ['c-1', 'withdrew'],
+      ['c-2', 'holds the port'],
+      ['c-3', 'waiting'],
+      ['c-4', 'queued'],
+    ]);
+    expect(thisPageState(view!)).toBe('withdrawn');
+    expect(isWithdrawn(view!.tabs[2]!, view!.owner)).toBe(false);
+  });
+
+  it("names this page's part in a configuration", () => {
+    const connected = buildConfigurationViews({
+      thisTab: tab('c-1'),
+      snapshot: undefined,
+      remembered: [],
+    });
+    const queued = buildConfigurationViews({
+      thisTab: tab('c-1', { role: 'participant', status: 'queued', connection: undefined }),
+      snapshot: snapshotOf(tab('c-2')),
+      remembered: [],
+    });
+    const elsewhere = buildConfigurationViews({
+      thisTab: undefined,
+      snapshot: snapshotOf(tab('c-2')),
+      remembered: [],
+    });
+
+    expect(thisPageState(connected[0]!)).toBe('connected');
+    expect(thisPageState(queued[0]!)).toBe('queued');
+    expect(thisPageState(elsewhere[0]!)).toBe('not connected');
   });
 
   it('can connect with reported settings as they are, because setup accepts them unchanged', () => {
@@ -274,6 +338,29 @@ describe('debugging surface: new and edited configurations', () => {
         context: expect.objectContaining({ argumentName: 'options.serial.baudRate' }) as unknown,
       }),
     );
+  });
+
+  it('finds the form field a rejection from the library names, so the dialog can show it', () => {
+    const rejection = (name: string, changes: Partial<ReturnType<typeof defaultFormValues>>) => {
+      try {
+        normalizeConfiguration(name, buildSetupOptions({ ...defaultFormValues(), ...changes }));
+      } catch (error) {
+        return rejectedField(error);
+      }
+      throw new Error('The library accepted the values');
+    };
+    const values = defaultFormValues();
+
+    expect(rejection('Device', { baudRate: 'fast' })).toBe('baudRate');
+    expect(rejection('Device', { dataBits: '9' })).toBe('dataBits');
+    expect(rejection('Device', { vendorId: 'zz' })).toBe('vendorId');
+    expect(rejection('Device', { maxTabs: '0' })).toBe('maxTabs');
+    expect(rejection('Device', { encoding: 'no-such-encoding' })).toBe('encoding');
+    expect(rejection('Device', { connection: { ...values.connection, jitter: 'lots' } })).toBe(
+      'connection.jitter',
+    );
+    expect(rejection('', {})).toBe('name');
+    expect(rejectedField(new Error('boom'))).toBeUndefined();
   });
 
   it('recognises a preset from its IDs, and anything else as another device', () => {
@@ -403,6 +490,52 @@ describe('debugging surface: formatting', () => {
     });
     expect(describeError(new Error('boom'))).toEqual({ text: 'boom', detail: '' });
     expect(describeError('plain')).toEqual({ text: 'plain', detail: '' });
+  });
+
+  it('renders byte counts in the unit that fits, without overflowing one', () => {
+    expect(formatBytes(1_023)).toBe('1023 B');
+    expect(formatBytes(4_200)).toBe('4.1 KB');
+    // Just below a megabyte, the rounded value moves to the next unit instead of "1024.0 KB".
+    expect(formatBytes(1_048_575)).toBe('1.0 MB');
+    expect(formatBytes(5 * 1_048_576)).toBe('5.0 MB');
+  });
+
+  it('counts with the right noun, and names this page and other tabs one way everywhere', () => {
+    expect(plural(1, 'tab')).toBe('1 tab');
+    expect(plural(0, 'tab')).toBe('0 tabs');
+    expect(tabLabel('c-1', 'c-1')).toBe('This page');
+    expect(tabLabel('c-12-3f1a9e0b-aaaa-bbbb', 'c-1')).toBe('Tab c-12-3f…-bbbb');
+    expect(tabLabel('c-2', undefined)).toBe('Tab c-2');
+  });
+
+  it('lists who holds each port from the ownership locks alone, whatever the name holds', () => {
+    const lock = (name: string) => ({ name, mode: 'exclusive' as const, browserClientId: 'b' });
+    const olderOwnerLock = ownerLockName('Scale').replace(
+      `/v${String(PROTOCOL_VERSION)}/`,
+      `/v${String(PROTOCOL_VERSION - 1)}/`,
+    );
+
+    expect(
+      describeOwnershipLocks(
+        {
+          held: [
+            lock(ownerLockName('Scale')),
+            lock(tabSlotLockName('Scale', 2, 0)),
+            lock(ownerLockName('Rack/COM 1')),
+            lock(olderOwnerLock),
+          ],
+          pending: [lock(ownerLockName('Scale')), lock(ownerLockName('Scale')), lock('other')],
+        },
+        PROTOCOL_VERSION,
+      ),
+    ).toBe(
+      `Scale: held, 2 waiting · Rack/COM 1: held · Scale (protocol ${String(PROTOCOL_VERSION - 1)}): held`,
+    );
+    expect(
+      describeOwnershipLocks({ held: [], pending: [lock(ownerLockName('A'))] }, PROTOCOL_VERSION),
+    ).toBe('A: free, 1 waiting');
+    expect(describeOwnershipLocks({ held: [], pending: [] }, PROTOCOL_VERSION)).toBe('none');
+    expect(describeOwnershipLocks(undefined, PROTOCOL_VERSION)).toBe('not listed by this browser');
   });
 
   it('renders values the way an operator reads them', () => {

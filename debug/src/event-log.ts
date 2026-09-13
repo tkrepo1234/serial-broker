@@ -14,16 +14,26 @@ export type EntryKind =
   | 'log-warn'
   | 'log-error';
 
+/** How close to the end, in pixels, still counts as reading the newest entry. */
+const END_SLACK_PX = 24;
+
 /**
  * A scrolling log.
  *
  * It keeps a bounded number of entries, because a page left open on a chatty device for a day
  * must not grow without limit, and it only follows the newest entry while the user is already
  * looking at the bottom - scrolling up to read something must not be undone by traffic.
+ *
+ * Whether it follows is remembered rather than measured when an entry arrives: a log in a hidden
+ * section measures zero, cannot scroll, and would otherwise be shown at its oldest entry and never
+ * follow again.
  */
 export class EventLog {
   readonly #container: HTMLElement;
   readonly #maxEntries: number;
+  #follows = true;
+  /** Where the log last scrolled itself to; the user scrolling above it stops the following. */
+  #pinnedAt = 0;
 
   /**
    * @param container - The element entries are appended to.
@@ -32,6 +42,16 @@ export class EventLog {
   constructor(container: HTMLElement, maxEntries = 2_000) {
     this.#container = container;
     this.#maxEntries = maxEntries;
+    container.addEventListener('scroll', () => {
+      if (container.clientHeight === 0) {
+        return;
+      }
+      const isAtEnd =
+        container.scrollHeight - container.scrollTop - container.clientHeight < END_SLACK_PX;
+      // A scroll event arrives a frame after the log scrolled itself, possibly after more entries
+      // were added; only a position above where it put itself is the user's doing.
+      this.#follows = isAtEnd || container.scrollTop >= this.#pinnedAt;
+    });
   }
 
   /**
@@ -51,8 +71,6 @@ export class EventLog {
     timestamp = Date.now(),
   ): void {
     const container = this.#container;
-    const isAtBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 24;
-
     const body = element('span', { className: 'text' }, [text]);
     if (detail !== undefined) {
       body.append(details('details', formatDetail(detail)));
@@ -67,13 +85,27 @@ export class EventLog {
     while (container.childElementCount > this.#maxEntries) {
       container.firstElementChild?.remove();
     }
-    if (isAtBottom) {
-      container.scrollTop = container.scrollHeight;
+    if (this.#follows) {
+      this.#scrollToEnd();
+    }
+  }
+
+  /** To be called when the log becomes visible, so it opens at the newest entry it follows. */
+  revealed(): void {
+    if (this.#follows) {
+      this.#scrollToEnd();
     }
   }
 
   /** Removes every entry. */
   clear(): void {
     this.#container.replaceChildren();
+    this.#follows = true;
+    this.#pinnedAt = 0;
+  }
+
+  #scrollToEnd(): void {
+    this.#container.scrollTop = this.#container.scrollHeight;
+    this.#pinnedAt = this.#container.scrollTop;
   }
 }
