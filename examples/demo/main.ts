@@ -33,7 +33,7 @@ SerialBroker.configure({
 function element(id: string): HTMLElement {
   const found = document.getElementById(id);
   if (found === null) {
-    throw new Error(`The demo page is missing #`);
+    throw new Error(`The demo page is missing #${id}`);
   }
   return found;
 }
