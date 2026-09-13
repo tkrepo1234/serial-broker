@@ -421,8 +421,11 @@ export class ConfigurationSession {
           if (this.#supervisor !== supervisor) {
             return;
           }
-          this.#setStatus(status);
+          // Told to the other tabs before this tab's listeners hear it: a listener may react by
+          // releasing the configuration, and the other tabs must not learn `owner-released`
+          // before the status it supersedes.
           this.#broadcastStatus(status);
+          this.#setStatus(status);
         },
         onData: (data, text) => {
           this.#emitter.emit('onReceive', {

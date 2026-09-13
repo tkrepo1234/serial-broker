@@ -127,6 +127,36 @@ describe.each(TRANSPORTS)(
   },
 );
 
+describe.each(TRANSPORTS)('a listener that releases on the status it hears (%s)', (transport) => {
+  it('does not leave the other tabs with the status it superseded', async () => {
+    const harness = new BrowserHarness({ transport });
+    // Not granted yet: the port opens only when the user picks the device, after both tabs are set up.
+    const device = harness.serial.addDevice(READER.vendorId, READER.productId);
+    const owner = harness.openTab();
+    await owner.setup('Reader', READER_OPTIONS);
+    const other = harness.openTab();
+    await other.setup('Reader', READER_OPTIONS);
+
+    // The tab holding the port gives it up as soon as it opens.
+    owner.client.subscribe('Reader', 'onStatusChange', (event) => {
+      if (event.status === 'open') {
+        void owner.client.release('Reader');
+      }
+    });
+    harness.serial.pickerQueue.push(device);
+    await owner.client.requestAccess('Reader');
+    await harness.advance(0);
+    await harness.advance(0);
+
+    // Once told the port was given up, the other tab must not hear the port is open from the
+    // tab that gave it up - only from itself, when it opens the port in turn.
+    const trail = other.statusTrail('Reader');
+    const releasedAt = trail.lastIndexOf('reconnecting');
+    expect(releasedAt).toBeGreaterThanOrEqual(0);
+    expect(trail.slice(releasedAt + 1, releasedAt + 2)).not.toEqual(['open']);
+  });
+});
+
 describe('errors that arrive while nothing listens for them', () => {
   function codes(events: readonly ErrorEvent[]): string[] {
     return events.map((event) => event.error.code);
