@@ -1,5 +1,5 @@
 import { BackoffState, computeBackoffDelayMs } from '../core/backoff.js';
-import { chunkBytes, toHex } from '../core/bytes.js';
+import { toHex } from '../core/bytes.js';
 import type { TimerHandle } from '../core/clock.js';
 import { withDeadline } from '../core/deadline.js';
 import type { NormalizedConfiguration } from '../core/defaults.js';
@@ -277,28 +277,51 @@ export class PortSupervisor {
    * another's. Large payloads are chunked, because devices with small receive buffers drop
    * the tail of an oversized write rather than applying back-pressure.
    *
+   * A write that has waited in the queue for `writeTimeoutMs` is never begun, and rejects with
+   * `WRITE_TIMEOUT` and `started: false`. Its issuer's own deadline, which covers the whole journey,
+   * has passed by then, and it was told the write did not start: writing it afterwards would put a
+   * command on the device the application may already have sent again (ADR-0013). It leaves the
+   * queue when its time is up, so a backlog behind a slow write holds no payloads nobody waits for.
+   *
    * @param payload - The bytes to write.
    * @param onStarted - Invoked at the moment the first byte is handed to the device. After
    *   this point the write is no longer replayable: if this context dies now, whether the
    *   device received the bytes is unknowable. See ADR-0013.
    */
   async write(payload: Uint8Array, onStarted: () => void): Promise<void> {
-    await this.#writes.enqueue(async () => {
+    const clock = this.environment.clock;
+    const { writeTimeoutMs, maxWriteChunkBytes } = this.configuration.connection;
+    const queuedAt = clock.now();
+    let expiry: TimerHandle | undefined;
+
+    const queued = this.#writes.enqueueWithdrawable(async () => {
+      if (expiry !== undefined) {
+        clock.clearTimer(expiry);
+        expiry = undefined;
+      }
+      // Measured on the wall clock as well as by the timer: a timer can run late, in a tab the
+      // browser throttles, and a write begun in that moment is one its issuer has given up on. A wall
+      // clock set forward refuses a write too early instead, which is the safe direction.
+      if (clock.now() - queuedAt >= writeTimeoutMs) {
+        throw this.#waitedTooLong(payload.byteLength, queuedAt);
+      }
+
       const state = this.#state;
       if (state.kind !== 'open') {
         throw new SerialBrokerError(SerialBrokerErrorCode.NOT_CONNECTED, 'The port is not open', {
           configName: this.configuration.name,
           context: { status: this.#status, byteLength: payload.byteLength },
-          timestamp: this.environment.clock.now(),
+          timestamp: clock.now(),
         });
       }
 
       onStarted();
 
+      // One chunk at a time rather than all of them up front: a large payload with a small chunk size
+      // would otherwise allocate a view per chunk - millions of them - before the first byte goes out.
       let bytesWritten = 0;
-      const chunks = chunkBytes(payload, this.configuration.connection.maxWriteChunkBytes);
-
-      for (const chunk of chunks) {
+      do {
+        const chunk = payload.subarray(bytesWritten, bytesWritten + maxWriteChunkBytes);
         try {
           await withDeadline(state.writer.write(chunk), this.environment.clock, {
             timeoutMs: this.configuration.connection.writeTimeoutMs,
@@ -334,10 +357,42 @@ export class PortSupervisor {
 
         bytesWritten += chunk.byteLength;
         this.#bytesSent += chunk.byteLength;
-      }
+      } while (bytesWritten < payload.byteLength);
 
       this.#traceTraffic('sent', payload);
     });
+
+    expiry = clock.setTimer(() => {
+      expiry = undefined;
+      queued.withdraw(this.#waitedTooLong(payload.byteLength, queuedAt));
+    }, writeTimeoutMs);
+
+    try {
+      await queued.promise;
+    } finally {
+      // Safe for a timer that has fired: clearing it then does nothing.
+      clock.clearTimer(expiry);
+    }
+  }
+
+  /** The error for a write that waited at the port for `writeTimeoutMs` without being begun. */
+  #waitedTooLong(byteLength: number, queuedAt: number): SerialBrokerError {
+    const now = this.environment.clock.now();
+    this.logger.debug('a write waited too long at the port and was not begun', {
+      configName: this.configuration.name,
+      event: 'supervisor.write-expired',
+      byteLength,
+      queuedWrites: this.#writes.depth,
+    });
+    return new SerialBrokerError(
+      SerialBrokerErrorCode.WRITE_TIMEOUT,
+      'The write waited at the port for longer than writeTimeoutMs and was not begun',
+      {
+        configName: this.configuration.name,
+        context: { started: false, byteLength, waitedMs: now - queuedAt },
+        timestamp: now,
+      },
+    );
   }
 
   /**
