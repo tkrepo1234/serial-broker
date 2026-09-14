@@ -9,6 +9,8 @@
  *   by its script URL (ADR-0006): a minified build that started a worker of its own would leave its
  *   tabs unable to coordinate with tabs on the readable build.
  * - A minified file is smaller than its readable counterpart.
+ * - The declarations every entry point names type-check without the Web Serial types, which the
+ *   package cannot make an application install.
  *
  * Run by `npm run build`, last. Fails the build with a list of what is wrong.
  */
@@ -70,6 +72,8 @@ for (const [readable, minified] of pairs) {
   }
 }
 
+problems.push(...(await checkDeclarations()));
+
 if (problems.length > 0) {
   process.stderr.write(`The build does not match the package:\n- ${problems.join('\n- ')}\n`);
   process.exit(1);
@@ -80,6 +84,50 @@ for (const { file, bytes, gzip } of sizes) {
   process.stdout.write(`${file}: ${kb(bytes)}, ${kb(gzip)} gzipped\n`);
 }
 process.stdout.write('The build matches the package exports.\n');
+
+/**
+ * Type-checks every published declaration entry point the way a strict application does.
+ *
+ * `skipLibCheck: false`, no `@types` packages and only the `ES2022` and `DOM` libraries: an
+ * application that has not installed `@types/w3c-web-serial` must be able to type-check against
+ * the package. A declaration reachable from an entry point that names `SerialPort` or another Web
+ * Serial type fails here, where the repository's own configuration, which loads those types, would
+ * not notice it.
+ *
+ * @returns One problem per diagnostic.
+ */
+async function checkDeclarations() {
+  const { default: ts } = await import('typescript');
+  const entries = new Set(
+    [
+      packageJson.types,
+      ...exportTargets(packageJson.exports),
+      ...exportTargets(packageJson.typesVersions),
+    ].filter((target) => target.endsWith('.d.ts')),
+  );
+  const program = ts.createProgram(
+    [...entries].map((entry) => join(root, entry)),
+    {
+      target: ts.ScriptTarget.ES2022,
+      module: ts.ModuleKind.NodeNext,
+      moduleResolution: ts.ModuleResolutionKind.NodeNext,
+      lib: ['lib.es2022.d.ts', 'lib.dom.d.ts'],
+      types: [],
+      strict: true,
+      skipLibCheck: false,
+      noEmit: true,
+    },
+  );
+  return ts.getPreEmitDiagnostics(program).map((diagnostic) => {
+    const text = ts.flattenDiagnosticMessageText(diagnostic.messageText, ' ');
+    if (diagnostic.file === undefined || diagnostic.start === undefined) {
+      return `declarations: ${text}`;
+    }
+    const { line } = diagnostic.file.getLineAndCharacterOfPosition(diagnostic.start);
+    const file = diagnostic.file.fileName.slice(root.length + 1);
+    return `declarations: ${file}:${String(line + 1)}: ${text}`;
+  });
+}
 
 /** Every file path named anywhere in an `exports` map, conditions included. */
 function exportTargets(value) {

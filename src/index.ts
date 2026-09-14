@@ -59,8 +59,12 @@ export {
  *
  * Also reachable as `SerialBroker.isSupported()`; exported separately so it can be called
  * without touching the singleton - for instance to decide whether to load a feature at all.
+ *
+ * Re-exported from the facade rather than from `environment/browser`: a re-export makes the
+ * published declarations import that module's, and through them the Web Serial types, which an
+ * application type-checking without `@types/w3c-web-serial` does not have.
  */
-export { isSupported } from './environment/browser.js';
+export { isSupported } from './serial-broker.js';
 
 /**
  * Version of the inter-context message protocol.

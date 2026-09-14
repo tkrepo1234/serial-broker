@@ -10,7 +10,23 @@ import type {
   Unsubscribe,
 } from './core/types.js';
 import { validateName } from './core/validation.js';
-import { createBrowserEnvironment, isSupported } from './environment/browser.js';
+import {
+  createBrowserEnvironment,
+  isSupported as isPlatformSupported,
+} from './environment/browser.js';
+
+/**
+ * Reports whether this browser can support the library at all.
+ *
+ * The same check as {@link SerialBrokerApi.isSupported}, callable without the singleton.
+ *
+ * A function of its own rather than a re-export of the environment's: the published declaration
+ * of a re-export imports the declarations of the module it comes from, and those name the Web
+ * Serial types, which an application need not have installed.
+ */
+export function isSupported(): boolean {
+  return isPlatformSupported();
+}
 
 /**
  * The library's public surface.
