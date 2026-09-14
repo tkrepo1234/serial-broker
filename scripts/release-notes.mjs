@@ -18,7 +18,10 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
-const tag = process.argv[2] ?? '';
+const packageVersion = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')).version;
+// Without an argument, the tag the version in package.json would get: what `npm run release:check`
+// checks, on every platform - a `$npm_package_version` in the script would not expand on Windows.
+const tag = process.argv[2] ?? `v${packageVersion}`;
 
 const parsed = /^v(\d+\.\d+\.\d+)(-[0-9A-Za-z.-]+)?$/.exec(tag);
 if (parsed === null) {
@@ -27,7 +30,6 @@ if (parsed === null) {
 const [, core, prerelease] = parsed;
 const version = `${core}${prerelease ?? ''}`;
 
-const packageVersion = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')).version;
 if (packageVersion !== version) {
   fail(`The tag ${tag} is version ${version}, but package.json says ${packageVersion}.`);
 }
