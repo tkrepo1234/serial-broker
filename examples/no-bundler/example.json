@@ -1,0 +1,7 @@
+{
+  "name": "no-bundler",
+  "port": 8154,
+  "start": "npm start",
+  "readyPath": "/",
+  "summary": "Static HTML: serial-broker/min from an import map, the worker script next to it, served by a small static server. No bundler, no build step."
+}

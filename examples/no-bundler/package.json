@@ -1,0 +1,20 @@
+{
+  "name": "serial-broker-no-bundler-example",
+  "version": "0.0.0",
+  "private": true,
+  "description": "A static page that loads serial-broker through an import map: no bundler, no build step.",
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "start": "node serve.mjs",
+    "typecheck": "tsc --noEmit",
+    "build": "node scripts/build.mjs"
+  },
+  "dependencies": {
+    "serial-broker": "file:../.."
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.2",
+    "typescript": "^6.0.3"
+  }
+}

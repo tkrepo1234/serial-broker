@@ -1,0 +1,2 @@
+# The deployable folder scripts/build.mjs assembles: the page plus the library files.
+dist/
