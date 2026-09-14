@@ -55,7 +55,7 @@ export type StorageProblemReporter = (error: SerialBrokerError) => void;
 /** What reading one entry produced. */
 type EntryOutcome =
   | { readonly kind: 'restored'; readonly configuration: NormalizedConfiguration }
-  /** The entry was unusable and has been removed; its name leaves the index with it. */
+  /** There is nothing usable under that name any more; the name leaves the index. */
   | { readonly kind: 'discarded' }
   /** Storage itself refused. Nothing is known about the entry, so its name stays in the index. */
   | { readonly kind: 'unreadable' };
@@ -143,8 +143,8 @@ export class ConfigurationStore {
     if (
       !this.#write(storageEntryKey(configuration.name), JSON.stringify(toStorable(configuration)))
     ) {
-      // An entry that was not written must not be listed: `load()` would report the name as a
-      // configuration that went missing.
+      // An entry that was not written must not be listed: the next restore would find a name with
+      // nothing under it and forget it again, having told the application it was remembered.
       return;
     }
     this.#listName(configuration.name);
@@ -173,9 +173,15 @@ export class ConfigurationStore {
     }
 
     if (raw === null) {
-      // Listed but not there: a write that failed after the name was listed, a browser that
-      // evicted the entry, or a developer console. Either way there is nothing to restore.
-      this.#discardEntry(name, 'the entry is gone', undefined);
+      // Listed but not there: another tab removed the configuration while this index was stale
+      // (ADR-0033), a write failed after the name was listed, a browser evicted the entry, or a
+      // developer console did. Nothing is corrupt - the name is, so it leaves the index without a
+      // word to the application, which has nothing to act on and may have asked for the removal.
+      this.logger.info('forgot a remembered configuration that has no entry left', {
+        configName: name,
+        event: 'storage.stale-name',
+        reason: 'the entry is gone',
+      });
       return { kind: 'discarded' };
     }
 

@@ -344,10 +344,12 @@ serial-broker keeps configurations in memory for the lifetime of the page and re
 reload, so the application should set them up itself.
 
 `STORAGE_CORRUPT`
-: **Arises** in `restore()` when one remembered configuration cannot be read — it is gone, is not
-valid JSON, or is no longer valid, for example after an application update changed what it stores —
-or when the list of remembered names itself cannot be read. What could not be read is discarded, so
-it is reported once and not on every restore; every other configuration is restored as usual.
+: **Arises** in `restore()` when one remembered configuration cannot be read — it is not valid
+JSON, or is no longer valid, for example after an application update changed what it stores — or
+when the list of remembered names itself cannot be read. What could not be read is discarded, so
+it is reported once and not on every restore; every other configuration is restored as usual. A
+remembered name that has no configuration left under it is _not_ reported: it is what a removal in
+another tab looks like from here, and it is only logged (`storage.stale-name`).
 **Context:** `configName`, for a single entry; absent when the list itself was unreadable.
 **Do:** nothing. Set the configuration up again, and it is remembered afresh.
 

@@ -195,6 +195,21 @@ describe('ConfigurationStore', () => {
     expect(entries.get(storageIndexKey())).toBe('[]');
   });
 
+  it('forgets a listed name whose entry is gone, without troubling the application', () => {
+    const { store, entries, reported } = createStore({
+      ...stored('Reader'),
+      [storageIndexKey()]: JSON.stringify(['Reader', 'Vanished']),
+    });
+
+    expect(store.load().map((configuration) => configuration.name)).toEqual(['Reader']);
+
+    // A name with no entry is a stale name, not a corrupt configuration: the likeliest cause is
+    // another tab removing it while this index was stale, which nothing asked the application to
+    // act on. It simply leaves the index.
+    expect(reported).toEqual([]);
+    expect(entries.get(storageIndexKey())).toBe(JSON.stringify(['Reader']));
+  });
+
   it('reports an index that is not an array and starts over', () => {
     const { store, entries, reported } = createStore({
       [storageIndexKey()]: JSON.stringify({ Reader: OPTIONS }),

@@ -80,6 +80,7 @@ message.
 | `storage.unavailable`                     | warn  | A read or write to `localStorage` failed; configurations may not be remembered.           |
 | `storage.invalid-entry`                   | warn  | A remembered configuration was invalid and discarded.                                     |
 | `storage.corrupt`                         | warn  | The list of remembered configurations could not be read and was discarded.                |
+| `storage.stale-name`                      | info  | A remembered name had no configuration left under it and was forgotten.                   |
 | `storage.old-format-discarded`            | info  | Configurations stored by an earlier version were removed, unread.                         |
 | `storage.old-format-kept`                 | debug | Removing what an earlier version stored failed; the next read reports storage itself.     |
 | `storage.hold-failed`                     | warn  | The lock that keeps a remembered configuration for other tabs could not be requested.     |

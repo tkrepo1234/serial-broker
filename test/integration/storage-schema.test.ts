@@ -102,18 +102,21 @@ describe('the layout of remembered configurations', () => {
     expect(rememberedNames(harness.storage)).toEqual(['Reader']);
   });
 
-  it('forgets a name whose entry is gone, and reports it', async () => {
+  it('forgets a name whose entry is gone, without troubling the application', async () => {
     const harness = harnessWithDevice();
     remember(harness.storage, { Reader: { device: READER, serial: { baudRate: 9600 } } });
     harness.storage.poison(storageIndexKey(), JSON.stringify(['Reader', 'Vanished']));
     const tab = harness.openTab();
 
     await expect(tab.client.restore()).resolves.toEqual(['Reader']);
-    // Setting up the restored name is how this tab starts listening; the error it missed follows.
+    // Setting up the restored name is how this tab starts listening, so an error raised by the
+    // restore before it would still arrive here.
     await tab.setup('Reader', READER_OPTIONS);
     await harness.settle();
 
-    expect(tab.errorCodes('Reader')).toEqual([SerialBrokerErrorCode.STORAGE_CORRUPT]);
+    // A listed name with no entry is another tab's removal seen through a stale index far more
+    // often than it is corruption, and the application has nothing to do about either.
+    expect(tab.errorCodes('Reader')).toEqual([]);
     expect(rememberedNames(harness.storage)).toEqual(['Reader']);
   });
 

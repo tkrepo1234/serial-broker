@@ -41,9 +41,15 @@ other's entry; the index is the only key they share, and the only thing at stake
 
 Reads are defensive at both levels. An index that is not valid JSON, or not an array, is reported
 as `STORAGE_CORRUPT` and removed. An index that is partly rubbish keeps the names in it and is
-written back without the rest. A listed name whose entry is missing, unparseable or no longer valid
-is reported as `STORAGE_CORRUPT` with its `configName`, removed, and dropped from the index — while
-a name whose entry could not be read because storage itself refused stays listed, since nothing
+written back without the rest. A listed name whose entry is unparseable or no longer valid is
+reported as `STORAGE_CORRUPT` with its `configName`, removed, and dropped from the index.
+
+A listed name with no entry at all is _not_ reported. With one key per configuration it is an
+ordinary outcome of the shared index: a tab that removes a configuration writes the index and the
+entry as two operations, and a tab whose copy of the index is older re-lists the name in between.
+The name is dropped from the index and logged at `info`; there is nothing the application could
+act on, and reporting it would tell a user a configuration they themselves removed was corrupt.
+A name whose entry could not be read because storage itself refused stays listed, since nothing
 says it is gone.
 
 Nothing is migrated. Version 1 and the protocol-versioned keys are removed, unread, the first time
@@ -92,6 +98,10 @@ old keys, and must not be counted as a tab running a configuration stored in the
 - An index that could not be read at all leaves its entries behind, unreadable and unreferenced,
   until the same names are saved again. They are a few hundred bytes of JSON and hold nothing
   sensitive (SECURITY.md).
+- A configuration that disappears from storage for a reason nothing else notices — a browser
+  evicting one key of an origin, say — is logged and not reported. That case is indistinguishable
+  from the far commoner benign one, and an error the application cannot act on is worse than a log
+  line it can read.
 
 ### Risks and mitigations
 
