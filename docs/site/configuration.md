@@ -4,9 +4,11 @@ Two calls take options. `setup()` describes one configuration: which device, how
 to keep it connected, how to treat text, and whether to remember it. `configure()` sets
 library-wide options before the first configuration is set up.
 
-Every option is validated when it is passed. An invalid value fails the call with
-`INVALID_ARGUMENT`, and `error.context.argumentName` names the field, such as
-`options.serial.baudRate`.
+Every option is validated when it is passed — those of `setup()`, `configure()` and `release()`
+alike. An invalid value fails the call with `INVALID_ARGUMENT`, nothing of the call is applied, and
+`error.context.argumentName` names the field, such as `options.serial.baudRate`. Each option is read
+once, when the call is made: changing the object afterwards, or a getter answering differently the
+second time, changes nothing.
 
 ## Whose settings apply
 

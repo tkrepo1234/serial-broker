@@ -13,7 +13,7 @@ import {
 import type { EffectiveSettings } from './diagnostics.js';
 import { SerialBrokerErrorCode } from './error-codes.js';
 import { SerialBrokerError } from './errors.js';
-import type { SerialBrokerOptions } from './types.js';
+import type { SerialBrokerGlobalOptions, SerialBrokerOptions, TransportKind } from './types.js';
 
 /**
  * The application-facing validation boundary.
@@ -262,14 +262,17 @@ function optionalObject(value: unknown, argumentName: string): Record<string, un
  * either interpretation would be a guess about what the caller meant.
  */
 function normalizeDeviceFilter(device: Record<string, unknown>): NormalizedDeviceFilter {
+  // Each field is read once. An options object may be a proxy or carry getters, and a value that
+  // passed a check must be the value that is kept.
   const wantsAny = device['any'];
-  const hasIds = device['vendorId'] !== undefined || device['productId'] !== undefined;
+  const vendorId = device['vendorId'];
+  const productId = device['productId'];
 
   if (wantsAny !== undefined) {
     if (wantsAny !== true) {
       throw invalidArgument('options.device.any', 'true, or absent', wantsAny);
     }
-    if (hasIds) {
+    if (vendorId !== undefined || productId !== undefined) {
       throw invalidArgument(
         'options.device',
         'either { vendorId, productId } or { any: true }, not both',
@@ -281,9 +284,91 @@ function normalizeDeviceFilter(device: Record<string, unknown>): NormalizedDevic
 
   return Object.freeze({
     kind: 'usb' as const,
-    vendorId: requireInteger(device['vendorId'], 'options.device.vendorId', 0, USB_ID_MAX),
-    productId: requireInteger(device['productId'], 'options.device.productId', 0, USB_ID_MAX),
+    vendorId: requireInteger(vendorId, 'options.device.vendorId', 0, USB_ID_MAX),
+    productId: requireInteger(productId, 'options.device.productId', 0, USB_ID_MAX),
   });
+}
+
+/**
+ * Validates the options passed to `release()` and `releaseAll()`.
+ *
+ * Read once, before anything is released: a value that fails must leave the configuration running,
+ * and one read again after the port has closed could have changed in between.
+ *
+ * @throws A {@link SerialBrokerError} with code `INVALID_ARGUMENT`.
+ */
+export function normalizeReleaseOptions(options: unknown): { readonly forgetDevice: boolean } {
+  const raw = optionalObject(options, 'options');
+  return Object.freeze({
+    forgetDevice: requireBoolean(orDefault(raw['forgetDevice'], false), 'options.forgetDevice'),
+  });
+}
+
+const TRANSPORT_KINDS: readonly TransportKind[] = ['auto', 'sharedworker', 'broadcastchannel'];
+
+/**
+ * Validates the options passed to `configure()`, and copies them.
+ *
+ * Each option is read once, and only the documented ones are kept, so the settings a client is
+ * built with later are the ones checked now. `undefined` sets an option back to its default, as
+ * merging it always has.
+ *
+ * `logPayloads` in particular must be a boolean: a truthy string would otherwise switch payload
+ * bytes into the log.
+ *
+ * @throws A {@link SerialBrokerError} with code `INVALID_ARGUMENT`.
+ */
+export function normalizeGlobalOptions(options: unknown): SerialBrokerGlobalOptions {
+  const raw = requireObject(options, 'options');
+  const workerUrl = raw['workerUrl'];
+  const transport = raw['transport'];
+  const logger = raw['logger'];
+  const logPayloads = raw['logPayloads'];
+  const result: Record<string, unknown> = {};
+
+  if ('workerUrl' in raw) {
+    if (
+      workerUrl !== undefined &&
+      !(typeof workerUrl === 'string' && workerUrl.length > 0) &&
+      !isUrl(workerUrl)
+    ) {
+      throw invalidArgument('options.workerUrl', 'a non-empty string or a URL', workerUrl);
+    }
+    result['workerUrl'] = workerUrl;
+  }
+  if ('transport' in raw) {
+    result['transport'] =
+      transport === undefined
+        ? undefined
+        : requireOneOf(transport, 'options.transport', TRANSPORT_KINDS);
+  }
+  if ('logger' in raw) {
+    if (logger !== undefined) {
+      const log = typeof logger === 'object' && logger !== null ? readLog(logger) : undefined;
+      if (typeof log !== 'function') {
+        throw invalidArgument(
+          'options.logger',
+          'an object with a log(level, message, fields) method',
+          logger,
+        );
+      }
+    }
+    result['logger'] = logger;
+  }
+  if ('logPayloads' in raw) {
+    result['logPayloads'] =
+      logPayloads === undefined ? undefined : requireBoolean(logPayloads, 'options.logPayloads');
+  }
+  return result;
+}
+
+/** A `URL`, recognised by its tag, so one from another realm counts too. */
+function isUrl(value: unknown): value is URL {
+  return Object.prototype.toString.call(value) === '[object URL]';
+}
+
+function readLog(logger: object): unknown {
+  return (logger as { log?: unknown }).log;
 }
 
 /**

@@ -103,15 +103,23 @@ export class SerialBrokerError extends Error {
     message: string,
     options: SerialBrokerErrorOptions = {},
   ) {
-    super(message, options.cause === undefined ? undefined : { cause: options.cause });
+    // The constructor is public, so JavaScript can pass `null` where the types allow only an
+    // object. An error that cannot be built would replace the failure it was meant to report.
+    const given: unknown = options;
+    const settings = (given ?? {}) as SerialBrokerErrorOptions;
+    super(message, settings.cause === undefined ? undefined : { cause: settings.cause });
 
     this.name = 'SerialBrokerError';
     this.code = code;
-    this.configName = options.configName;
-    this.context = Object.freeze({ ...options.context });
-    this.remediation = options.remediation ?? REMEDIATION[code];
-    this.isRetryable = options.isRetryable ?? RETRYABLE_CODES.has(code);
-    this.timestamp = options.timestamp ?? 0;
+    this.configName = settings.configName;
+    this.context = Object.freeze({ ...settings.context });
+    // Looked up as an own entry: a code such as `toString` would otherwise find a function on the
+    // prototype, and a code no table knows would leave the mandatory remediation `undefined`.
+    this.remediation =
+      settings.remediation ??
+      (Object.hasOwn(REMEDIATION, code) ? REMEDIATION[code] : REMEDIATION.UNKNOWN);
+    this.isRetryable = settings.isRetryable ?? RETRYABLE_CODES.has(code);
+    this.timestamp = settings.timestamp ?? 0;
 
     // Keeps the constructor out of the stack in V8, so the first frame is the throw site.
     // `captureStackTrace` is a V8 extension rather than part of the language, so it is reached
