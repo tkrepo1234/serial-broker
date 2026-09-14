@@ -59,7 +59,20 @@ downloads OpenUI5 1.148 from npm into the UI5 Tooling cache; later starts are of
 
 Chrome or Edge is required - Web Serial exists nowhere else - and a secure context, which
 `localhost` counts as. Without a device you still see the whole application: the status stays
-_Waiting for permission_, and _Connect_ opens the browser's port picker.
+_Waiting for permission_, and _Connect_ opens the browser's port picker. German texts:
+`index.html?sap-ui-language=de`.
+
+### The smoke test
+
+[`smoke.spec.ts`](smoke.spec.ts) drives the application in the installed Edge with the Web Serial
+stand-in in place of a device: it clicks _Connect_, sees the status become _Open_, sends `PING`
+and sees the loopback device echo it into the traffic list. It runs through the repository root,
+which starts the application on port 8150 first:
+
+```sh
+# in the repository root, after `npm run build` there and `npm ci` here
+npm run test:examples -- examples/openui5/smoke.spec.ts
+```
 
 ## Taking the integration module into your own application
 
@@ -253,12 +266,39 @@ ones a test will want, verified in the browser:
 
 A control that is currently invisible keeps its id on a placeholder named
 `sap-ui-invisible-<id>` - that is how UI5 renders `visible="false"`, and it is worth knowing before
-a test concludes the control is missing.
+a test concludes the control is missing. Two more things the smoke test learned: a `sap.m.Input`
+puts its id on a wrapper, and the element that takes keystrokes is `<id>-inner`; and an
+`ObjectStatus` keeps its text in `<id>-text`, next to a screen-reader label that would otherwise
+end up in the assertion.
+
+**The smoke test starts with an ungranted device.** The stand-in is installed with
+`granted: false`, so that the application's own connect path is what runs: a device the origin had
+already been granted would open with no click at all, and the click matters - `requestPort()`,
+the stand-in's as much as the browser's, needs the transient activation of a real gesture. It
+sends with _Append CR LF_ on, as a user would, and takes the counters (`6 bytes received, 6 bytes
+sent`) as the proof that the same bytes went out and came back.
+
+**`"type": "module"` in `package.json`.** Playwright decides how to read `smoke.spec.ts` from the
+nearest `package.json`, and without the field it treats the file as CommonJS, where the
+`import.meta.url` that finds `example.json` is a syntax error. Nothing in the example itself is
+CommonJS - the sources are ES modules and the copy script is `.mjs` - so the field costs nothing
+and the spec reads like the root's own tests.
+
+**The i18n model is not `async: true`, and the console says so.** UI5 logs _"Usage of synchronous
+loading is deprecated"_ for a `ResourceModel` created without `async: true`. It is a warning about
+the model's API mode, not about a synchronous request: for a manifest model the component loader
+fetches the bundle asynchronously before it creates the model (`afterPreload` in
+`sap/ui/core/Component`). With `async: true`, `getResourceBundle()` returns a promise, and every
+formatter in the controller - which needs the bundle synchronously, while rendering - would have
+to cache it first. The synchronous model keeps the controller simple, at the price of that one
+line in the log.
 
 ## Files
 
 ```
 examples/openui5/
+├── example.json                          the manifest the root's test runner reads
+├── smoke.spec.ts                         connect, send, echo - in a real browser
 ├── ui5.yaml                              UI5 Tooling: framework, transpile, npm modules
 ├── tsconfig.json                         type-check only; @openui5/types
 ├── scripts/copy-serial-broker-assets.mjs copies the broker script into webapp/
