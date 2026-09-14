@@ -71,6 +71,21 @@ permission through a throwaway profile written before it starts; nothing clicks 
 prompt and no machine-wide setting is changed. Record what you saw in
 [the manual test plan](./docs/manual-test-plan.md).
 
+### Benchmarks
+
+`npm run bench` measures what the library costs on the simulated browser - latency and throughput
+from the device to 1, 5 and 10 tabs, write latency, handover and start times, an hour's steady
+state, over both transports - in about a second, and judges every number against the expectation
+written down for it in `bench/expectations.ts` (ADR-0036). It writes `bench/results/harness.json`
+and the fragments under `docs/site/_generated/` that the documentation's Performance chapter
+includes; commit them with a change that is meant to be faster, or that touches what they measure.
+
+The same scenarios run in a real browser with `SERIAL_BROKER_BENCH_BROWSER=1 npm run bench:browser`
+(PowerShell: `$env:SERIAL_BROKER_BENCH_BROWSER='1'; npm run bench:browser`), in the installed Edge,
+on port 8147, in a few minutes. That run is never part of CI: its numbers are one machine's, and
+they are recorded once in the chapter with the machine named. A result more than ten times worse
+than its expectation has to become a fix with a test, or a limit recorded in the chapter.
+
 ## Making a change
 
 1. Branch: `<type>/<short-description>`.

@@ -255,6 +255,11 @@ load and find each other — and a part of it runs against a real serial device 
 What neither suite can prove is recorded in `docs/manual-test-plan.md`, which is worked through in a
 real browser, with real or emulated hardware [ADR-0017], and where every hardware run is recorded.
 
+What the library costs is measured rather than tested: `bench/` runs the same scenarios - chunks
+from the device to ten tabs, writes from a tab, handovers, starts, an hour of traffic - on the
+harness and in a real browser, against expectations written down before the first measurement,
+and the [Performance](performance.md) chapter records the results [ADR-0036].
+
 ## Decision records
 
 | ADR  | Decision                                                                            |
@@ -291,3 +296,4 @@ real browser, with real or emulated hardware [ADR-0017], and where every hardwar
 | 0033 | One storage key per configuration, with an index of the names                       |
 | 0034 | Start the debugging surface from a chosen port, under its own policy                |
 | 0035 | Test the built package in a real browser, and against real hardware                 |
+| 0036 | Measure performance against expectations written first                              |

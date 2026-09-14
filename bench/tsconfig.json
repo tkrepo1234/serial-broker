@@ -1,0 +1,14 @@
+{
+  // The benchmarks: the harness scenarios, which run in Node, and the browser scenarios, which
+  // Playwright runs and whose page code the test server strips the types from. Type-checked with
+  // the library's own configuration, as the test suite is, plus Node's types for the runner;
+  // `allowJs` lets the runner import the size module it shares with `scripts/check-dist.mjs`.
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "types": ["@types/w3c-web-serial", "node"],
+    "allowJs": true,
+    "noEmit": true
+  },
+  "include": ["./**/*.ts", "../scripts/dist-sizes.mjs"],
+  "exclude": ["./.build"]
+}

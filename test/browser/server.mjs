@@ -11,6 +11,8 @@
  * - `/other-protocol-version/serial-broker.worker.js` - the built worker with its `PROTOCOL_VERSION`
  *   changed, which is how a tab meets a worker of another version without a second checkout
  *   (ADR-0024).
+ * - `/bench/*` - the browser benchmark's pages (`bench/browser/pages/`), served the same way: a
+ *   `.js` that is TypeScript on disk is stripped on the way out (ADR-0036).
  *
  * Plain JavaScript, like the other tool scripts in this repository, so that it needs no build step
  * of its own.
@@ -27,6 +29,7 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPOSITORY = path.resolve(HERE, '..', '..');
 const DIST = path.join(REPOSITORY, 'dist');
 const PAGES = path.join(HERE, 'pages');
+const BENCH_PAGES = path.join(REPOSITORY, 'bench', 'browser', 'pages');
 
 /** The protocol version the transformed worker script reports. Any version but this build's. */
 const OTHER_PROTOCOL_VERSION = 9_999;
@@ -93,8 +96,36 @@ async function route(pathname) {
     return file === undefined ? undefined : await readStatic(file);
   }
 
+  if (pathname.startsWith('/bench/')) {
+    const file = resolveWithin(BENCH_PAGES, pathname.slice('/bench'.length));
+    if (file === undefined) {
+      return undefined;
+    }
+    if (file.endsWith('.js')) {
+      const stripped = await readStripped(`${file.slice(0, -'.js'.length)}.ts`);
+      if (stripped !== undefined) {
+        return stripped;
+      }
+    }
+    return await readStatic(file);
+  }
+
   const page = resolveWithin(PAGES, pathname);
   return page === undefined ? undefined : await readStatic(page);
+}
+
+/** A TypeScript page module, served as JavaScript; `undefined` if there is no such file. */
+async function readStripped(file) {
+  try {
+    const source = await readFile(file, 'utf8');
+    return {
+      status: 200,
+      type: CONTENT_TYPES.get('.js'),
+      body: stripTypeScriptTypes(source, { mode: 'strip' }),
+    };
+  } catch {
+    return undefined;
+  }
 }
 
 async function readStatic(file) {

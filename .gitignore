@@ -31,6 +31,9 @@ docs/.venv/
 docs/site/api/reference/
 docs/site/_build/
 
+# The benchmark's bundled runner (bench/run.mjs); its results under bench/results/ are committed
+bench/.build/
+
 # Agent worktrees and local Claude Code state
 .claude/
 

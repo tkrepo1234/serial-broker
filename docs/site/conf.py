@@ -27,6 +27,8 @@ exclude_patterns = [
     "examples/code",
     # TypeDoc's list of both entry points. The site presents them in separate sections instead.
     "api/reference/index.md",
+    # Fragments the benchmarks generate (bench/), included by performance.md rather than pages.
+    "_generated",
 ]
 
 # typedoc links to headings inside its generated pages; MyST needs anchors for them.
