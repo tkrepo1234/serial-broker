@@ -21,6 +21,7 @@ import {
   MAX_CONFIGURATIONS,
   MAX_HEARTBEAT_CONFIGURATIONS,
   MAX_IDENTIFIER_LENGTH,
+  MAX_LOG_RECORD_CHARACTERS,
   MAX_LOG_RECORD_VALUES,
   MAX_PAYLOAD_BYTES,
   MAX_REPORT_VALUES,
@@ -254,6 +255,19 @@ describe('decodeMessage within its limits', () => {
     expect(failureOf({ ...record, fields: fieldsOf(MAX_LOG_RECORD_VALUES + 1) })).toEqual(
       exceeding('worker-log', 'fields', 'MAX_LOG_RECORD_VALUES'),
     );
+  });
+
+  it('counts the message of a worker record and its fields against one budget', () => {
+    const record = validMessages()['worker-log'];
+    const fields = { event: 'x' };
+    const spent = 'event'.length + 'x'.length;
+
+    expect(
+      failureOf({ ...record, fields, message: 'm'.repeat(MAX_LOG_RECORD_CHARACTERS - spent) }),
+    ).toBe('accepted');
+    expect(
+      failureOf({ ...record, fields, message: 'm'.repeat(MAX_LOG_RECORD_CHARACTERS - spent + 1) }),
+    ).toEqual(exceeding('worker-log', 'fields', 'MAX_LOG_RECORD_CHARACTERS'));
   });
 
   it('refuses the fields of a worker record without reading past the limit', () => {

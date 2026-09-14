@@ -1,15 +1,22 @@
 import { describe, expect, it } from 'vitest';
 
 import { ScopedLogger } from '../../src/core/logger.js';
+import { decodeMessage } from '../../src/protocol/decode.js';
 import { SILENT_PARTICIPANT_TIMEOUT_MS } from '../../src/protocol/heartbeat.js';
 import {
   MAX_BOUND_IDENTITIES,
   MAX_IDENTIFIER_LENGTH,
+  MAX_LOG_RECORD_CHARACTERS,
   MAX_PARTICIPANTS,
   MAX_PORTS_PER_PARTICIPANT,
 } from '../../src/protocol/limits.js';
 import { BROKER_ID } from '../../src/protocol/messages.js';
-import { FORWARD_INTERVAL_MS, MAX_FORWARDED_RECORDS } from '../../src/worker/record-forwarding.js';
+import { PROTOCOL_VERSION } from '../../src/protocol/version.js';
+import {
+  FORWARD_INTERVAL_MS,
+  MAX_FORWARDED_RECORDS,
+  RecordForwarder,
+} from '../../src/worker/record-forwarding.js';
 import { WorkerPorts } from '../../src/worker/worker-ports.js';
 import { fieldsOfEvent, recordingLogger, type LogRecord } from '../harness/recording-logger.js';
 import { envelope, FakeMessagePort, hello } from '../harness/transport-doubles.js';
@@ -309,6 +316,34 @@ describe('WorkerPorts', () => {
         }) as unknown,
       }),
     );
+  });
+
+  it('holds a record it forwards to one budget, so that no tab refuses it', () => {
+    const forwarded: unknown[] = [];
+    const forwarder = new RecordForwarder({
+      now: () => 0,
+      forward: (level, message, fields) => {
+        forwarded.push({
+          v: PROTOCOL_VERSION,
+          from: BROKER_ID,
+          to: 'alice',
+          type: 'worker-log',
+          level,
+          message,
+          fields,
+        });
+      },
+      reportDropped: () => undefined,
+    });
+
+    // Nothing the worker writes is this long, but a record over the budget must not become a record
+    // no tab accepts: the message and the fields share the budget on both sides of the bus.
+    forwarder
+      .wrap({ log: () => undefined })
+      .log('warn', 'm'.repeat(MAX_LOG_RECORD_CHARACTERS + 1), { event: 'worker.message-refused' });
+
+    expect(forwarded).toHaveLength(1);
+    expect(decodeMessage(forwarded[0]).ok).toBe(true);
   });
 
   it('answers a hello on the port it came on, not on the other ports of that identity', () => {

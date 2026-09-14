@@ -267,8 +267,11 @@ class FieldReader {
    * Rejecting everything else - objects, arrays, cycles, functions - keeps what an application's
    * logger is handed as small and as plain as the fields the library writes itself. The object is
    * rebuilt, so a `__proto__` key is an own property here and changes nothing.
+   *
+   * @param messageCharacters - What the record's message already spends of the budget the two share,
+   *   so that `MAX_LOG_RECORD_CHARACTERS` bounds the record and not each of its halves.
    */
-  logFields(): LogFields {
+  logFields(messageCharacters: number): LogFields {
     const value = this.raw['fields'];
     if (typeof value !== 'object' || value === null || Array.isArray(value)) {
       return malformed(this.type, 'fields');
@@ -287,7 +290,7 @@ class FieldReader {
       }
       entries.push([key, record[key]]);
     }
-    let characters = 0;
+    let characters = messageCharacters;
     for (const [key, entry] of entries) {
       if (typeof entry === 'string') {
         characters += key.length + entry.length;
@@ -390,16 +393,13 @@ function decodeChecked(raw: unknown): ProtocolMessage {
     case 'goodbye':
       return { type, v, from, to };
 
-    case 'worker-log':
-      return {
-        type,
-        v,
-        from,
-        to,
-        level: read.logLevel(),
-        message: read.logMessage(),
-        fields: read.logFields(),
-      };
+    case 'worker-log': {
+      // One character budget for the record, so what the message spends of it the fields no longer
+      // have: read the message first and carry its length into them.
+      const level = read.logLevel();
+      const message = read.logMessage();
+      return { type, v, from, to, level, message, fields: read.logFields(message.length) };
+    }
 
     case 'heartbeat':
       return {

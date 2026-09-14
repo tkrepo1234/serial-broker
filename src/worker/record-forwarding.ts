@@ -80,7 +80,8 @@ export class RecordForwarder {
       return;
     }
     this.#forwarded += 1;
-    this.host.forward(level, boundedMessage(message), busFieldsOf(fields));
+    const text = boundedMessage(message);
+    this.host.forward(level, text, busFieldsOf(fields, text.length));
   }
 
   /**
@@ -118,10 +119,13 @@ function boundedMessage(message: string): string {
  * A record is written to a logger and read by nobody else, so nothing in it has to be structure.
  * Anything else - a field that is `undefined`, an object, whatever an application's own logger would
  * have coped with - is left out rather than making the whole record undeliverable.
+ *
+ * @param messageCharacters - What the record's message already spends of the budget the two share,
+ *   as a tab counts it: a record over `MAX_LOG_RECORD_CHARACTERS` in total would be refused whole.
  */
-function busFieldsOf(fields: LogFields): LogFields {
+function busFieldsOf(fields: LogFields, messageCharacters: number): LogFields {
   const kept: [string, string | number | boolean][] = [];
-  let characters = 0;
+  let characters = messageCharacters;
   for (const [key, value] of Object.entries(fields)) {
     if (kept.length >= MAX_LOG_RECORD_VALUES) {
       break;

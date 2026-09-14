@@ -43,8 +43,8 @@ the worker's own, and nothing has to be renamed to be read.
   connecting, a message routed to no owner - and would tell a tab more about the worker than about
   its own device.
 - **A record is data, never structure.** Its fields cross the bus as strings, finite numbers and
-  booleans only, bounded like every other message (`MAX_LOG_RECORD_VALUES`,
-  `MAX_LOG_RECORD_CHARACTERS`); anything else the worker recorded is left out rather than making the
+  booleans only, bounded like every other message (`MAX_LOG_RECORD_VALUES`, and
+  `MAX_LOG_RECORD_CHARACTERS` for the message and the fields together); anything else the worker recorded is left out rather than making the
   record undeliverable.
 - **Only the broker's own records are logged as the worker's.** The broker passes no `worker-log` on,
   no port may say `hello` as the broker (`WorkerPorts`), and a tab logs one only from the broker's
