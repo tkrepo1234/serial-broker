@@ -1,0 +1,25 @@
+{
+  "name": "serial-broker-svelte-example",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Svelte 5 application showing serial-broker through a reusable, rune-based createSerialBroker().",
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "start": "vite --port 8157 --strictPort",
+    "typecheck": "svelte-check --tsconfig ./tsconfig.json --fail-on-warnings",
+    "build": "vite build",
+    "preview": "vite preview --port 8157 --strictPort"
+  },
+  "dependencies": {
+    "serial-broker": "file:../.."
+  },
+  "devDependencies": {
+    "@sveltejs/vite-plugin-svelte": "^7.3.0",
+    "@types/w3c-web-serial": "^1.0.8",
+    "svelte": "^5.57.0",
+    "svelte-check": "^4.7.6",
+    "typescript": "^6.0.3",
+    "vite": "^8.3.0"
+  }
+}
