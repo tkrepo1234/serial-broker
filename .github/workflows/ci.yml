@@ -30,6 +30,37 @@ jobs:
           path: coverage/
           retention-days: 7
 
+  browser:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - run: npm ci
+
+      # Installing Playwright downloads no browser here: this repository does not run install
+      # scripts (`allowScripts`), so the one browser the suite needs is fetched explicitly.
+      # Locally the suite drives the developer's installed Edge instead (ADR-0035).
+      - run: npx playwright install --with-deps chromium
+
+      # Builds the package and runs test/browser/ against it. The hardware tests skip themselves:
+      # SERIAL_BROKER_HARDWARE is not set, and no device is attached to a runner.
+      - env:
+          SERIAL_BROKER_BROWSER_CHANNEL: chromium
+        run: npm run test:browser
+
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: browser-traces
+          path: test-results/
+          retention-days: 7
+
   docs:
     runs-on: ubuntu-latest
 
