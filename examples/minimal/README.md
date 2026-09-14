@@ -171,7 +171,8 @@ next to the button, a button that cannot be pressed says the same thing sooner.
 
 **Retryable errors are shown as a note.** `isRetryable` means the library is already reconnecting,
 and the status says so. Hiding such an error would hide what happened; showing it as a problem
-would ask the user to do something. The box is styled by `data-retryable` and cleared on `open`.
+would ask the user to do something. The box is styled by `data-retryable`, cleared on `open`, and
+set by every error, so that a note left by an earlier error does not soften a later problem.
 
 **A few CSS rules in `index.html`, no stylesheet and no framework.** Enough to tell the states
 apart at a glance - open is green, connecting, reconnecting and queued amber, failed red - and
@@ -190,8 +191,9 @@ typecheck` is the gate here, and CI runs it. Prettier still formats the folder.
 examples/minimal/
 ├── example.json     port 8151, start command, ready path - read by the root's test runner
 ├── index.html       the page: status, connect button, error box, received text, send form
-├── src/main.ts      the integration, 146 lines with comments
-├── smoke.spec.ts    Playwright: loads the page against the stand-in, sends a line, sees it echoed
+├── src/main.ts      the integration, 148 lines with comments
+├── smoke.spec.ts    Playwright: loads the page against the stand-in, sends a line, sees it echoed,
+│                    unplugs the device and sees the note, plugs it in and sees the port open again
 ├── tsconfig.json    type-check only; vite/client for the ?url import
 └── package.json     vite, typescript, "serial-broker": "file:../.."
 ```

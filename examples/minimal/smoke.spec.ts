@@ -9,9 +9,19 @@
  */
 import { expect, test } from '@playwright/test';
 
-import { installWebSerialStandIn } from '../../test/browser/stand-in/web-serial-stand-in.js';
+import {
+  installWebSerialStandIn,
+  type WebSerialStandInControl,
+} from '../../test/browser/stand-in/web-serial-stand-in.js';
 
-test('connects on load, sends a line and sees it echoed', async ({ browser }) => {
+/** The stand-in's controls, as the page sees them; `page.evaluate` cannot import the type. */
+interface StandInWindow {
+  readonly webSerialStandIn?: WebSerialStandInControl;
+}
+
+test('connects on load, echoes a line, and survives the device being unplugged', async ({
+  browser,
+}) => {
   const context = await browser.newContext();
   // Before the first page: the stand-in has to be there before the page's own script runs.
   await context.addInitScript(installWebSerialStandIn, {
@@ -41,6 +51,25 @@ test('connects on load, sends a line and sees it echoed', async ({ browser }) =>
   await expect(page.locator('#received')).toContainText('PING');
   await expect(page.locator('#send-input')).toHaveValue('');
   await expect(page.locator('#error')).toBeHidden();
+
+  // Unplugging the device is a failure the library recovers from by itself: the page shows the
+  // error as a note (data-retryable) next to the reconnecting status, and clears it once the
+  // device is back and the port is open again.
+  await page.evaluate(() => {
+    (window as unknown as StandInWindow).webSerialStandIn?.unplug();
+  });
+  await expect(page.locator('#status')).toHaveText('reconnecting');
+  await expect(page.locator('#error')).toBeVisible();
+  await expect(page.locator('#error')).toHaveAttribute('data-retryable', 'true');
+  await expect(page.locator('#error-code')).toHaveText('DEVICE_DISCONNECTED');
+  await expect(page.locator('#send-button')).toBeDisabled();
+
+  await page.evaluate(() => {
+    (window as unknown as StandInWindow).webSerialStandIn?.plug();
+  });
+  await expect(page.locator('#status')).toHaveText('open');
+  await expect(page.locator('#error')).toBeHidden();
+  await expect(page.locator('#send-button')).toBeEnabled();
 
   expect(pageErrors).toEqual([]);
   expect(consoleNoise).toEqual([]);

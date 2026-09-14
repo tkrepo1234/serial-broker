@@ -113,18 +113,20 @@ function showStatus(value: SerialBrokerStatus): void {
 }
 
 function showError(error: unknown): void {
+  // isRetryable means the library is already recovering and the status shows it, so the page
+  // presents such an error as a note rather than as a problem. Set for every error, not only for
+  // the library's: a note left over from an earlier error must not soften a later problem.
+  errorBox.dataset['retryable'] = String(error instanceof SerialBrokerError && error.isRetryable);
   if (!(error instanceof SerialBrokerError)) {
     errorCode.textContent = 'Error';
     errorMessage.textContent = String(error);
     errorRemediation.textContent = '';
   } else {
     // code is stable across versions - branch on it, never on the message. remediation is one
-    // sentence saying what to do. isRetryable means the library is already recovering and the
-    // status shows it, so the page presents such an error as a note rather than as a problem.
+    // sentence saying what to do.
     errorCode.textContent = error.code;
     errorMessage.textContent = error.message;
     errorRemediation.textContent = error.remediation;
-    errorBox.dataset['retryable'] = String(error.isRetryable);
   }
   errorBox.hidden = false;
 }
