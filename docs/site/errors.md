@@ -116,7 +116,9 @@ usually means another program has the device open, or the adapter rejects the li
 
 `INVALID_ARGUMENT`
 : **Raised by** any method, for an argument that fails validation, including every option of
-`setup()`, and by `send()` for a string when the configured `encoding` is not UTF-8.
+`setup()`, and by `send()` for a string when the configured `encoding` is not UTF-8, and for a
+payload over 16 MiB, the most one message between tabs carries (`context.byteLength`). The limit
+applies in every tab alike, so split larger data across several calls.
 **Context:** `argumentName` names the field, such as `options.serial.baudRate`; `expected` says
 what it must be; `actualType` and, for simple values, `actualValue` say what it was.
 **Do:** fix the call. This error never arises from anything outside the application's code.

@@ -29,6 +29,7 @@ import {
   versionAnnouncement,
 } from '../protocol/announcement.js';
 import { describeDecodeFailure, type DecodeFailure } from '../protocol/decode.js';
+import { MAX_PAYLOAD_BYTES } from '../protocol/limits.js';
 import {
   configNameOf,
   type ClientId,
@@ -830,10 +831,46 @@ export class SerialBrokerClient {
           },
         );
       }
-      return new TextEncoder().encode(data);
+      return this.#withinPayloadLimit(new TextEncoder().encode(data), 'string', configuration);
     }
 
-    return this.#stamped(() => copyBytes(data));
+    return this.#withinPayloadLimit(
+      this.#stamped(() => copyBytes(data)),
+      'bytes',
+      configuration,
+    );
+  }
+
+  /**
+   * Refuses a payload larger than one message on the bus may carry.
+   *
+   * Another tab drops such a write request (`MAX_PAYLOAD_BYTES`), so it could only end in
+   * `WRITE_TIMEOUT` there. Refused in every tab alike, the tab holding the port included, so that
+   * whether a `send()` works never depends on which tab holds the port.
+   */
+  #withinPayloadLimit(
+    bytes: Uint8Array,
+    actualType: 'string' | 'bytes',
+    configuration: NormalizedConfiguration,
+  ): Uint8Array {
+    if (bytes.byteLength <= MAX_PAYLOAD_BYTES) {
+      return bytes;
+    }
+    throw new SerialBrokerError(
+      SerialBrokerErrorCode.INVALID_ARGUMENT,
+      `A payload of ${String(bytes.byteLength)} bytes is larger than the ${String(MAX_PAYLOAD_BYTES)} bytes one send() can carry. Split it across several calls.`,
+      {
+        configName: configuration.name,
+        // Not `invalidArgument`: that records a primitive value, and this one is the payload.
+        context: {
+          argumentName: 'data',
+          expected: `at most ${String(MAX_PAYLOAD_BYTES)} bytes`,
+          actualType,
+          byteLength: bytes.byteLength,
+        },
+        timestamp: this.environment.clock.now(),
+      },
+    );
   }
 
   async #forgetDevice(configuration: NormalizedConfiguration): Promise<void> {

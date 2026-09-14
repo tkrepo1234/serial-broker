@@ -140,7 +140,8 @@ export interface SerialBrokerApi {
    * @returns A promise that resolves once the bytes have been handed to the device - not once
    *   the device has acted on them, which a serial port cannot report.
    * @throws A `SerialBrokerError` with code `UNKNOWN_CONFIGURATION`, `INVALID_ARGUMENT` for a
-   *   string while an `encoding` other than UTF-8 is configured, `WRITE_FAILED`, `WRITE_TIMEOUT`,
+   *   string while an `encoding` other than UTF-8 is configured or for more than 16 MiB of data,
+   *   `WRITE_FAILED`, `WRITE_TIMEOUT`,
    *   `CONFIGURATION_RELEASED` when the configuration is released while the write waits,
    *   `CONFIGURATION_CONFLICT` once this tab has withdrawn because the tab holding the port runs
    *   a different `maxTabs`, or `OWNER_LOST_DURING_WRITE` when the owning tab closed mid-write

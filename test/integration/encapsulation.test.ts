@@ -189,6 +189,38 @@ describe('argument handling at the public surface', () => {
     expect(device.isOpen).toBe(true);
   });
 
+  it('refuses a payload larger than the bus carries in every tab, the one holding the port included', async () => {
+    const { harness, owner, peer } = await (async () => {
+      const harness = new BrowserHarness();
+      const device = harness.serial.addDevice(READER.vendorId, READER.productId);
+      harness.serial.grant(device);
+      const owner = harness.openTab();
+      await owner.client.setup('Reader', READER_OPTIONS);
+      await harness.settle();
+      const peer = harness.openTab();
+      await peer.client.setup('Reader', READER_OPTIONS);
+      await harness.settle();
+      return { harness, owner, peer };
+    })();
+    const tooLarge = new Uint8Array(16 * 1024 * 1024 + 1);
+    const refused = expect.objectContaining({
+      code: SerialBrokerErrorCode.INVALID_ARGUMENT,
+      context: expect.objectContaining({
+        argumentName: 'data',
+        byteLength: tooLarge.byteLength,
+      }) as unknown,
+    }) as unknown;
+
+    // Otherwise the tab holding the port would write it, and another tab's request would be dropped
+    // on the bus and time out: whether it works would depend on which tab holds the port.
+    await expect(owner.client.send('Reader', tooLarge)).rejects.toThrow(refused);
+    await expect(peer.client.send('Reader', tooLarge)).rejects.toThrow(refused);
+    await expect(
+      peer.client.send('Reader', new Uint8Array(16 * 1024 * 1024)),
+    ).resolves.toBeUndefined();
+    await harness.settle();
+  });
+
   it('treats a repeated setup with equal options as a no-op', async () => {
     const harness = new BrowserHarness();
     const device = harness.serial.addDevice(READER.vendorId, READER.productId);
