@@ -33,6 +33,18 @@
  * transform rewrites into helper functions that do not travel with the source. Closures do
  * travel, so the objects here are built by factories.
  *
+ * Two ways to use it, and an example application can use either:
+ *
+ * ```ts
+ * // From a test, before the page's own scripts run:
+ * await context.addInitScript(installWebSerialStandIn, { devices: [{ id: 'loopback', granted: true }] });
+ *
+ * // Or from a page of its own, as the first thing it does - before the library is imported,
+ * // because the library reads `navigator.serial` when its client is built:
+ * installWebSerialStandIn({ devices: [{ id: 'loopback', granted: true }] });
+ * const { SerialBroker } = await import('serial-broker');
+ * ```
+ *
  * See ADR-0035.
  */
 

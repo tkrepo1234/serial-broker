@@ -14,10 +14,10 @@ Thumbs.db
 !.vscode/extensions.json
 !.vscode/settings.json
 
-# Browser tests: Playwright's traces, reports and throwaway browser profiles (ADR-0035)
+# Browser tests: Playwright's traces, reports and the throwaway browser profiles under them
+# (ADR-0035)
 test-results/
 playwright-report/
-.playwright/
 
 # Logs
 *.log

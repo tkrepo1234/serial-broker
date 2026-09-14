@@ -1,10 +1,10 @@
 /**
  * Permission and reconnection, as the browser does them.
  *
- * Both are places where the library depends on browser behaviour that a fake can only claim:
- * that the port picker refuses a call made outside a user gesture, and that an unplugged device
- * errors the read stream of whoever holds it and announces itself again when it comes back
- * (ADR-0009, ADR-0010). See ADR-0035.
+ * Both are places where the library depends on browser behaviour that a fake can only claim: that
+ * a port granted from a click is usable at once, and that an unplugged device errors the read
+ * stream of whoever holds it and announces itself again when it comes back (ADR-0009, ADR-0010).
+ * See ADR-0035.
  */
 
 import { expect, test } from '@playwright/test';

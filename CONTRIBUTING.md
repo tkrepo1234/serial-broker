@@ -23,9 +23,10 @@ decisions that look replaceable and are not.
 
 ```sh
 npm install
-npm test          # a few seconds
-npm run verify    # format, lint, type-check, tests with coverage gates, build: CI's first job
-npm run docs      # the documentation site: CI's second job
+npm test           # a few seconds
+npm run verify     # format, lint, type-check, tests with coverage gates, build: CI's first job
+npm run docs       # the documentation site: CI's second job
+npm run test:browser  # the built package in a real browser: CI's third job
 ```
 
 Node 22.13 or newer on the 22 line, or 24 or newer: that is what Vitest and ESLint require. CI
@@ -39,6 +40,26 @@ switched on by default — 22.18 or newer on the 22 line.
 `python -m venv docs/.venv`, then install `docs/site/requirements.txt` with that environment's
 `pip`. The build fails on any warning, in CI as locally.
 
+`npm run test:browser` builds the package and runs the browser suite (`test/browser/`, ADR-0035)
+against **the Microsoft Edge you already have installed** — no browser is downloaded. It serves
+`dist/` on `http://localhost:8146`; set `SERIAL_BROKER_BROWSER_TEST_PORT` if that port is taken,
+and `SERIAL_BROKER_BROWSER_CHANNEL` (`chromium`, `chrome`, `msedge`) to use another browser, which
+is what CI does after `npx playwright install --with-deps chromium`. Pass Playwright's own
+arguments after `--`, for instance `npm run test:browser -- --headed test/browser/failover.spec.ts`.
+
+The same suite has a part that needs a real device, in `test/browser/hardware/`. It is skipped
+unless you ask for it:
+
+```sh
+SERIAL_BROKER_HARDWARE=arduino npm run test:browser -- test/browser/hardware
+```
+
+It expects an Arduino (USB `0x2341`/`0x0078`) on a COM port, running a sketch that echoes every
+byte it receives at 9600 baud, and nothing else using that port. The browser is handed the
+permission through a throwaway profile written before it starts; nothing clicks a permission
+prompt and no machine-wide setting is changed. Record what you saw in
+[the manual test plan](./docs/manual-test-plan.md).
+
 ## Making a change
 
 1. Branch: `<type>/<short-description>`.
@@ -47,7 +68,8 @@ switched on by default — 22.18 or newer on the 22 line.
    transports.
 3. Make it pass.
 4. `npm run verify` must be green, including the coverage gates — and `npm run docs`, if the
-   change touches documentation or TSDoc.
+   change touches documentation or TSDoc, and `npm run test:browser`, if it touches anything the
+   browser suite loads: `src/`, the build, or `test/browser/` itself.
 5. Commit with [Conventional Commits](./docs/guidelines/git-workflow.md). The body explains
    _why_; the diff already shows _what_.
 6. Update `CHANGELOG.md` if the change is user-visible, and TSDoc on every touched export.

@@ -10,12 +10,12 @@ step.
 
 ## Status
 
-|                          |                                                                              |
-| ------------------------ | ---------------------------------------------------------------------------- |
-| **Browser, no hardware** | **run 2026-09-12, repeated 2026-09-13 on Edge 153 / Windows 11** — see below |
-| **Emulated device**      | built 2026-09-13 (`emulator/`), _never run against usbip-win2_               |
-| **With real hardware**   | _never run_                                                                  |
-| **Blocking for**         | the first published release                                                  |
+|                          |                                                                                              |
+| ------------------------ | -------------------------------------------------------------------------------------------- |
+| **Browser, no hardware** | **automated since 2026-09-14** (`test/browser/`, ADR-0035); before that by hand, see below   |
+| **Emulated device**      | built 2026-09-13 (`emulator/`), _never run against usbip-win2_                               |
+| **With real hardware**   | **first run 2026-09-14** — automated, `test/browser/hardware/` against an Arduino; see below |
+| **Blocking for**         | the first published release                                                                  |
 
 ### 2026-09-12 — Edge 153.0.0.0, Windows 11 Home 26200, no device attached
 
@@ -116,6 +116,19 @@ it proves the software path, not the electrical one.
 3. Attach a USB-serial device. A CH340 adapter (`0x1a86` / `0x7523`) with its TX and RX pins
    bridged is ideal: everything sent comes straight back, so send and receive are visible in
    one window.
+
+## What the browser suite now does for you
+
+`npm run test:browser` (ADR-0035) runs part of this plan on every CI run, and
+`SERIAL_BROKER_HARDWARE=arduino npm run test:browser -- test/browser/hardware` runs part of it
+against a device. What they cover of the checklist below: steps 3, 5, 6, 8 and 9 (in a browser and
+on hardware), 13–15 and 20–21 in a browser against the Web Serial stand-in, 25 and 28 in a
+browser, and the failover half of 29 - the broker that dies with a crashed renderer and is
+replaced without any application action.
+
+What stays here, because it needs hands or a machine nobody has in CI: the port picker and site
+settings (steps 1, 2, 18, 19), a device physically unplugged (13–17), killing a tab from the
+browser's task manager (10), Chrome for Android (26), and everything about the debugging surface.
 
 ## Checklist
 
@@ -239,3 +252,48 @@ coordination and what the page shows of it.
 
 Not covered: anything that needs a device to answer, and the _Watch_ panel's ownership events
 across the handover, because the tab that was watching was the one closed.
+
+### 2026-09-14 — Edge 153.0.4234.32 (headless), Windows 11 Home 26200, Arduino on COM3: the first run against real hardware
+
+The first time this library has moved bytes through a real UART. Run automatically, by
+`test/browser/hardware/arduino.spec.ts` (ADR-0035), against the package built from the working
+tree; the browser was driven by Playwright 1.63.0 and given the port through a throwaway profile
+carrying the permission, so no prompt was answered and nothing on the machine was changed.
+
+**Device:** an Arduino reporting USB `0x2341`/`0x0078`, device instance ID
+`USB\VID_2341&PID_0078&MI_01\7&1B7B3EF0&0&0001`, on COM3, running an echo sketch. 9600 baud,
+8N1, no flow control.
+
+Six tests, all green:
+
+- **A single tab** sets up, opens the port with no prompt, sends `HELLO` and receives it back.
+- **Two tabs** share the port; a write from the second reaches the device **once** and both tabs
+  see the one echo.
+- **Three tabs** share it; the sender's `onSend` says `local`, the others' say `remote`.
+- **Failover**: with three tabs attached, the tab holding the port is closed. Another tab takes
+  the lock, reopens the real COM port, and the echo works again from a tab that never had it.
+- **A payload larger than a write chunk** (5 000 bytes, chunked at 4 096) comes back byte for
+  byte, across thousands of read boundaries.
+- **Release and set up again** in the same tab: the browser kept the permission, so the second
+  `setup()` opens the port with no prompt and the echo works again.
+
+**64 KiB, run separately** (`SERIAL_BROKER_HARDWARE_LARGE=1`): 65 536 bytes written in one
+`send()`, chunked at 4 096 by the library, came back **complete and in order** - an unbroken run of
+all 65 536 bytes of the pattern - in **14.0 minutes**. Nothing was lost, nothing was reordered, no
+error was reported, and no write timed out.
+
+Worth keeping, because it is the kind of thing only hardware shows:
+
+- **This board echoes at about 80 bytes a second**, whatever the line rate says - 64 KiB takes a
+  quarter of an hour rather than the two minutes 9600 baud suggests. Nothing in the library
+  notices: the write is handed to the driver in milliseconds and the answers arrive in ordinary
+  reads. But the board goes on echoing long after the browser has closed the port, so a later run
+  starts with the tail of an earlier one on the line: 30 090 bytes were drained after one
+  abandoned attempt before the device fell quiet.
+- Consequently the assertions are about **what arrived** - a marker counted in the received text,
+  a run of a seeded pattern - and never about how many bytes arrived by when. A payload carries a
+  per-run seed so that an echo of an earlier run cannot be mistaken for this one's.
+- No `SerialBrokerError` was reported in any tab, and no console errors.
+
+Not covered by this run: unplugging the device (needs a hand), the port picker and site settings,
+and anything the debugging surface shows.

@@ -3,8 +3,9 @@
 One serial port, every tab.
 
 > **Alpha.** serial-broker is at version 0.1.0-alpha.1. Its API may still change from one release to
-> the next, and it has not yet been verified against a real serial device: everything is tested
-> against a simulated browser and a Web Serial stand-in.
+> the next. It is tested against a simulated browser, in a real browser, and — since 2026-09-14 —
+> against a real serial device: one board, one echo sketch, the scenarios in
+> [the manual test plan](./docs/manual-test-plan.md). That is a first run, not a field record.
 
 The [Web Serial API](https://developer.mozilla.org/en-US/docs/Web/API/Web_Serial_API) gives a
 single browsing context exclusive access to a device: open it in one tab and every other tab
@@ -346,8 +347,9 @@ Enough to know whether it will do what you need; the full reasoning is in
 
 ```sh
 npm install
-npm test          # unit and integration tests
-npm run verify    # format, lint, types, tests with coverage gates, build
+npm test             # unit and integration tests
+npm run verify       # format, lint, types, tests with coverage gates, build
+npm run test:browser # the built package in a real browser
 ```
 
 The test suite simulates a browser: several tabs, a lock manager with real Web Locks
@@ -355,6 +357,11 @@ semantics including release-on-death, and devices that can be unplugged or made 
 mid-write. Everything that makes this library difficult is an ordinary deterministic test —
 see [`test/harness/`](./test/harness/) and the scenario matrix in
 [docs/guidelines/testing.md](./docs/guidelines/testing.md).
+
+`npm run test:browser` then runs the **built** package in a real Chromium — several tabs of one
+origin, a real `SharedWorker`, real Web Locks — and, when a device is attached and
+`SERIAL_BROKER_HARDWARE=arduino` says so, against real hardware
+([ADR-0035](./docs/adr/0035-browser-tests-with-playwright.md)).
 
 Before changing anything, read [the engineering guidelines](./docs/guidelines/). They are
 binding.

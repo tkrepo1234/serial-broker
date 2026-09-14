@@ -6,8 +6,9 @@
  * teach anyone to do. The permission is therefore written into the profile *before* the browser
  * starts, which is where the browser would keep it anyway.
  *
- * Chromium stores it as content setting `serial-chooser-data` in the profile's `Preferences`
- * file, under the requesting origin, as a list of "chosen objects"
+ * Chromium stores it as the content setting registered as `serial-chooser-data` in the profile's
+ * `Preferences` file - under the preference name `serial_chooser_data`, because the preference
+ * path replaces every `-` with `_` - under the requesting origin, as a list of "chosen objects"
  * (`components/permissions/object_permission_context_base.cc`, `kObjectListKey`). On Windows one
  * such object is exactly two fields - a display name and the device instance ID - and a port is
  * granted when its instance ID matches (`chrome/browser/serial/serial_chooser_context.cc`,

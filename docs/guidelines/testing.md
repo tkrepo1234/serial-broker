@@ -6,13 +6,15 @@ that matter, and they must be **deterministic**.
 
 ## Levels
 
-| Level               | Location                      | What it proves                                                                                                                     | Rule                                                                                     |
-| ------------------- | ----------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
-| **Unit**            | `test/unit/`                  | One module in isolation: backoff maths, validation, codecs, protocol encode/decode.                                                | No fakes beyond the module's own dependencies. Fast (< 5 ms each).                       |
-| **Integration**     | `test/integration/`           | Several real modules against the simulated browser harness: a single tab end-to-end, reconnect, write queueing.                    | Uses the harness, never the real DOM.                                                    |
-| **Multi-context**   | `test/integration/multi-tab/` | The actual product claim: N simulated tabs sharing one port, ownership failover, broadcast fan-out, interlocking under contention. | Mandatory for every change to `owner/`, `worker/` or `client/`.                          |
-| **Emulated device** | `emulator/`                   | Real Chromium and the real Windows serial stack against a USB device whose failures are scriptable.                                | Its own tests live in `emulator/test/`; runs are recorded in `docs/manual-test-plan.md`. |
-| **Manual**          | `debug/`                      | Real Chromium, real hardware. Documented, checklisted, never a substitute for the above.                                           | Recorded in `docs/manual-test-plan.md`.                                                  |
+| Level               | Location                      | What it proves                                                                                                                                | Rule                                                                                     |
+| ------------------- | ----------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| **Unit**            | `test/unit/`                  | One module in isolation: backoff maths, validation, codecs, protocol encode/decode.                                                           | No fakes beyond the module's own dependencies. Fast (< 5 ms each).                       |
+| **Integration**     | `test/integration/`           | Several real modules against the simulated browser harness: a single tab end-to-end, reconnect, write queueing.                               | Uses the harness, never the real DOM.                                                    |
+| **Multi-context**   | `test/integration/multi-tab/` | The actual product claim: N simulated tabs sharing one port, ownership failover, broadcast fan-out, interlocking under contention.            | Mandatory for every change to `owner/`, `worker/` or `client/`.                          |
+| **Browser**         | `test/browser/`               | The **built** package in a real Chromium: a real `SharedWorker` handshake, real Web Locks, real `BroadcastChannel`, `dist/` loaded by a page. | Scenarios only, no races; `npm run test:browser`. See below and ADR-0035.                |
+| **Hardware**        | `test/browser/hardware/`      | The same scenarios against a real serial device, through a real UART.                                                                         | Runs only with `SERIAL_BROKER_HARDWARE=arduino`; results in `docs/manual-test-plan.md`.  |
+| **Emulated device** | `emulator/`                   | Real Chromium and the real Windows serial stack against a USB device whose failures are scriptable.                                           | Its own tests live in `emulator/test/`; runs are recorded in `docs/manual-test-plan.md`. |
+| **Manual**          | `debug/`                      | Real Chromium, real hardware. Documented, checklisted, never a substitute for the above.                                                      | Recorded in `docs/manual-test-plan.md`.                                                  |
 
 ## Determinism is mandatory
 
@@ -55,6 +57,51 @@ Never retried, never `.skip`ped with a TODO.
 The harness is the most important asset in the test suite. It has its own tests
 (`test/harness/harness-conformance.test.ts`) proving it matches the specified browser behaviour —
 **a fake that lies produces tests that lie.**
+
+## The browser suite
+
+`npm run test:browser` builds the package and runs `test/browser/` against a real Chromium with
+Playwright (ADR-0035). Locally it drives the **installed Microsoft Edge**, so nothing is
+downloaded; CI installs Chromium and runs the same suite. A static server serves `dist/` and the
+test pages from `test/browser/pages/`, and each test opens ordinary pages that `import` the
+library — one page is one tab.
+
+What belongs here is what **only a browser can answer**: that a Web Lock is released when a
+renderer dies, that one `SharedWorker` serves the tabs of an origin, that the built files find
+each other, that the minified entry point coordinates with the readable one. What does **not**
+belong here is a race: an interleaving a browser produces by luck is a flaky test, and
+`test/integration/multi-tab/` stages the same interleaving on purpose. The browser suite has no
+coverage gates and nothing in it is retried.
+
+Web Serial itself is replaced, per page, before the page's scripts run
+(`test/browser/stand-in/web-serial-stand-in.ts`): permission per origin, one page at a time
+holding the device, a loopback for a device. Two things about it are worth knowing before
+changing it:
+
+- It is serialised into the page, so it may use no `#private` fields — the test runner's transform
+  rewrites them into helpers that do not travel with the source, and the page then throws before
+  `navigator.serial` is replaced.
+- Every script an automation evaluates carries transient activation, so `USER_GESTURE_REQUIRED`
+  cannot be produced in a browser test. It stays covered in-process.
+
+### Against real hardware
+
+`test/browser/hardware/` runs the same scenarios against a device that answers. It is skipped
+unless `SERIAL_BROKER_HARDWARE=arduino` is set, and it never runs in CI:
+
+```sh
+SERIAL_BROKER_HARDWARE=arduino npm run test:browser -- test/browser/hardware
+```
+
+It needs an Arduino (USB `0x2341`/`0x0078`) on a COM port running a sketch that echoes every byte
+at 9600 baud, and nothing else using that port. The browser is given the permission through a
+throwaway profile written before it starts — no prompt is answered and no machine-wide setting is
+touched. `SERIAL_BROKER_HARDWARE_PORT` picks the port when several boards are attached, and
+`SERIAL_BROKER_HARDWARE_LARGE=1` adds the 64 KiB round trip, which takes about a quarter of an
+hour on a board that echoes at 80 bytes a second.
+
+**Record every hardware run in [the manual test plan](../manual-test-plan.md)** — date, browser
+version, device, result.
 
 ## Writing tests
 

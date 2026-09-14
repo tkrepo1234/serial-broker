@@ -51,7 +51,8 @@ const test = base.extend<{ hardware: BrowserContext }>({
     const device = devices.find((it) => it.portName === PORT_NAME) ?? devices[0];
     if (device === undefined) {
       throw new Error(
-        `No serial port with USB 0x2341/0x0078 is attached. Windows lists none; check the cable and the Device Manager.`,
+        'No serial port with USB 0x2341/0x0078 is attached, or this is not Windows, where the ' +
+          'permission is seeded by device instance ID. Check the cable and the Device Manager.',
       );
     }
 
@@ -62,8 +63,12 @@ const test = base.extend<{ hardware: BrowserContext }>({
       name: device.name,
     });
 
+    // A context of its own, with a profile of its own: the permission is in that profile, and
+    // the browser started for the rest of the suite has none.
     const context = await chromium.launchPersistentContext(profile, {
-      channel: String(testInfo.project.use.channel),
+      ...(testInfo.project.use.channel === undefined
+        ? {}
+        : { channel: testInfo.project.use.channel }),
       baseURL,
     });
 

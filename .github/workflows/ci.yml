@@ -43,9 +43,9 @@ jobs:
 
       - run: npm ci
 
-      # Installing Playwright downloads no browser here: this repository does not run install
-      # scripts (`allowScripts`), so the one browser the suite needs is fetched explicitly.
-      # Locally the suite drives the developer's installed Edge instead (ADR-0035).
+      # Installing Playwright downloads no browser - the package has no install script - so the
+      # one this suite needs is fetched explicitly. Locally it drives the developer's installed
+      # Edge instead, and fetches nothing at all (ADR-0035).
       - run: npx playwright install --with-deps chromium
 
       # Builds the package and runs test/browser/ against it. The hardware tests skip themselves:
