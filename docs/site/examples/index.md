@@ -33,6 +33,10 @@ is a Vite and TypeScript dashboard in plain DOM that names every status, shows e
 code and remediation, asks for permission from the one click that needs it, remembers and restores
 the device, lists what the other tabs see, and shows the diagnostics entry point read-only. One
 worked-out framework integration is a project of its own too:
+## Runnable applications
+
+The examples above are plain TypeScript and fit into any framework. Worked-out integrations live
+in the repository rather than here, because each is a project of its own:
 [examples/openui5](https://github.com/tkrepo1234/serial-broker/tree/main/examples/openui5) is a
 runnable [OpenUI5](https://openui5.org) application together with a reusable module - a `JSONModel`
 that mirrors one configuration and is bindable in XML views - and a README that explains how to
@@ -41,3 +45,7 @@ take it into an application of your own.
 [examples/exclusive](https://github.com/tkrepo1234/serial-broker/tree/main/examples/exclusive) is
 a Vite page without a framework that uses a device with `maxTabs: 1`: it shows `queued` as a wait,
 the takeover when the tab in front releases the device or closes, and a release button.
+[examples/no-bundler](https://github.com/tkrepo1234/serial-broker/tree/main/examples/no-bundler)
+is a static page with no build step - `serial-broker/min` from an import map, the worker script
+served next to it, `configure({ workerUrl })` spelled out - for a front end that a site's existing
+web server delivers.

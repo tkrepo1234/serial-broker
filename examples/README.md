@@ -7,9 +7,10 @@ entry points only, never through `src/`. Each one lives in its own directory wit
 | Directory | Shows |
 | ---------------------- | -------------------------------------------------------------------------------------- |
 | `minimal/` | One page: connect, print what arrives, send text. |
+
 | `multi-tab-dashboard/` | Several tabs on one device: every status, errors, permission, remembering, diagnostics. |
 | `exclusive/` | `maxTabs: 1`: one tab at a time, `queued` shown as a wait, the takeover, a release. |
-| `no-bundler/` | `serial-broker/min` from an import map, no build step. |
+| `no-bundler/` | Static HTML: `serial-broker/min` from an import map, a static server, no build step. |
 | `openui5/` | SAP OpenUI5: a reusable integration module (`JSONModel`) and an application using it. |
 | `react/` | React: a `useSerialBroker` hook. |
 | `vue/` | Vue 3: a composable. |
