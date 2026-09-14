@@ -7,8 +7,8 @@ library-wide options before the first configuration is set up.
 Every option is validated when it is passed — those of `setup()`, `configure()` and `release()`
 alike. An invalid value fails the call with `INVALID_ARGUMENT`, nothing of the call is applied, and
 `error.context.argumentName` names the field, such as `options.serial.baudRate`. Each option is read
-once, when the call is made: changing the object afterwards, or a getter answering differently the
-second time, changes nothing.
+once, when the call is made, and copied: a framework's reactive proxy is fine, and changing the object
+afterwards, or a getter answering differently the second time, changes nothing.
 
 ## Whose settings apply
 
@@ -29,10 +29,13 @@ change them has to tell its other tabs, as the [full-featured example](examples/
 does. The [debugging surface](diagnostics.md) marks a configuration whose tabs run different
 settings.
 
-Within one tab, calling `setup()` again for a name with the same device, line settings and tab
-limit does nothing. Calling it with a different `device`, `baudRate`, `dataBits`, `stopBits`,
-`parity`, `flowControl`, `bufferSize` or `maxTabs` fails with `CONFIGURATION_CONFLICT`; release the
-configuration first. Other options passed to a second `setup()` in the same tab are ignored. A
+Within one tab, a name is one configuration, whichever code set it up: there is no count, and one
+`release()` ends it for every caller. Calling `setup()` again for a name with the same device, line
+settings and tab limit does nothing — also while the configuration is `failed`, so release it first
+to try again. Calling it with a different `device`, `baudRate`, `dataBits`, `stopBits`, `parity`,
+`flowControl`, `bufferSize` or `maxTabs` fails with `CONFIGURATION_CONFLICT`; release the
+configuration first. Other options passed to a second `setup()` in the same tab, `persist` among
+them, are ignored. A
 `device` in auto mode never conflicts with one in auto mode, whatever either has resolved to; while
 it has resolved to nothing it conflicts with no explicit device either — the running configuration
 keeps what it has — and once resolved it counts as the device it resolved to.
@@ -246,8 +249,9 @@ The browser remembers the device permission independently of this option.
 
 - **Type:** integer, 1–100, or `Infinity`. **Default:** `Infinity`.
 - **What it does:** at most this many tabs of the origin use the configuration at the same time,
-  the tab holding the port included. A tab beyond the limit gets the status `queued`: it receives
-  nothing, and its writes wait for their deadline. As soon as another tab releases the
+  the tab holding the port included. Every tab with a limit starts at `queued`, and moves on to
+  `idle` as soon as it has a place, at once when one is free. A tab beyond the limit stays `queued`:
+  it receives nothing, and its writes wait for their deadline. As soon as another tab releases the
   configuration, closes or crashes, the tab that has waited longest joins and carries on as any
   other tab would. See [Limiting how many tabs use a port](shared-ports.md#limiting-how-many-tabs-use-a-port).
 - **Set it to `1`** when only one tab may drive the device at a time — a machine operated from

@@ -65,3 +65,7 @@ Configurations are independent of each other. Each has its own ownership lock an
 the scale may be held by one tab and the printer by another, and either may reconnect without
 affecting the other. The weight read from the scale in one tab can be printed by whichever tab
 holds the printer.
+
+Give every configuration a device of its own. serial-broker does not keep configurations apart: a
+`{ any: true }` configuration next to this printer matches the printer's port as well, and whichever
+of the two opens it first leaves the other unable to.

@@ -16,6 +16,7 @@ the API addresses it by that name.
 ```ts
 import { SerialBroker } from 'serial-broker';
 
+await SerialBroker.restore();
 await SerialBroker.setup('Adapter', {
   serial: { baudRate: 9600 },
   encoding: { decodeText: true },
@@ -23,7 +24,8 @@ await SerialBroker.setup('Adapter', {
 ```
 
 No device is named: the configuration takes it from the port the user picks in the browser's
-picker the first time (step 3), remembers it, and shares it with the other tabs. To name the
+picker the first time (step 3), remembers it, and shares it with the other tabs. `restore()` brings
+that choice back on a later visit; without it, `setup()` asks the user again. To name the
 device instead, pass `device: { vendorId: 0x1a86, productId: 0x7523 }`: the USB IDs identify the
 kind of device, the picker is then filtered to it, and nothing else is ever offered. On Windows the
 IDs are in Device Manager under the device's _Hardware Ids_ (`VID_1A86&PID_7523`); on Linux,
@@ -33,7 +35,7 @@ panel once a device has been chosen there.
 `setup()` resolves as soon as the configuration is registered. It does not wait for the port to
 open, because that may need the user — see step 3.
 
-Call `setup()` on every page load. Calling it again with the same options does nothing, so there
+Call both on every page load. Calling `setup()` again with the same options does nothing, so there
 is no need to check first.
 
 ## 2. Watch the status and what the device sends
@@ -72,10 +74,12 @@ connectButton.addEventListener('click', () => {
 ```
 
 Call `requestAccess()` **directly** in the click handler. An `await` before it uses up the click,
-and the browser will refuse to show the picker.
+and the browser will refuse to show the picker. Every tab shows `awaiting-permission`, but only the
+tab holding the port can ask; in the others `requestAccess()` rejects with `PERMISSION_REQUIRED`, so
+show the error rather than dropping it.
 
 Once the user has chosen the port, the browser remembers the choice for your origin. On every
-later visit, `setup()` finds the port and opens it with no prompt.
+later visit, `restore()` and `setup()` find the port and open it with no prompt.
 
 ```ts
 const { status } = SerialBroker.getStatus('Adapter');
@@ -130,6 +134,8 @@ browser's permission for the device is kept, so a later `setup()` needs no promp
 
 ## Next
 
+- [Tasks, counted](tasks.md) shows the code for each common task, and what it takes with Web Serial
+  alone.
 - [How shared ports behave](shared-ports.md) explains what happens when tabs and devices come and
   go, and what your application can rely on.
 - [Examples](examples/index.md) goes from this minimal page to a complete application.

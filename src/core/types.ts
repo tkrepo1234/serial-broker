@@ -19,7 +19,8 @@ export const SerialBrokerStatus = {
   Idle: 'idle',
   /**
    * Waiting for a place: `maxTabs` other tabs use the configuration. The tab joins, and moves
-   * on from here, as soon as one of them releases it, closes or crashes. See ADR-0025.
+   * on from here, as soon as one of them releases it, closes or crashes. Every tab with a limit
+   * starts here, and moves on at once when a place is free. See ADR-0025.
    */
   Queued: 'queued',
   /** No granted port matches the device. Call `requestAccess()` from a user gesture. */
@@ -35,7 +36,10 @@ export const SerialBrokerStatus = {
    * this tab withdrew because the tab holding the port runs a different `maxTabs` (ADR-0025).
    */
   Failed: 'failed',
-  /** The configuration was released. No further events will be delivered. */
+  /**
+   * The configuration was released in this tab. Delivered as its last event; the tab's listeners
+   * for it are removed with it.
+   */
   Released: 'released',
 } as const;
 
@@ -315,7 +319,11 @@ export interface SendEvent {
 
 /** Payload of an `onError` event. */
 export interface ErrorEvent {
-  /** The configuration name, or `undefined` for a failure not tied to one. */
+  /**
+   * The configuration the listener was registered for. A failure of the tab's environment - its
+   * message bus, its storage - is delivered to every configuration of the tab, each under its own
+   * name.
+   */
   readonly name: string | undefined;
   /** The error. Errors raised in a peer context are faithfully reconstructed here. */
   readonly error: SerialBrokerError;

@@ -68,6 +68,13 @@ export interface SerialBrokerApi {
    * open in another tab with the old settings. Auto mode never conflicts with auto mode, nor
    * with an explicit device while it has resolved to nothing.
    *
+   * In one tab a name is one configuration, whichever code set it up: a second call joins it, and
+   * one `release()` ends it for every caller. A `failed` configuration is still set up, so this
+   * call does nothing for it; release it first to try again.
+   *
+   * An auto-mode configuration does not look up a device remembered by an earlier visit: call
+   * {@link SerialBrokerApi.restore} first, or it waits for the user again.
+   *
    * @param name - Identifies this configuration in every other call. Must be non-empty, at
    *   most 128 characters, and free of control characters.
    * @param options - Line settings, and optionally a device filter and reconnect and encoding
@@ -77,7 +84,8 @@ export interface SerialBrokerApi {
    * @throws A `SerialBrokerError` with code `INVALID_ARGUMENT` when an option is invalid,
    *   `CONFIGURATION_CONFLICT` when the name is already set up with different device or line
    *   settings or a different `maxTabs`, or `WEB_SERIAL_UNAVAILABLE`, `WEB_LOCKS_UNAVAILABLE`,
-   *   `TRANSPORT_UNAVAILABLE` or `BROKER_UNAVAILABLE` when the browser cannot support it.
+   *   `TRANSPORT_UNAVAILABLE` or `BROKER_UNAVAILABLE` when the browser cannot support it. Nothing is
+   *   registered when it rejects.
    * @example The device the user chooses in the picker
    * ```ts
    * await SerialBroker.setup('Scale', { serial: { baudRate: 19_200 } });
@@ -108,6 +116,10 @@ export interface SerialBrokerApi {
    * Other tabs are unaffected: if one of them still has it set up, the port stays open and
    * ownership moves there if this tab happened to hold it. Pending writes are rejected rather
    * than left hanging.
+   *
+   * The status `released` is delivered through `onStatusChange` as the configuration's last event,
+   * and this tab's listeners for the name are removed with it: subscribe again after the next
+   * `setup()`.
    *
    * The browser's permission for the device is deliberately kept, so a later `setup()` needs
    * no prompt. Pass `{ forgetDevice: true }` to revoke it as well.
