@@ -11,10 +11,11 @@ entry points only, never through `src/`. Each one lives in its own directory wit
 | `exclusive/`           | `maxTabs: 1`: one tab at a time, `queued` shown as a wait, the takeover, a release.     |
 | `no-bundler/`          | Static HTML: `serial-broker/min` from an import map, a static server, no build step.    |
 | `openui5/`             | SAP OpenUI5: a reusable integration module (`JSONModel`) and an application using it.   |
-| `react/`               | React: a `useSerialBroker` hook.                                                        |
-| `vue/`                 | Vue 3: a composable.                                                                    |
-| `svelte/`              | Svelte 5: a store.                                                                      |
-| `angular/`             | Angular: a service with signals.                                                        |
+| `react/`               | React 19: a reusable `useSerialBroker` hook, shared by several components.              |
+
+| `vue/` | Vue 3: a composable. |
+| `svelte/` | Svelte 5: a store. |
+| `angular/` | Angular: a service with signals. |
 
 ## The contract every example keeps
 
