@@ -1,282 +1,354 @@
-<svg xmlns="http://www.w3.org/2000/svg" class="ssg" viewBox="0 0 1200 1860" width="1200" height="1860" role="img" aria-labelledby="ssg-title ssg-desc">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 1792" width="760" height="1792"
+     role="img" aria-labelledby="ssg-title ssg-desc">
   <title id="ssg-title">serial-broker at a glance</title>
-  <desc id="ssg-desc">What serial-broker does for web applications that use a serial device from several browser tabs, how it fits between an application, the browser and the devices, and which problem each of its features solves.</desc>
+  <desc id="ssg-desc">One page about serial-broker. First the problem: the Web Serial API lets one browsing
+    context open a port, so a second tab is refused; with serial-broker one tab holds the port and every tab reads
+    from it and writes to it. Then where the library sits: the tabs of one origin, each running the application and
+    serial-broker, connected by a message bus made of a SharedWorker or a BroadcastChannel, on top of the browser's
+    Web Locks, Web Serial and localStorage, and below them the serial devices. Then four situations: several tabs
+    using one device, the tab holding the port closing or crashing, the device being unplugged, and a tab limit that
+    gives one tab exclusive use. Finally what shows an operator what is happening — errors, logging, the diagnostics
+    entry point and the debugging surface — and the calls an application makes.</desc>
+
   <style>
-    /* The Read the Docs theme's fonts and colours, so the page and the picture read as one. */
-    .ssg-sans { font-family: Lato, proxima-nova, "Helvetica Neue", Arial, sans-serif; }
-    .ssg-slab { font-family: "Roboto Slab", ff-tisa-web-pro, Georgia, Arial, sans-serif; }
-    .ssg-mono { font-family: SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; font-variant-ligatures: none; }
-    .ssg-bold { font-weight: 700; }
-    .ssg-semi { font-weight: 600; }
+    /* The fonts and colours of the documentation's Read the Docs theme, so page and picture read as one. */
+    .sans { font-family: Lato, proxima-nova, "Helvetica Neue", Arial, sans-serif; }
+    .slab { font-family: "Roboto Slab", ff-tisa-web-pro, Georgia, Arial, sans-serif; }
+    .mono { font-family: Consolas, "Liberation Mono", Menlo, Monaco, "Courier New", monospace; }
+    .b { font-weight: 700; }
+    .h2 { font-size: 21px; font-weight: 700; }
+    .lead { font-size: 14px; fill: #555555; }
+    .body { font-size: 13px; }
+    .small { font-size: 12.5px; fill: #555555; }
+    .tiny { font-size: 12px; fill: #555555; }
+    text { fill: #404040; }
   </style>
 
-  <rect width="1200" height="1860" fill="#fcfcfc"/>
+  <defs>
+    <marker id="arrow-orange" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M0 0 L8 4 L0 8 z" fill="#f0b37e"/>
+    </marker>
+    <!-- A refusal: the cross marks every route that does not exist, or does not exist any more. -->
+    <g id="cross" stroke="#e74c3c" stroke-width="2.4" stroke-linecap="round">
+      <path d="M-5 -5 L5 5 M5 -5 L-5 5"/>
+    </g>
+  </defs>
 
-  <!-- Header, in the theme's navigation blue -->
-  <rect width="1200" height="196" fill="#2980b9"/>
-  <text class="ssg-slab ssg-bold" x="48" y="90" font-size="52" fill="#ffffff">serial-broker</text>
-  <text class="ssg-sans ssg-bold" x="48" y="134" font-size="28" fill="#ffffff">One serial port. Every tab.</text>
-  <text class="ssg-sans" x="48" y="170" font-size="17" fill="#e7f2fa">Web Serial for applications that run in several tabs: shared, handed over, reconnected, with no coordination code.</text>
-  <rect x="900" y="58" width="252" height="44" rx="4" fill="#ffffff" fill-opacity="0.14" stroke="#ffffff" stroke-opacity="0.5"/>
-  <text class="ssg-mono" x="1026" y="86" font-size="15" fill="#ffffff" text-anchor="middle">npm install serial-broker</text>
+  <rect width="760" height="1792" fill="#fcfcfc"/>
 
-  <!-- Problem and solution, as the theme's danger and tip admonitions -->
-  <g class="ssg-sans">
-    <rect x="48" y="224" width="540" height="376" fill="#fdf3f2"/>
-    <rect x="48" y="224" width="540" height="48" fill="#f29f97"/>
-    <text class="ssg-bold" x="72" y="255" font-size="19" fill="#ffffff">Web Serial alone</text>
-    <rect x="72" y="290" width="492" height="178" rx="4" fill="#ffffff" stroke="#e1e4e5"/>
-    <rect x="84" y="300" width="148" height="24" rx="3" fill="#f3f6f6" stroke="#e1e4e5"/>
-    <rect x="244" y="300" width="148" height="24" rx="3" fill="#f3f6f6" stroke="#e1e4e5"/>
-    <rect x="404" y="300" width="148" height="24" rx="3" fill="#f3f6f6" stroke="#e1e4e5"/>
-    <text x="158" y="317" font-size="13" fill="#404040" text-anchor="middle">Point of sale</text>
-    <text x="318" y="317" font-size="13" fill="#404040" text-anchor="middle">Back office</text>
-    <text x="478" y="317" font-size="13" fill="#404040" text-anchor="middle">Labels</text>
-    <rect x="84" y="332" width="148" height="124" rx="3" fill="#dbfaf4" stroke="#1abc9c"/>
-    <rect x="244" y="332" width="148" height="124" rx="3" fill="#fdf3f2" stroke="#f29f97"/>
-    <rect x="404" y="332" width="148" height="124" rx="3" fill="#fdf3f2" stroke="#f29f97"/>
-    <text class="ssg-bold" x="158" y="388" font-size="15" fill="#138d75" text-anchor="middle">Port open</text>
-    <text x="158" y="408" font-size="12.5" fill="#138d75" text-anchor="middle">this tab only</text>
-    <text class="ssg-bold" x="318" y="386" font-size="13.5" fill="#c0392b" text-anchor="middle">InvalidStateError</text>
-    <text x="318" y="406" font-size="12.5" fill="#c0392b" text-anchor="middle">port already open</text>
-    <text class="ssg-bold" x="478" y="386" font-size="13.5" fill="#c0392b" text-anchor="middle">InvalidStateError</text>
-    <text x="478" y="406" font-size="12.5" fill="#c0392b" text-anchor="middle">port already open</text>
-    <text x="72" y="512" font-size="16" fill="#404040"><tspan fill="#c0392b" class="ssg-bold">✕</tspan>  Only one tab can open the port</text>
-    <text x="72" y="542" font-size="16" fill="#404040"><tspan fill="#c0392b" class="ssg-bold">✕</tspan>  That tab closes: the device is gone for all</text>
-    <text x="72" y="572" font-size="16" fill="#404040"><tspan fill="#c0392b" class="ssg-bold">✕</tspan>  Device unplugged: dead until someone reloads</text>
+  <!-- ─────────────────────────────  Header, in the theme's navigation blue  ───────────────────────────── -->
+  <rect width="760" height="92" fill="#2980b9"/>
+  <text class="slab b" x="24" y="46" font-size="30" fill="#ffffff">serial-broker</text>
+  <text class="sans" x="24" y="72" font-size="15.5" fill="#e7f2fa">One serial port, every tab of an origin.</text>
 
-    <rect x="612" y="224" width="540" height="376" fill="#dbfaf4"/>
-    <rect x="612" y="224" width="540" height="48" fill="#1abc9c"/>
-    <text class="ssg-bold" x="636" y="255" font-size="19" fill="#ffffff">With serial-broker</text>
-    <rect x="636" y="290" width="492" height="178" rx="4" fill="#ffffff" stroke="#e1e4e5"/>
-    <rect x="648" y="300" width="148" height="24" rx="3" fill="#f3f6f6" stroke="#e1e4e5"/>
-    <rect x="808" y="300" width="148" height="24" rx="3" fill="#f3f6f6" stroke="#e1e4e5"/>
-    <rect x="968" y="300" width="148" height="24" rx="3" fill="#f3f6f6" stroke="#e1e4e5"/>
-    <text x="722" y="317" font-size="13" fill="#404040" text-anchor="middle">Point of sale</text>
-    <text x="882" y="317" font-size="13" fill="#404040" text-anchor="middle">Back office</text>
-    <text x="1042" y="317" font-size="13" fill="#404040" text-anchor="middle">Labels</text>
-    <rect x="648" y="332" width="148" height="124" rx="3" fill="#dbfaf4" stroke="#f0b37e" stroke-width="2"/>
-    <rect x="808" y="332" width="148" height="124" rx="3" fill="#dbfaf4" stroke="#1abc9c"/>
-    <rect x="968" y="332" width="148" height="124" rx="3" fill="#dbfaf4" stroke="#1abc9c"/>
-    <rect x="668" y="346" width="108" height="22" rx="3" fill="#ffedcc"/>
-    <text class="ssg-bold" x="722" y="361" font-size="11.5" fill="#a85c1a" text-anchor="middle">holds the port</text>
-    <text class="ssg-bold" x="722" y="404" font-size="14" fill="#138d75" text-anchor="middle">reads · writes</text>
-    <text class="ssg-bold" x="882" y="404" font-size="14" fill="#138d75" text-anchor="middle">reads · writes</text>
-    <text class="ssg-bold" x="1042" y="404" font-size="14" fill="#138d75" text-anchor="middle">reads · writes</text>
-    <text x="802" y="404" font-size="18" fill="#1abc9c" text-anchor="middle">⇄</text>
-    <text x="962" y="404" font-size="18" fill="#1abc9c" text-anchor="middle">⇄</text>
-    <text x="636" y="512" font-size="16" fill="#404040"><tspan fill="#138d75" class="ssg-bold">✓</tspan>  Every tab reads from and writes to the device</text>
-    <text x="636" y="542" font-size="16" fill="#404040"><tspan fill="#138d75" class="ssg-bold">✓</tspan>  That tab closes or crashes: another takes over</text>
-    <text x="636" y="572" font-size="16" fill="#404040"><tspan fill="#138d75" class="ssg-bold">✓</tspan>  Device comes back: so does the connection</text>
-  </g>
+  <!-- ─────────────────────────────  The problem, and what changes  ───────────────────────────── -->
+  <text class="slab h2" x="24" y="132">One port, many tabs</text>
+  <text class="sans lead" x="24" y="156">The Web Serial API gives one browsing context exclusive access to a port.</text>
 
-  <!-- Landscape -->
-  <g class="ssg-sans">
-    <text class="ssg-slab ssg-bold" x="48" y="662" font-size="26" fill="#404040">Where it fits</text>
-    <text x="48" y="690" font-size="16" fill="#606060">Everything runs in the browser, on your origin. No server component, no browser extension.</text>
+  <!-- Web Serial alone, in the theme's danger colours -->
+  <g transform="translate(24,168)">
+    <rect width="344" height="232" fill="#fdf3f2"/>
+    <rect width="344" height="30" fill="#f29f97"/>
+    <text class="sans b" x="14" y="20" font-size="14" fill="#ffffff">Web Serial alone</text>
 
-    <rect x="48" y="712" width="1104" height="386" fill="#ffffff" stroke="#e1e4e5"/>
-    <rect x="72" y="736" width="720" height="338" rx="4" fill="#fcfcfc" stroke="#c9c9c9" stroke-dasharray="6 5"/>
-    <text class="ssg-bold" x="88" y="762" font-size="13.5" fill="#606060">Browser · your origin · HTTPS or localhost</text>
+    <g transform="translate(12,42)">
+      <rect width="320" height="126" fill="#ffffff" stroke="#e1e4e5"/>
+      <g transform="translate(10,12)">
+        <!-- The device, above the one tab that may open it -->
+        <rect width="100" height="28" rx="3" fill="#f3f6f6" stroke="#e1e4e5"/>
+        <text class="sans tiny" x="50" y="18" text-anchor="middle">serial device</text>
+        <path d="M50 28 V48" stroke="#9b9b9b" stroke-width="2"/>
 
-    <!-- Tabs -->
-    <rect x="96" y="780" width="300" height="62" rx="4" fill="#ffffff" stroke="#f0b37e" stroke-width="2"/>
-    <text class="ssg-bold" x="112" y="806" font-size="15" fill="#404040">Point of sale</text>
-    <text x="112" y="826" font-size="12.5" fill="#a85c1a">tab 1 · holds the port</text>
-    <rect x="96" y="852" width="300" height="62" rx="4" fill="#ffffff" stroke="#e1e4e5"/>
-    <text class="ssg-bold" x="112" y="878" font-size="15" fill="#404040">Back office</text>
-    <text x="112" y="898" font-size="12.5" fill="#808080">tab 2 · same application</text>
-    <rect x="96" y="924" width="300" height="62" rx="4" fill="#ffffff" stroke="#e1e4e5"/>
-    <text class="ssg-bold" x="112" y="950" font-size="15" fill="#404040">Label designer</text>
-    <text x="112" y="970" font-size="12.5" fill="#808080">tab 3 · another page</text>
-    <rect x="96" y="996" width="300" height="62" rx="4" fill="#ffffff" stroke="#9b59b6" stroke-dasharray="5 4"/>
-    <text class="ssg-bold" x="112" y="1022" font-size="15" fill="#404040">Debugging surface</text>
-    <text x="112" y="1042" font-size="12.5" fill="#9b59b6">optional, for operators</text>
-    <g class="ssg-mono" font-size="11">
-      <rect x="272" y="799" width="112" height="24" rx="3" fill="#e7f2fa"/>
-      <text x="328" y="815" fill="#2980b9" text-anchor="middle">serial-broker</text>
-      <rect x="272" y="871" width="112" height="24" rx="3" fill="#e7f2fa"/>
-      <text x="328" y="887" fill="#2980b9" text-anchor="middle">serial-broker</text>
-      <rect x="272" y="943" width="112" height="24" rx="3" fill="#e7f2fa"/>
-      <text x="328" y="959" fill="#2980b9" text-anchor="middle">serial-broker</text>
-      <rect x="272" y="1015" width="112" height="24" rx="3" fill="#f2e8f7"/>
-      <text x="328" y="1031" fill="#9b59b6" text-anchor="middle">diagnostics</text>
+        <!-- Three tabs: one opens the port, the others are refused -->
+        <rect y="48" width="100" height="36" rx="3" fill="#ffffff" stroke="#9b9b9b"/>
+        <text class="sans b" x="50" y="66" font-size="13" text-anchor="middle">Tab A</text>
+        <text class="sans tiny" x="50" y="80" text-anchor="middle">port open</text>
+
+        <rect x="110" y="48" width="100" height="36" rx="3" fill="#ffffff" stroke="#e1e4e5"/>
+        <text class="sans b" x="160" y="66" font-size="13" text-anchor="middle">Tab B</text>
+        <text class="sans tiny" x="160" y="80" text-anchor="middle">refused</text>
+        <path d="M160 48 V38" stroke="#9b9b9b" stroke-width="2"/>
+        <use href="#cross" x="160" y="30"/>
+
+        <rect x="220" y="48" width="100" height="36" rx="3" fill="#ffffff" stroke="#e1e4e5"/>
+        <text class="sans b" x="270" y="66" font-size="13" text-anchor="middle">Tab C</text>
+        <text class="sans tiny" x="270" y="80" text-anchor="middle">refused</text>
+        <path d="M270 48 V38" stroke="#9b9b9b" stroke-width="2"/>
+        <use href="#cross" x="270" y="30"/>
+
+        <text class="sans tiny" x="160" y="104" text-anchor="middle"><tspan class="mono">InvalidStateError</tspan> – the port is already open</text>
+      </g>
     </g>
 
-    <!-- Message bus -->
-    <g stroke="#6ab0de" stroke-width="2">
-      <line x1="396" y1="826" x2="424" y2="826"/>
-      <line x1="396" y1="883" x2="424" y2="883"/>
-      <line x1="396" y1="955" x2="424" y2="955"/>
-      <line x1="396" y1="1027" x2="424" y2="1027"/>
-    </g>
-    <rect x="424" y="816" width="112" height="242" rx="4" fill="#e7f2fa" stroke="#6ab0de"/>
-    <text class="ssg-bold" x="480" y="912" font-size="14" fill="#2980b9" text-anchor="middle">Message bus</text>
-    <text x="480" y="934" font-size="12" fill="#2980b9" text-anchor="middle">SharedWorker</text>
-    <text x="480" y="952" font-size="12" fill="#2980b9" text-anchor="middle">or</text>
-    <text x="480" y="970" font-size="12" fill="#2980b9" text-anchor="middle">BroadcastChannel</text>
-
-    <!-- The holding tab's line to Web Serial -->
-    <path d="M396 800 H560" stroke="#f0b37e" stroke-width="3" fill="none"/>
-    <path d="M552 794 L562 800 L552 806 Z" fill="#f0b37e"/>
-
-    <!-- Platform -->
-    <rect x="564" y="780" width="204" height="62" rx="4" fill="#f3f6f6" stroke="#e1e4e5"/>
-    <text class="ssg-bold" x="580" y="806" font-size="14.5" fill="#404040">Web Serial</text>
-    <text x="580" y="826" font-size="12.5" fill="#808080">Chrome, Edge, Opera, Brave</text>
-    <rect x="564" y="888" width="204" height="62" rx="4" fill="#f3f6f6" stroke="#e1e4e5"/>
-    <text class="ssg-bold" x="580" y="914" font-size="14.5" fill="#404040">localStorage</text>
-    <text x="580" y="934" font-size="12.5" fill="#808080">remembered configurations</text>
-    <rect x="564" y="996" width="204" height="62" rx="4" fill="#ffedcc" stroke="#f0b37e"/>
-    <text class="ssg-bold" x="580" y="1022" font-size="14.5" fill="#a85c1a">Web Locks</text>
-    <text x="580" y="1042" font-size="12.5" fill="#a85c1a">exactly one tab holds a port</text>
-
-    <!-- Devices -->
-    <text class="ssg-bold" x="840" y="762" font-size="13.5" fill="#606060">Your devices · USB-serial or RS-232</text>
-    <g stroke="#2980b9" stroke-width="2" fill="none">
-      <path d="M768 811 H816 V1010"/>
-      <path d="M816 802 H840"/>
-      <path d="M816 854 H840"/>
-      <path d="M816 906 H840"/>
-      <path d="M816 958 H840"/>
-      <path d="M816 1010 H840"/>
-    </g>
-    <g font-size="14">
-      <rect x="840" y="780" width="288" height="44" rx="4" fill="#ffffff" stroke="#e1e4e5"/>
-      <text class="ssg-bold" x="856" y="800" fill="#404040">Card reader</text>
-      <text x="856" y="816" font-size="11.5" fill="#808080">CH340 USB-serial adapter</text>
-      <rect x="840" y="832" width="288" height="44" rx="4" fill="#ffffff" stroke="#e1e4e5"/>
-      <text class="ssg-bold" x="856" y="852" fill="#404040">Scale</text>
-      <text x="856" y="868" font-size="11.5" fill="#808080">FTDI USB-serial, even parity</text>
-      <rect x="840" y="884" width="288" height="44" rx="4" fill="#ffffff" stroke="#e1e4e5"/>
-      <text class="ssg-bold" x="856" y="904" fill="#404040">Label printer</text>
-      <text x="856" y="920" font-size="11.5" fill="#808080">hardware flow control</text>
-      <rect x="840" y="936" width="288" height="44" rx="4" fill="#ffffff" stroke="#e1e4e5"/>
-      <text class="ssg-bold" x="856" y="956" fill="#404040">Machine panel</text>
-      <text x="856" y="972" font-size="11.5" fill="#808080">built-in RS-232, no USB identity</text>
-      <rect x="840" y="988" width="288" height="44" rx="4" fill="#ffffff" stroke="#e1e4e5"/>
-      <text class="ssg-bold" x="856" y="1008" fill="#404040">Microcontroller</text>
-      <text x="856" y="1024" font-size="11.5" fill="#808080">Arduino, ESP32, your own board</text>
-    </g>
-    <text x="840" y="1064" font-size="12.5" fill="#808080">One configuration per device, as many as you need</text>
-  </g>
-
-  <!-- Integration -->
-  <g class="ssg-sans">
-    <rect x="48" y="1122" width="352" height="92" fill="#ffffff" stroke="#e1e4e5"/>
-    <text class="ssg-bold" x="68" y="1152" font-size="15.5" fill="#404040">Drops into any web application</text>
-    <text x="68" y="1176" font-size="13.5" fill="#606060">Any framework or none. ESM, CommonJS and</text>
-    <text x="68" y="1196" font-size="13.5" fill="#606060">TypeScript types; no runtime dependencies.</text>
-    <rect x="424" y="1122" width="352" height="92" fill="#ffffff" stroke="#e1e4e5"/>
-    <text class="ssg-bold" x="444" y="1152" font-size="15.5" fill="#404040">One extra file to serve</text>
-    <text x="444" y="1176" font-size="13.5" fill="#606060">The worker script. Most bundlers emit it;</text>
-    <text x="444" y="1196" font-size="13.5" fill="#606060">otherwise, point workerUrl at it.</text>
-    <rect x="800" y="1122" width="352" height="92" fill="#ffffff" stroke="#e1e4e5"/>
-    <text class="ssg-bold" x="820" y="1152" font-size="15.5" fill="#404040">Visible when something is wrong</text>
-    <text x="820" y="1176" font-size="13.5" fill="#606060">Your logger, a diagnostics API, and a</text>
-    <text x="820" y="1196" font-size="13.5" fill="#606060">ready-made debugging page to deploy or not.</text>
-  </g>
-
-  <!-- Needs and features -->
-  <g class="ssg-sans">
-    <text class="ssg-slab ssg-bold" x="48" y="1270" font-size="26" fill="#404040">Whatever you need, it is there</text>
-    <text x="48" y="1298" font-size="16" fill="#606060">The problems a serial device shared by several tabs runs into, and what serial-broker does about each.</text>
-
-    <g>
-      <rect x="48" y="1318" width="352" height="82" fill="#ffffff" stroke="#e1e4e5"/>
-      <rect x="48" y="1318" width="5" height="82" fill="#2980b9"/>
-      <text class="ssg-bold" x="68" y="1344" font-size="15" fill="#404040">Several tabs need the same device</text>
-      <text x="68" y="1366" font-size="13.5" fill="#606060">One port for every tab: all of them read</text>
-      <text x="68" y="1385" font-size="13.5" fill="#606060">and write, and no write is sent twice.</text>
-
-      <rect x="424" y="1318" width="352" height="82" fill="#ffffff" stroke="#e1e4e5"/>
-      <rect x="424" y="1318" width="5" height="82" fill="#f0b37e"/>
-      <text class="ssg-bold" x="444" y="1344" font-size="15" fill="#404040">The tab holding the port closes</text>
-      <text x="444" y="1366" font-size="13.5" fill="#606060">Another tab takes over, even after a crash,</text>
-      <text x="444" y="1385" font-size="13.5" fill="#606060">with no unload handler.</text>
-
-      <rect x="800" y="1318" width="352" height="82" fill="#ffffff" stroke="#e1e4e5"/>
-      <rect x="800" y="1318" width="5" height="82" fill="#f0b37e"/>
-      <text class="ssg-bold" x="820" y="1344" font-size="15" fill="#404040">The device is unplugged or turned off</text>
-      <text x="820" y="1366" font-size="13.5" fill="#606060">The port reopens with the same settings,</text>
-      <text x="820" y="1385" font-size="13.5" fill="#606060">at once when the device reappears.</text>
-    </g>
-
-    <g>
-      <rect x="48" y="1408" width="352" height="82" fill="#ffffff" stroke="#e1e4e5"/>
-      <rect x="48" y="1408" width="5" height="82" fill="#f0b37e"/>
-      <text class="ssg-bold" x="68" y="1434" font-size="15" fill="#404040">A handover happens mid-write</text>
-      <text x="68" y="1456" font-size="13.5" fill="#606060">Writes not yet begun go out once; a begun</text>
-      <text x="68" y="1475" font-size="13.5" fill="#606060">one is reported, never silently repeated.</text>
-
-      <rect x="424" y="1408" width="352" height="82" fill="#ffffff" stroke="#e1e4e5"/>
-      <rect x="424" y="1408" width="5" height="82" fill="#2980b9"/>
-      <text class="ssg-bold" x="444" y="1434" font-size="15" fill="#404040">Scale, printer and reader at once</text>
-      <text x="444" y="1456" font-size="13.5" fill="#606060">Independent configurations, each with</text>
-      <text x="444" y="1475" font-size="13.5" fill="#606060">its own connection and recovery.</text>
-
-      <rect x="800" y="1408" width="352" height="82" fill="#ffffff" stroke="#e1e4e5"/>
-      <rect x="800" y="1408" width="5" height="82" fill="#2980b9"/>
-      <text class="ssg-bold" x="820" y="1434" font-size="15" fill="#404040">A text protocol, or binary frames</text>
-      <text x="820" y="1456" font-size="13.5" fill="#606060">Bytes pass through untouched; text is</text>
-      <text x="820" y="1475" font-size="13.5" fill="#606060">decoded correctly across chunks.</text>
-    </g>
-
-    <g>
-      <rect x="48" y="1498" width="352" height="82" fill="#ffffff" stroke="#e1e4e5"/>
-      <rect x="48" y="1498" width="5" height="82" fill="#1abc9c"/>
-      <text class="ssg-bold" x="68" y="1524" font-size="15" fill="#404040">Users should choose the port once</text>
-      <text x="68" y="1546" font-size="13.5" fill="#606060">The configuration is remembered and the</text>
-      <text x="68" y="1565" font-size="13.5" fill="#606060">browser keeps the permission: no prompt.</text>
-
-      <rect x="424" y="1498" width="352" height="82" fill="#ffffff" stroke="#e1e4e5"/>
-      <rect x="424" y="1498" width="5" height="82" fill="#1abc9c"/>
-      <text class="ssg-bold" x="444" y="1524" font-size="15" fill="#404040">A port without USB identity</text>
-      <text x="444" y="1546" font-size="13.5" fill="#606060"><tspan class="ssg-mono" font-size="12" fill="#e74c3c">{ any: true }</tspan> for built-in RS-232,</text>
-      <text x="444" y="1565" font-size="13.5" fill="#606060">Bluetooth and virtual COM ports.</text>
-
-      <rect x="800" y="1498" width="352" height="82" fill="#ffffff" stroke="#e1e4e5"/>
-      <rect x="800" y="1498" width="5" height="82" fill="#1abc9c"/>
-      <text class="ssg-bold" x="820" y="1524" font-size="15" fill="#404040">No SharedWorker available</text>
-      <text x="820" y="1546" font-size="13.5" fill="#606060">BroadcastChannel takes over: Android, a</text>
-      <text x="820" y="1565" font-size="13.5" fill="#606060">strict CSP, a worker script not deployed.</text>
-    </g>
-
-    <g>
-      <rect x="48" y="1588" width="352" height="82" fill="#ffffff" stroke="#e1e4e5"/>
-      <rect x="48" y="1588" width="5" height="82" fill="#9b59b6"/>
-      <text class="ssg-bold" x="68" y="1614" font-size="15" fill="#404040">Something goes wrong</text>
-      <text x="68" y="1636" font-size="13.5" fill="#606060">Stable error codes, each with a sentence</text>
-      <text x="68" y="1655" font-size="13.5" fill="#606060">that says what to do about it.</text>
-
-      <rect x="424" y="1588" width="352" height="82" fill="#ffffff" stroke="#e1e4e5"/>
-      <rect x="424" y="1588" width="5" height="82" fill="#9b59b6"/>
-      <text class="ssg-bold" x="444" y="1614" font-size="15" fill="#404040">Support needs to see inside</text>
-      <text x="444" y="1636" font-size="13.5" fill="#606060">Structured logs, a diagnostics API, and a</text>
-      <text x="444" y="1655" font-size="13.5" fill="#606060">page showing every tab and every port.</text>
-
-      <rect x="800" y="1588" width="352" height="82" fill="#ffffff" stroke="#e1e4e5"/>
-      <rect x="800" y="1588" width="5" height="82" fill="#9b59b6"/>
-      <text class="ssg-bold" x="820" y="1614" font-size="15" fill="#404040">It has to work today</text>
-      <text x="820" y="1636" font-size="13.5" fill="#606060">A handful of calls, TypeScript types, no</text>
-      <text x="820" y="1655" font-size="13.5" fill="#606060">runtime dependencies, MIT licence.</text>
+    <g class="sans body">
+      <text x="14" y="188">One tab opens the port, the others are refused.</text>
+      <text x="14" y="206">That tab closes: no other tab takes over.</text>
+      <text x="14" y="224">The device is unplugged: you write the recovery.</text>
     </g>
   </g>
 
-  <!-- Code, as the site's code blocks show it, and requirements -->
-  <rect x="48" y="1698" width="640" height="136" fill="#eeffcc" stroke="#e1e4e5"/>
-  <g class="ssg-mono" font-size="13.5" fill="#404040">
-    <text x="72" y="1728"><tspan fill="#007020" class="ssg-bold">await</tspan> SerialBroker.setup(<tspan fill="#4070a0">'Scale'</tspan>, {</text>
-    <text x="99" y="1748">device: { vendorId: <tspan fill="#208050">0x0403</tspan>, productId: <tspan fill="#208050">0x6001</tspan> },</text>
-    <text x="99" y="1768">serial: { baudRate: <tspan fill="#208050">9600</tspan> },</text>
-    <text x="72" y="1788">});</text>
-    <text x="72" y="1808">SerialBroker.subscribe(<tspan fill="#4070a0">'Scale'</tspan>, <tspan fill="#4070a0">'onReceive'</tspan>, (e) =&gt; show(e.data));</text>
+  <!-- With serial-broker, in the theme's tip colours -->
+  <g transform="translate(392,168)">
+    <rect width="344" height="232" fill="#dbfaf4"/>
+    <rect width="344" height="30" fill="#1abc9c"/>
+    <text class="sans b" x="14" y="20" font-size="14" fill="#ffffff">With serial-broker</text>
+
+    <g transform="translate(12,42)">
+      <rect width="320" height="126" fill="#ffffff" stroke="#e1e4e5"/>
+      <g transform="translate(10,12)">
+        <rect width="100" height="28" rx="3" fill="#f3f6f6" stroke="#e1e4e5"/>
+        <text class="sans tiny" x="50" y="18" text-anchor="middle">serial device</text>
+        <path d="M50 28 V48" stroke="#f0b37e" stroke-width="3"/>
+
+        <rect y="48" width="100" height="36" rx="3" fill="#ffffff" stroke="#f0b37e" stroke-width="2"/>
+        <text class="sans b" x="50" y="66" font-size="13" text-anchor="middle">Tab A</text>
+        <text class="sans tiny" x="50" y="80" fill="#a8640a" text-anchor="middle">holds the port</text>
+
+        <rect x="110" y="48" width="100" height="36" rx="3" fill="#ffffff" stroke="#e1e4e5"/>
+        <text class="sans b" x="160" y="66" font-size="13" text-anchor="middle">Tab B</text>
+        <text class="sans tiny" x="160" y="80" text-anchor="middle">reads · writes</text>
+
+        <rect x="220" y="48" width="100" height="36" rx="3" fill="#ffffff" stroke="#e1e4e5"/>
+        <text class="sans b" x="270" y="66" font-size="13" text-anchor="middle">Tab C</text>
+        <text class="sans tiny" x="270" y="80" text-anchor="middle">reads · writes</text>
+
+        <!-- The message bus carries everything that is not the port itself -->
+        <path d="M50 84 V94 M160 84 V94 M270 84 V94 M50 94 H270" stroke="#6ab0de" stroke-width="2"/>
+        <text class="sans tiny" x="160" y="108" fill="#2980b9" text-anchor="middle">message bus</text>
+      </g>
+    </g>
+
+    <g class="sans body">
+      <text x="14" y="188">Every tab reads from and writes to the one port.</text>
+      <text x="14" y="206">That tab closes: another tab takes over.</text>
+      <text x="14" y="224">The device comes back: so does the connection.</text>
+    </g>
   </g>
-  <g class="ssg-sans">
-    <text class="ssg-slab ssg-bold" x="716" y="1726" font-size="17" fill="#404040">The same calls in every tab.</text>
-    <text x="716" y="1754" font-size="14" fill="#606060">Chromium browsers: Chrome, Edge, Opera, Brave</text>
-    <text x="716" y="1778" font-size="14" fill="#606060">HTTPS or localhost · all tabs on one origin</text>
-    <text x="716" y="1802" font-size="14" fill="#606060">Documentation: configuration, errors, examples,</text>
-    <text x="716" y="1822" font-size="14" fill="#606060">diagnostics and the API reference</text>
+
+  <!-- ─────────────────────────────  Where the library sits  ───────────────────────────── -->
+  <text class="slab h2" x="24" y="444">Where it fits</text>
+  <text class="sans lead" x="24" y="468">Everything runs in the browser, on your origin: no server component, no browser extension.</text>
+
+  <g transform="translate(24,484)">
+    <!-- The browser, one origin -->
+    <rect width="712" height="262" fill="#ffffff" stroke="#c9c9c9" stroke-dasharray="6 5"/>
+    <text class="sans b small" x="16" y="22">Browser · one origin · HTTPS or localhost</text>
+
+    <!-- The tabs: the application in each of them, and the debugging surface if it is served -->
+    <g transform="translate(16,30)">
+      <rect width="155" height="88" rx="3" fill="#ffffff" stroke="#f0b37e" stroke-width="2"/>
+      <text class="sans b" x="14" y="24" font-size="13.5">Point of sale</text>
+      <text class="sans small" x="14" y="42" fill="#a8640a">holds the port</text>
+      <rect x="14" y="52" width="110" height="22" rx="3" fill="#e7f2fa"/>
+      <text class="mono small" x="22" y="67" fill="#2980b9">serial-broker</text>
+
+      <rect x="167" width="155" height="88" rx="3" fill="#ffffff" stroke="#e1e4e5"/>
+      <text class="sans b" x="181" y="24" font-size="13.5">Back office</text>
+      <text class="sans small" x="181" y="42">sends and receives</text>
+      <rect x="181" y="52" width="110" height="22" rx="3" fill="#e7f2fa"/>
+      <text class="mono small" x="189" y="67" fill="#2980b9">serial-broker</text>
+
+      <rect x="334" width="155" height="88" rx="3" fill="#ffffff" stroke="#e1e4e5"/>
+      <text class="sans b" x="348" y="24" font-size="13.5">Label designer</text>
+      <text class="sans small" x="348" y="42">sends and receives</text>
+      <rect x="348" y="52" width="110" height="22" rx="3" fill="#e7f2fa"/>
+      <text class="mono small" x="356" y="67" fill="#2980b9">serial-broker</text>
+
+      <rect x="501" width="155" height="88" rx="3" fill="#ffffff" stroke="#9b59b6" stroke-dasharray="5 4"/>
+      <text class="sans b" x="515" y="24" font-size="13.5">Debugging surface</text>
+      <text class="sans small" x="515" y="42" fill="#7d3c98">optional, watches only</text>
+      <rect x="515" y="52" width="110" height="22" rx="3" fill="#f4ecf7"/>
+      <text class="mono small" x="523" y="67" fill="#7d3c98">diagnostics</text>
+    </g>
+
+    <!-- The message bus between the tabs -->
+    <path d="M93 118 V136 M260 118 V136 M427 118 V136" stroke="#6ab0de" stroke-width="2"/>
+    <path d="M594 118 V136" stroke="#9b59b6" stroke-width="2" stroke-dasharray="4 4"/>
+    <rect x="78" y="136" width="532" height="34" rx="3" fill="#e7f2fa" stroke="#6ab0de"/>
+    <text class="sans" x="94" y="158" font-size="13" fill="#2980b9"><tspan class="b">Message bus</tspan> · a SharedWorker, or a BroadcastChannel where that is not available</text>
+
+    <!-- What the browser provides underneath. The tab that holds the port is the one that opens it. -->
+    <path d="M56 118 V190" stroke="#f0b37e" stroke-width="3" marker-end="url(#arrow-orange)"/>
+
+    <g transform="translate(16,190)">
+      <rect width="210" height="60" rx="3" fill="#f3f6f6" stroke="#e1e4e5"/>
+      <text class="sans b" x="14" y="24" font-size="13.5">Web Serial</text>
+      <text class="sans small" x="14" y="42">the port, opened by the tab</text>
+      <text class="sans small" x="14" y="56">that holds it</text>
+
+      <rect x="223" width="210" height="60" rx="3" fill="#ffedcc" stroke="#f0b37e"/>
+      <text class="sans b" x="237" y="24" font-size="13.5">Web Locks</text>
+      <text class="sans small" x="237" y="42" fill="#7a4a08">which tab holds the port, and</text>
+      <text class="sans small" x="237" y="56" fill="#7a4a08">the places a tab limit allows</text>
+
+      <rect x="446" width="210" height="60" rx="3" fill="#f3f6f6" stroke="#e1e4e5"/>
+      <text class="sans b" x="460" y="24" font-size="13.5">localStorage</text>
+      <text class="sans small" x="460" y="42">the configurations to set up</text>
+      <text class="sans small" x="460" y="56">again on the next visit</text>
+    </g>
+
+    <!-- Out of the browser, to the hardware -->
+    <path d="M56 250 V286" stroke="#f0b37e" stroke-width="3" marker-end="url(#arrow-orange)"/>
+    <g transform="translate(0,286)">
+      <rect width="712" height="52" rx="3" fill="#f3f6f6" stroke="#e1e4e5"/>
+      <text class="sans b" x="16" y="30" font-size="13.5">Your devices</text>
+      <rect x="130" y="13" width="170" height="26" rx="3" fill="#ffffff" stroke="#e1e4e5"/>
+      <text class="sans small" x="215" y="30" text-anchor="middle">USB-serial adapter</text>
+      <rect x="312" y="13" width="170" height="26" rx="3" fill="#ffffff" stroke="#e1e4e5"/>
+      <text class="sans small" x="397" y="30" text-anchor="middle">built-in RS-232</text>
+      <rect x="494" y="13" width="170" height="26" rx="3" fill="#ffffff" stroke="#e1e4e5"/>
+      <text class="sans small" x="579" y="30" text-anchor="middle">microcontroller</text>
+    </g>
+
+    <g class="sans body" fill="#555555">
+      <text y="364">One configuration per device, each with its own connection and its own recovery.</text>
+      <text y="384">One file more for your web server: the worker script — and the debugging surface, if you serve it.</text>
+      <text y="404">serial-broker is the transport only. Framing, checksums and request–response belong to your code above it.</text>
+    </g>
   </g>
+
+  <!-- ─────────────────────────────  The situations it exists for  ───────────────────────────── -->
+  <text class="slab h2" x="24" y="930">What happens when things move</text>
+  <text class="sans lead" x="24" y="954">The situations a shared port runs into, and what the library does in each of them.</text>
+
+  <!-- Several tabs, one device -->
+  <g transform="translate(24,970)">
+    <rect width="344" height="176" fill="#ffffff" stroke="#e1e4e5"/>
+    <rect width="4" height="176" fill="#2980b9"/>
+    <text class="sans b" x="20" y="28" font-size="14.5">Several tabs need the same device</text>
+    <g transform="translate(20,42)">
+      <rect width="92" height="26" rx="3" fill="#f3f6f6" stroke="#e1e4e5"/>
+      <text class="sans tiny" x="46" y="17" text-anchor="middle">serial device</text>
+      <path d="M46 26 V44" stroke="#f0b37e" stroke-width="3"/>
+      <rect y="44" width="92" height="30" rx="3" fill="#ffffff" stroke="#f0b37e" stroke-width="2"/>
+      <text class="sans tiny" x="46" y="63" text-anchor="middle">holds the port</text>
+      <rect x="106" y="44" width="92" height="30" rx="3" fill="#ffffff" stroke="#e1e4e5"/>
+      <text class="sans tiny" x="152" y="63" text-anchor="middle">reads · writes</text>
+      <rect x="212" y="44" width="92" height="30" rx="3" fill="#ffffff" stroke="#e1e4e5"/>
+      <text class="sans tiny" x="258" y="63" text-anchor="middle">reads · writes</text>
+      <path d="M46 74 V86 M152 74 V86 M258 74 V86 M46 86 H258" stroke="#6ab0de" stroke-width="2"/>
+    </g>
+    <g class="sans body">
+      <text x="20" y="148">Every tab receives what the device sends</text>
+      <text x="20" y="166">and can write to it, at most once.</text>
+    </g>
+  </g>
+
+  <!-- Failover -->
+  <g transform="translate(392,970)">
+    <rect width="344" height="176" fill="#ffffff" stroke="#e1e4e5"/>
+    <rect width="4" height="176" fill="#f0b37e"/>
+    <text class="sans b" x="20" y="28" font-size="14.5">The tab holding the port goes away</text>
+    <g transform="translate(20,42)">
+      <rect width="92" height="26" rx="3" fill="#f3f6f6" stroke="#e1e4e5"/>
+      <text class="sans tiny" x="46" y="17" text-anchor="middle">serial device</text>
+      <!-- the port moves from the tab that is gone to the tab that waited longest -->
+      <path d="M46 26 V33" stroke="#9b9b9b" stroke-width="2" stroke-dasharray="3 3"/>
+      <use href="#cross" x="46" y="39"/>
+      <path d="M46 26 H152 V44" stroke="#f0b37e" stroke-width="3" fill="none"/>
+      <rect y="44" width="92" height="30" rx="3" fill="#f3f6f6" stroke="#c9c9c9" stroke-dasharray="4 4"/>
+      <text class="sans tiny" x="46" y="63" fill="#777777" text-anchor="middle">closed, crashed</text>
+      <rect x="106" y="44" width="92" height="30" rx="3" fill="#ffffff" stroke="#f0b37e" stroke-width="2"/>
+      <text class="sans tiny" x="152" y="63" text-anchor="middle">takes over</text>
+      <rect x="212" y="44" width="92" height="30" rx="3" fill="#ffffff" stroke="#e1e4e5"/>
+      <text class="sans tiny" x="258" y="63" text-anchor="middle">reads · writes</text>
+      <path d="M152 74 V86 M258 74 V86 M152 86 H258" stroke="#6ab0de" stroke-width="2"/>
+    </g>
+    <g class="sans body">
+      <text x="20" y="148">The browser frees its Web Lock however</text>
+      <text x="20" y="166">the tab ends: no unload handler, no timeout.</text>
+    </g>
+  </g>
+
+  <!-- Reconnection -->
+  <g transform="translate(24,1166)">
+    <rect width="344" height="176" fill="#ffffff" stroke="#e1e4e5"/>
+    <rect width="4" height="176" fill="#f0b37e"/>
+    <text class="sans b" x="20" y="28" font-size="14.5">The device is unplugged or switched off</text>
+    <g transform="translate(20,42)">
+      <rect width="92" height="26" rx="3" fill="#f3f6f6" stroke="#c9c9c9" stroke-dasharray="4 4"/>
+      <text class="sans tiny" x="46" y="17" fill="#777777" text-anchor="middle">gone, and back</text>
+      <path d="M46 26 V31 M46 39 V44" stroke="#f0b37e" stroke-width="3"/>
+      <use href="#cross" x="46" y="35"/>
+      <rect y="44" width="92" height="30" rx="3" fill="#ffffff" stroke="#f0b37e" stroke-width="2"/>
+      <text class="mono tiny" x="46" y="63" fill="#404040" text-anchor="middle">reconnecting</text>
+      <rect x="106" y="44" width="92" height="30" rx="3" fill="#ffffff" stroke="#e1e4e5"/>
+      <text class="mono tiny" x="152" y="63" fill="#404040" text-anchor="middle">reconnecting</text>
+      <rect x="212" y="44" width="92" height="30" rx="3" fill="#ffffff" stroke="#e1e4e5"/>
+      <text class="mono tiny" x="258" y="63" fill="#404040" text-anchor="middle">reconnecting</text>
+      <path d="M46 74 V86 M152 74 V86 M258 74 V86 M46 86 H258" stroke="#6ab0de" stroke-width="2"/>
+    </g>
+    <g class="sans body">
+      <text x="20" y="148">Every tab sees the same status. The port</text>
+      <text x="20" y="166">reopens with the same settings, on its own.</text>
+    </g>
+  </g>
+
+  <!-- A tab limit -->
+  <g transform="translate(392,1166)">
+    <rect width="344" height="176" fill="#ffffff" stroke="#e1e4e5"/>
+    <rect width="4" height="176" fill="#2980b9"/>
+    <text class="sans b" x="20" y="28" font-size="14.5">Only one tab may use the device</text>
+    <g transform="translate(20,42)">
+      <rect width="92" height="26" rx="3" fill="#f3f6f6" stroke="#e1e4e5"/>
+      <text class="sans tiny" x="46" y="17" text-anchor="middle">serial device</text>
+      <path d="M46 26 V44" stroke="#f0b37e" stroke-width="3"/>
+      <rect y="44" width="92" height="30" rx="3" fill="#ffffff" stroke="#f0b37e" stroke-width="2"/>
+      <text class="mono tiny" x="46" y="63" fill="#404040" text-anchor="middle">open</text>
+      <rect x="106" y="44" width="92" height="30" rx="3" fill="#f3f6f6" stroke="#e1e4e5"/>
+      <text class="mono tiny" x="152" y="63" text-anchor="middle">queued</text>
+      <rect x="212" y="44" width="92" height="30" rx="3" fill="#f3f6f6" stroke="#e1e4e5"/>
+      <text class="mono tiny" x="258" y="63" text-anchor="middle">queued</text>
+      <!-- A queued tab holds no place, so it is on no bus and in no election. -->
+      <text class="sans tiny" x="205" y="88" text-anchor="middle">waiting for a place</text>
+    </g>
+    <g class="sans body">
+      <text x="20" y="148"><tspan class="mono" font-size="12.5">maxTabs: 1</tspan> gives one tab exclusive use.</text>
+      <text x="20" y="166">The others wait, and take over when it ends.</text>
+    </g>
+  </g>
+
+  <!-- ─────────────────────────────  Seeing what is happening  ───────────────────────────── -->
+  <text class="slab h2" x="24" y="1380">Seeing what is happening</text>
+  <text class="sans lead" x="24" y="1404">Which tab holds the port is invisible to the application on purpose — and visible to whoever operates it.</text>
+
+  <g transform="translate(24,1420)">
+    <rect width="712" height="144" fill="#ffffff" stroke="#e1e4e5"/>
+    <path d="M364 16 H364 M364 16 V128" stroke="#e1e4e5"/>
+
+    <g transform="translate(16,0)">
+      <text class="sans b" y="28" font-size="13.5">Errors</text>
+      <text class="sans small" y="48">A stable code, the context it happened in, and one</text>
+      <text class="sans small" y="65">sentence saying what to do about it.</text>
+    </g>
+    <g transform="translate(388,0)">
+      <text class="sans b" y="28" font-size="13.5">Logging</text>
+      <text class="sans small" y="48">Records to the logger you pass, each naming the tab</text>
+      <text class="sans small" y="65">and configuration. Nothing is logged until you ask.</text>
+    </g>
+    <g transform="translate(16,66)">
+      <text class="mono b" y="28" font-size="13">serial-broker/diagnostics</text>
+      <text class="sans small" y="48">An observer on the bus: every tab, its role, status,</text>
+      <text class="sans small" y="65">settings and pending writes. It takes no port.</text>
+    </g>
+    <g transform="translate(388,66)">
+      <text class="sans b" y="28" font-size="13.5" fill="#7d3c98">Debugging surface</text>
+      <text class="sans small" y="48">The same state as a page, with the traffic and the</text>
+      <text class="sans small" y="65">locks. Watching never moves a port.</text>
+    </g>
+  </g>
+
+  <!-- ─────────────────────────────  The calls, and what they need  ───────────────────────────── -->
+  <text class="slab b" x="24" y="1604" font-size="17">The same calls in every tab</text>
+
+  <rect x="24" y="1618" width="712" height="122" fill="#ffffff" stroke="#e1e4e5"/>
+  <g class="mono" font-size="13">
+    <text x="40" y="1642"><tspan fill="#007020" class="b">await</tspan> SerialBroker.setup(<tspan fill="#4070a0">'Scale'</tspan>, {</text>
+    <text x="56" y="1660">device: { vendorId: <tspan fill="#208050">0x0403</tspan>, productId: <tspan fill="#208050">0x6001</tspan> },</text>
+    <text x="56" y="1678">serial: { baudRate: <tspan fill="#208050">9600</tspan> }, encoding: { decodeText: <tspan fill="#007020" class="b">true</tspan> },</text>
+    <text x="40" y="1696">});</text>
+    <text x="40" y="1720">SerialBroker.subscribe(<tspan fill="#4070a0">'Scale'</tspan>, <tspan fill="#4070a0">'onReceive'</tspan>, (event) =&gt; show(event.text));</text>
+  </g>
+
+  <text class="sans small" x="24" y="1768">Chrome, Edge, Opera or Brave · HTTPS or localhost · all tabs on one origin · no runtime dependencies · MIT</text>
 </svg>
