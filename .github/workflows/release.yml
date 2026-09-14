@@ -1,8 +1,9 @@
 name: Release
 
-# Every stable version gets a GitHub release: pushing a tag vX.Y.Z creates it, after the same
-# checks as CI, with the notes from CHANGELOG.md and the installable package attached. A tag with a
-# pre-release part, such as v1.2.0-rc.1, gets none. Nothing is published to npm.
+# Every version gets a GitHub release: pushing a tag vX.Y.Z creates it, after the same checks as
+# CI, with the notes from CHANGELOG.md and the installable package attached. A tag with a
+# pre-release part, such as v1.2.0-alpha.1, gets a release marked as a pre-release. Nothing is
+# published to npm.
 on:
   push:
     tags:
@@ -28,22 +29,20 @@ jobs:
       - id: notes
         run: node scripts/release-notes.mjs "$GITHUB_REF_NAME" > release-notes.md
 
-      - if: steps.notes.outputs.stable == 'true'
-        run: npm ci
+      - run: npm ci
 
-      - if: steps.notes.outputs.stable == 'true'
-        run: npm run verify
+      - run: npm run verify
 
-      - if: steps.notes.outputs.stable == 'true'
-        run: npm pack
+      - run: npm pack
 
-      - if: steps.notes.outputs.stable == 'true'
-        env:
+      - env:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ steps.notes.outputs.version }}
+          PRERELEASE: ${{ steps.notes.outputs.stable == 'true' && '' || '--prerelease' }}
         run: >
           gh release create "$GITHUB_REF_NAME"
           --verify-tag
           --title "serial-broker $VERSION"
           --notes-file release-notes.md
+          $PRERELEASE
           "serial-broker-$VERSION.tgz"

@@ -62,9 +62,9 @@ as the code passes every test.
 
 ## Releasing
 
-Every stable version gets a GitHub release, created by `.github/workflows/release.yml` when its tag
-is pushed. A version with a pre-release part, such as `1.2.0-rc.1`, gets none. Nothing is
-published to npm.
+Every version gets a GitHub release, created by `.github/workflows/release.yml` when its tag is
+pushed. A version with a pre-release part, such as `0.1.0-alpha.1`, gets one marked as a
+pre-release. Nothing is published to npm before 1.0.
 
 1. Rename the `[Unreleased]` section of `CHANGELOG.md` to the version and date, such as
    `## [0.2.0] - 2026-10-01`, and start a new, empty `[Unreleased]` above it. The release notes

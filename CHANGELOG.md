@@ -11,6 +11,10 @@ coordinate with each other. See
 
 ## [Unreleased]
 
+## [0.1.0-alpha.1] - 2026-09-14
+
+The first release, marked as an alpha: it has not yet been verified against a real serial device.
+
 ### Added
 
 - Cross-tab sharing of a Web Serial port: one tab holds the port, every tab reads and writes.

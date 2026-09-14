@@ -2,8 +2,13 @@
 
 ## Reporting
 
-Report vulnerabilities privately to the maintainers rather than through a public issue. Include
-what an attacker can do, not only what is wrong.
+Report vulnerabilities privately rather than through a public issue, with GitHub's private
+vulnerability reporting: on the repository's **Security** tab, choose **Report a vulnerability**. Only
+the maintainers see the report, and a fix can be prepared with you before anything is published.
+Include what an attacker can do, not only what is wrong.
+
+GitHub offers private reporting for public repositories only. While the repository is private,
+everyone who can read it can reach the maintainers directly; report to them instead.
 
 ## What this library assumes
 

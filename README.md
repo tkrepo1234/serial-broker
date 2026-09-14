@@ -2,6 +2,10 @@
 
 One serial port, every tab.
 
+> **Alpha.** serial-broker is at version 0.1.0-alpha.1. Its API may still change from one release to
+> the next, and it has not yet been verified against a real serial device: everything is tested
+> against a simulated browser and a Web Serial stand-in.
+
 The [Web Serial API](https://developer.mozilla.org/en-US/docs/Web/API/Web_Serial_API) gives a
 single browsing context exclusive access to a device: open it in one tab and every other tab
 gets `InvalidStateError`. This library removes that limit. One tab holds the port; every tab

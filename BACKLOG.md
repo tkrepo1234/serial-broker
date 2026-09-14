@@ -26,7 +26,20 @@ further down says otherwise, this section wins.
 - `devEngines` stays.
 - `debug/index.html` gets a meta content security policy, tested in a browser; the advice to send
   `frame-ancestors` as a header stays.
-- Enable GitHub's **private vulnerability reporting** and name it in `SECURITY.md`.
+- Enable GitHub's **private vulnerability reporting** and name it in `SECURITY.md`. GitHub offers it
+  for public repositories only (the API answers 404 for this private one), so `SECURITY.md` names it
+  now, and it is switched on when the repository becomes public.
+- Dev dependencies stay on TypeScript 6 and `@types/node` 22: typescript-eslint and typedoc do not
+  support TypeScript 7 yet, and Node 22 is the oldest Node the toolchain supports. Check again at
+  the monthly update.
+
+### Debugging surface as an entry point (Tim, 2026-09-14)
+
+- Connect to a device without typing a vendor ID, product ID or type: a **Choose a device** action
+  opens the browser's port picker with no filter, takes the vendor and product ID from the chosen
+  port - or `device: { any: true }` for a port without a USB identity - suggests a name and a baud
+  rate the user can change, and sets the configuration up. It is the first thing a developer trying
+  the library should find.
 
 ### Hardening (protocol version 8)
 

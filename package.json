@@ -1,6 +1,6 @@
 {
   "name": "serial-broker",
-  "version": "0.1.0",
+  "version": "0.1.0-alpha.1",
   "description": "Cross-tab Web Serial access for Chromium: one shared port, every tab, automatic reconnect and failover.",
   "keywords": [
     "web-serial",

@@ -1,10 +1,11 @@
 /**
  * Decides whether a version tag gets a release, and prints its release notes.
  *
- * A release is created for every stable version: a tag `vX.Y.Z` with no pre-release part. A tag
- * such as `v1.2.0-rc.1` gets none. Before anything is published the tag has to match the version
- * in package.json, and CHANGELOG.md has to have a section for that version - the notes are taken
- * from it, so a release can never go out without them.
+ * Every version tag gets a release. A stable version, `vX.Y.Z`, gets an ordinary one; a tag with a
+ * pre-release part, such as `v1.2.0-alpha.1`, gets one marked as a pre-release. Before anything is
+ * published the tag has to match the version in package.json, and CHANGELOG.md has to have a
+ * section for that version - the notes are taken from it, so a release can never go out without
+ * them.
  *
  * Usage: `node scripts/release-notes.mjs v0.1.0`, or `npm run release:check` for the version in
  * package.json. Prints the notes on stdout. In GitHub Actions it also writes `stable` and `version`
@@ -31,12 +32,6 @@ if (packageVersion !== version) {
   fail(`The tag ${tag} is version ${version}, but package.json says ${packageVersion}.`);
 }
 
-if (prerelease !== undefined) {
-  output({ stable: 'false', version });
-  process.stderr.write(`${version} is a pre-release; it gets no release.\n`);
-  process.exit(0);
-}
-
 const notes = changelogSection(readFileSync(join(root, 'CHANGELOG.md'), 'utf8'), version);
 if (notes === undefined) {
   fail(
@@ -47,7 +42,7 @@ if (notes.trim() === '') {
   fail(`The CHANGELOG.md section for ${version} is empty.`);
 }
 
-output({ stable: 'true', version });
+output({ stable: prerelease === undefined ? 'true' : 'false', version });
 process.stdout.write(`${notes.trim()}\n`);
 
 /** The body of `## [version]` (optionally followed by a date), up to the next `## ` heading. */

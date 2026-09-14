@@ -56,3 +56,10 @@ jobs:
           docs/.venv/bin/python -m pip install -r docs/site/requirements.txt
 
       - run: npm run docs
+
+      # The built site, to download and open until it is hosted (GitHub Pages, later).
+      - uses: actions/upload-artifact@v4
+        with:
+          name: documentation
+          path: docs/site/_build/html/
+          retention-days: 30
