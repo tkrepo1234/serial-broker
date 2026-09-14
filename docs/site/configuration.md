@@ -159,7 +159,9 @@ block the connection indefinitely; a timeout counts as a failed attempt.
 
 `writeTimeoutMs`
 : The deadline for one `send()` in the tab that called it, including the time spent waiting for a
-connection; and, in the tab holding the port, for each chunk handed to the device. Raise it for a
+connection; and, in the tab holding the port, for how long a write may wait behind other writes
+before it begins — one that waited longer is never begun — and for each chunk handed to the device.
+Raise it for a
 device that applies flow control for long stretches; lower it when a user is waiting for the
 result.
 

@@ -264,10 +264,11 @@ These reject the `send()` call they belong to, in the tab that issued it.
 `WRITE_TIMEOUT`
 : **Arises** in two ways, told apart by `context`:
 
-- The whole `send()` — waiting for a connection, reaching the tab holding the port, and the
-  device accepting the bytes — took longer than `writeTimeoutMs`. **Context:** `started`: `false`
-  if the write never began, so the device received nothing; `true` if it had begun and may still
-  complete after the rejection.
+- The whole `send()` — waiting for a connection, reaching the tab holding the port, waiting there
+  behind other writes, and the device accepting the bytes — took longer than `writeTimeoutMs`.
+  **Context:** `started`: `false` if the write never began, so the device received nothing, and
+  never will: the tab holding the port does not begin a write that has waited that long; `true` if
+  it had begun and may still complete after the rejection.
 - The device did not accept a chunk within `writeTimeoutMs`, typically because of flow control.
   **Context:** `bytesWritten` of `byteLength`. The tab holding the port also treats the
   connection as broken and reconnects.
