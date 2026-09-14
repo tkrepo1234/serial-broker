@@ -215,9 +215,27 @@ describe('BroadcastChannelTransport', () => {
   it('accepts a context-wide message that names no configuration', () => {
     const { deliver, messages } = create();
 
-    deliver({ v: PROTOCOL_VERSION, from: PEER, to: 'all', type: 'hello' });
+    deliver(envelope(PEER, 'all', { type: 'diagnostics-request', requestId: 'd-1' }));
 
     expect(messages).toHaveLength(1);
+  });
+
+  it.each([
+    ['hello', {}],
+    ['welcome', {}],
+    ['goodbye', {}],
+    ['heartbeat', { configNames: ['Reader'], ownedConfigNames: ['Reader'] }],
+    ['attach', { configName: 'Reader' }],
+    ['detach', { configName: 'Reader' }],
+  ])('passes on no %s, which is meant for a broker and read by nobody above it', (type, body) => {
+    const { transport, deliver, messages } = create();
+    transport.attach('Reader');
+
+    // Any script of the origin can post these on the channel. On the worker the broker keeps them.
+    deliver(envelope(PEER, 'all', { type, ...body }));
+    deliver(envelope(PEER, 'all', STATUS_REQUEST));
+
+    expect(messages.map((message) => message.type)).toEqual(['status-request']);
   });
 
   it('stops accepting messages for a configuration it detached from', () => {

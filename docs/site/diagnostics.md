@@ -76,6 +76,7 @@ message.
 | `transport.broker-restored`               | info  | The worker answers again.                                                                 |
 | `transport.worker-other-protocol-version` | warn  | The worker runs another protocol version; the tab uses no worker until it is reloaded.    |
 | `transport.dispose-failed`                | warn  | A cleanup step failed while the message bus was closed.                                   |
+| `transport.limit-exceeded`                | warn  | A message beyond a limit of the bus was dropped; once per `limit`, with its `limitValue`. |
 | `storage.unavailable`                     | warn  | A read or write to `localStorage` failed; configurations may not be remembered.           |
 | `storage.invalid-entry`                   | warn  | A remembered configuration was invalid and discarded.                                     |
 | `storage.corrupt`                         | warn  | The stored configurations could not be read and were discarded.                           |
@@ -92,9 +93,15 @@ A diagnostics observer, described below, takes a logger of its own and logs unde
 at `warn`: a message it could not read, a failure of the message bus, a `watch` listener that
 threw, and a browser that cannot list Web Locks.
 
-The broker in the `SharedWorker` keeps its own records under `broker.*` and `worker.*`. A worker
-has no way to hand them to a tab's logger, so they are not seen; what they would say reaches the
-tabs as the `transport.*` records above.
+The broker in the `SharedWorker` keeps its own records under `broker.*` and `worker.*`, among them
+`worker.message-refused` for a message a port may not send, and `worker.limit-exceeded` and
+`broker.limit-exceeded` for what exceeds a limit, each once per reason or limit. A worker has no way
+to hand them to a tab's logger, so they are not seen; what they would say reaches the tabs as the
+`transport.*` records above.
+
+`transport.limit-exceeded` means that something on the bus sent a message no tab of this version
+sends: a tab of another build, a bug, or a script of the origin that is not serial-broker. What such a
+script can and cannot do is described in the repository's `SECURITY.md`.
 
 Logging is per tab: a logger sees the records of the tab it was configured in. To follow what
 happens across tabs, collect records from each — or use the diagnostics entry point below.

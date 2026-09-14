@@ -13,6 +13,17 @@
  */
 export const PROTOCOL_VERSION = 7;
 
+/**
+ * `true` for a value that can be a protocol version: a positive safe integer.
+ *
+ * Whatever else a sender puts where a version belongs - an object, a string, a fraction, `NaN`,
+ * `-0` - names no build of this library. Reporting it as a version would let one sender produce a
+ * new "version" with every message, and each is reported once (ADR-0008, ADR-0023).
+ */
+export function isProtocolVersion(value: unknown): value is number {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value >= 1;
+}
+
 /** Prefix for every name this library claims in a shared namespace. */
 const NAMESPACE = 'serial-broker';
 

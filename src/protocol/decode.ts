@@ -1,10 +1,29 @@
 import { assertNever } from '../core/assert.js';
-import { describeUnknown, isSerializedError } from '../core/errors.js';
+import type { ParticipantDiagnostics } from '../core/diagnostics.js';
+import {
+  describeUnknown,
+  isSerializedError,
+  type SerializedSerialBrokerError,
+} from '../core/errors.js';
 
 import { isParticipantDiagnostics } from './decode-diagnostics.js';
 import { isFiniteNumber, isNonEmptyString, isRecord, isStatus, isTabLimit } from './guards.js';
+import {
+  exceedsStructureBudget,
+  MAX_CONFIG_NAME_LENGTH,
+  MAX_ERROR_CHARACTERS,
+  MAX_ERROR_VALUES,
+  MAX_HEARTBEAT_CONFIGURATIONS,
+  MAX_IDENTIFIER_LENGTH,
+  MAX_PAYLOAD_BYTES,
+  MAX_REPORT_CHARACTERS,
+  MAX_REPORT_VALUES,
+  MAX_REPORTED_CONFIGURATIONS,
+  MAX_TEXT_LENGTH,
+  type LimitName,
+} from './limits.js';
 import type { ClientId, MessageTarget, ProtocolMessage, RequestId, TermId } from './messages.js';
-import { PROTOCOL_VERSION } from './version.js';
+import { isProtocolVersion, PROTOCOL_VERSION } from './version.js';
 
 /**
  * The message-boundary validation layer.
@@ -13,14 +32,44 @@ import { PROTOCOL_VERSION } from './version.js';
  * from an older build of this library, from an unrelated script that happens to use the same
  * channel name, or from a browser extension. Nothing is read from a message until it has
  * passed through here. See docs/guidelines/defensive-programming.md and ADR-0008.
+ *
+ * Validation alone lets a hostile sender make a context hold anything well-typed of any size, so
+ * every field is also held to the limits in `limits.ts`. And an accepted message is rebuilt from its
+ * declared fields: what the sender added travels no further - not into the application, and not
+ * into the broker's copies for every other tab (SECURITY.md).
  */
+
+/**
+ * The longest message type quoted in a decode failure.
+ *
+ * A failure is logged, and its type is whatever the sender put there: quoting a string of any length
+ * would let a sender write that much into every log record.
+ */
+const MAX_QUOTED_TYPE_LENGTH = 64;
 
 /** Why a message was rejected. Reported at `warn` level, never thrown. */
 export type DecodeFailure =
   | { readonly reason: 'not-an-object' }
-  | { readonly reason: 'version-mismatch'; readonly theirVersion: unknown }
-  | { readonly reason: 'unknown-type'; readonly type: unknown }
-  | { readonly reason: 'malformed'; readonly type: string; readonly field: string };
+  | {
+      readonly reason: 'version-mismatch';
+      /**
+       * The sender's protocol version, or `undefined` when `v` is not a protocol version at all.
+       *
+       * Only a positive safe integer is passed on. Anything else the sender chose - an object, a
+       * string of any length, a fraction - would be a new value for every message, and whoever
+       * reports each version once would report it every time.
+       */
+      readonly theirVersion: number | undefined;
+    }
+  | { readonly reason: 'unknown-type'; readonly type: string }
+  | { readonly reason: 'malformed'; readonly type: string; readonly field: string }
+  | {
+      readonly reason: 'limit-exceeded';
+      readonly type: string;
+      readonly field: string;
+      /** The limit of `limits.ts` the field exceeds. */
+      readonly limit: LimitName;
+    };
 
 /** Result of decoding one message. */
 export type DecodeResult =
@@ -31,50 +80,200 @@ function fail(failure: DecodeFailure): DecodeResult {
   return { ok: false, failure };
 }
 
-function malformed(type: string, field: string): DecodeResult {
-  return fail({ reason: 'malformed', type, field });
+/** Thrown inside the decoder only, to leave it from any depth; never escapes `decodeMessage`. */
+class Rejection extends Error {
+  constructor(readonly failure: DecodeFailure) {
+    super(failure.reason);
+  }
+}
+
+function malformed(type: string, field: string): never {
+  throw new Rejection({ reason: 'malformed', type, field });
+}
+
+function exceeded(type: string, field: string, limit: LimitName): never {
+  throw new Rejection({ reason: 'limit-exceeded', type, field, limit });
+}
+
+/** A value from the sender, quoted in a failure: a string of bounded length, whatever it was. */
+function quoteType(value: unknown): string {
+  if (typeof value !== 'string') {
+    return `(${value === null ? 'null' : typeof value})`;
+  }
+  return value.length > MAX_QUOTED_TYPE_LENGTH
+    ? `${value.slice(0, MAX_QUOTED_TYPE_LENGTH)}...`
+    : value;
 }
 
 /**
- * Accepts a message as it arrived, once every field its type declares has been checked.
+ * Reads the raw message, one declared field at a time, each checked as it is read.
  *
- * Only messages carrying a payload are rebuilt instead, because their payload may need
- * normalising (see {@link asBytes}).
+ * Every reader either returns the field in its declared type, or throws a {@link Rejection} naming
+ * the field and why. So a message is either rebuilt entirely from checked fields, or rejected.
  */
-function accepted(raw: Record<string, unknown>): DecodeResult {
-  return { ok: true, message: raw as unknown as ProtocolMessage };
-}
+class FieldReader {
+  constructor(
+    private readonly raw: Record<string, unknown>,
+    readonly type: string,
+  ) {}
 
-const isNameList = (value: unknown): value is readonly string[] =>
-  Array.isArray(value) && value.every(isNonEmptyString);
-
-/**
- * Payloads arrive as `Uint8Array` through structured cloning.
- *
- * A sender on a different build could send something else entirely, and a plain `ArrayBuffer`
- * is a realistic near-miss, so both are accepted and normalised rather than rejected.
- */
-function asBytes(value: unknown): Uint8Array | undefined {
-  if (value instanceof Uint8Array) {
+  /** A string of at most `limit` characters: a name or an identifier. */
+  #boundedString(field: string, maxLength: number, limit: LimitName): string {
+    const value = this.raw[field];
+    if (!isNonEmptyString(value)) {
+      return malformed(this.type, field);
+    }
+    if (value.length > maxLength) {
+      return exceeded(this.type, field, limit);
+    }
     return value;
   }
-  if (value instanceof ArrayBuffer) {
-    return new Uint8Array(value);
+
+  identifier(field: string): string {
+    return this.#boundedString(field, MAX_IDENTIFIER_LENGTH, 'MAX_IDENTIFIER_LENGTH');
   }
-  return undefined;
+
+  optionalIdentifier(field: string): string | undefined {
+    return this.raw[field] === undefined ? undefined : this.identifier(field);
+  }
+
+  configName(field = 'configName'): string {
+    return this.#boundedString(field, MAX_CONFIG_NAME_LENGTH, 'MAX_CONFIG_NAME_LENGTH');
+  }
+
+  optionalConfigName(): string | undefined {
+    // Optional, but routed on when present: a name that is not one would be dropped by every
+    // receiver as belonging to no configuration, without anyone learning why.
+    return this.raw['configName'] === undefined ? undefined : this.configName();
+  }
+
+  target(): MessageTarget {
+    return this.identifier('to') as MessageTarget;
+  }
+
+  nameList(field: string): readonly string[] {
+    const value = this.raw[field];
+    if (!Array.isArray(value)) {
+      return malformed(this.type, field);
+    }
+    if (value.length > MAX_HEARTBEAT_CONFIGURATIONS) {
+      return exceeded(this.type, field, 'MAX_HEARTBEAT_CONFIGURATIONS');
+    }
+    const names: string[] = [];
+    for (const name of value as readonly unknown[]) {
+      if (!isNonEmptyString(name)) {
+        return malformed(this.type, field);
+      }
+      if (name.length > MAX_CONFIG_NAME_LENGTH) {
+        return exceeded(this.type, field, 'MAX_CONFIG_NAME_LENGTH');
+      }
+      names.push(name);
+    }
+    return names;
+  }
+
+  /**
+   * A payload, normalised to a `Uint8Array` that spans its own buffer and nothing more.
+   *
+   * Payloads arrive as `Uint8Array` through structured cloning. A sender on a different build could
+   * send something else entirely, and a plain `ArrayBuffer` is a realistic near-miss, so both are
+   * accepted. A view is copied when it does not span exactly its own, unshared buffer: cloning a view
+   * clones all of its buffer, and a one-byte view of a 100 MB buffer must not keep the 100 MB alive in
+   * whoever holds the payload.
+   */
+  payload(): Uint8Array {
+    const value = this.raw['payload'];
+    let bytes: Uint8Array;
+    if (value instanceof Uint8Array) {
+      bytes = value;
+    } else if (value instanceof ArrayBuffer) {
+      bytes = new Uint8Array(value);
+    } else {
+      return malformed(this.type, 'payload');
+    }
+    if (bytes.byteLength > MAX_PAYLOAD_BYTES) {
+      return exceeded(this.type, 'payload', 'MAX_PAYLOAD_BYTES');
+    }
+    const spansItsBuffer =
+      bytes.byteOffset === 0 &&
+      bytes.buffer instanceof ArrayBuffer &&
+      bytes.buffer.byteLength === bytes.byteLength;
+    return spansItsBuffer ? bytes : bytes.slice();
+  }
+
+  timestamp(): number {
+    const value = this.raw['timestamp'];
+    return isFiniteNumber(value) ? value : malformed(this.type, 'timestamp');
+  }
+
+  optionalText(): string | undefined {
+    const value = this.raw['text'];
+    if (value === undefined) {
+      return undefined;
+    }
+    if (typeof value !== 'string') {
+      return malformed(this.type, 'text');
+    }
+    return value.length > MAX_TEXT_LENGTH ? exceeded(this.type, 'text', 'MAX_TEXT_LENGTH') : value;
+  }
+
+  boolean(field: string): boolean {
+    const value = this.raw[field];
+    return typeof value === 'boolean' ? value : malformed(this.type, field);
+  }
+
+  error(): SerializedSerialBrokerError {
+    const value = this.raw['error'];
+    // Bounded before the shape is checked, so that checking costs no more than the budget.
+    if (typeof value === 'object' && value !== null) {
+      const excess = exceedsStructureBudget(value, {
+        values: MAX_ERROR_VALUES,
+        characters: MAX_ERROR_CHARACTERS,
+      });
+      if (excess !== undefined) {
+        const limit = excess === 'values' ? 'MAX_ERROR_VALUES' : 'MAX_ERROR_CHARACTERS';
+        return exceeded(this.type, 'error', limit);
+      }
+    }
+    return isSerializedError(value) ? value : malformed(this.type, 'error');
+  }
+
+  report(): ParticipantDiagnostics {
+    const value = this.raw['report'];
+    if (typeof value === 'object' && value !== null) {
+      const excess = exceedsStructureBudget(value, {
+        values: MAX_REPORT_VALUES,
+        characters: MAX_REPORT_CHARACTERS,
+      });
+      if (excess !== undefined) {
+        const limit = excess === 'values' ? 'MAX_REPORT_VALUES' : 'MAX_REPORT_CHARACTERS';
+        return exceeded(this.type, 'report', limit);
+      }
+      // Counted on its own: a report of many small configurations stays within the value budget, and
+      // each configuration is still one more row an observer shows.
+      const configurations = (value as Record<string, unknown>)['configurations'];
+      if (Array.isArray(configurations) && configurations.length > MAX_REPORTED_CONFIGURATIONS) {
+        return exceeded(this.type, 'report', 'MAX_REPORTED_CONFIGURATIONS');
+      }
+    }
+    return isParticipantDiagnostics(value) ? value : malformed(this.type, 'report');
+  }
 }
 
 /**
  * Validates an incoming message.
  *
  * @param raw - The value from `event.data`. Entirely untrusted.
- * @returns The typed message, or the reason it was rejected. Never throws: a hostile message
- *   must not be able to break the receive path.
+ * @returns The typed message, rebuilt from its declared fields only, or the reason it was rejected.
+ *   Never throws: a hostile message must not be able to break the receive path.
  */
 export function decodeMessage(raw: unknown): DecodeResult {
   try {
-    return decodeChecked(raw);
+    return { ok: true, message: decodeChecked(raw) };
   } catch (error) {
+    if (error instanceof Rejection) {
+      return fail(error.failure);
+    }
     // The contract is absolute: a message must never be able to break the receive path, and
     // "reading a field cannot throw" is an assumption, not a fact. Structured cloning does not
     // carry getters today, so this is unreachable through the supported transports - which is
@@ -83,210 +282,159 @@ export function decodeMessage(raw: unknown): DecodeResult {
   }
 }
 
-function decodeChecked(raw: unknown): DecodeResult {
+function decodeChecked(raw: unknown): ProtocolMessage {
   if (!isRecord(raw)) {
-    return fail({ reason: 'not-an-object' });
+    throw new Rejection({ reason: 'not-an-object' });
   }
 
-  if (raw['v'] !== PROTOCOL_VERSION) {
-    return fail({ reason: 'version-mismatch', theirVersion: raw['v'] });
+  const version = raw['v'];
+  if (version !== PROTOCOL_VERSION) {
+    throw new Rejection({
+      reason: 'version-mismatch',
+      theirVersion: isProtocolVersion(version) ? version : undefined,
+    });
   }
 
-  if (!isNonEmptyString(raw['from'])) {
-    return malformed(String(raw['type']), 'from');
-  }
-
-  if (!isNonEmptyString(raw['to'])) {
-    return malformed(String(raw['type']), 'to');
-  }
+  const quotedType = quoteType(raw['type']);
+  const envelope = new FieldReader(raw, quotedType);
+  const from = envelope.identifier('from') as ClientId;
+  const to = envelope.target();
 
   const type = raw['type'];
   if (typeof type !== 'string') {
-    return fail({ reason: 'unknown-type', type });
+    throw new Rejection({ reason: 'unknown-type', type: quotedType });
   }
+
+  const read = new FieldReader(raw, type);
+  const v = PROTOCOL_VERSION;
 
   switch (type) {
     case 'hello':
     case 'welcome':
     case 'goodbye':
-      return accepted(raw);
+      return { type, v, from, to };
 
     case 'heartbeat':
-      if (!isNameList(raw['configNames'])) {
-        return malformed(type, 'configNames');
-      }
-      return isNameList(raw['ownedConfigNames'])
-        ? accepted(raw)
-        : malformed(type, 'ownedConfigNames');
+      return {
+        type,
+        v,
+        from,
+        to,
+        configNames: read.nameList('configNames'),
+        ownedConfigNames: read.nameList('ownedConfigNames'),
+      };
 
     case 'attach':
     case 'detach':
     case 'status-request':
-      return isNonEmptyString(raw['configName']) ? accepted(raw) : malformed(type, 'configName');
+      return { type, v, from, to, configName: read.configName() };
 
     case 'owner-claimed':
     case 'owner-released':
-      if (!isNonEmptyString(raw['configName'])) {
-        return malformed(type, 'configName');
-      }
-      return isNonEmptyString(raw['term']) ? accepted(raw) : malformed(type, 'term');
-
-    case 'write-request': {
-      if (!isNonEmptyString(raw['configName'])) {
-        return malformed(type, 'configName');
-      }
-      if (!isNonEmptyString(raw['requestId'])) {
-        return malformed(type, 'requestId');
-      }
-      const payload = asBytes(raw['payload']);
-      if (payload === undefined) {
-        return malformed(type, 'payload');
-      }
-      if (!isNonEmptyString(raw['term'])) {
-        return malformed(type, 'term');
-      }
       return {
-        ok: true,
-        message: {
-          type: 'write-request',
-          v: PROTOCOL_VERSION,
-          from: raw['from'] as ClientId,
-          to: raw['to'] as MessageTarget,
-          configName: raw['configName'],
-          requestId: raw['requestId'] as RequestId,
-          payload,
-          term: raw['term'] as TermId,
-        },
+        type,
+        v,
+        from,
+        to,
+        configName: read.configName(),
+        term: read.identifier('term') as TermId,
       };
-    }
+
+    case 'write-request':
+      return {
+        type,
+        v,
+        from,
+        to,
+        configName: read.configName(),
+        requestId: read.identifier('requestId') as RequestId,
+        payload: read.payload(),
+        term: read.identifier('term') as TermId,
+      };
 
     case 'write-started':
-      if (!isNonEmptyString(raw['configName'])) {
-        return malformed(type, 'configName');
-      }
-      if (!isNonEmptyString(raw['requestId'])) {
-        return malformed(type, 'requestId');
-      }
-      return isNonEmptyString(raw['term']) ? accepted(raw) : malformed(type, 'term');
+      return {
+        type,
+        v,
+        from,
+        to,
+        configName: read.configName(),
+        requestId: read.identifier('requestId') as RequestId,
+        term: read.identifier('term') as TermId,
+      };
 
     case 'write-result': {
-      if (!isNonEmptyString(raw['configName'])) {
-        return malformed(type, 'configName');
-      }
-      if (!isNonEmptyString(raw['requestId'])) {
-        return malformed(type, 'requestId');
-      }
-      if (typeof raw['ok'] !== 'boolean') {
-        return malformed(type, 'ok');
-      }
-      // A failed result without an error would leave the caller's promise rejected with
-      // nothing to report, which is worse than dropping the message.
-      if (!raw['ok'] && !isSerializedError(raw['error'])) {
-        return malformed(type, 'error');
-      }
+      const configName = read.configName();
+      const requestId = read.identifier('requestId') as RequestId;
+      const ok = read.boolean('ok');
+      // A failed result without an error would leave the caller's promise rejected with nothing to
+      // report, which is worse than dropping the message. A successful one carries none: an error
+      // there would be nothing anyone reads, only something the broker copies.
+      const error = ok ? undefined : read.error();
       // Optional: a tab that never held the port has no term to answer with.
-      if (raw['term'] !== undefined && !isNonEmptyString(raw['term'])) {
-        return malformed(type, 'term');
-      }
-      return accepted(raw);
+      const term = read.optionalIdentifier('term') as TermId | undefined;
+      return { type, v, from, to, configName, requestId, ok, error, term };
     }
 
-    case 'data-received': {
-      if (!isNonEmptyString(raw['configName'])) {
-        return malformed(type, 'configName');
-      }
-      const payload = asBytes(raw['payload']);
-      if (payload === undefined) {
-        return malformed(type, 'payload');
-      }
-      if (!isFiniteNumber(raw['timestamp'])) {
-        return malformed(type, 'timestamp');
-      }
-      const text = raw['text'];
-      if (text !== undefined && typeof text !== 'string') {
-        return malformed(type, 'text');
-      }
+    case 'data-received':
       return {
-        ok: true,
-        message: {
-          type: 'data-received',
-          v: PROTOCOL_VERSION,
-          from: raw['from'] as ClientId,
-          to: raw['to'] as MessageTarget,
-          configName: raw['configName'],
-          payload,
-          text,
-          timestamp: raw['timestamp'],
-        },
+        type,
+        v,
+        from,
+        to,
+        configName: read.configName(),
+        payload: read.payload(),
+        timestamp: read.timestamp(),
+        text: read.optionalText(),
       };
-    }
 
-    case 'data-sent': {
-      if (!isNonEmptyString(raw['configName'])) {
-        return malformed(type, 'configName');
-      }
-      const payload = asBytes(raw['payload']);
-      if (payload === undefined) {
-        return malformed(type, 'payload');
-      }
-      if (!isNonEmptyString(raw['originClientId'])) {
-        return malformed(type, 'originClientId');
-      }
-      if (!isFiniteNumber(raw['timestamp'])) {
-        return malformed(type, 'timestamp');
-      }
+    case 'data-sent':
       return {
-        ok: true,
-        message: {
-          type: 'data-sent',
-          v: PROTOCOL_VERSION,
-          from: raw['from'] as ClientId,
-          to: raw['to'] as MessageTarget,
-          configName: raw['configName'],
-          payload,
-          originClientId: raw['originClientId'] as ClientId,
-          timestamp: raw['timestamp'],
-        },
+        type,
+        v,
+        from,
+        to,
+        configName: read.configName(),
+        payload: read.payload(),
+        originClientId: read.identifier('originClientId') as ClientId,
+        timestamp: read.timestamp(),
       };
-    }
 
-    case 'status':
-      if (!isNonEmptyString(raw['configName'])) {
-        return malformed(type, 'configName');
-      }
-      if (!isStatus(raw['status'])) {
+    case 'status': {
+      const configName = read.configName();
+      const status = raw['status'];
+      if (!isStatus(status)) {
         return malformed(type, 'status');
       }
-      if (!isTabLimit(raw['maxTabs'])) {
+      const maxTabs = raw['maxTabs'];
+      if (!isTabLimit(maxTabs)) {
         return malformed(type, 'maxTabs');
       }
-      if (!isNonEmptyString(raw['term'])) {
-        return malformed(type, 'term');
-      }
-      return isFiniteNumber(raw['timestamp']) ? accepted(raw) : malformed(type, 'timestamp');
+      const term = read.identifier('term') as TermId;
+      return { type, v, from, to, configName, status, maxTabs, term, timestamp: read.timestamp() };
+    }
 
     case 'diagnostics-request':
-      return isNonEmptyString(raw['requestId']) ? accepted(raw) : malformed(type, 'requestId');
+      return { type, v, from, to, requestId: read.identifier('requestId') as RequestId };
 
     case 'diagnostics-report':
-      if (!isNonEmptyString(raw['requestId'])) {
-        return malformed(type, 'requestId');
-      }
-      return isParticipantDiagnostics(raw['report']) ? accepted(raw) : malformed(type, 'report');
+      return {
+        type,
+        v,
+        from,
+        to,
+        requestId: read.identifier('requestId') as RequestId,
+        report: read.report(),
+      };
 
-    case 'error':
-      // Optional, but routed on when present: a name that is not one would be dropped by every
-      // receiver as belonging to no configuration, without anyone learning why.
-      if (raw['configName'] !== undefined && !isNonEmptyString(raw['configName'])) {
-        return malformed(type, 'configName');
-      }
-      if (!isSerializedError(raw['error'])) {
-        return malformed(type, 'error');
-      }
-      return isFiniteNumber(raw['timestamp']) ? accepted(raw) : malformed(type, 'timestamp');
+    case 'error': {
+      const configName = read.optionalConfigName();
+      const error = read.error();
+      return { type, v, from, to, configName, error, timestamp: read.timestamp() };
+    }
 
     default:
-      return fail({ reason: 'unknown-type', type });
+      throw new Rejection({ reason: 'unknown-type', type: quotedType });
   }
 }
 
@@ -296,11 +444,15 @@ export function describeDecodeFailure(failure: DecodeFailure): string {
     case 'not-an-object':
       return 'message was not an object';
     case 'version-mismatch':
-      return `protocol version ${String(failure.theirVersion)} does not match ${String(PROTOCOL_VERSION)}`;
+      return failure.theirVersion === undefined
+        ? `message carries no protocol version, where ${String(PROTOCOL_VERSION)} was expected`
+        : `protocol version ${String(failure.theirVersion)} does not match ${String(PROTOCOL_VERSION)}`;
     case 'unknown-type':
-      return `unknown message type ${String(failure.type)}`;
+      return `unknown message type ${failure.type}`;
     case 'malformed':
       return `message "${failure.type}" has an invalid "${failure.field}" field`;
+    case 'limit-exceeded':
+      return `message "${failure.type}" exceeds ${failure.limit} in its "${failure.field}" field`;
     default:
       return assertNever(failure, 'decode failure reason');
   }

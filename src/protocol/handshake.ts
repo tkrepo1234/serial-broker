@@ -1,4 +1,5 @@
 import { isNonEmptyString, isRecord } from './guards.js';
+import { MAX_IDENTIFIER_LENGTH } from './limits.js';
 import { BROKER_ID, type ClientId, type WelcomeMessage } from './messages.js';
 import { PROTOCOL_VERSION } from './version.js';
 
@@ -37,8 +38,15 @@ export function welcomeFor(clientId: ClientId): WelcomeMessage {
  * @returns The sender's identity, or `undefined` for anything that is not a `hello`.
  */
 export function helloSenderOf(raw: unknown): ClientId | undefined {
-  if (!isRecord(raw) || raw['type'] !== 'hello' || !isNonEmptyString(raw['from'])) {
+  if (!isRecord(raw) || raw['type'] !== 'hello') {
     return undefined;
   }
-  return raw['from'] as ClientId;
+  const from = raw['from'];
+  // Bounded like every identifier (`MAX_IDENTIFIER_LENGTH`): the worker echoes it back in the welcome,
+  // and a sender must not make it post a string of any length. Every build creates identifiers of
+  // about 50 characters, so no version is refused by it.
+  if (!isNonEmptyString(from) || from.length > MAX_IDENTIFIER_LENGTH) {
+    return undefined;
+  }
+  return from as ClientId;
 }
