@@ -4,6 +4,7 @@ import { SerialBrokerErrorCode } from '../../../src/core/error-codes.js';
 import { SerialBrokerStatus } from '../../../src/core/types.js';
 import { BrowserHarness, TRANSPORT_MODES } from '../../harness/browser-harness.js';
 import { READER } from '../../harness/devices.js';
+import type { FakeDevice } from '../../harness/fake-serial.js';
 import { fieldsOfEvent, recordingLogger } from '../../harness/recording-logger.js';
 import { remember, rememberedEntry } from '../../harness/stored-configurations.js';
 
@@ -279,6 +280,190 @@ describe('a configuration in auto mode', () => {
     expect(tab.client.getStatus('Reader')).toMatchObject({
       status: SerialBrokerStatus.Open,
       deviceKind: 'usb',
+    });
+  });
+});
+
+/**
+ * The first visit: a tab sets the name up in auto mode, the user picks `device`, and the tab closes -
+ * leaving the resolution remembered, as a page that is navigated away from does.
+ */
+async function chooseOnFirstVisit(harness: BrowserHarness, device: FakeDevice): Promise<void> {
+  const first = harness.openTab();
+  await first.setup('Reader', AUTO);
+  harness.serial.pickerQueue.push(device);
+  await first.client.requestAccess('Reader');
+  await harness.settle();
+  await first.close();
+  await harness.settle();
+}
+
+describe.each(TRANSPORT_MODES)('a later visit in auto mode (%s)', (transport) => {
+  it('opens the remembered device with setup() alone, without a prompt', async () => {
+    const { logger, records } = recordingLogger();
+    const harness = new BrowserHarness({ transport, logger });
+    const other = harness.serial.addDevice(OTHER.vendorId, OTHER.productId);
+    harness.serial.grant(other);
+    const device = harness.serial.addDevice(READER.vendorId, READER.productId);
+    await chooseOnFirstVisit(harness, device);
+
+    // The page the Quickstart teaches: `setup()` on every load, no `restore()`, and no
+    // `requestAccess()` - so nothing could have opened a picker.
+    const later = harness.openTab();
+    await later.setup('Reader', AUTO);
+    await harness.settle();
+
+    expect(later.client.getStatus('Reader')).toMatchObject({
+      status: SerialBrokerStatus.Open,
+      deviceKind: 'usb',
+      vendorId: READER.vendorId,
+      productId: READER.productId,
+    });
+    expect(device.isOpen).toBe(true);
+    expect(other.isOpen).toBe(false);
+    expect(later.errorCodes('Reader')).toEqual([]);
+    expect(fieldsOfEvent(records, 'session.device-resolved')).toContainEqual(
+      expect.objectContaining({ configName: 'Reader', source: 'remembered', device: 'usb' }),
+    );
+  });
+
+  it('keeps the resolution in the remembered entry that setup() saves', async () => {
+    const harness = new BrowserHarness({ transport });
+    const bare = harness.serial.addNonUsbPort();
+    await chooseOnFirstVisit(harness, bare);
+
+    const later = harness.openTab();
+    await later.setup('Reader', { ...AUTO, serial: { baudRate: 19_200 } });
+    await harness.settle();
+
+    // The line settings are the ones this visit passed; the device is the one the user chose.
+    expect(rememberedEntry(harness.storage, 'Reader')).toMatchObject({
+      device: { auto: true, resolved: { nonUsb: true } },
+      serial: { baudRate: 19_200 },
+    });
+    expect(later.client.getStatus('Reader')).toMatchObject({
+      status: SerialBrokerStatus.Open,
+      deviceKind: 'non-usb',
+    });
+    await later.close();
+    expect(rememberedEntry(harness.storage, 'Reader')).toMatchObject({
+      device: { auto: true, resolved: { nonUsb: true } },
+    });
+  });
+
+  it('still lets restore() reconnect, after setup() and on the visit after that', async () => {
+    const harness = new BrowserHarness({ transport });
+    const device = harness.serial.addDevice(READER.vendorId, READER.productId);
+    await chooseOnFirstVisit(harness, device);
+
+    const second = harness.openTab();
+    await second.setup('Reader', AUTO);
+    // Already set up in this tab, so there is nothing more to restore, and nothing is disturbed.
+    await expect(second.client.restore()).resolves.toEqual([]);
+    await harness.settle();
+    expect(second.client.getStatus('Reader').status).toBe(SerialBrokerStatus.Open);
+    await second.close();
+    await harness.settle();
+
+    const third = harness.openTab();
+    await expect(third.client.restore()).resolves.toEqual(['Reader']);
+    await harness.settle();
+    expect(third.client.getStatus('Reader')).toMatchObject({
+      status: SerialBrokerStatus.Open,
+      deviceKind: 'usb',
+      vendorId: READER.vendorId,
+    });
+  });
+
+  it('lets an explicit setup() ignore a remembered auto-mode resolution of the same name', async () => {
+    const harness = new BrowserHarness({ transport });
+    const device = harness.serial.addDevice(READER.vendorId, READER.productId);
+    harness.serial.grant(device);
+    const other = harness.serial.addDevice(OTHER.vendorId, OTHER.productId);
+    harness.serial.grant(other);
+    remember(harness.storage, {
+      Reader: { device: { auto: true, resolved: READER }, serial: { baudRate: 9600 } },
+    });
+
+    const tab = harness.openTab();
+    await tab.setup('Reader', { device: OTHER, ...AUTO });
+    await harness.settle();
+
+    expect(tab.client.getStatus('Reader')).toMatchObject({
+      status: SerialBrokerStatus.Open,
+      deviceKind: 'usb',
+      vendorId: OTHER.vendorId,
+      productId: OTHER.productId,
+    });
+    expect(other.isOpen).toBe(true);
+    expect(device.isOpen).toBe(false);
+    expect((rememberedEntry(harness.storage, 'Reader') as { device: unknown }).device).toEqual(
+      OTHER,
+    );
+
+    // The name is set up now, so an auto-mode setup() is judged against what runs - compatible, as
+    // an unresolved auto-mode filter always is - and reads nothing remembered.
+    await expect(tab.client.setup('Reader', AUTO)).resolves.toBeUndefined();
+    expect(tab.client.getStatus('Reader').vendorId).toBe(OTHER.vendorId);
+  });
+});
+
+describe('what a later visit in auto mode takes from the remembered entry', () => {
+  it.each([
+    ['USB IDs', READER],
+    ['any port', { any: true }],
+    ['a port without USB identity', { nonUsb: true }],
+  ])('takes nothing from an entry naming %s explicitly', async (_label, remembered) => {
+    const harness = new BrowserHarness();
+    harness.serial.grant(harness.serial.addDevice(READER.vendorId, READER.productId));
+    harness.serial.grant(harness.serial.addNonUsbPort());
+    remember(harness.storage, { Reader: { device: remembered, serial: { baudRate: 9600 } } });
+
+    const tab = harness.openTab();
+    await tab.setup('Reader', AUTO);
+    await harness.settle();
+
+    // Not a choice the user made in auto mode: the configuration waits for one, and says so.
+    expect(tab.client.getStatus('Reader')).toMatchObject({
+      status: SerialBrokerStatus.AwaitingPermission,
+      deviceKind: 'auto',
+    });
+    expect(rememberedEntry(harness.storage, 'Reader')).toMatchObject({ device: { auto: true } });
+  });
+
+  it('takes nothing for a configuration set up with persist: false', async () => {
+    const harness = new BrowserHarness();
+    harness.serial.grant(harness.serial.addDevice(READER.vendorId, READER.productId));
+    remember(harness.storage, {
+      Reader: { device: { auto: true, resolved: READER }, serial: { baudRate: 9600 } },
+    });
+
+    const tab = harness.openTab();
+    await tab.setup('Reader', { ...AUTO, persist: false });
+    await harness.settle();
+
+    expect(tab.client.getStatus('Reader').status).toBe(SerialBrokerStatus.AwaitingPermission);
+  });
+
+  it('lets a resolution passed to setup() win over the remembered one', async () => {
+    const harness = new BrowserHarness();
+    const device = harness.serial.addDevice(READER.vendorId, READER.productId);
+    harness.serial.grant(device);
+    const other = harness.serial.addDevice(OTHER.vendorId, OTHER.productId);
+    harness.serial.grant(other);
+    remember(harness.storage, {
+      Reader: { device: { auto: true, resolved: OTHER }, serial: { baudRate: 9600 } },
+    });
+
+    const tab = harness.openTab();
+    await tab.setup('Reader', { device: { auto: true, resolved: READER }, ...AUTO });
+    await harness.settle();
+
+    expect(tab.client.getStatus('Reader').vendorId).toBe(READER.vendorId);
+    expect(device.isOpen).toBe(true);
+    expect(other.isOpen).toBe(false);
+    expect(rememberedEntry(harness.storage, 'Reader')).toMatchObject({
+      device: { auto: true, resolved: READER },
     });
   });
 });

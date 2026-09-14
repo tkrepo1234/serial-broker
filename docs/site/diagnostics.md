@@ -69,7 +69,7 @@ message.
 | `supervisor.teardown-failed`              | debug | Closing a lost connection failed or timed out at `step`; the next open may find it open.                                              |
 | `supervisor.write-expired`                | debug | A write waited `writeTimeoutMs` behind others and was not begun; `queuedWrites` remain.                                               |
 | `supervisor.sent`, `.received`            | debug | Traffic, with `byteLength`; with `logPayloads`, also `hex`.                                                                           |
-| `session.device-resolved`                 | info  | A configuration in auto mode took its device from the picker (`source: 'picker'`) or from the tab holding the port (`'holder'`).      |
+| `session.device-resolved`                 | info  | Auto mode took its device from the picker (`source: 'picker'`), the holder (`'holder'`) or the remembered entry (`'remembered'`).     |
 | `matcher.none`                            | debug | No granted port matches the configured device, or none is chosen yet (`filter: 'auto'`).                                              |
 | `matcher.ambiguous`                       | warn  | Several granted ports match; the first is used.                                                                                       |
 | `environment.transport-fallback`          | warn  | `SharedWorker` is unavailable or its script did not load; `BroadcastChannel` is used.                                                 |
@@ -87,6 +87,7 @@ message.
 | `storage.stale-name`                      | info  | A remembered name had no configuration left under it and was forgotten.                                                               |
 | `storage.old-format-discarded`            | info  | Configurations stored by an earlier version were removed, unread.                                                                     |
 | `storage.old-format-kept`                 | debug | Removing what an earlier version stored failed; the next read reports storage itself.                                                 |
+| `storage.lookup-failed`                   | debug | `setup()` could not read the remembered configuration of its name; it starts as if none were remembered.                              |
 | `storage.hold-failed`                     | warn  | The lock that keeps a remembered configuration for other tabs could not be requested.                                                 |
 | `slot.acquired`                           | info  | This tab took one of the `maxTabs` places and joins the configuration.                                                                |
 | `slot.released`                           | info  | This tab gave its place up.                                                                                                           |

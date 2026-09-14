@@ -127,6 +127,85 @@ describe('ConfigurationStore', () => {
     expect(store.load()).toEqual([saved, unlimited]);
   });
 
+  it('finds one remembered configuration, and nothing for a name the index does not list', () => {
+    const { store, entries } = createStore(stored('Reader'));
+    entries.set(storageEntryKey('Unlisted'), JSON.stringify(OPTIONS));
+
+    expect(store.find('Reader')).toEqual(normalizeConfiguration('Reader', OPTIONS));
+    expect(store.find('Unlisted')).toBeUndefined();
+    expect(store.find('Scale')).toBeUndefined();
+  });
+
+  it('finds quietly: an unusable entry is not reported, repaired or removed', () => {
+    const { store, entries, writes, reported } = createStore({
+      [storageIndexKey()]: JSON.stringify(['Reader', 'Scale']),
+      [storageEntryKey('Reader')]: '{ not json',
+      [storageEntryKey('Scale')]: JSON.stringify({ serial: { baudRate: -1 } }),
+    });
+
+    expect(store.find('Reader')).toBeUndefined();
+    expect(store.find('Scale')).toBeUndefined();
+    expect(
+      new ConfigurationStore(
+        unavailableStorage(),
+        new ScopedLogger(NOOP_LOGGER, {}),
+        () => undefined,
+      ).find('Reader'),
+    ).toBe(undefined);
+
+    expect(reported).toEqual([]);
+    expect(writes).toEqual([]);
+    expect(entries.get(storageEntryKey('Reader'))).toBe('{ not json');
+  });
+
+  it('keeps a stored auto-mode resolution when an unresolved auto-mode configuration is saved', () => {
+    const resolved = { auto: true, resolved: { vendorId: 0x1a86, productId: 0x7523 } };
+    const { store, entries } = createStore({
+      [storageIndexKey()]: JSON.stringify(['Reader']),
+      [storageEntryKey('Reader')]: JSON.stringify({ device: resolved, serial: { baudRate: 9600 } }),
+    });
+
+    // Another tab resolved the name after this one set it up unresolved: its choice stays.
+    store.save(normalizeConfiguration('Reader', { serial: { baudRate: 19_200 } }));
+
+    expect(JSON.parse(entries.get(storageEntryKey('Reader')) ?? '')).toMatchObject({
+      device: resolved,
+      serial: { baudRate: 19_200 },
+    });
+  });
+
+  it('replaces a stored auto-mode resolution with anything that is not an unresolved auto mode', () => {
+    const resolved = { auto: true, resolved: { vendorId: 0x1a86, productId: 0x7523 } };
+    const { store, entries } = createStore({
+      [storageIndexKey()]: JSON.stringify(['Reader']),
+      [storageEntryKey('Reader')]: JSON.stringify({ device: resolved, serial: { baudRate: 9600 } }),
+    });
+    const entry = (): unknown =>
+      (JSON.parse(entries.get(storageEntryKey('Reader')) ?? '') as { device: unknown }).device;
+
+    store.save(normalizeConfiguration('Reader', { ...OPTIONS, device: { nonUsb: true } }));
+    expect(entry()).toEqual({ nonUsb: true });
+
+    // An unresolved save after an explicit one keeps nothing: there is no resolution left to keep.
+    store.save(normalizeConfiguration('Reader', { serial: { baudRate: 9600 } }));
+    expect(entry()).toEqual({ auto: true });
+
+    // A resolution of its own replaces a stored one.
+    store.save(
+      normalizeConfiguration('Reader', {
+        device: { auto: true, resolved: { nonUsb: true } },
+        serial: { baudRate: 9600 },
+      }),
+    );
+    store.save(
+      normalizeConfiguration('Reader', {
+        device: { auto: true, resolved: { vendorId: 1, productId: 2 } },
+        serial: { baudRate: 9600 },
+      }),
+    );
+    expect(entry()).toEqual({ auto: true, resolved: { vendorId: 1, productId: 2 } });
+  });
+
   it('writes the index only when the name is not listed yet', () => {
     const { store, writes } = createStore();
     const configuration = normalizeConfiguration('Reader', OPTIONS);
