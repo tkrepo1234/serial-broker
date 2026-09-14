@@ -82,7 +82,7 @@ includes; commit them with a change that is meant to be faster, or that touches 
 
 The same scenarios run in a real browser with `SERIAL_BROKER_BENCH_BROWSER=1 npm run bench:browser`
 (PowerShell: `$env:SERIAL_BROKER_BENCH_BROWSER='1'; npm run bench:browser`), in the installed Edge,
-on port 8147, in a few minutes. That run is never part of CI: its numbers are one machine's, and
+on port 8147, in about ten minutes. That run is never part of CI: its numbers are one machine's, and
 they are recorded once in the chapter with the machine named. A result more than ten times worse
 than its expectation has to become a fix with a test, or a limit recorded in the chapter.
 

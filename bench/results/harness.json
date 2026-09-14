@@ -1,9 +1,9 @@
 {
   "kind": "harness",
   "date": "2026-09-14",
-  "commit": "f29d45f (with uncommitted changes)",
+  "commit": "62275c5",
   "machine": {
-    "os": "Windows_NT 10.0.26200",
+    "os": "Windows 11 Home (10.0.26200)",
     "cpu": "AMD Ryzen 7 7840HS w/ Radeon 780M Graphics",
     "runtime": "Node 24.21.0",
     "device": "the harness fake (`test/harness/fake-serial.ts`)"
@@ -17,26 +17,26 @@
         {
           "key": "throughput",
           "unit": "B/s",
-          "measured": 51612642.061267264,
+          "measured": 49020000,
           "expected": 2000000,
           "better": "higher",
-          "ratio": 0.03875019607843136
+          "ratio": 0.0408
         },
         {
           "key": "latencyP50",
           "unit": "ms",
-          "measured": 0.0027000000000043656,
+          "measured": 0.0036,
           "expected": 0.1,
           "better": "lower",
-          "ratio": 0.027000000000043656
+          "ratio": 0.036
         },
         {
           "key": "latencyP95",
           "unit": "ms",
-          "measured": 0.01290000000000191,
+          "measured": 0.0121,
           "expected": 0.3,
           "better": "lower",
-          "ratio": 0.043000000000006366
+          "ratio": 0.0403
         }
       ],
       "note": "255-byte chunks; latency from the device's push to `onReceive` in each tab, one chunk at a time; throughput from a burst of 2000 chunks, until the last tab has the last one."
@@ -49,26 +49,26 @@
         {
           "key": "throughput",
           "unit": "B/s",
-          "measured": 14016302.88406044,
+          "measured": 13690000,
           "expected": 1000000,
           "better": "higher",
-          "ratio": 0.07134549019607843
+          "ratio": 0.0731
         },
         {
           "key": "latencyP50",
           "unit": "ms",
-          "measured": 0.016199999999997772,
+          "measured": 0.0173,
           "expected": 0.3,
           "better": "lower",
-          "ratio": 0.053999999999992575
+          "ratio": 0.0577
         },
         {
           "key": "latencyP95",
           "unit": "ms",
-          "measured": 0.03450000000000841,
+          "measured": 0.049,
           "expected": 0.6,
           "better": "lower",
-          "ratio": 0.057500000000014026
+          "ratio": 0.0817
         }
       ],
       "note": "255-byte chunks; latency from the device's push to `onReceive` in each tab, one chunk at a time; throughput from a burst of 2000 chunks, until the last tab has the last one."
@@ -81,26 +81,26 @@
         {
           "key": "throughput",
           "unit": "B/s",
-          "measured": 8437171.198475353,
+          "measured": 8598000,
           "expected": 500000,
           "better": "higher",
-          "ratio": 0.05926156862745098
+          "ratio": 0.0582
         },
         {
           "key": "latencyP50",
           "unit": "ms",
-          "measured": 0.026199999999988677,
+          "measured": 0.0279,
           "expected": 0.5,
           "better": "lower",
-          "ratio": 0.052399999999977354
+          "ratio": 0.0558
         },
         {
           "key": "latencyP95",
           "unit": "ms",
-          "measured": 0.0543999999999869,
+          "measured": 0.0593,
           "expected": 1,
           "better": "lower",
-          "ratio": 0.0543999999999869
+          "ratio": 0.0593
         }
       ],
       "note": "255-byte chunks; latency from the device's push to `onReceive` in each tab, one chunk at a time; throughput from a burst of 2000 chunks, until the last tab has the last one."
@@ -113,18 +113,18 @@
         {
           "key": "latencyP50",
           "unit": "ms",
-          "measured": 0.050399999999996226,
+          "measured": 0.0517,
           "expected": 0.3,
           "better": "lower",
-          "ratio": 0.16799999999998744
+          "ratio": 0.172
         },
         {
           "key": "latencyP95",
           "unit": "ms",
-          "measured": 0.08740000000000236,
+          "measured": 0.1587,
           "expected": 1,
           "better": "lower",
-          "ratio": 0.08740000000000236
+          "ratio": 0.159
         }
       ],
       "note": "A six-byte write from the tab that does not hold the port, timed from `send()` to its promise settling; the interval between writes is simulated time."
@@ -137,18 +137,18 @@
         {
           "key": "latencyP50",
           "unit": "ms",
-          "measured": 0.03530000000000655,
+          "measured": 0.0383,
           "expected": 0.3,
           "better": "lower",
-          "ratio": 0.1176666666666885
+          "ratio": 0.128
         },
         {
           "key": "latencyP95",
           "unit": "ms",
-          "measured": 0.05030000000004975,
+          "measured": 0.056,
           "expected": 1,
           "better": "lower",
-          "ratio": 0.05030000000004975
+          "ratio": 0.056
         }
       ],
       "note": "A six-byte write from the tab that does not hold the port, timed from `send()` to its promise settling; the interval between writes is simulated time."
@@ -161,18 +161,18 @@
         {
           "key": "latencyP50",
           "unit": "ms",
-          "measured": 0.03309999999999036,
+          "measured": 0.0336,
           "expected": 0.3,
           "better": "lower",
-          "ratio": 0.1103333333333012
+          "ratio": 0.112
         },
         {
           "key": "latencyP95",
           "unit": "ms",
-          "measured": 0.06229999999999336,
+          "measured": 0.0721,
           "expected": 1,
           "better": "lower",
-          "ratio": 0.06229999999999336
+          "ratio": 0.0721
         }
       ],
       "note": "A six-byte write from the tab that does not hold the port, timed from `send()` to its promise settling; the interval between writes is simulated time."
@@ -185,10 +185,10 @@
         {
           "key": "wallP50",
           "unit": "ms",
-          "measured": 2.606899999999996,
+          "measured": 2.521,
           "expected": 50,
           "better": "lower",
-          "ratio": 0.05213799999999992
+          "ratio": 0.0504
         }
       ],
       "note": "One `send()` of 1 MiB from the tab that does not hold the port, to its promise settling, with the default 4 KiB write chunk."
@@ -209,18 +209,18 @@
         {
           "key": "wallP50",
           "unit": "ms",
-          "measured": 0.09699999999997999,
+          "measured": 0.0924,
           "expected": 2,
           "better": "lower",
-          "ratio": 0.048499999999989996
+          "ratio": 0.0462
         },
         {
           "key": "wallP95",
           "unit": "ms",
-          "measured": 0.18990000000002283,
+          "measured": 0.2809,
           "expected": 5,
           "better": "lower",
-          "ratio": 0.037980000000004566
+          "ratio": 0.0562
         }
       ],
       "note": "Two tabs; the one holding the port is killed with no chance to clean up, and the other is timed until it reports `open`. Simulated time is the fake clock; wall time the process."
@@ -241,18 +241,18 @@
         {
           "key": "wallP50",
           "unit": "ms",
-          "measured": 0.17280000000005202,
+          "measured": 0.1854,
           "expected": 3,
           "better": "lower",
-          "ratio": 0.05760000000001734
+          "ratio": 0.0618
         },
         {
           "key": "wallP95",
           "unit": "ms",
-          "measured": 0.4187999999999761,
+          "measured": 0.6625,
           "expected": 6,
           "better": "lower",
-          "ratio": 0.06979999999999602
+          "ratio": 0.11
         }
       ],
       "note": "Two tabs; the one holding the port releases the configuration, and the other is timed until it reports `open`."
@@ -273,18 +273,18 @@
         {
           "key": "wallP50",
           "unit": "ms",
-          "measured": 0.11759999999998172,
+          "measured": 0.1127,
           "expected": 2,
           "better": "lower",
-          "ratio": 0.05879999999999086
+          "ratio": 0.0564
         },
         {
           "key": "wallP95",
           "unit": "ms",
-          "measured": 0.21530000000001337,
+          "measured": 0.2379,
           "expected": 5,
           "better": "lower",
-          "ratio": 0.04306000000000267
+          "ratio": 0.0476
         }
       ],
       "note": "A fresh browser with the device granted: from `setup()` to the tab reporting `open`."
@@ -305,18 +305,18 @@
         {
           "key": "wallP50",
           "unit": "ms",
-          "measured": 0.11540000000002237,
+          "measured": 0.0923,
           "expected": 2,
           "better": "lower",
-          "ratio": 0.05770000000001119
+          "ratio": 0.0462
         },
         {
           "key": "wallP95",
           "unit": "ms",
-          "measured": 0.17500000000001137,
+          "measured": 0.1522,
           "expected": 5,
           "better": "lower",
-          "ratio": 0.03500000000000227
+          "ratio": 0.0304
         }
       ],
       "note": "A tab joining a configuration another tab already holds open: from `setup()` to `open`."
@@ -329,10 +329,10 @@
         {
           "key": "heapGrowth",
           "unit": "KB",
-          "measured": -770.0078125,
+          "measured": 222.8,
           "expected": 512,
           "better": "lower",
-          "ratio": -1.5039215087890625
+          "ratio": 0.435
         },
         {
           "key": "timerGrowth",
@@ -345,10 +345,10 @@
         {
           "key": "wall",
           "unit": "ms",
-          "measured": 236.40469999999993,
+          "measured": 238.1,
           "expected": 15000,
           "better": "lower",
-          "ratio": 0.015760313333333328
+          "ratio": 0.0159
         }
       ],
       "note": "Three tabs, one chunk and one write a second for a simulated hour, in steps of 5 s on both clocks; heap and timers compared after a minute of warm-up and at the end, the garbage collected before each reading."
@@ -361,26 +361,26 @@
         {
           "key": "throughput",
           "unit": "B/s",
-          "measured": 229059061.30698538,
+          "measured": 195200000,
           "expected": 2000000,
           "better": "higher",
-          "ratio": 0.008731372549019557
+          "ratio": 0.0102
         },
         {
           "key": "latencyP50",
           "unit": "ms",
-          "measured": 0.0014999999999645297,
+          "measured": 0.002,
           "expected": 0.1,
           "better": "lower",
-          "ratio": 0.014999999999645297
+          "ratio": 0.02
         },
         {
           "key": "latencyP95",
           "unit": "ms",
-          "measured": 0.002399999999965985,
+          "measured": 0.0027,
           "expected": 0.3,
           "better": "lower",
-          "ratio": 0.007999999999886617
+          "ratio": 0.009
         }
       ],
       "note": "255-byte chunks; latency from the device's push to `onReceive` in each tab, one chunk at a time; throughput from a burst of 2000 chunks, until the last tab has the last one."
@@ -393,26 +393,26 @@
         {
           "key": "throughput",
           "unit": "B/s",
-          "measured": 18825092.741265714,
+          "measured": 16460000,
           "expected": 1000000,
           "better": "higher",
-          "ratio": 0.05312058823529411
+          "ratio": 0.0607
         },
         {
           "key": "latencyP50",
           "unit": "ms",
-          "measured": 0.011200000000030741,
+          "measured": 0.0121,
           "expected": 0.3,
           "better": "lower",
-          "ratio": 0.0373333333334358
+          "ratio": 0.0403
         },
         {
           "key": "latencyP95",
           "unit": "ms",
-          "measured": 0.016500000000064574,
+          "measured": 0.0211,
           "expected": 0.6,
           "better": "lower",
-          "ratio": 0.027500000000107626
+          "ratio": 0.0352
         }
       ],
       "note": "255-byte chunks; latency from the device's push to `onReceive` in each tab, one chunk at a time; throughput from a burst of 2000 chunks, until the last tab has the last one."
@@ -425,26 +425,26 @@
         {
           "key": "throughput",
           "unit": "B/s",
-          "measured": 10192029.832670836,
+          "measured": 10050000,
           "expected": 500000,
           "better": "higher",
-          "ratio": 0.049057941176470665
+          "ratio": 0.0498
         },
         {
           "key": "latencyP50",
           "unit": "ms",
-          "measured": 0.022600000000011278,
+          "measured": 0.0254,
           "expected": 0.5,
           "better": "lower",
-          "ratio": 0.045200000000022555
+          "ratio": 0.0508
         },
         {
           "key": "latencyP95",
           "unit": "ms",
-          "measured": 0.04450000000008458,
+          "measured": 0.056,
           "expected": 1,
           "better": "lower",
-          "ratio": 0.04450000000008458
+          "ratio": 0.056
         }
       ],
       "note": "255-byte chunks; latency from the device's push to `onReceive` in each tab, one chunk at a time; throughput from a burst of 2000 chunks, until the last tab has the last one."
@@ -457,18 +457,18 @@
         {
           "key": "latencyP50",
           "unit": "ms",
-          "measured": 0.01850000000001728,
+          "measured": 0.0192,
           "expected": 0.3,
           "better": "lower",
-          "ratio": 0.06166666666672427
+          "ratio": 0.064
         },
         {
           "key": "latencyP95",
           "unit": "ms",
-          "measured": 0.030099999999947613,
+          "measured": 0.0287,
           "expected": 1,
           "better": "lower",
-          "ratio": 0.030099999999947613
+          "ratio": 0.0287
         }
       ],
       "note": "A six-byte write from the tab that does not hold the port, timed from `send()` to its promise settling; the interval between writes is simulated time."
@@ -481,18 +481,18 @@
         {
           "key": "latencyP50",
           "unit": "ms",
-          "measured": 0.018700000000080763,
+          "measured": 0.0196,
           "expected": 0.3,
           "better": "lower",
-          "ratio": 0.062333333333602546
+          "ratio": 0.0653
         },
         {
           "key": "latencyP95",
           "unit": "ms",
-          "measured": 0.02680000000009386,
+          "measured": 0.0298,
           "expected": 1,
           "better": "lower",
-          "ratio": 0.02680000000009386
+          "ratio": 0.0298
         }
       ],
       "note": "A six-byte write from the tab that does not hold the port, timed from `send()` to its promise settling; the interval between writes is simulated time."
@@ -505,18 +505,18 @@
         {
           "key": "latencyP50",
           "unit": "ms",
-          "measured": 0.01639999999997599,
+          "measured": 0.0173,
           "expected": 0.3,
           "better": "lower",
-          "ratio": 0.054666666666586636
+          "ratio": 0.0577
         },
         {
           "key": "latencyP95",
           "unit": "ms",
-          "measured": 0.03710000000000946,
+          "measured": 0.0257,
           "expected": 1,
           "better": "lower",
-          "ratio": 0.03710000000000946
+          "ratio": 0.0257
         }
       ],
       "note": "A six-byte write from the tab that does not hold the port, timed from `send()` to its promise settling; the interval between writes is simulated time."
@@ -529,10 +529,10 @@
         {
           "key": "wallP50",
           "unit": "ms",
-          "measured": 2.091199999999958,
+          "measured": 1.91,
           "expected": 50,
           "better": "lower",
-          "ratio": 0.04182399999999916
+          "ratio": 0.0382
         }
       ],
       "note": "One `send()` of 1 MiB from the tab that does not hold the port, to its promise settling, with the default 4 KiB write chunk."
@@ -553,18 +553,18 @@
         {
           "key": "wallP50",
           "unit": "ms",
-          "measured": 0.043800000000032924,
+          "measured": 0.0524,
           "expected": 2,
           "better": "lower",
-          "ratio": 0.021900000000016462
+          "ratio": 0.0262
         },
         {
           "key": "wallP95",
           "unit": "ms",
-          "measured": 0.12139999999999418,
+          "measured": 0.1393,
           "expected": 5,
           "better": "lower",
-          "ratio": 0.024279999999998837
+          "ratio": 0.0279
         }
       ],
       "note": "Two tabs; the one holding the port is killed with no chance to clean up, and the other is timed until it reports `open`. Simulated time is the fake clock; wall time the process."
@@ -585,18 +585,18 @@
         {
           "key": "wallP50",
           "unit": "ms",
-          "measured": 0.13040000000000873,
+          "measured": 0.1541,
           "expected": 3,
           "better": "lower",
-          "ratio": 0.043466666666669575
+          "ratio": 0.0514
         },
         {
           "key": "wallP95",
           "unit": "ms",
-          "measured": 0.213799999999992,
+          "measured": 0.2482,
           "expected": 6,
           "better": "lower",
-          "ratio": 0.035633333333332
+          "ratio": 0.0414
         }
       ],
       "note": "Two tabs; the one holding the port releases the configuration, and the other is timed until it reports `open`."
@@ -617,18 +617,18 @@
         {
           "key": "wallP50",
           "unit": "ms",
-          "measured": 0.06229999999993652,
+          "measured": 0.0408,
           "expected": 2,
           "better": "lower",
-          "ratio": 0.03114999999996826
+          "ratio": 0.0204
         },
         {
           "key": "wallP95",
           "unit": "ms",
-          "measured": 0.13170000000002346,
+          "measured": 0.0663,
           "expected": 5,
           "better": "lower",
-          "ratio": 0.026340000000004693
+          "ratio": 0.0133
         }
       ],
       "note": "A fresh browser with the device granted: from `setup()` to the tab reporting `open`."
@@ -649,18 +649,18 @@
         {
           "key": "wallP50",
           "unit": "ms",
-          "measured": 0.09189999999989595,
+          "measured": 0.055,
           "expected": 2,
           "better": "lower",
-          "ratio": 0.04594999999994798
+          "ratio": 0.0275
         },
         {
           "key": "wallP95",
           "unit": "ms",
-          "measured": 0.19230000000004566,
+          "measured": 0.0839,
           "expected": 5,
           "better": "lower",
-          "ratio": 0.03846000000000913
+          "ratio": 0.0168
         }
       ],
       "note": "A tab joining a configuration another tab already holds open: from `setup()` to `open`."
@@ -673,10 +673,10 @@
         {
           "key": "heapGrowth",
           "unit": "KB",
-          "measured": 192.0234375,
+          "measured": -794.5,
           "expected": 512,
           "better": "lower",
-          "ratio": 0.3750457763671875
+          "ratio": -1.55
         },
         {
           "key": "timerGrowth",
@@ -689,10 +689,10 @@
         {
           "key": "wall",
           "unit": "ms",
-          "measured": 153.3306,
+          "measured": 171.9,
           "expected": 15000,
           "better": "lower",
-          "ratio": 0.01022204
+          "ratio": 0.0115
         }
       ],
       "note": "Three tabs, one chunk and one write a second for a simulated hour, in steps of 5 s on both clocks; heap and timers compared after a minute of warm-up and at the end, the garbage collected before each reading."

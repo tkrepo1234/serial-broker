@@ -110,6 +110,15 @@ remaining tabs, the status goes through `reconnecting` or `connecting` and retur
 
 Three things happen during a handover that an application should know about.
 
+### After a crash, the other tabs can take a minute
+
+With the `SharedWorker` transport, a crash can take the worker with it. Measured in Microsoft Edge
+153, the worker ends when the tab that started it crashes, and that is usually the first tab to hold
+the port. The tab that takes the port over reports `open` within a second, but every other tab shows
+`reconnecting` until it notices that the worker is gone and starts a new one, which takes up to a
+minute; a write issued meanwhile ends in `WRITE_TIMEOUT`. This is a documented limit of the library,
+see [Performance](performance.md#documented-limits).
+
 ### Data sent by the device in between is lost
 
 When the owner goes away, the browser closes its port. Until the next owner has opened it, nothing
@@ -280,9 +289,11 @@ the browser refuses to create one, or its script fails to load, serial-broker us
 `BroadcastChannel` instead. What a tab sent before its worker script failed is sent again over the
 channel, once and in order, so the tab joins the others as if it had started there.
 
-Behaviour is identical on both. The fallback costs a little more work per message, because every
-tab receives every message and ignores those not meant for it; at the rates a serial device
-produces, that is not measurable.
+Behaviour is identical on both, with one exception: a crash can take the `SharedWorker` with it, and
+the tabs on it then need up to a minute to reconnect (see
+[After a crash, the other tabs can take a minute](#after-a-crash-the-other-tabs-can-take-a-minute)).
+The fallback costs a little more work per message, because every tab receives every message and
+ignores those not meant for it; at the rates a serial device produces, that is not measurable.
 
 Every tab must load the worker from **the same URL**. Tabs that load it from different URLs are
 connected to different workers, cannot see each other, and will compete for the device.

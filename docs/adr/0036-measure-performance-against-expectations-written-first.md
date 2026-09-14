@@ -113,10 +113,13 @@ A `bench/` directory holds both benchmarks and one file of expectations.
   before it reports - every chunk in every tab, every write at the device, the port opened exactly
   as often as it should - and throws otherwise.
 - **Comparing clocks across pages.** `performance.timeOrigin + performance.now()` is the system
-  clock in every page of one browser, but each page's origin is set at its own navigation; drift
-  between pages over a run of seconds is far below the milliseconds measured. A crash is ordered
-  from the test runner, so that scenario's number includes the DevTools round trip, and the chapter
-  says so.
+  clock in every page of one browser, but each page converts it on its own. Checked once, on
+  2026-09-14, with an NTP-style exchange over a `BroadcastChannel` between ten pages in Edge 153:
+  the pages' clocks agreed within 0.05 to 0.3 ms. That is the size of the smallest latencies
+  measured, so a sub-millisecond latency between pages is a bound - under a millisecond - and not
+  an exact value; the chapter says so. A crash is ordered from the test runner, so that scenario's
+  numbers include the DevTools round trip; the time the browser takes to notice the crash is taken
+  out by a plain Web Lock the crashed page held, and the chapter says that too.
 - **The results going stale.** Each fragment names the commit it was measured at, and the chapter
   says how to run the benchmarks again.
 
