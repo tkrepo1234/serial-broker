@@ -81,6 +81,7 @@ export function validMessages(): Record<ProtocolMessageType, Record<string, unkn
       configName: 'Reader',
       status: 'open',
       maxTabs: Number.POSITIVE_INFINITY,
+      device: { kind: 'usb', vendorId: 0x1a86, productId: 0x7523 },
       term: 't-1',
       timestamp: 1,
     },

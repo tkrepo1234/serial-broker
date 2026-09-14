@@ -5,6 +5,7 @@ import { SerialBrokerError } from '../../src/core/errors.js';
 import {
   isDeviceCompatible,
   normalizeConfiguration,
+  toSetupOptions,
   validateName,
 } from '../../src/core/validation.js';
 
@@ -102,7 +103,8 @@ describe('normalizeConfiguration', () => {
     ['Infinity', { ...VALID, serial: { baudRate: Number.POSITIVE_INFINITY } }],
     ['an unsupported parity', { ...VALID, serial: { baudRate: 9600, parity: 'mark' } }],
     ['5 data bits', { ...VALID, serial: { baudRate: 9600, dataBits: 5 } }],
-    ['a missing device', { serial: { baudRate: 9600 } }],
+    ['an empty device', { device: {}, serial: { baudRate: 9600 } }],
+    ['a null device', { device: null, serial: { baudRate: 9600 } }],
     ['a missing baud rate', { device: VALID.device, serial: {} }],
     ['an array instead of options', []],
     ['null options', null],
@@ -227,7 +229,134 @@ describe('isDeviceCompatible', () => {
     ['a different product', { ...VALID, device: { vendorId: 0x1a86, productId: 1 } }],
     ['a different baud rate', { ...VALID, serial: { baudRate: 19_200 } }],
     ['a different parity', { ...VALID, serial: { baudRate: 9600, parity: 'even' } }],
+    ['a port without USB identity', { ...VALID, device: { nonUsb: true } }],
+    ['any port', { ...VALID, device: { any: true } }],
   ])('rejects %s', (_label, options) => {
     expect(isDeviceCompatible(base, normalizeConfiguration('Reader', options))).toBe(false);
+  });
+
+  const serial = VALID.serial;
+  const compatible = (a: unknown, b: unknown): boolean =>
+    isDeviceCompatible(
+      normalizeConfiguration('Reader', { device: a, serial }),
+      normalizeConfiguration('Reader', { device: b, serial }),
+    );
+
+  it('never lets auto mode conflict with auto mode, whatever each has resolved to', () => {
+    // Both say "the device the tab holding the port chose"; the session running keeps its
+    // resolution (ADR-0036).
+    expect(compatible(undefined, { auto: true })).toBe(true);
+    expect(compatible({ auto: true, resolved: VALID.device }, { auto: true })).toBe(true);
+    expect(
+      compatible(
+        { auto: true, resolved: VALID.device },
+        { auto: true, resolved: { nonUsb: true } },
+      ),
+    ).toBe(true);
+  });
+
+  it('lets an unresolved auto-mode configuration accept any explicit device', () => {
+    expect(compatible({ auto: true }, VALID.device)).toBe(true);
+    expect(compatible({ any: true }, undefined)).toBe(true);
+    expect(compatible({ nonUsb: true }, { auto: true })).toBe(true);
+  });
+
+  it('holds a resolved auto-mode configuration to the device it resolved to', () => {
+    expect(compatible({ auto: true, resolved: VALID.device }, VALID.device)).toBe(true);
+    expect(compatible({ auto: true, resolved: { nonUsb: true } }, { nonUsb: true })).toBe(true);
+    expect(
+      compatible({ auto: true, resolved: VALID.device }, { vendorId: 0x0403, productId: 0x6001 }),
+    ).toBe(false);
+    expect(compatible({ auto: true, resolved: { nonUsb: true } }, { any: true })).toBe(false);
+    expect(compatible({ nonUsb: true }, { auto: true, resolved: VALID.device })).toBe(false);
+  });
+
+  it('treats two explicit non-USB filters as the same device, and any port as another', () => {
+    expect(compatible({ nonUsb: true }, { nonUsb: true })).toBe(true);
+    expect(compatible({ nonUsb: true }, { any: true })).toBe(false);
+    expect(compatible({ any: true }, { any: true })).toBe(true);
+  });
+});
+
+describe('the device filter in auto mode (ADR-0036)', () => {
+  const serial = { baudRate: 9600 };
+
+  it('takes an omitted device, and { auto: true }, as auto mode with nothing resolved', () => {
+    expect(normalizeConfiguration('Reader', { serial }).device).toEqual({
+      kind: 'auto',
+      resolved: undefined,
+    });
+    expect(normalizeConfiguration('Reader', { device: { auto: true }, serial }).device).toEqual({
+      kind: 'auto',
+      resolved: undefined,
+    });
+  });
+
+  it('keeps what an auto-mode configuration has resolved to', () => {
+    expect(
+      normalizeConfiguration('Reader', {
+        device: { auto: true, resolved: { vendorId: 0x1a86, productId: 0x7523 } },
+        serial,
+      }).device,
+    ).toEqual({ kind: 'auto', resolved: { kind: 'usb', vendorId: 0x1a86, productId: 0x7523 } });
+    expect(
+      normalizeConfiguration('Reader', {
+        device: { auto: true, resolved: { nonUsb: true } },
+        serial,
+      }).device,
+    ).toEqual({ kind: 'auto', resolved: { kind: 'non-usb' } });
+  });
+
+  it('accepts a filter for ports without USB identity', () => {
+    expect(normalizeConfiguration('Reader', { device: { nonUsb: true }, serial }).device).toEqual({
+      kind: 'non-usb',
+    });
+  });
+
+  it.each([
+    ['auto and any', { auto: true, any: true }],
+    ['auto and IDs', { auto: true, vendorId: 0x1a86, productId: 0x7523 }],
+    ['non-USB and a product ID', { nonUsb: true, productId: 0x7523 }],
+    ['non-USB and any', { nonUsb: true, any: true }],
+    ['IDs and a resolution', { vendorId: 0x1a86, productId: 0x7523, resolved: { nonUsb: true } }],
+    ['any and a resolution', { any: true, resolved: { nonUsb: true } }],
+  ])('rejects a device that mixes shapes: %s', (_label, device) => {
+    // Either reading would be a guess about which device to open, and that is not a guess worth
+    // making (ADR-0016).
+    expect(argumentOf(() => normalizeConfiguration('R', { device, serial }))).toBe(
+      'options.device',
+    );
+  });
+
+  it.each([
+    ['options.device.auto', { auto: 1 }],
+    ['options.device.nonUsb', { nonUsb: 'yes' }],
+    ['options.device.resolved', { auto: true, resolved: 'usb' }],
+    ['options.device.resolved.vendorId', { auto: true, resolved: { any: true } }],
+    ['options.device.resolved.vendorId', { auto: true, resolved: { auto: true } }],
+    ['options.device.resolved.productId', { auto: true, resolved: { vendorId: 1 } }],
+    ['options.device.resolved.nonUsb', { auto: true, resolved: { nonUsb: false } }],
+    ['options.device.resolved', { auto: true, resolved: { nonUsb: true, vendorId: 1 } }],
+    ['options.device.vendorId', {}],
+  ])('names %s when it rejects the value', (argumentName, device) => {
+    expect(argumentOf(() => normalizeConfiguration('R', { device, serial }))).toBe(argumentName);
+  });
+
+  it.each([
+    ['omitted', undefined],
+    ['auto', { auto: true }],
+    ['resolved to a USB device', { auto: true, resolved: { vendorId: 0x1a86, productId: 0x7523 } }],
+    ['resolved to a port without USB identity', { auto: true, resolved: { nonUsb: true } }],
+    ['non-USB', { nonUsb: true }],
+    ['any', { any: true }],
+    ['USB', { vendorId: 0x1a86, productId: 0x7523 }],
+  ])('survives the trip through the options setup() accepts when %s', (_label, device) => {
+    // The stored entry and a diagnostics report are `toSetupOptions()`, and `restore()` passes
+    // the entry back to `setup()`: a resolution that did not survive would ask the user again.
+    const configuration = normalizeConfiguration('Reader', { device, serial });
+    const options = toSetupOptions(configuration);
+
+    expect(normalizeConfiguration('Reader', options)).toEqual(configuration);
+    expect(options.device).toEqual(device ?? { auto: true });
   });
 });

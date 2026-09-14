@@ -1,7 +1,12 @@
 import { assertNever } from '../core/assert.js';
 import type { TimerHandle } from '../core/clock.js';
 import { createSignal, withDeadline, type Signal } from '../core/deadline.js';
-import type { NormalizedConfiguration } from '../core/defaults.js';
+import {
+  effectiveDevice,
+  type NormalizedConfiguration,
+  type NormalizedDeviceFilter,
+  type ResolvedDevice,
+} from '../core/defaults.js';
 import { describeSettings, type ConfigurationDiagnostics } from '../core/diagnostics.js';
 import { EventEmitter } from '../core/emitter.js';
 import { SerialBrokerErrorCode } from '../core/error-codes.js';
@@ -16,7 +21,14 @@ import {
 } from '../core/types.js';
 import type { SerialPortLike, SerialBrokerEnvironment } from '../environment/environment.js';
 import { ELECTION_RETRY_DELAY_MS, OwnershipElection } from '../owner/election.js';
+import {
+  describeDevice,
+  matchesDevice,
+  resolveDevice,
+  toRequestOptions,
+} from '../owner/port-matcher.js';
 import { PortSupervisor } from '../owner/port-supervisor.js';
+import { mapRequestPortError } from '../owner/serial-errors.js';
 import {
   MAX_WAITING_WRITE_BYTES,
   MAX_WAITING_WRITES,
@@ -27,6 +39,7 @@ import type {
   ClientId,
   ProtocolMessage,
   RequestId,
+  StatusDevice,
   StatusMessage,
   TermId,
 } from '../protocol/messages.js';
@@ -116,13 +129,28 @@ export class ConfigurationSession {
   #isJoined = false;
   /** Why this tab gave up: the tab holding the port runs a different tab limit (ADR-0025). */
   #withdrawal: SerialBrokerError | undefined;
+  /**
+   * The configuration in effect.
+   *
+   * Replaced, never mutated, and only in one respect: an auto-mode configuration takes its
+   * device from the port the user chooses, or from the tab holding the port (ADR-0036). Every
+   * other field is what `setup()` was given.
+   */
+  #configuration: NormalizedConfiguration;
 
+  /**
+   * @param onDeviceResolved - An auto-mode configuration resolved its device, or adopted another
+   *   tab's; `definition` now carries it, and whoever remembers the configuration should remember
+   *   that.
+   */
   constructor(
     private readonly environment: SerialBrokerEnvironment,
     private readonly transport: Transport,
-    private readonly configuration: NormalizedConfiguration,
+    configuration: NormalizedConfiguration,
     private readonly logger: ScopedLogger,
+    private readonly onDeviceResolved: () => void,
   ) {
+    this.#configuration = configuration;
     this.#statusSince = environment.clock.now();
 
     this.#emitter = new EventEmitter(
@@ -208,7 +236,7 @@ export class ConfigurationSession {
 
   /** The configuration this session serves. */
   get definition(): NormalizedConfiguration {
-    return this.configuration;
+    return this.#configuration;
   }
 
   /**
@@ -234,7 +262,7 @@ export class ConfigurationSession {
       this.#setStatus(SerialBrokerStatus.Idle);
     }
 
-    this.transport.attach(this.configuration.name);
+    this.transport.attach(this.#configuration.name);
 
     // Ask whoever owns the port to restate its status. Without this, a tab joining an
     // already-open configuration would sit at `idle` until the next status change, which on a
@@ -279,7 +307,7 @@ export class ConfigurationSession {
       new SerialBrokerError(
         SerialBrokerErrorCode.CONFIGURATION_RELEASED,
         'The configuration was released while this write was pending',
-        { configName: this.configuration.name, timestamp: this.environment.clock.now() },
+        { configName: this.#configuration.name, timestamp: this.environment.clock.now() },
       ),
     );
 
@@ -293,7 +321,7 @@ export class ConfigurationSession {
     this.#stopTimers();
 
     if (this.#isJoined && this.#withdrawal === undefined) {
-      this.transport.detach(this.configuration.name);
+      this.transport.detach(this.#configuration.name);
     }
     // The place goes last: the next tab joins only once this one has left the bus and the port.
     this.#slot?.stop();
@@ -342,14 +370,14 @@ export class ConfigurationSession {
 
   /** A point-in-time view of this configuration. */
   getStatus(): SerialBrokerStatusSnapshot {
+    const device = describeDevice(this.#configuration.device);
     return Object.freeze({
-      name: this.configuration.name,
+      name: this.#configuration.name,
       status: this.#status,
-      vendorId:
-        this.configuration.device.kind === 'usb' ? this.configuration.device.vendorId : undefined,
-      productId:
-        this.configuration.device.kind === 'usb' ? this.configuration.device.productId : undefined,
-      serialOptions: this.configuration.serial,
+      deviceKind: device.kind,
+      vendorId: device.vendorId,
+      productId: device.productId,
+      serialOptions: this.#configuration.serial,
       since: this.#statusSince,
       observedAt: this.environment.clock.now(),
       lastErrorCode: this.#lastErrorCode,
@@ -365,12 +393,12 @@ export class ConfigurationSession {
    */
   diagnostics(): ConfigurationDiagnostics {
     return {
-      name: this.configuration.name,
+      name: this.#configuration.name,
       role: this.#election.isOwner ? 'owner' : 'participant',
       status: this.#status,
       statusSince: this.#statusSince,
       lastErrorCode: this.#lastErrorCode,
-      settings: describeSettings(this.configuration),
+      settings: describeSettings(this.#configuration),
       listeners: this.#emitter.listenerCounts(),
       pendingWrites: this.#writes.diagnostics(),
       connection: this.#supervisor?.diagnostics(),
@@ -388,7 +416,7 @@ export class ConfigurationSession {
       throw new SerialBrokerError(
         SerialBrokerErrorCode.CONFIGURATION_RELEASED,
         'This configuration has been released',
-        { configName: this.configuration.name, timestamp: this.environment.clock.now() },
+        { configName: this.#configuration.name, timestamp: this.environment.clock.now() },
       );
     }
     if (this.#withdrawal !== undefined) {
@@ -400,30 +428,123 @@ export class ConfigurationSession {
     await this.#writes.add(this.environment.newId('w') as RequestId, payload);
   }
 
-  /** Shows the port picker. Must be called from a user gesture. */
+  /**
+   * Shows the port picker. Must be called from a user gesture.
+   *
+   * Allowed while this tab holds the port, and before anyone is known to: a tab that has just set
+   * the configuration up may ask in the same gesture, and the choice is used the moment this tab
+   * holds the port (ADR-0036). A tab that knows another tab holds it has no use for a choice.
+   */
   async requestAccess(): Promise<void> {
-    const supervisor = this.#supervisor;
-    if (supervisor === undefined) {
+    if (this.#supervisor === undefined) {
       // Another context owns the port. If it is open, there is nothing to ask for; if it is
       // waiting for permission, that context has to be the one to prompt, because only it can
       // act on the result.
       if (this.#status === SerialBrokerStatus.Open) {
         return;
       }
+      const isHeldElsewhere =
+        this.#status === SerialBrokerStatus.Queued ||
+        this.#terms.current !== undefined ||
+        this.#withdrawal !== undefined ||
+        this.#isReleased;
+      if (isHeldElsewhere) {
+        throw new SerialBrokerError(
+          SerialBrokerErrorCode.PERMISSION_REQUIRED,
+          this.#status === SerialBrokerStatus.Queued
+            ? 'This tab is queued behind the tabs using this configuration and cannot use the device yet'
+            : 'Another tab currently owns this configuration and must be the one to request access',
+          {
+            configName: this.#configuration.name,
+            context: { status: this.#status },
+            timestamp: this.environment.clock.now(),
+          },
+        );
+      }
+    }
+
+    await this.#pickPort();
+    // The picker stays open for as long as the user likes, so this tab may hold the port by now,
+    // or no longer. Its supervisor, if there is one, decides what the grant means for the
+    // connection; without one, the choice is found among the granted ports once there is.
+    await this.#supervisor?.useGrantedPort();
+  }
+
+  /**
+   * Opens the picker for the device in effect and takes what the user chose.
+   *
+   * In auto mode the chosen port's identity becomes the device (ADR-0036). Otherwise the port has
+   * to be the configured device - a browser applies the filter, but the check behind it holds
+   * should one offer a port it did not ask for.
+   *
+   * @throws A {@link SerialBrokerError} with code `PERMISSION_DENIED` if the user dismisses
+   *   the picker, `DEVICE_MISMATCH` if the chosen port is not the configured device, or
+   *   `USER_GESTURE_REQUIRED` if the call was not made during a gesture.
+   */
+  async #pickPort(): Promise<void> {
+    let port: SerialPortLike;
+    try {
+      port = await this.environment.serial.requestPort(toRequestOptions(this.#configuration));
+    } catch (error) {
+      throw mapRequestPortError(error, {
+        configName: this.#configuration.name,
+        timestamp: this.environment.clock.now(),
+      });
+    }
+
+    const device = this.#configuration.device;
+    if (device.kind === 'auto' && device.resolved === undefined) {
+      this.#resolveDevice(resolveDevice(port), 'picker');
+      return;
+    }
+    if (!matchesDevice(port, this.#configuration)) {
+      const info = port.getInfo();
+      const expected = describeDevice(device);
       throw new SerialBrokerError(
-        SerialBrokerErrorCode.PERMISSION_REQUIRED,
-        this.#status === SerialBrokerStatus.Queued
-          ? 'This tab is queued behind the tabs using this configuration and cannot use the device yet'
-          : 'Another tab currently owns this configuration and must be the one to request access',
+        SerialBrokerErrorCode.DEVICE_MISMATCH,
+        'The selected port is not the configured device',
         {
-          configName: this.configuration.name,
-          context: { status: this.#status },
+          configName: this.#configuration.name,
+          context: {
+            // Reached for a USB or a non-USB filter: an `any` filter matches every port, so
+            // there is nothing it can mismatch.
+            expectedDevice: expected.kind,
+            expectedVendorId: expected.vendorId,
+            expectedProductId: expected.productId,
+            actualVendorId: info.usbVendorId,
+            actualProductId: info.usbProductId,
+          },
           timestamp: this.environment.clock.now(),
         },
       );
     }
+  }
 
-    await supervisor.requestAccess();
+  /**
+   * Takes a device for an auto-mode configuration: the port the user chose, or what the tab
+   * holding the port runs (ADR-0036).
+   *
+   * Only auto mode resolves, and only to something else than it has: the tab holding the port
+   * decides, so a device adopted from it replaces one this tab chose earlier.
+   */
+  #resolveDevice(resolved: ResolvedDevice, source: 'picker' | 'holder'): void {
+    const device = this.#configuration.device;
+    if (device.kind !== 'auto' || isSameResolution(device.resolved, resolved)) {
+      return;
+    }
+    this.#configuration = Object.freeze({
+      ...this.#configuration,
+      device: Object.freeze({ kind: 'auto' as const, resolved: Object.freeze(resolved) }),
+    });
+    this.logger.info('auto mode resolved the device', {
+      configName: this.#configuration.name,
+      event: 'session.device-resolved',
+      source,
+      device: resolved.kind,
+      vendorId: resolved.kind === 'usb' ? resolved.vendorId : undefined,
+      productId: resolved.kind === 'usb' ? resolved.productId : undefined,
+    });
+    this.onDeviceResolved();
   }
 
   // --- Bus ----------------------------------------------------------------------------------
@@ -490,7 +611,7 @@ export class ConfigurationSession {
           return;
         }
         this.#emitter.emit('onReceive', {
-          name: this.configuration.name,
+          name: this.#configuration.name,
           data: message.payload,
           text: message.text,
           timestamp: message.timestamp,
@@ -503,7 +624,7 @@ export class ConfigurationSession {
           return;
         }
         this.#emitter.emit('onSend', {
-          name: this.configuration.name,
+          name: this.#configuration.name,
           data: message.payload,
           origin: message.originClientId === this.transport.clientId ? 'local' : 'remote',
           timestamp: message.timestamp,
@@ -595,10 +716,10 @@ export class ConfigurationSession {
     void this.environment.locks
       .request(
         termLockName(
-          this.configuration.name,
+          this.#configuration.name,
           term,
           this.transport.clientId,
-          this.configuration.maxTabs,
+          this.#configuration.maxTabs,
         ),
         { mode: 'exclusive' },
         async () => {
@@ -628,7 +749,7 @@ export class ConfigurationSession {
    */
   #retryTerm(error: unknown): void {
     this.logger.warn('could not take the lock for a term of holding the port; trying again', {
-      configName: this.configuration.name,
+      configName: this.#configuration.name,
       event: 'session.term-lock-failed',
       error: describeUnknown(error),
     });
@@ -645,21 +766,22 @@ export class ConfigurationSession {
     this.#term = term;
     this.#lastTerm = term;
 
-    this.transport.setOwnership(this.configuration.name, true);
+    this.transport.setOwnership(this.#configuration.name, true);
     this.transport.send({
       type: 'owner-claimed',
       v: PROTOCOL_VERSION,
       from: this.transport.clientId,
       to: 'all',
-      configName: this.configuration.name,
+      configName: this.#configuration.name,
       term,
-      maxTabs: this.configuration.maxTabs,
+      maxTabs: this.#configuration.maxTabs,
     });
 
     const supervisor = new PortSupervisor(
       this.environment,
-      this.configuration,
+      this.#configuration,
       {
+        device: () => this.#configuration.device,
         onStatus: (status) => {
           // A supervisor being stopped still reports its last statuses. They describe a
           // connection this context has already given up, so no tab should see them.
@@ -674,7 +796,7 @@ export class ConfigurationSession {
         },
         onData: (data, text) => {
           this.#emitter.emit('onReceive', {
-            name: this.configuration.name,
+            name: this.#configuration.name,
             data,
             text,
             timestamp: this.environment.clock.now(),
@@ -684,7 +806,7 @@ export class ConfigurationSession {
             v: PROTOCOL_VERSION,
             from: this.transport.clientId,
             to: 'all',
-            configName: this.configuration.name,
+            configName: this.#configuration.name,
             payload: data,
             text,
             timestamp: this.environment.clock.now(),
@@ -706,7 +828,7 @@ export class ConfigurationSession {
     this.#terms.takeOwn({
       term,
       from: this.transport.clientId,
-      maxTabs: this.configuration.maxTabs,
+      maxTabs: this.#configuration.maxTabs,
     });
   }
 
@@ -732,7 +854,7 @@ export class ConfigurationSession {
       return;
     }
 
-    this.transport.setOwnership(this.configuration.name, false);
+    this.transport.setOwnership(this.#configuration.name, false);
 
     await supervisor.stop();
     // `owner-released` is the term's last word, and a tab that hears it concludes that a write the
@@ -750,7 +872,7 @@ export class ConfigurationSession {
       v: PROTOCOL_VERSION,
       from: this.transport.clientId,
       to: 'all',
-      configName: this.configuration.name,
+      configName: this.#configuration.name,
       term,
     });
     hold?.resolve();
@@ -768,10 +890,10 @@ export class ConfigurationSession {
     void this.environment.locks
       .request(
         termLockName(
-          this.configuration.name,
+          this.#configuration.name,
           term,
           this.transport.clientId,
-          this.configuration.maxTabs,
+          this.#configuration.maxTabs,
         ),
         { mode: 'exclusive' },
         async () => {
@@ -791,10 +913,10 @@ export class ConfigurationSession {
     }
     try {
       await withDeadline(Promise.all(this.#unreported), this.environment.clock, {
-        timeoutMs: this.configuration.connection.writeTimeoutMs,
+        timeoutMs: this.#configuration.connection.writeTimeoutMs,
         code: SerialBrokerErrorCode.WRITE_TIMEOUT,
         message: 'Timed out while waiting for writes to be answered',
-        configName: this.configuration.name,
+        configName: this.#configuration.name,
       });
     } catch {
       // A write still hanging after the port closed. It is answered when it ends; its issuer has
@@ -834,7 +956,7 @@ export class ConfigurationSession {
       v: PROTOCOL_VERSION,
       from: this.transport.clientId,
       to: 'owner',
-      configName: this.configuration.name,
+      configName: this.#configuration.name,
       requestId,
       payload,
       term,
@@ -863,7 +985,7 @@ export class ConfigurationSession {
           SerialBrokerErrorCode.NOT_CONNECTED,
           'This context does not hold the port in the term the write was addressed to',
           {
-            configName: this.configuration.name,
+            configName: this.#configuration.name,
             context: { requestedTerm, term },
             timestamp: this.environment.clock.now(),
           },
@@ -879,7 +1001,7 @@ export class ConfigurationSession {
           v: PROTOCOL_VERSION,
           from: this.transport.clientId,
           to: origin,
-          configName: this.configuration.name,
+          configName: this.#configuration.name,
           requestId,
           term,
         });
@@ -933,7 +1055,7 @@ export class ConfigurationSession {
         this.#announceSent(payload, origin);
       },
       (error: unknown) => {
-        const failure = toSerialBrokerError(error, this.configuration.name);
+        const failure = toSerialBrokerError(error, this.#configuration.name);
         accepted.finish(origin, requestId, failure);
         report.finished(failure);
       },
@@ -973,7 +1095,7 @@ export class ConfigurationSession {
     this.logger.warn(
       'dropped device data from a context that speaks for no term of holding the port; further ones are dropped without a record',
       {
-        configName: this.configuration.name,
+        configName: this.#configuration.name,
         event: 'session.data-without-a-term',
         messageType: type,
         from,
@@ -988,7 +1110,7 @@ export class ConfigurationSession {
       this.logger.warn(
         'refused a write because the port already holds as many as it keeps; further ones are refused without a record',
         {
-          configName: this.configuration.name,
+          configName: this.#configuration.name,
           event: 'session.write-queue-full',
           waiting: this.#unreported.size,
           waitingBytes: this.#waitingWriteBytes,
@@ -1001,7 +1123,7 @@ export class ConfigurationSession {
       SerialBrokerErrorCode.WRITE_QUEUE_FULL,
       'The tab holding the port already has as many writes waiting as it keeps',
       {
-        configName: this.configuration.name,
+        configName: this.#configuration.name,
         context: {
           requestId,
           byteLength,
@@ -1024,7 +1146,7 @@ export class ConfigurationSession {
       v: PROTOCOL_VERSION,
       from: this.transport.clientId,
       to: origin,
-      configName: this.configuration.name,
+      configName: this.#configuration.name,
       requestId,
       ok: error === undefined,
       error: error?.toJSON(),
@@ -1037,7 +1159,7 @@ export class ConfigurationSession {
     const timestamp = this.environment.clock.now();
 
     this.#emitter.emit('onSend', {
-      name: this.configuration.name,
+      name: this.#configuration.name,
       data: payload,
       origin: originClientId === this.transport.clientId ? 'local' : 'remote',
       timestamp,
@@ -1048,7 +1170,7 @@ export class ConfigurationSession {
       v: PROTOCOL_VERSION,
       from: this.transport.clientId,
       to: 'all',
-      configName: this.configuration.name,
+      configName: this.#configuration.name,
       payload,
       originClientId,
       timestamp,
@@ -1068,7 +1190,7 @@ export class ConfigurationSession {
     this.#statusSince = this.environment.clock.now();
 
     this.#emitter.emit('onStatusChange', {
-      name: this.configuration.name,
+      name: this.#configuration.name,
       status,
       previousStatus,
       timestamp: this.#statusSince,
@@ -1091,17 +1213,17 @@ export class ConfigurationSession {
   #withdraw(holdingTabMaxTabs: number): void {
     const conflict = new SerialBrokerError(
       SerialBrokerErrorCode.CONFIGURATION_CONFLICT,
-      `"${this.configuration.name}" is used with maxTabs ${String(holdingTabMaxTabs)} by the tab holding the port, and with maxTabs ${String(this.configuration.maxTabs)} in this tab`,
+      `"${this.#configuration.name}" is used with maxTabs ${String(holdingTabMaxTabs)} by the tab holding the port, and with maxTabs ${String(this.#configuration.maxTabs)} in this tab`,
       {
-        configName: this.configuration.name,
-        context: { maxTabs: this.configuration.maxTabs, holdingTabMaxTabs },
+        configName: this.#configuration.name,
+        context: { maxTabs: this.#configuration.maxTabs, holdingTabMaxTabs },
         timestamp: this.environment.clock.now(),
       },
     );
     this.#withdrawal = conflict;
     this.logger.warn('withdrew from a configuration run with a different tab limit', {
       event: 'session.tab-limit-conflict',
-      maxTabs: this.configuration.maxTabs,
+      maxTabs: this.#configuration.maxTabs,
       holdingTabMaxTabs,
     });
     // Told to every tab, the one holding the port included, before this tab leaves the bus.
@@ -1110,7 +1232,7 @@ export class ConfigurationSession {
     this.#terms.dispose();
     this.#stopTimers();
     this.#election.stop();
-    this.transport.detach(this.configuration.name);
+    this.transport.detach(this.#configuration.name);
     this.#slot?.stop();
     this.#setStatus(SerialBrokerStatus.Failed);
   }
@@ -1124,11 +1246,17 @@ export class ConfigurationSession {
     if (this.#isReleased || this.#withdrawal !== undefined || this.#election.isOwner) {
       return;
     }
-    if (message.maxTabs !== this.configuration.maxTabs) {
+    if (message.maxTabs !== this.#configuration.maxTabs) {
       // The limit is part of the term's lock name, so this tab has checked that the tab holding
       // the port really runs the configuration with it (ADR-0025, ADR-0030).
       this.#withdraw(message.maxTabs);
       return;
+    }
+    if (message.device.kind === 'usb' || message.device.kind === 'non-usb') {
+      // The device the tab holding the port runs - configured, or chosen by its user. A tab in
+      // auto mode follows it; any other tab keeps what it was configured with (ADR-0036). Believed
+      // for the same reason as the limit: the term's lock was held when this status was checked.
+      this.#resolveDevice(message.device, 'holder');
     }
     if (message.status === SerialBrokerStatus.Open) {
       // The owner states `open` when the port opens, and again after reaching a new broker. A
@@ -1186,7 +1314,7 @@ export class ConfigurationSession {
       v: PROTOCOL_VERSION,
       from: this.transport.clientId,
       to: 'owner',
-      configName: this.configuration.name,
+      configName: this.#configuration.name,
     });
   }
 
@@ -1202,9 +1330,10 @@ export class ConfigurationSession {
       v: PROTOCOL_VERSION,
       from: this.transport.clientId,
       to: 'all',
-      configName: this.configuration.name,
+      configName: this.#configuration.name,
       status,
-      maxTabs: this.configuration.maxTabs,
+      maxTabs: this.#configuration.maxTabs,
+      device: statusDevice(this.#configuration.device),
       term,
       timestamp: this.environment.clock.now(),
     });
@@ -1223,7 +1352,7 @@ export class ConfigurationSession {
     this.#lastErrorCode = error.code;
 
     this.#emitter.emit('onError', {
-      name: this.configuration.name,
+      name: this.#configuration.name,
       error,
       timestamp: error.timestamp === 0 ? this.environment.clock.now() : error.timestamp,
     });
@@ -1234,12 +1363,35 @@ export class ConfigurationSession {
         v: PROTOCOL_VERSION,
         from: this.transport.clientId,
         to: 'all',
-        configName: this.configuration.name,
+        configName: this.#configuration.name,
         error: error.toJSON(),
         timestamp: this.environment.clock.now(),
       });
     }
   }
+}
+
+/** `true` if a resolution is the one an auto-mode filter already holds. */
+function isSameResolution(current: ResolvedDevice | undefined, next: ResolvedDevice): boolean {
+  if (current?.kind !== next.kind) {
+    return false;
+  }
+  return (
+    current.kind !== 'usb' ||
+    next.kind !== 'usb' ||
+    (current.vendorId === next.vendorId && current.productId === next.productId)
+  );
+}
+
+/** The device in effect, as a `status` message carries it: by kind, with USB IDs when it has them. */
+function statusDevice(filter: NormalizedDeviceFilter): StatusDevice {
+  const device = effectiveDevice(filter);
+  if (device === undefined) {
+    return { kind: 'auto' };
+  }
+  return device.kind === 'usb'
+    ? { kind: 'usb', vendorId: device.vendorId, productId: device.productId }
+    : { kind: device.kind };
 }
 
 /** Wraps anything thrown by the supervisor that is not already a library error. */

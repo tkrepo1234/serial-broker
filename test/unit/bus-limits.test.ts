@@ -151,6 +151,7 @@ describe('decodeMessage within its limits', () => {
     // Otherwise the broker copies whatever was added to every tab it routes the message to.
     expect(result.ok && Object.keys(result.message).sort()).toEqual([
       'configName',
+      'device',
       'from',
       'maxTabs',
       'status',

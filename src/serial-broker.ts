@@ -55,14 +55,22 @@ export interface SerialBrokerApi {
    * Otherwise the status becomes `awaiting-permission` and the application must call
    * {@link SerialBrokerApi.requestAccess} from a user gesture (ADR-0009).
    *
+   * Without a `device`, or with `device: { auto: true }`, the configuration is in **auto mode**:
+   * it waits with `awaiting-permission` until `requestAccess()` opens the picker with no filter,
+   * and takes its device from the port the user chooses - its USB IDs, or the fact that it has
+   * none. The device is remembered with the configuration, reported by `getStatus()`, and adopted
+   * by the other tabs that set the name up in auto mode (ADR-0036). A remembered configuration
+   * restored with its device reconnects without a prompt, like an explicit one.
+   *
    * Calling this again with the same name and equivalent options is a no-op, so it is safe to
    * call on every page initialisation. Calling it with options that would open the port
    * differently is a conflict rather than a silent reconfiguration, because the port may be
-   * open in another tab with the old settings.
+   * open in another tab with the old settings. Auto mode never conflicts with auto mode, nor
+   * with an explicit device while it has resolved to nothing.
    *
    * @param name - Identifies this configuration in every other call. Must be non-empty, at
    *   most 128 characters, and free of control characters.
-   * @param options - Device filter, line settings, and optionally reconnect and encoding
+   * @param options - Line settings, and optionally a device filter and reconnect and encoding
    *   behaviour.
    * @returns A promise that resolves once the configuration is registered. It does **not**
    *   wait for the connection: watch `onStatusChange` for that.
@@ -70,7 +78,13 @@ export interface SerialBrokerApi {
    *   `CONFIGURATION_CONFLICT` when the name is already set up with different device or line
    *   settings or a different `maxTabs`, or `WEB_SERIAL_UNAVAILABLE`, `WEB_LOCKS_UNAVAILABLE`,
    *   `TRANSPORT_UNAVAILABLE` or `BROKER_UNAVAILABLE` when the browser cannot support it.
-   * @example
+   * @example The device the user chooses in the picker
+   * ```ts
+   * await SerialBroker.setup('Scale', { serial: { baudRate: 19_200 } });
+   * // ... from a click, the first time:
+   * await SerialBroker.requestAccess('Scale');
+   * ```
+   * @example A USB device named by its IDs
    * ```ts
    * await SerialBroker.setup('Scale', {
    *   device: { vendorId: 0x0403, productId: 0x6001 },
@@ -78,10 +92,10 @@ export interface SerialBrokerApi {
    *   connection: { maxDelayMs: 10_000 },
    * });
    * ```
-   * @example A port with no USB identity - a built-in RS-232 interface, a virtual COM port
+   * @example Any port with no USB identity - a built-in RS-232 interface, a virtual COM port
    * ```ts
    * await SerialBroker.setup('PanelPort', {
-   *   device: { any: true },
+   *   device: { nonUsb: true },
    *   serial: { baudRate: 9600 },
    * });
    * ```
@@ -249,8 +263,14 @@ export interface SerialBrokerApi {
    * it. Once the user grants a device, the permission persists across visits and this never
    * needs to be called again for that device.
    *
-   * The picker is pre-filtered to the configured device, unless the configuration accepts any
-   * port, in which case every port is offered.
+   * The picker is pre-filtered to the configured device, or to the device a configuration in
+   * auto mode has resolved to. It is unfiltered for a configuration that accepts any port or
+   * only ports without USB identity, and for one in auto mode that has not resolved yet - which
+   * then takes its device from the port chosen, and remembers it (ADR-0036).
+   *
+   * Allowed in the tab holding the port, and in a tab that does not yet know of another tab
+   * holding it - so `setup()` and `requestAccess()` may follow each other in one click, and the
+   * choice is used the moment this tab holds the port.
    *
    * @param name - The configuration name.
    * @returns `true` if a device is now available, `false` if the user dismissed the picker - a

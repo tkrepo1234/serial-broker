@@ -158,6 +158,44 @@ describe('a script of the origin that forges messages about the port', () => {
     expect(device.writtenText()).toBe('PING');
   });
 
+  it('cannot make a tab in auto mode adopt a device by stating one', async () => {
+    const { logger, records } = recordingLogger();
+    const harness = new BrowserHarness({ transport: 'broadcastchannel', logger });
+    harness.serial.addDevice(READER.vendorId, READER.productId);
+    const mallory = eavesdrop(harness);
+    const owner = harness.openTab();
+    await owner.setup('Reader', { serial: { baudRate: 9600 } });
+    const other = harness.openTab();
+    await other.setup('Reader', { serial: { baudRate: 9600 } });
+    expect(other.client.getStatus('Reader').deviceKind).toBe('auto');
+    const forged = {
+      ...FORGED,
+      type: 'status',
+      configName: 'Reader',
+      status: SerialBrokerStatus.AwaitingPermission,
+      maxTabs: Number.POSITIVE_INFINITY,
+      device: { kind: 'usb', vendorId: 0x0403, productId: 0x6001 },
+      timestamp: 1,
+    };
+
+    // In the script's own name, for the real term; and in the holder's name, for a term it never
+    // held. The lock of a term names the term and the tab speaking for it, so neither names a term
+    // of this configuration (ADR-0030), and a tab waiting for a device is not handed one.
+    mallory.post({ ...forged, term: termOnTheBus(mallory.heard) });
+    mallory.post({ ...forged, from: owner.client.clientId, term: 't-invented' });
+    await harness.settle();
+
+    for (const tab of [owner, other]) {
+      expect(tab.client.getStatus('Reader')).toMatchObject({
+        status: SerialBrokerStatus.AwaitingPermission,
+        deviceKind: 'auto',
+        vendorId: undefined,
+      });
+    }
+    // Refused by the term check, not by the decoder: both forgeries were well-formed.
+    expect(fieldsOfEvent(records, 'client.malformed-message')).toEqual([]);
+  });
+
   it('cannot end the term of the tab holding the port by saying goodbye for it', async () => {
     const { harness, device, owner, other, mallory } = await twoWatchedTabs();
 

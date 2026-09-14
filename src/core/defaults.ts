@@ -9,15 +9,36 @@ export type NormalizedConnectionSettings = Required<ConnectionSettings>;
 /** Effective encoding settings, with every optional field resolved. */
 export type NormalizedEncodingSettings = Required<EncodingSettings>;
 
+/** What auto mode resolves to: a USB identity, or the absence of one (ADR-0036). */
+export type ResolvedDevice =
+  | { readonly kind: 'usb'; readonly vendorId: number; readonly productId: number }
+  | { readonly kind: 'non-usb' };
+
 /**
  * A validated device filter.
  *
  * Discriminated rather than "optional IDs", so that no code can read a vendor ID that a
  * configuration does not have. See ADR-0016.
+ *
+ * `auto` keeps its resolution beside the mode rather than becoming the device it resolved to: the
+ * configuration stays one that follows the tab holding the port, and a later `setup()` in auto
+ * mode never conflicts with it (ADR-0036).
  */
 export type NormalizedDeviceFilter =
-  | { readonly kind: 'usb'; readonly vendorId: number; readonly productId: number }
-  | { readonly kind: 'any' };
+  | ResolvedDevice
+  | { readonly kind: 'any' }
+  | { readonly kind: 'auto'; readonly resolved: ResolvedDevice | undefined };
+
+/**
+ * The device a filter matches ports against: the filter itself, or what auto mode resolved to.
+ *
+ * @returns `undefined` for an auto-mode filter that has not resolved, which matches nothing.
+ */
+export function effectiveDevice(
+  filter: NormalizedDeviceFilter,
+): ResolvedDevice | { readonly kind: 'any' } | undefined {
+  return filter.kind === 'auto' ? filter.resolved : filter;
+}
 
 /**
  * A validated, fully resolved configuration.
