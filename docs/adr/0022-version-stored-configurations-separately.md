@@ -1,8 +1,12 @@
 # ADR-0022: Version stored configurations separately from the protocol
 
-- **Status:** Accepted
+- **Status:** Accepted, amended by [ADR-0027](./0027-keep-a-remembered-configuration-while-a-tab-runs-it.md)
 - **Date:** 2026-09-13
 - **Amends:** ADR-0009
+
+> **Amendment (ADR-0027).** Tabs running a remembered configuration hold a shared Web Lock, and an
+> entry is removed only when none does. The lock carries `STORAGE_SCHEMA_VERSION`, not the protocol
+> version, for the reason this record gives for the key.
 
 ## Context
 

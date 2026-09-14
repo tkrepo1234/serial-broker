@@ -205,3 +205,4 @@ in a real browser, with real or emulated hardware [ADR-0017].
 | 0023 | Announce the protocol version on an unversioned channel                             |
 | 0024 | Keep the handshake with the worker readable by every protocol version               |
 | 0025 | Limit how many tabs use a configuration at once                                     |
+| 0027 | Keep a remembered configuration while any tab runs it                               |

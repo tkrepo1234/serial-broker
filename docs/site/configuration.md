@@ -190,6 +190,11 @@ application has to encode the bytes itself.
   again after a reload.
 - **Set it to `false`** for a configuration the application always sets up itself with fixed
   options, or one that should not outlive the page.
+- **Keep in mind:** what is remembered is one entry per name for the whole origin, shared by every
+  tab. `release()` forgets it only once no other tab still runs the configuration with
+  `persist: true`, and a tab that is closed or reloaded forgets nothing. A tab setting the name up
+  with `persist: false` forgets an entry left behind by an earlier setup, under the same condition.
+  The tab that saved last decides the remembered options.
 
 The browser remembers the device permission independently of this option.
 

@@ -964,9 +964,10 @@
         <dt>Disconnect</dt>
         <dd>
           Stops using the configuration in this page. Other tabs carry on; if this page held the
-          port, another tab takes it over. It is also removed from what this browser remembers,
-          which every page of this origin shares, your application's included. The browser keeps its
-          permission for the device, so connecting again needs no prompt.
+          port, another tab takes it over. Once no other page of this origin runs it with
+          <code>persist</code>, your application's included, it is also removed from what this
+          browser remembers. The browser keeps its permission for the device, so connecting again
+          needs no prompt.
         </dd>
         <dt>Disconnect and forget device</dt>
         <dd>

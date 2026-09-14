@@ -197,6 +197,15 @@ Two things are remembered between visits, by two different parties:
 - **serial-broker remembers the configuration**, in `localStorage`, unless you set
   `persist: false`. `SerialBroker.restore()` sets up every remembered configuration.
 
+What is remembered belongs to the origin, not to one tab. `release()` in one tab therefore forgets
+a configuration only when no other tab still runs it with `persist: true`; otherwise the next
+reload of those tabs would lose it. The same holds for `releaseAll()`, for
+`release(name, { forgetDevice: true })` — which still revokes the permission for every tab — and
+for a tab that sets the name up with `persist: false`. A tab that is closed, reloaded or crashes
+forgets nothing, so the configuration is there on the next visit. Every tab running a remembered
+configuration holds a shared Web Lock, `serial-broker/persisted/v1/<name>`, and the browser lets it
+go when the tab goes away, however it goes.
+
 Only the tab that holds the port can ask the user for permission, because only it can open the
 port the user chooses. `requestAccess()` in any other tab rejects with `PERMISSION_REQUIRED` unless
 the status is `open`, and returns `true` without asking once the port is open.

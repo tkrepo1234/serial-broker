@@ -76,6 +76,7 @@ message.
 | `storage.invalid-entry`           | warn  | A remembered configuration was invalid and discarded.                                     |
 | `storage.corrupt`                 | warn  | The stored configurations could not be read and were discarded.                           |
 | `storage.migrated`                | info  | Remembered configurations were moved from the key an earlier build used.                  |
+| `storage.hold-failed`             | warn  | The lock that keeps a remembered configuration for other tabs could not be requested.     |
 | `slot.acquired`                   | info  | This tab took one of the `maxTabs` places and joins the configuration.                    |
 | `slot.released`                   | info  | This tab gave its place up.                                                               |
 | `slot.failed`                     | warn  | Requesting a place failed; the tab queues again.                                          |

@@ -36,6 +36,7 @@ import {
 } from '../protocol/messages.js';
 import { PROTOCOL_VERSION } from '../protocol/version.js';
 import { ConfigurationStore } from '../storage/configuration-store.js';
+import { forgetUnlessHeld, PersistenceHold } from '../storage/persistence-hold.js';
 
 import { ConfigurationSession } from './configuration-session.js';
 import type { BroadcastChannelLike } from './transport/broadcast-channel-transport.js';
@@ -76,6 +77,11 @@ export class SerialBrokerClient {
   /** Peer protocol versions already reported: a mixed deployment is reported once per version. */
   readonly #reportedPeerVersions = new Set<unknown>();
   readonly #store: ConfigurationStore;
+  /**
+   * The holds that tell other tabs this one still runs a remembered configuration, by name
+   * (ADR-0027). Only configurations set up with `persist: true` have one.
+   */
+  readonly #holds = new Map<string, PersistenceHold>();
   readonly #disposal = new DisposalStack();
   readonly #clientId: ClientId;
   readonly #logger: ScopedLogger;
@@ -191,7 +197,7 @@ export class SerialBrokerClient {
     );
 
     this.#sessions.set(configuration.name, session);
-    this.#store.save(configuration);
+    this.#remember(session);
     session.start();
 
     this.#logger.info('configuration registered', {
@@ -249,9 +255,6 @@ export class SerialBrokerClient {
     }
 
     this.#sessions.delete(validName);
-    // Removed before the wait, not after it: a `setup()` of the same name while the port closes
-    // saves the new configuration, which removing afterwards would delete.
-    this.#store.remove(validName);
 
     const releasing = this.#finishRelease(validName, session, options);
     this.#releasing.set(validName, releasing);
@@ -269,6 +272,9 @@ export class SerialBrokerClient {
     session: ConfigurationSession,
     options: ReleaseOptions,
   ): Promise<void> {
+    // Part of the release a `setup()` of the same name waits for, so the entry that `setup()` saves
+    // comes after anything forgotten here.
+    await this.#forgetUnlessRunElsewhere(name);
     await session.release();
 
     // For the same reason, a configuration set up again meanwhile keeps its device permission.
@@ -284,6 +290,62 @@ export class SerialBrokerClient {
       configName: name,
       event: 'client.release',
     });
+  }
+
+  /**
+   * Remembers a configuration for later visits, and says so to the other tabs (ADR-0027).
+   *
+   * Saved at once, so that a reload straight after `setup()` restores it, and again once the hold is
+   * granted: a tab releasing the same name may forget the entry in between, and it waits for that
+   * tab to have finished.
+   *
+   * A configuration not to be remembered forgets an entry an earlier setup of the name left behind -
+   * otherwise `restore()` would bring it back, remembered after all - but not while another tab
+   * still runs it remembered.
+   */
+  #remember(session: ConfigurationSession): void {
+    const configuration = session.definition;
+    const name = configuration.name;
+    if (!configuration.persist) {
+      void this.#forgetUnlessRunElsewhere(name);
+      return;
+    }
+
+    this.#store.save(configuration);
+    const hold = new PersistenceHold(
+      this.environment.locks,
+      name,
+      () => {
+        if (this.#sessions.get(name) === session) {
+          this.#store.save(configuration);
+        }
+      },
+      this.#logger,
+      this.environment.clock,
+    );
+    this.#holds.set(name, hold);
+    hold.start();
+  }
+
+  /**
+   * Forgets a remembered configuration, unless another tab still runs it with `persist: true`.
+   *
+   * The entry is one per name for the whole origin. Forgetting it while another tab runs the
+   * configuration would cost that tab the configuration on its next reload (ADR-0027).
+   */
+  async #forgetUnlessRunElsewhere(name: string): Promise<void> {
+    const hold = this.#holds.get(name);
+    this.#holds.delete(name);
+    // Let go first: this tab's own hold would otherwise be the one found.
+    await hold?.stop();
+    await forgetUnlessHeld(
+      this.environment.locks,
+      name,
+      () => {
+        this.#store.remove(name);
+      },
+      this.#logger,
+    );
   }
 
   /** Stops using every configuration in this context. */
@@ -406,6 +468,10 @@ export class SerialBrokerClient {
       await session.release();
     }
     this.#sessions.clear();
+    // Let go, but nothing forgotten: disposing is what a closing tab does, and a configuration it
+    // ran stays remembered for the next visit (ADR-0027).
+    await Promise.all([...this.#holds.values()].map((hold) => hold.stop()));
+    this.#holds.clear();
     // A `release()` still under way has not closed its port or let its lock go yet, and still
     // needs the bus to say so. `dispose()` answers for everything this context holds.
     await Promise.all(this.#releasing.values());
