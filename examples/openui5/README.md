@@ -66,8 +66,10 @@ _Waiting for permission_, and _Connect_ opens the browser's port picker. German 
 
 [`smoke.spec.ts`](smoke.spec.ts) drives the application in the installed Edge with the Web Serial
 stand-in in place of a device: it clicks _Connect_, sees the status become _Open_, sends `PING`
-and sees the loopback device echo it into the traffic list. It runs through the repository root,
-which starts the application on port 8150 first:
+and sees the loopback device echo it into the traffic list. It loads the page with
+`?sap-ui-language=en`, so the texts it asserts are the English bundle's whatever language the
+machine speaks. It runs through the repository root, which starts the application on port 8150
+first:
 
 ```sh
 # in the repository root, after `npm run build` there and `npm ci` here
@@ -286,6 +288,15 @@ and the spec reads like the root's own tests.
 
 **The German bundle is UTF-8, with real umlauts.** UI5 Tooling reads `.properties` files as UTF-8
 by default since specification version 2.0 (`propertiesFileSourceEncoding`) and turns every
+**The smoke test fixes the language in the URL.** UI5 takes its language from the browser, and the
+browser reports the machine's - on a German Windows, Edge under Playwright loads
+`i18n_de.properties`, and a test that expects _Waiting for permission_ reads _Wartet auf die
+Freigabe_ and times out for a reason that has nothing to do with serial-broker. The
+`sap-ui-language` URL parameter wins over the browser's language, so the test loads
+`index.html?sap-ui-language=en`. That pins it in the test, where the asserted texts are, rather
+than in the root's Playwright configuration, where a `locale` would fix `navigator.language` for
+every example but leave the reason a directory away from the assertion.
+
 non-ASCII character into a `\uXXXX` escape while serving and building, which is what the UI5
 loader expects. `i18n_de.properties` therefore says _Gerät_, not _Geraet_ - visible at
 `index.html?sap-ui-language=de`.

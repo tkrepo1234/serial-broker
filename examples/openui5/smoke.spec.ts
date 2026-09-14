@@ -16,6 +16,8 @@
  *
  * UI5 renders asynchronously and after the page's `load` event, so nothing is looked for by
  * position: every control has a fixed id, listed in README.md, and every expectation waits for it.
+ * The page is loaded with `sap-ui-language=en`, so the texts it asserts do not depend on the
+ * language of the machine the browser runs on.
  */
 
 import { readFileSync } from 'node:fs';
@@ -47,7 +49,12 @@ test.describe('the OpenUI5 example', () => {
       pageErrors.push(error.message);
     });
 
-    await page.goto(`http://localhost:${String(manifest.port)}${manifest.readyPath}`);
+    // The texts asserted below are the English bundle's. UI5 picks its language from the browser
+    // unless the URL says otherwise, and the browser reports whatever the machine is set to - so
+    // the URL says otherwise.
+    await page.goto(
+      `http://localhost:${String(manifest.port)}${manifest.readyPath}?sap-ui-language=en`,
+    );
 
     // No granted port: the model stops at `awaiting-permission`, and the application offers
     // Connect. The sap.m.Input puts its id on a wrapper; the element that takes keystrokes is the
