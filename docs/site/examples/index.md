@@ -18,6 +18,11 @@ advanced
 | [Full-featured](full-featured.md) | A realistic application that uses them together.                                            |
 | [Advanced](advanced.md)           | The hard cases: failover-safe commands, a protocol layer on top, several devices at once.   |
 
+The Simple tier also exists as a runnable application with a smoke test,
+[examples/minimal](https://github.com/tkrepo1234/serial-broker/tree/main/examples/minimal): one
+Vite + TypeScript page that connects, prints what arrives and sends text, with every status, every
+error's code and remediation, and a README on taking it into an application of your own.
+
 ## In a framework
 
 The examples above are plain TypeScript and fit into any framework. One worked-out integration
