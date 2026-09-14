@@ -368,5 +368,5 @@ function toHex(data: Uint8Array): string {
 function describeSent(data: Uint8Array): string {
   const text = new TextDecoder().decode(data).replace(/(\r\n|\n|\r)$/u, '');
   // Control characters other than tab and line endings, or bytes that are not UTF-8.
-  return /[ --�]/u.test(text) ? toHex(data) : text;
+  return /[\u0000-\u0008\u000B-\u001F\u007F\uFFFD]/u.test(text) ? toHex(data) : text;
 }
