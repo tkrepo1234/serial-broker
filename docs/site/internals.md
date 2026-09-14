@@ -74,8 +74,10 @@ term, the tab speaking for it, and the tab limit that tab runs. Every other tab 
 - a term ends exactly when the browser frees the lock, which it does as it tears a crashed tab
   down - no grace period, no timer;
 - a tab letting go cleanly queues a second request of its own on the term's lock before it says
-  goodbye, and the tabs watching the term see that request and wait for the `owner-released` the
-  term still owes them. A message alone therefore never ends a term.
+  goodbye, and the tabs watching the term - which look the moment the lock is free, where a crash
+  leaves nothing queued - see that request and wait for the `owner-released` the term still owes
+  them. A goodbye that arrived earlier is remembered until then. A message alone therefore never
+  ends a term, whatever else is queued on its lock.
 
 ## The message bus
 
