@@ -16,6 +16,7 @@
  */
 
 import { existsSync, readFileSync, statSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import { dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { gzipSync } from 'node:zlib';
@@ -69,6 +70,28 @@ for (const [readable, minified] of pairs) {
   }
   if (statSync(join(root, minified)).size >= statSync(join(root, readable)).size) {
     problems.push(`${minified} is not smaller than ${readable}`);
+  }
+}
+
+// Loading the package where there is no browser, as server-side rendering does, must not throw, and
+// must report the library as unsupported rather than fail later.
+const require = createRequire(import.meta.url);
+for (const file of [
+  'dist/index.js',
+  'dist/index.min.js',
+  'dist/index.cjs',
+  'dist/diagnostics.js',
+  'dist/diagnostics.min.js',
+  'dist/diagnostics.cjs',
+]) {
+  try {
+    const path = join(root, file);
+    const module = file.endsWith('.cjs') ? require(path) : await import(pathToFileURL(path).href);
+    if ('isSupported' in module && module.isSupported() !== false) {
+      problems.push(`${file} reports itself supported outside a browser`);
+    }
+  } catch (error) {
+    problems.push(`${file} throws when loaded outside a browser: ${String(error)}`);
   }
 }
 
