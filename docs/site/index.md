@@ -28,6 +28,7 @@ await SerialBroker.send('CardReader', 'STATUS?\r\n');
 introduction
 installing
 quickstart
+tasks
 ```
 
 ```{toctree}
