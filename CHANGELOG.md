@@ -39,7 +39,9 @@ migrated (see below).
   device is remembered, so `restore()` reconnects without a prompt, and shared with the other tabs:
   a tab in auto mode adopts the device of the tab holding the port. `requestAccess()` may be called
   right after `setup()` in the same click. An auto-mode configuration waits for the user even when
-  exactly one port is granted, because that port may belong to another configuration.
+  exactly one port is granted, because that port may belong to another configuration. A later
+  visit that calls only `setup()` opens the device remembered for that name without a prompt, and
+  saving an unresolved configuration keeps a resolution already remembered under its name.
 - A new device filter, `{ nonUsb: true }`, accepts only ports without a USB identity.
 - `getStatus()` reports `deviceKind`: `'usb'`, `'non-usb'`, `'any'` or `'auto'`.
 - The debugging surface's **Choose a device…** uses the automatic mode: it asks only for a name and

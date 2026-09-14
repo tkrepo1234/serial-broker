@@ -202,8 +202,9 @@ round"). All nine example applications exist with smoke tests. The usability rev
 `docs/site/tasks.md` and `docs/usability-review-2026-09-14.md`. What it and the examples left open:
 
 - **P1, a defect in auto mode:** a later visit that calls only `setup()` asks for the device again
-  and overwrites the remembered resolution. Being fixed on 2026-09-15; until then the documentation
-  calls `restore()` first.
+  and overwrote the remembered resolution. Fixed on 2026-09-15 (ADR-0036, amendment): `setup()` in
+  auto mode takes a remembered auto-mode resolution, and the documentation no longer calls
+  `restore()` first.
 - **P2:** `setup()` with equal options starts a `failed` configuration again, so a "try again"
   button needs no release first.
 - **P3:** a new `onStatusChange` listener receives the current status once, so no example needs
