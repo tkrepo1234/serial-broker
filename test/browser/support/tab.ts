@@ -8,7 +8,7 @@
  * See ADR-0035.
  */
 
-import type { BrowserContext, Page } from '@playwright/test';
+import type { BrowserContext, CDPSession, Page } from '@playwright/test';
 
 import type { SerialBrokerOptions } from '../../../src/core/types.js';
 import type { HarnessLogRecord, HarnessSend, PageHarness } from '../pages/harness.js';
@@ -350,4 +350,74 @@ export async function tabHoldingThePort(tabs: readonly Tab[]): Promise<number> {
     throw new Error(`Expected exactly one tab to hold the device, found ${String(holders.length)}`);
   }
   return holders[0] as number;
+}
+
+/** One `SharedWorker` the browser hosts, as Chromium lists it. */
+export interface SharedWorkerTarget {
+  /** Chromium's handle for it; a new worker has a new one. */
+  readonly targetId: string;
+  /** The script it was constructed from. */
+  readonly url: string;
+}
+
+/**
+ * The shared workers Chromium hosts for this tab's browser context.
+ *
+ * The one thing about a `SharedWorker` no page can see: how many of them there are. Chromium
+ * lists them as targets, which is what `chrome://inspect/#workers` shows, and the list is
+ * filtered to this context because the files of this suite run in parallel contexts of the same
+ * browser, each with a worker of its own.
+ */
+export async function sharedWorkersOf(tab: Tab): Promise<readonly SharedWorkerTarget[]> {
+  const contextId = await browserContextIdOf(tab);
+  const session = await browserSessionOf(tab);
+  try {
+    const { targetInfos } = await session.send('Target.getTargets');
+    return targetInfos
+      .filter((info) => info.type === 'shared_worker' && info.browserContextId === contextId)
+      .map((info) => ({ targetId: info.targetId, url: info.url }));
+  } finally {
+    await session.detach();
+  }
+}
+
+/**
+ * Terminates every shared worker of this tab's context, and says which ones went.
+ *
+ * What step 29 of the manual test plan does from `chrome://inspect/#workers`: the broker is gone
+ * with nothing of ours told about it, so the tabs have to notice by themselves (ADR-0021).
+ * Killing it outright rather than crashing a renderer and hoping the worker lived there - which
+ * Chromium is free to arrange either way.
+ */
+export async function terminateSharedWorkers(tab: Tab): Promise<readonly SharedWorkerTarget[]> {
+  const workers = await sharedWorkersOf(tab);
+  const session = await browserSessionOf(tab);
+  try {
+    for (const worker of workers) {
+      await session.send('Target.closeTarget', { targetId: worker.targetId });
+    }
+  } finally {
+    await session.detach();
+  }
+  return workers;
+}
+
+/** The id Chromium gives the browser context this tab lives in. */
+async function browserContextIdOf(tab: Tab): Promise<string | undefined> {
+  const session = await tab.page.context().newCDPSession(tab.page);
+  try {
+    const { targetInfo } = await session.send('Target.getTargetInfo');
+    return targetInfo.browserContextId;
+  } finally {
+    await session.detach();
+  }
+}
+
+/** A CDP session on the browser itself: targets that are not pages live outside a page session. */
+async function browserSessionOf(tab: Tab): Promise<CDPSession> {
+  const browser = tab.page.context().browser();
+  if (browser === null) {
+    throw new Error('The browser is not available for a CDP session; this needs Chromium.');
+  }
+  return await browser.newBrowserCDPSession();
 }
