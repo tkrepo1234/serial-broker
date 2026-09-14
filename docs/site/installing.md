@@ -19,6 +19,14 @@ The package contains three things:
 It also ships a debugging surface under `dist/debug/`, as static files that nothing serves
 unless you do. See [Diagnostics](diagnostics.md).
 
+### TypeScript
+
+The type definitions need the `DOM` library, which the TypeScript configuration of a browser
+application includes anyway: `send()` takes a `BufferSource`, and a worker URL may be a `URL`. They
+need no Web Serial types — an application does not have to install `@types/w3c-web-serial`, and one
+that has them installed for its own code keeps whichever version it chose. The definitions check
+cleanly with `skipLibCheck: false` under `bundler`, `node16` and `node10` module resolution.
+
 ### Minified build
 
 `dist/index.min.js` and `dist/diagnostics.min.js` are the same code, minified, with source maps.

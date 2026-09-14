@@ -9,8 +9,28 @@ import type {
   SerialBrokerStatusSnapshot,
   Unsubscribe,
 } from './core/types.js';
-import { validateName } from './core/validation.js';
-import { createBrowserEnvironment, isSupported } from './environment/browser.js';
+import {
+  normalizeGlobalOptions,
+  normalizeReleaseOptions,
+  validateName,
+} from './core/validation.js';
+import {
+  createBrowserEnvironment,
+  isSupported as isPlatformSupported,
+} from './environment/browser.js';
+
+/**
+ * Reports whether this browser can support the library at all.
+ *
+ * The same check as {@link SerialBrokerApi.isSupported}, callable without the singleton.
+ *
+ * A function of its own rather than a re-export of the environment's: the published declaration
+ * of a re-export imports the declarations of the module it comes from, and those name the Web
+ * Serial types, which an application need not have installed.
+ */
+export function isSupported(): boolean {
+  return isPlatformSupported();
+}
 
 /**
  * The library's public surface.
@@ -77,7 +97,11 @@ export interface SerialBrokerApi {
    * no prompt. Pass `{ forgetDevice: true }` to revoke it as well.
    *
    * @param name - The configuration name. Releasing one that is not set up is a no-op.
-   * @param options - Whether to also revoke the browser's device permission.
+   * @param options - Whether to also revoke the browser's device permission. Read once, when the
+   *   call is made.
+   * @throws A `SerialBrokerError` with code `INVALID_ARGUMENT` for an invalid name, for `options`
+   *   that is not an object, or for a `forgetDevice` that is not a boolean. Nothing is released
+   *   then.
    * @returns A promise that resolves once the port has been closed and the lock released.
    *   Teardown is bounded: a device that has stopped answering cannot hold it open.
    * @example
@@ -92,6 +116,8 @@ export interface SerialBrokerApi {
    * Stops using every configuration in this tab.
    *
    * @param options - Applied to each configuration in turn.
+   * @throws A `SerialBrokerError` with code `INVALID_ARGUMENT` when `options` is not an object or
+   *   `forgetDevice` is not a boolean. Nothing is released then.
    */
   releaseAll(options?: ReleaseOptions): Promise<void>;
 
@@ -265,7 +291,12 @@ export interface SerialBrokerApi {
    * `exists`, `names`, `unsubscribe`, `release` and `releaseAll` build no client while nothing is
    * set up.
    *
-   * @param options - Merged into the current settings; omitted fields are left alone.
+   * @param options - Merged into the current settings; omitted fields are left alone. Each field is
+   *   read once, now.
+   * @throws A `SerialBrokerError` with code `INVALID_ARGUMENT` when `options` is not an object, or
+   *   a field has the wrong type: `workerUrl` not a non-empty string or `URL`, `transport` not one of
+   *   the three kinds, `logger` without a `log` method, `logPayloads` not a boolean. Nothing is
+   *   applied then.
    * @example
    * ```ts
    * SerialBroker.configure({
@@ -298,6 +329,14 @@ export interface SerialBrokerApi {
 
 let globalOptions: SerialBrokerGlobalOptions = {};
 let instance: SerialBrokerClient | undefined;
+/**
+ * The `dispose()` still closing what the previous client held, if one is under way.
+ *
+ * `dispose()` lets go of its client at once, so that a call made meanwhile starts afresh. Closing
+ * the ports takes longer. `release()`, `releaseAll()` and `dispose()` promise to resolve once the
+ * ports are closed, so a call to one of them made meanwhile waits for this as well.
+ */
+let disposing: Promise<void> | undefined;
 
 /**
  * Builds the client on first use.
@@ -357,16 +396,23 @@ export const SerialBroker: SerialBrokerApi = {
   async release(name, options) {
     if (instance === undefined) {
       // Nothing is set up, so there is nothing to release - and no reason to build a client,
-      // which would throw in a browser without Web Serial.
+      // which would throw in a browser without Web Serial. A disposal under way may still be
+      // closing the port, though.
       validateName(name);
+      normalizeReleaseOptions(options);
+      await disposing;
       return;
     }
-    await instance.release(name, options);
+    // Checked, and read once, before anything is released: an invalid value must leave the
+    // configuration running, and the client reads the options only after the port has closed.
+    await instance.release(name, normalizeReleaseOptions(options));
   },
 
   /** {@inheritDoc SerialBrokerApi.releaseAll} */
   async releaseAll(options) {
-    await instance?.releaseAll(options);
+    const releaseOptions = normalizeReleaseOptions(options);
+    await instance?.releaseAll(releaseOptions);
+    await disposing;
   },
 
   /** {@inheritDoc SerialBrokerApi.send} */
@@ -421,12 +467,15 @@ export const SerialBroker: SerialBrokerApi = {
 
   /** {@inheritDoc SerialBrokerApi.configure} */
   configure(options) {
-    globalOptions = { ...globalOptions, ...options };
+    // Validated and copied now: the client reads the settings only when it is built, which may be
+    // long after this call, and must find the values that were checked.
+    const validated = normalizeGlobalOptions(options);
+    globalOptions = { ...globalOptions, ...validated };
     // The client has already read the settings it was built with. Silence would leave an
     // application wondering why its worker URL or logger is not used.
     instance?.logger.warn(
       'configure() was called after serial-broker started; the settings apply after dispose()',
-      { event: 'facade.late-configure', options: Object.keys(options).join(', ') },
+      { event: 'facade.late-configure', options: Object.keys(validated).join(', ') },
     );
   },
 
@@ -439,6 +488,16 @@ export const SerialBroker: SerialBrokerApi = {
   async dispose() {
     const current = instance;
     instance = undefined;
-    await current?.dispose();
+    if (current !== undefined) {
+      const run = Promise.all([disposing, current.dispose()]).then(() => undefined);
+      const settled = (): void => {
+        if (disposing === run) {
+          disposing = undefined;
+        }
+      };
+      disposing = run;
+      run.then(settled, settled);
+    }
+    await disposing;
   },
 };

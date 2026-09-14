@@ -16,12 +16,23 @@
  * @packageDocumentation
  */
 
-import { DiagnosticsObserver } from './client/diagnostics-observer.js';
+import {
+  DEFAULT_COLLECT_WINDOW_MS as OBSERVER_COLLECT_WINDOW_MS,
+  DiagnosticsObserver,
+} from './client/diagnostics-observer.js';
 import type { DiagnosticsSnapshot, ObservedEvent } from './core/diagnostics.js';
 import type { Logger, TransportKind, Unsubscribe } from './core/types.js';
 import { createBrowserEnvironment } from './environment/browser.js';
 
-export { DEFAULT_COLLECT_WINDOW_MS } from './client/diagnostics-observer.js';
+/**
+ * How long {@link SerialBrokerDiagnostics.collect} listens for answers by default, in
+ * milliseconds.
+ *
+ * Declared here rather than re-exported from the observer: the published declaration of a
+ * re-export imports the observer's declarations, and through them the Web Serial types, which an
+ * application need not have installed.
+ */
+export const DEFAULT_COLLECT_WINDOW_MS = OBSERVER_COLLECT_WINDOW_MS;
 export {
   CONNECTION_STATES,
   type ConfigurationDiagnostics,

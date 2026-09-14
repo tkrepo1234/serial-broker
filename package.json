@@ -23,8 +23,12 @@
   "homepage": "https://github.com/tkrepo1234/serial-broker#readme",
   "type": "module",
   "sideEffects": false,
-  "engines": {
-    "node": ">=22.13"
+  "devEngines": {
+    "runtime": {
+      "name": "node",
+      "version": ">=22.13",
+      "onFail": "warn"
+    }
   },
   "files": [
     "dist",

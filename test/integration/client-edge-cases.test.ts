@@ -176,7 +176,7 @@ describe('hostile traffic on the shared bus', () => {
     const mismatch = tab
       .recordFor('Reader')
       .errors.find((event) => event.error.code === SerialBrokerErrorCode.PROTOCOL_VERSION_MISMATCH);
-    expect(mismatch?.error.remediation).toContain('Reload all tabs');
+    expect(mismatch?.error.remediation).toContain('reload every tab');
   });
 
   it('drops and logs a malformed message without disturbing the connection', async () => {

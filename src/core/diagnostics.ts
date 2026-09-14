@@ -152,11 +152,16 @@ export interface ParticipantDiagnostics {
 export interface LockDiagnostics {
   /**
    * The lock name: `serial-broker/owner/v<protocol version>/<configuration name>` for the ownership
-   * of a port, and `serial-broker/tab-slot/…` or `serial-broker/tab-slot-gate/…` for the places of
-   * a configuration with a tab limit (ADR-0025).
+   * of a port, `serial-broker/tab-slot/…` or `serial-broker/tab-slot-gate/…` for the places of a
+   * configuration with a tab limit (ADR-0025), and `serial-broker/persisted/v<storage schema
+   * version>/<configuration name>` for a tab running a remembered configuration (ADR-0027).
    */
   readonly name: string;
-  /** The lock mode. This library only takes exclusive locks. */
+  /**
+   * The lock mode. Ownership and the places of a tab limit are `exclusive`. Every tab running a
+   * remembered configuration holds its `persisted` lock `shared`, and a tab about to forget the
+   * entry asks for it `exclusive` without waiting, to learn whether any other tab still holds it.
+   */
   readonly mode: 'exclusive' | 'shared';
   /**
    * The browser's identifier for the context, from `LockManager.query()`.

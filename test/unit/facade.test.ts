@@ -246,4 +246,140 @@ describe('SerialBroker', () => {
 
     expect(SerialBroker.exists('Reader')).toBe(true);
   });
+
+  describe('misuse', () => {
+    const invalidArgument = (argumentName: string): unknown => {
+      const context: unknown = expect.objectContaining({ argumentName });
+      return expect.objectContaining({ code: SerialBrokerErrorCode.INVALID_ARGUMENT, context });
+    };
+
+    it('rejects release options that are not an object, and keeps the configuration running', async () => {
+      await SerialBroker.setup('Reader', READER_OPTIONS);
+      await settle();
+
+      await expect(SerialBroker.release('Reader', null as never)).rejects.toThrow(
+        invalidArgument('options'),
+      );
+      await expect(SerialBroker.releaseAll(null as never)).rejects.toThrow(
+        invalidArgument('options'),
+      );
+
+      expect(SerialBroker.exists('Reader')).toBe(true);
+      expect(platform.device.isOpen).toBe(true);
+    });
+
+    it('rejects a forgetDevice that is not a boolean rather than keeping the permission silently', async () => {
+      await SerialBroker.setup('Reader', READER_OPTIONS);
+      await settle();
+
+      await expect(
+        SerialBroker.release('Reader', { forgetDevice: 'yes' } as never),
+      ).rejects.toThrow(invalidArgument('options.forgetDevice'));
+      expect(SerialBroker.exists('Reader')).toBe(true);
+    });
+
+    it('checks release options also when nothing is set up', async () => {
+      await expect(SerialBroker.release('Reader', 7 as never)).rejects.toThrow(
+        invalidArgument('options'),
+      );
+    });
+
+    it('acts on forgetDevice as it was when release() was called, not once the port has closed', async () => {
+      await SerialBroker.setup('Reader', READER_OPTIONS);
+      await settle();
+      const options = { forgetDevice: false };
+
+      const released = SerialBroker.release('Reader', options);
+      // An application reusing one options object for its next call.
+      options.forgetDevice = true;
+      await released;
+
+      // Released without forgetting: the permission is still there.
+      await expect(platform.serial.forContext('page').getPorts()).resolves.toHaveLength(1);
+    });
+
+    it('rejects library-wide options of the wrong type, so a truthy string cannot log payloads', () => {
+      expect(() => {
+        SerialBroker.configure({ logPayloads: 'yes' } as never);
+      }).toThrow(invalidArgument('options.logPayloads'));
+      expect(() => {
+        SerialBroker.configure(null as never);
+      }).toThrow(invalidArgument('options'));
+      expect(() => {
+        SerialBroker.configure({ transport: 'websocket' } as never);
+      }).toThrow(invalidArgument('options.transport'));
+      expect(() => {
+        SerialBroker.configure({ workerUrl: 42 } as never);
+      }).toThrow(invalidArgument('options.workerUrl'));
+      expect(() => {
+        // A logging function where an object with a `log` method belongs.
+        SerialBroker.configure({ logger: () => undefined } as never);
+      }).toThrow(invalidArgument('options.logger'));
+    });
+
+    it('keeps no part of library-wide options that failed validation', async () => {
+      const { logger, records } = recordingLogger();
+
+      expect(() => {
+        SerialBroker.configure({ logger, logPayloads: 'yes' } as never);
+      }).toThrow();
+      await SerialBroker.setup('Reader', READER_OPTIONS);
+      await settle();
+
+      expect(records).toEqual([]);
+    });
+
+    it('reads library-wide options once, when configure() is called', async () => {
+      const { logger, records } = recordingLogger();
+      let reads = 0;
+      const options = {
+        logger,
+        get logPayloads() {
+          reads += 1;
+          return reads === 1 ? false : 'yes';
+        },
+      };
+
+      SerialBroker.configure(options as never);
+      await SerialBroker.setup('Reader', READER_OPTIONS);
+      await settle();
+      platform.device.emit('PIN 1234');
+      await settle();
+
+      expect(reads).toBe(1);
+      expect(fieldsOfEvent(records, 'supervisor.received')[0]).not.toHaveProperty('hex');
+    });
+
+    it('takes options declared as getters on a class, which spreading the object would lose', async () => {
+      const { logger, records } = recordingLogger();
+      class Settings {
+        get logger(): typeof logger {
+          return logger;
+        }
+      }
+
+      SerialBroker.configure(new Settings());
+      await SerialBroker.setup('Reader', READER_OPTIONS);
+
+      expect(records.length).toBeGreaterThan(0);
+    });
+
+    it('resolves a release made while dispose() runs only once the port is closed', async () => {
+      await SerialBroker.setup('Reader', READER_OPTIONS);
+      await settle();
+      expect(platform.device.isOpen).toBe(true);
+
+      const disposing = SerialBroker.dispose();
+      const released = SerialBroker.release('Reader');
+      const releasedAll = SerialBroker.releaseAll();
+      const disposedAgain = SerialBroker.dispose();
+
+      await released;
+      expect(platform.device.isOpen).toBe(false);
+      await releasedAll;
+      await disposedAgain;
+      await disposing;
+      expect(platform.device.isOpen).toBe(false);
+    });
+  });
 });

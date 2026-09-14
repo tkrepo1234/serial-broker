@@ -18,13 +18,18 @@ import {
   tabLabel,
   toHex,
 } from '../../debug/src/format.js';
-import { linkWithSettings, resolveLibrarySettings } from '../../debug/src/library-settings.js';
+import {
+  linkedWorkerUrlToConfirm,
+  linkWithSettings,
+  resolveLibrarySettings,
+} from '../../debug/src/library-settings.js';
 import {
   buildConfigurationViews,
   isWithdrawn,
   tabRole,
   thisPageState,
 } from '../../debug/src/model.js';
+import { isFramedByAnotherOrigin } from '../../debug/src/page-guard.js';
 import {
   buildSetupOptions,
   defaultFormValues,
@@ -430,6 +435,86 @@ describe('debugging surface: library settings', () => {
 
     expect(resolveLibrarySettings(new URL(link).searchParams, null, DEFAULT_WORKER)).toEqual(
       settings,
+    );
+  });
+
+  it('never takes a worker script from another origin or a data: or blob: URL', () => {
+    const saved = JSON.stringify({ workerUrl: '/saved.js' });
+    for (const workerUrl of [
+      'https://attacker.example/evil.js',
+      '//attacker.example/evil.js',
+      'data:text/javascript,postMessage(1)',
+      'blob:http://localhost/0b6c',
+      'javascript:alert(1)',
+    ]) {
+      const query = new URLSearchParams({ workerUrl });
+
+      expect(resolveLibrarySettings(query, saved, DEFAULT_WORKER).workerUrl).toBe('/saved.js');
+      expect(linkedWorkerUrlToConfirm(query, saved, DEFAULT_WORKER)).toBeUndefined();
+    }
+  });
+
+  it('asks to confirm a worker script that only the link names', () => {
+    const saved = JSON.stringify({ workerUrl: '/assets/serial-broker.worker.js' });
+
+    expect(
+      linkedWorkerUrlToConfirm(
+        new URLSearchParams('workerUrl=/uploads/evil.js'),
+        saved,
+        DEFAULT_WORKER,
+      ),
+    ).toBe('/uploads/evil.js');
+    expect(
+      linkedWorkerUrlToConfirm(new URLSearchParams('workerUrl=/linked.js'), null, DEFAULT_WORKER),
+    ).toBe('/linked.js');
+  });
+
+  it('does not ask again for the worker the page already uses, however the link spells it', () => {
+    const saved = JSON.stringify({ workerUrl: '/assets/serial-broker.worker.js' });
+
+    expect(
+      linkedWorkerUrlToConfirm(
+        new URLSearchParams('workerUrl=http://localhost/assets/serial-broker.worker.js'),
+        saved,
+        DEFAULT_WORKER,
+      ),
+    ).toBeUndefined();
+    expect(
+      linkedWorkerUrlToConfirm(
+        new URLSearchParams({ workerUrl: DEFAULT_WORKER, transport: 'broadcastchannel' }),
+        null,
+        DEFAULT_WORKER,
+      ),
+    ).toBeUndefined();
+    expect(
+      linkedWorkerUrlToConfirm(new URLSearchParams('transport=auto'), saved, DEFAULT_WORKER),
+    ).toBeUndefined();
+  });
+});
+
+describe('debugging surface: framing', () => {
+  const origin = { origin: 'https://app.example' };
+
+  it('refuses a top-level page of another origin, whose location cannot be read', () => {
+    const view = {
+      self: {},
+      top: {
+        get location(): never {
+          throw new Error('SecurityError: Blocked a frame from accessing a cross-origin frame');
+        },
+      },
+      location: origin,
+    };
+
+    expect(isFramedByAnotherOrigin(view)).toBe(true);
+  });
+
+  it('allows the page on its own and inside a page of its own origin', () => {
+    const self = {};
+
+    expect(isFramedByAnotherOrigin({ self, top: self, location: origin })).toBe(false);
+    expect(isFramedByAnotherOrigin({ self, top: { location: origin }, location: origin })).toBe(
+      false,
     );
   });
 });

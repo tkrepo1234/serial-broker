@@ -78,7 +78,10 @@ export const SerialBrokerErrorCode = {
   OWNER_LOST_DURING_WRITE: 'OWNER_LOST_DURING_WRITE',
 
   // --- Coordination ----------------------------------------------------------------------
-  /** A peer context runs an incompatible wire protocol version. See ADR-0008. */
+  /**
+   * Another tab, or the worker script, runs an incompatible wire protocol version. See ADR-0008
+   * and ADR-0024.
+   */
   PROTOCOL_VERSION_MISMATCH: 'PROTOCOL_VERSION_MISMATCH',
 
   // --- Storage ---------------------------------------------------------------------------
@@ -126,7 +129,7 @@ export const REMEDIATION: Record<SerialBrokerErrorCode, string> = {
   TRANSPORT_UNAVAILABLE:
     'Neither SharedWorker nor BroadcastChannel is available. Both are blocked in some privacy configurations and in sandboxed iframes without the allow-same-origin token.',
   BROKER_UNAVAILABLE:
-    'The broker script could not be loaded, or the worker running it stopped answering. If it did not load, ensure serial-broker.worker.js is served from the same origin, or pass its URL with SerialBroker.configure({ workerUrl }). If it stopped answering, the tabs connect to a new worker on their own; nothing needs to be done unless it keeps happening.',
+    'The broker script could not be loaded, or the worker running it stopped answering. If it did not load, ensure serial-broker.worker.js is served from the same origin, or pass its URL with SerialBroker.configure({ workerUrl }). If it stopped answering, the tabs connect to a new worker on their own and nothing needs to be done unless it keeps happening - except when the new worker runs another version of serial-broker, which is reported as PROTOCOL_VERSION_MISMATCH and only a reload resolves.',
   PERMISSION_REQUIRED:
     'Only the tab holding the port can ask the user for it. Offer requestAccess() in response to the status "awaiting-permission", which every tab receives, and ask the user to try again if this happens anyway.',
   PERMISSION_DENIED:
@@ -146,15 +149,15 @@ export const REMEDIATION: Record<SerialBrokerErrorCode, string> = {
   READ_FAILED:
     'The read stream failed, often from a framing or parity error. The library reopens the port automatically; if this repeats, check the line settings, the cable and the adapter.',
   NOT_CONNECTED:
-    'The connection was lost before the write was handed to the device, so nothing was written and sending it again is safe. To avoid it, wait for status "open" via subscribe(name, "onStatusChange", ...) before sending.',
+    'Nothing to do: the connection was lost before the write was handed to the device, so nothing was written, and the tab that issued the write sends it again once the port is open. This code appears in logs and diagnostics only; a write that finds no connection before its deadline fails with WRITE_TIMEOUT.',
   WRITE_FAILED:
     'The device rejected the write. `context.bytesWritten` shows how many bytes were handed over before the failure; decide whether your command is safe to repeat.',
   WRITE_TIMEOUT:
     'The write did not complete within connection.writeTimeoutMs. When `context.started` is false nothing was written and it can be sent again; otherwise the device may have received it. If timeouts are frequent while the port is open, check the flowControl serial option and whether the device is ready to receive.',
   OWNER_LOST_DURING_WRITE:
-    'The tab that owned the port closed mid-write, so it is unknown whether the device received the bytes. Only repeat the command if it is idempotent for your device.',
+    'The tab that owned the port closed or crashed mid-write, so it is unknown whether the device received the bytes. Only repeat the command if it is idempotent for your device.',
   PROTOCOL_VERSION_MISMATCH:
-    'Another tab runs a different version of this library. Reload all tabs of this application after deploying a version with a protocol change.',
+    'Another tab, or the serial-broker.worker.js script the tabs load, runs a different protocol version of serial-broker, and the two cannot coordinate. Make sure the worker URL serves the serial-broker.worker.js of the release the page ships - not a copy left from an earlier release or kept by a cache - then reload every tab of the application.',
   STORAGE_UNAVAILABLE:
     'A read or write to localStorage failed, for instance because its quota is used up, so configurations may not be restored after a reload. Everything else keeps working; set the configurations up again after a reload.',
   STORAGE_CORRUPT:
