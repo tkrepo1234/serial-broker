@@ -221,14 +221,19 @@ export class BrowserHarness {
    * `hold()` keeps every message that arrives from then on; `deliverHeld()` hands them to the tab
    * in order, and lets later ones through again. What the tab sends is never held. The tab records
    * nothing, so a test asserts on the device and on what its calls return.
+   *
+   * `hold(from)` keeps only the messages of one sender and lets the others through: messages from
+   * different tabs have no defined order between them, while a sender's own messages keep theirs,
+   * which holding all of one sender's messages preserves.
    */
   openBusyTab(id = 'busy'): {
     readonly client: SerialBrokerClient;
-    readonly hold: () => void;
+    readonly hold: (from?: string) => void;
     readonly deliverHeld: () => void;
   } {
     const held: ProtocolMessage[] = [];
     let isHolding = false;
+    let heldSender: string | undefined;
     let deliver: (message: ProtocolMessage) => void = () => undefined;
     const environment = this.createEnvironment(id);
     const client = new SerialBrokerClient({
@@ -238,7 +243,7 @@ export class BrowserHarness {
         return environment.createTransport({
           ...request,
           onMessage: (message) => {
-            if (isHolding) {
+            if (isHolding && (heldSender === undefined || message.from === heldSender)) {
               held.push(message);
             } else {
               request.onMessage(message);
@@ -249,11 +254,13 @@ export class BrowserHarness {
     });
     return {
       client,
-      hold: () => {
+      hold: (from) => {
         isHolding = true;
+        heldSender = from;
       },
       deliverHeld: () => {
         isHolding = false;
+        heldSender = undefined;
         for (const message of held.splice(0)) {
           deliver(message);
         }

@@ -288,7 +288,9 @@ appears in logs and in diagnostics only.
 `OWNER_LOST_DURING_WRITE`
 : **Arises** when the tab holding the port went away while the write was being written. Whether the
 device received the bytes, some of them, or none, cannot be known. serial-broker never repeats
-such a write.
+such a write. It is decided once that tab has provably said its last word: at once when it closed
+and its goodbye arrived without a result for the write, and one second after another tab took the
+port over when it crashed.
 **Context:** `byteLength`.
 **Do:** repeat the command only if doing so is harmless for the device, or after checking its
 state. See

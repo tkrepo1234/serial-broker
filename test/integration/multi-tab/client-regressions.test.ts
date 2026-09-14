@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
+import { FORMER_OWNER_GRACE_MS } from '../../../src/client/owner-terms.js';
 import { SerialBrokerErrorCode } from '../../../src/core/error-codes.js';
 import type { ErrorEvent } from '../../../src/core/types.js';
 import {
@@ -46,6 +47,8 @@ describe.each(TRANSPORT_MODES)('a write issued during an owner change (%s)', (tr
       await harness.settle();
       busy.deliverHeld();
       await harness.settle();
+      // A crashed holder says no goodbye, so its term is waited for before the write is handed on.
+      await harness.advance(FORMER_OWNER_GRACE_MS);
 
       await expect(sending).resolves.toBeUndefined();
       expect(device.writtenText()).toBe('PING');

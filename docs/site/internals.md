@@ -46,9 +46,10 @@ timer functions only through the injected environment, and a lint rule enforces 
 For each configuration, every tab that has set it up requests the Web Lock
 `serial-broker/owner/v<protocol>/<name>` in exclusive mode [ADR-0005]. The tab granted the lock is
 the owner for as long as it keeps the lock callback's promise pending; there is no other flag. When
-it becomes the owner it creates a `PortSupervisor`, announces `owner-claimed` on the bus, and hands
-pending writes on. When it stops, it closes the port **before** releasing the lock, so the successor
-never finds the device still open.
+it becomes the owner it creates a `PortSupervisor` and announces `owner-claimed` on the bus. When it
+stops, it closes the port **before** releasing the lock, so the successor never finds the device
+still open; then it waits until every write it performed has been answered, and sends
+`owner-released` as the last message of its term.
 
 With a tab limit, a tab requests the ownership lock - and joins the bus - only while it holds one
 of `maxTabs` places, each the Web Lock `serial-broker/tab-slot/v<protocol>/<maxTabs>/<place>/<name>`.
@@ -56,7 +57,10 @@ Waiting tabs queue at a gate lock and, holding it, request every place at once; 
 kept [ADR-0025].
 
 When a tab dies, the browser releases its lock and grants it to the longest-waiting request. The
-successor's `owner-claimed` is also the proof, to every other tab, that the previous owner is gone.
+successor's `owner-claimed` proves to every other tab that the previous owner let go of the lock -
+but not that the previous owner's last messages have arrived, which come from another sender. Each
+time of holding the port is therefore a **term** with an identifier of its own, and messages about
+ownership, writes and the status name their term [ADR-0026].
 
 ## The message bus
 
@@ -100,11 +104,11 @@ malformed is dropped [ADR-0008].
 | `welcome`                                   | the broker              | Answers `hello` and every `heartbeat`: the worker script runs and is alive. |
 | `heartbeat`                                 | every tab on the worker | Keeps a tab known to the broker, and restores what it takes part in.        |
 | `attach`, `detach`                          | every tab               | Start or stop participating in a configuration.                             |
-| `owner-claimed`, `owner-released`           | the owner               | Ownership changed.                                                          |
+| `owner-claimed`, `owner-released`           | the owner               | A term of holding the port began; it ended, as its last message.            |
 | `status-request`                            | a tab that just set up  | Asks the owner to restate the status.                                       |
-| `status`                                    | the owner               | The connection status changed, with the owner's tab limit.                  |
-| `write-request`                             | a participant           | Asks the owner to write.                                                    |
-| `write-started`, `write-result`             | the owner               | The write began; how it ended.                                              |
+| `status`                                    | the owner               | The connection status changed, with the owner's tab limit and term.         |
+| `write-request`                             | a participant           | Asks the owner in one term to write.                                        |
+| `write-started`, `write-result`             | the owner               | The write began, in a term; how it ended.                                   |
 | `data-received`, `data-sent`                | the owner               | Traffic, to every participant.                                              |
 | `error`                                     | any tab                 | A failure every participant should know about.                              |
 | `diagnostics-request`, `diagnostics-report` | an observer; every tab  | The diagnostics collection [ADR-0018].                                      |
@@ -144,10 +148,16 @@ another's.
 A write belongs to the tab that issued it, not to the owner or the broker [ADR-0013].
 `PendingWrites` in that tab holds it until a connection exists, hands it to the owner, and settles
 it when the owner reports the result. The owner reports `write-started` the moment it begins, and
-that marks the write as not repeatable. When a new owner claims the port, every write that had not
-started is handed to it; every write that had started is rejected with `OWNER_LOST_DURING_WRITE`.
-Because this decision lives in the issuing tab, it is the same on both transports and does not
-depend on the broker.
+that marks the write as not repeatable. Because this decision lives in the issuing tab, it is the
+same on both transports and does not depend on the broker.
+
+A write request is addressed to the owner's term, and only that term writes it [ADR-0026]. A new
+claim does not decide anything by itself: the former term's result may still be on its way. A term
+ends when its `owner-released` arrives, or, if it was succeeded without one, once it has been silent
+for `FORMER_OWNER_GRACE_MS` (one second). Only then is a write that term began and did not answer
+rejected with `OWNER_LOST_DURING_WRITE`, and a write addressed to it that it never began handed to
+the owner now. An owner that crashed after writing but before its `write-started` arrived, or whose
+messages arrive later than the grace period, cannot be told from one that never received the write.
 
 ## Errors
 
@@ -205,4 +215,5 @@ in a real browser, with real or emulated hardware [ADR-0017].
 | 0023 | Announce the protocol version on an unversioned channel                             |
 | 0024 | Keep the handshake with the worker readable by every protocol version               |
 | 0025 | Limit how many tabs use a configuration at once                                     |
+| 0026 | Attribute ownership, write and status messages to a term of holding the port        |
 | 0027 | Keep a remembered configuration while any tab runs it                               |

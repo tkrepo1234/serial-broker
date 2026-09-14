@@ -3,7 +3,7 @@ import { createSignal, type Signal } from '../core/deadline.js';
 import type { PendingWritesDiagnostics } from '../core/diagnostics.js';
 import { SerialBrokerErrorCode } from '../core/error-codes.js';
 import { SerialBrokerError } from '../core/errors.js';
-import type { RequestId } from '../protocol/messages.js';
+import type { RequestId, TermId } from '../protocol/messages.js';
 
 /** A write this context has issued and is still waiting on. */
 interface PendingWrite {
@@ -11,19 +11,26 @@ interface PendingWrite {
   readonly payload: Uint8Array;
   readonly settled: Signal;
   /**
-   * Set when the owner reports it has begun writing.
+   * The term that reported beginning to write it, once one has.
    *
    * The line between replayable and not. Before it, the bytes demonstrably never reached the
    * device and the request can be re-sent to a new owner. After it, whether they arrived is
    * unknowable and the request must never be repeated. See ADR-0013.
    */
-  started: boolean;
+  startedTerm: TermId | undefined;
   /**
-   * Set while the request sits with an owner that has not answered yet.
+   * The term the request was last handed to (ADR-0026).
+   *
+   * Only a tab holding the port in that term writes it, so this is the one term whose word decides
+   * whether it was written. It is handed to another term only once this one has ended.
+   */
+  addressedTerm: TermId | undefined;
+  /**
+   * Set while the request sits with its addressed term, which has not answered yet.
    *
    * Stops the same command being queued twice at the owner when a status change or an
-   * ownership announcement retriggers dispatch. Cleared when the owner it was handed to is
-   * known to be gone, or hands the write back because it no longer holds the port.
+   * ownership announcement retriggers dispatch. Cleared when that term hands the write back
+   * because it could not write it, or has ended without beginning it.
    */
   isDispatched: boolean;
   timer: TimerHandle | undefined;
@@ -36,14 +43,18 @@ export interface PendingWriteHost {
   /** Milliseconds a write may spend waiting, in total, before it is failed. */
   readonly writeTimeoutMs: number;
   /**
-   * Hands a request to whoever can perform it.
+   * Hands a request to whoever holds the port in `term`.
    *
    * Called only when the tracker has decided it is safe to do so, which is what keeps the
    * at-most-once guarantee in one place.
    */
-  readonly dispatch: (requestId: RequestId, payload: Uint8Array) => void;
+  readonly dispatch: (requestId: RequestId, payload: Uint8Array, term: TermId) => void;
   /** `true` when a connection exists to write to. Checked at every dispatch decision. */
   readonly canDispatch: () => boolean;
+  /** The term of the tab holding the port, as far as this context has heard. */
+  readonly currentTerm: () => TermId | undefined;
+  /** `true` once nothing more can come from `term`. */
+  readonly isTermEnded: (term: TermId) => boolean;
 }
 
 /**
@@ -55,13 +66,16 @@ export interface PendingWriteHost {
  * survives the broker itself dying.
  *
  * The rules it enforces, all of them about one question - *may this command be sent again?*
+ * A write is addressed to one term of holding the port, and only that term can write it
+ * (ADR-0026).
  *
  * | Situation | Answer |
  * | --- | --- |
  * | No connection yet | Hold it. The deadline bounds the wait. |
- * | Already handed to an owner, no answer yet | No. Sending again would queue it twice. |
- * | The owner went away, and it had not started | Yes. The bytes demonstrably never left. |
- * | The owner went away, and it **had** started | **Never.** Whether the device acted on it is unknowable. |
+ * | Already handed to a term that has not answered | No. Sending again would queue it twice. |
+ * | That term ended, and it had not started | Yes. The bytes demonstrably never left. |
+ * | That term ended, and it **had** started, with no result | **Never.** Whether the device acted on it is unknowable. |
+ * | A new owner claimed the port, but the old term has not ended | Wait: its last words may still be on their way. |
  */
 export class PendingWrites {
   readonly #writes = new Map<RequestId, PendingWrite>();
@@ -81,7 +95,7 @@ export class PendingWrites {
       if (pending.isDispatched) {
         dispatched += 1;
       }
-      if (pending.started) {
+      if (pending.startedTerm !== undefined) {
         started += 1;
       }
     }
@@ -99,7 +113,8 @@ export class PendingWrites {
       requestId,
       payload,
       settled: createSignal(),
-      started: false,
+      startedTerm: undefined,
+      addressedTerm: undefined,
       isDispatched: false,
       timer: undefined,
     };
@@ -117,7 +132,7 @@ export class PendingWrites {
             context: {
               requestId,
               byteLength: payload.byteLength,
-              started: pending.started,
+              started: pending.startedTerm !== undefined,
             },
             timestamp: this.host.clock.now(),
           },
@@ -131,43 +146,55 @@ export class PendingWrites {
     await pending.settled.promise;
   }
 
-  /** Records that the owner has begun writing a request, making it non-replayable. */
-  markStarted(requestId: RequestId): void {
+  /** Records that `term` has begun writing a request, making it non-replayable. */
+  markStarted(requestId: RequestId, term: TermId): void {
     const pending = this.#writes.get(requestId);
     if (pending !== undefined) {
-      pending.started = true;
+      pending.startedTerm ??= term;
     }
   }
 
   /**
-   * Returns a request to the queue so it can be handed to somebody else.
+   * Takes the answer to a request from the tab holding, or last holding, the port in `term`.
    *
-   * Used when an owner declines a write because it stopped being the owner between receiving
-   * it and performing it. The write never started, so this is not a repeat.
-   *
-   * @returns `true` if it was re-dispatched, `false` if it had already started and must not be.
+   * An outcome settles the write, whichever term reports it: a term that wrote it knows how that
+   * went. `NOT_CONNECTED` means that term did not write it and will not - but only from the term the
+   * request was addressed to. The same answer from another term concerns a copy that reached the
+   * wrong tab, and says nothing about the term that may still be writing it.
    */
-  redispatch(requestId: RequestId): boolean {
-    const pending = this.#writes.get(requestId);
-    if (pending === undefined || pending.started) {
-      return false;
+  handleResult(
+    requestId: RequestId,
+    term: TermId | undefined,
+    error: SerialBrokerError | undefined,
+  ): void {
+    if (error?.code !== SerialBrokerErrorCode.NOT_CONNECTED) {
+      this.settle(requestId, error);
+      return;
     }
 
+    const pending = this.#writes.get(requestId);
+    if (
+      pending === undefined ||
+      pending.startedTerm !== undefined ||
+      term === undefined ||
+      term !== pending.addressedTerm
+    ) {
+      return;
+    }
     pending.isDispatched = false;
     this.#dispatch(pending);
-    return true;
   }
 
   /**
-   * Reacts to ownership changing hands.
+   * Reacts to a term of holding the port ending (ADR-0026).
    *
-   * A new owner announcing itself is proof that the previous one is gone - the Web Lock cannot
-   * be granted while it is held (ADR-0005). So every write that had started with the old owner
-   * is now undecidable and is failed, and every write that had not is handed on.
+   * Everything that term said has arrived, or has been waited for as long as it will be. A write it
+   * had begun and not answered is now undecidable and is failed; a write handed to it that it never
+   * began is handed on.
    */
-  handleOwnerChanged(): void {
+  handleTermEnded(term: TermId): void {
     for (const pending of [...this.#writes.values()]) {
-      if (pending.started) {
+      if (pending.startedTerm === term) {
         this.settle(
           pending.requestId,
           new SerialBrokerError(
@@ -180,9 +207,9 @@ export class PendingWrites {
             },
           ),
         );
-      } else {
-        // Never started, so the bytes demonstrably never reached the device - and the context
-        // it was handed to is gone, so handing it on is not a duplicate.
+      } else if (pending.startedTerm === undefined && pending.addressedTerm === term) {
+        // Never started by the only term that could write it, so the bytes demonstrably never
+        // reached the device - and handing it on is not a duplicate.
         pending.isDispatched = false;
         this.#dispatch(pending);
       }
@@ -193,19 +220,25 @@ export class PendingWrites {
    * Hands on every write that has not started, including those already handed to an owner.
    *
    * For when a request may have been lost on its way: the broker it went through died
-   * (ADR-0021, amended). The owner recognises a request it has already accepted, so handing one on
-   * again cannot write it twice (ADR-0013).
+   * (ADR-0021, amended), or the owner restated `open`. The owner recognises a request it has
+   * already accepted, so handing one on again to the same term cannot write it twice (ADR-0013). A
+   * write addressed to a term that has not ended stays with it.
    */
   resendUnstarted(): void {
+    const current = this.host.currentTerm();
     for (const pending of [...this.#writes.values()]) {
-      if (!pending.started) {
+      if (pending.startedTerm !== undefined) {
+        continue;
+      }
+      const addressed = pending.addressedTerm;
+      if (addressed === undefined || addressed === current || this.host.isTermEnded(addressed)) {
         pending.isDispatched = false;
         this.#dispatch(pending);
       }
     }
   }
 
-  /** Dispatches everything that has been waiting for a connection. */
+  /** Dispatches everything that has been waiting for a connection or for a term to end. */
   dispatchWaiting(): void {
     for (const pending of [...this.#writes.values()]) {
       this.#dispatch(pending);
@@ -246,9 +279,8 @@ export class PendingWrites {
    * bounds the wait, so nothing waits forever.
    */
   #dispatch(pending: PendingWrite): void {
-    if (pending.isDispatched) {
-      // Already with an owner that has not answered. Sending it again would put the same
-      // command in that owner's queue twice.
+    if (pending.startedTerm !== undefined) {
+      // Begun: never sent again, whatever happens next.
       return;
     }
 
@@ -257,7 +289,25 @@ export class PendingWrites {
       return;
     }
 
+    const term = this.host.currentTerm();
+    if (term === undefined) {
+      return;
+    }
+
+    const addressed = pending.addressedTerm;
+    if (pending.isDispatched && addressed === term) {
+      // Already with the term holding the port, which has not answered. Sending it again would put
+      // the same command in that owner's queue twice.
+      return;
+    }
+    if (addressed !== undefined && addressed !== term && !this.host.isTermEnded(addressed)) {
+      // Another term may still be writing it, and its word may not have arrived: a claim from the
+      // new holder proves only that the old one let go of the lock (ADR-0026).
+      return;
+    }
+
     pending.isDispatched = true;
-    this.host.dispatch(pending.requestId, pending.payload);
+    pending.addressedTerm = term;
+    this.host.dispatch(pending.requestId, pending.payload, term);
   }
 }

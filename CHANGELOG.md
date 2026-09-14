@@ -80,7 +80,7 @@ coordinate with each other. See
 - Wire protocol version: **6**. Version 1 was never released; 2 added the diagnostics request and
   report, 3 the broker's `welcome`, 4 the `heartbeat`, and 5 has the broker answer every heartbeat
   with a `welcome` and freezes the shape of `hello` and `welcome` for every later version
-  ([ADR-0024](./docs/adr/0024-keep-the-worker-handshake-version-independent.md)), and 6 adds the tab limit to the `status` message ([ADR-0025](./docs/adr/0025-limit-the-tabs-using-a-configuration.md)).
+  ([ADR-0024](./docs/adr/0024-keep-the-worker-handshake-version-independent.md)), and 6 adds the tab limit to the `status` message ([ADR-0025](./docs/adr/0025-limit-the-tabs-using-a-configuration.md)), and 7 names the term of holding the port in ownership, write and status messages ([ADR-0026](./docs/adr/0026-attribute-messages-to-a-term-of-holding-the-port.md)).
 - Remembered configurations are stored under a key with a version of its own,
   `serial-broker/configurations/v1`, so a protocol change no longer discards them. Configurations
   remembered under the earlier, protocol-versioned keys are moved there when they are first read.

@@ -11,7 +11,7 @@
  * announcement, whose channel carries no version, and report `PROTOCOL_VERSION_MISMATCH`
  * (ADR-0023).
  */
-export const PROTOCOL_VERSION = 6;
+export const PROTOCOL_VERSION = 7;
 
 /** Prefix for every name this library claims in a shared namespace. */
 const NAMESPACE = 'serial-broker';

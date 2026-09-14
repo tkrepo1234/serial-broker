@@ -214,6 +214,7 @@ describe('hostile traffic on the shared bus', () => {
       configName: 'SomethingElse',
       status: 'failed',
       maxTabs: Number.POSITIVE_INFINITY,
+      term: 't-peer',
       timestamp: 1,
     });
     await harness.settle();

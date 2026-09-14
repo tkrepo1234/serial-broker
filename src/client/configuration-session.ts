@@ -1,4 +1,5 @@
 import { assertNever } from '../core/assert.js';
+import { withDeadline } from '../core/deadline.js';
 import type { NormalizedConfiguration } from '../core/defaults.js';
 import { describeSettings, type ConfigurationDiagnostics } from '../core/diagnostics.js';
 import { EventEmitter } from '../core/emitter.js';
@@ -14,10 +15,11 @@ import {
 import type { SerialBrokerEnvironment } from '../environment/environment.js';
 import { OwnershipElection } from '../owner/election.js';
 import { PortSupervisor } from '../owner/port-supervisor.js';
-import type { ClientId, ProtocolMessage, RequestId } from '../protocol/messages.js';
+import type { ClientId, ProtocolMessage, RequestId, TermId } from '../protocol/messages.js';
 import { PROTOCOL_VERSION } from '../protocol/version.js';
 
 import { AcceptedWrites } from './accepted-writes.js';
+import { OwnerTerms } from './owner-terms.js';
 import { PendingWrites } from './pending-writes.js';
 import { TabSlot } from './tab-slot.js';
 import type { Transport } from './transport/transport.js';
@@ -54,6 +56,18 @@ export class ConfigurationSession {
   readonly #emitter: EventEmitter;
   readonly #election: OwnershipElection;
   readonly #writes: PendingWrites;
+  /** The terms of holding the port this context has heard of (ADR-0026). */
+  readonly #terms: OwnerTerms;
+  /** This context's term while it holds the port. */
+  #term: TermId | undefined;
+  /** The term this context last held the port in, to answer with once it no longer does. */
+  #lastTerm: TermId | undefined;
+  /**
+   * The outcomes of writes performed at this context's port that have not been reported yet.
+   *
+   * Waited for before `owner-released`, which has to be the term's last word (ADR-0026).
+   */
+  readonly #unreported = new Set<Promise<void>>();
   /**
    * The writes accepted at this context's port in the current term of holding it (ADR-0013).
    *
@@ -110,12 +124,21 @@ export class ConfigurationSession {
       clock: environment.clock,
       configName: configuration.name,
       writeTimeoutMs: configuration.connection.writeTimeoutMs,
-      dispatch: (requestId, payload) => {
-        this.#dispatchWrite(requestId, payload);
+      dispatch: (requestId, payload, term) => {
+        this.#dispatchWrite(requestId, payload, term);
       },
       // A write can only go anywhere while there is a connection to write to. Asking here
       // rather than tracking it in two places keeps one source of truth for the answer.
       canDispatch: () => this.#status === SerialBrokerStatus.Open,
+      currentTerm: () => this.#terms.current,
+      isTermEnded: (term) => this.#terms.isEnded(term),
+    });
+
+    this.#terms = new OwnerTerms({
+      clock: environment.clock,
+      onEnded: (term) => {
+        this.#writes.handleTermEnded(term);
+      },
     });
 
     this.#slot = Number.isFinite(configuration.maxTabs)
@@ -215,6 +238,7 @@ export class ConfigurationSession {
     // InvalidStateError and drops the successor straight into a reconnect loop.
     await this.#stopBeingOwner();
     this.#election.stop();
+    this.#terms.dispose();
 
     if (this.#isJoined && this.#withdrawal === undefined) {
       this.transport.detach(this.configuration.name);
@@ -359,27 +383,38 @@ export class ConfigurationSession {
         // While this context holds the lock, any other claim is stale - the lock cannot be held
         // twice (ADR-0005) - and acting on it would hand this context's own writes out again.
         if (!this.#election.isOwner) {
-          this.#writes.handleOwnerChanged();
+          // Proof that the former holder let go of the lock, not that its last words have arrived:
+          // they come from another sender. Its term is waited for (ADR-0026).
+          this.#terms.observe(message.term);
+          this.#writes.dispatchWaiting();
         }
         return;
 
-      case 'owner-released':
-        // The successor's `owner-claimed` is what actually resolves pending writes; this only
-        // records that the port is momentarily unowned so the status reflects it.
-        if (!this.#election.isOwner) {
+      case 'owner-released': {
+        // The term's last message: everything it said about its writes has arrived before it.
+        const wasCurrent = this.#terms.current === message.term;
+        this.#terms.end(message.term);
+        // Only the term holding the port as far as this tab knows leaves it unowned. A goodbye that
+        // arrives after the successor's claim describes nothing any more.
+        if (wasCurrent && !this.#election.isOwner) {
           this.#setStatus(SerialBrokerStatus.Reconnecting);
         }
         return;
+      }
 
       case 'write-request':
-        this.#performWriteForPeer(message.from, message.requestId, message.payload);
+        this.#performWriteForPeer(message.from, message.requestId, message.payload, message.term);
         return;
 
       case 'write-started':
-        this.#writes.markStarted(message.requestId);
+        this.#terms.heard(message.term);
+        this.#writes.markStarted(message.requestId, message.term);
         return;
 
       case 'write-result': {
+        if (message.term !== undefined) {
+          this.#terms.heard(message.term);
+        }
         const error =
           message.ok || message.error === undefined ? undefined : deserializeError(message.error);
 
@@ -387,7 +422,7 @@ export class ConfigurationSession {
         // says so rather than failing it. The write never started, so handing it to whoever
         // owns the port now is not a repeat - and failing the caller because two tabs swapped
         // roles mid-request would be an error about nothing.
-        this.#settleWrite(message.requestId, error);
+        this.#writes.handleResult(message.requestId, message.term, error);
         return;
       }
 
@@ -416,6 +451,11 @@ export class ConfigurationSession {
           // status this tab's port does not have, and hold back every write while it lasted.
           return;
         }
+        if (!this.#terms.observe(message.term)) {
+          // From a term that has ended or been succeeded, arriving late (ADR-0026).
+          return;
+        }
+        this.#terms.heard(message.term);
         if (message.maxTabs !== this.configuration.maxTabs) {
           this.#withdraw(message.maxTabs);
           return;
@@ -485,6 +525,10 @@ export class ConfigurationSession {
       return;
     }
 
+    const term = this.environment.newId('t') as TermId;
+    this.#term = term;
+    this.#lastTerm = term;
+
     this.transport.setOwnership(this.configuration.name, true);
     this.transport.send({
       type: 'owner-claimed',
@@ -492,6 +536,7 @@ export class ConfigurationSession {
       from: this.transport.clientId,
       to: 'all',
       configName: this.configuration.name,
+      term,
     });
 
     const supervisor = new PortSupervisor(
@@ -538,21 +583,22 @@ export class ConfigurationSession {
     this.#supervisor = supervisor;
     supervisor.start();
 
-    // Becoming the owner is also a change of owner, and has to resolve pending writes exactly
-    // as an announcement from a peer would. Whoever held the port before is gone - that is what
-    // freed the lock - so a write already in progress there is unknowable, and one that never
-    // started can now proceed here.
-    this.#writes.handleOwnerChanged();
+    // Becoming the owner is also a change of owner, and has to treat pending writes exactly as an
+    // announcement from a peer would. Whoever held the port before let go of the lock - but what it
+    // said about a write may still be on its way, so its term is waited for (ADR-0026).
+    this.#terms.observe(term);
   }
 
   async #stopBeingOwner(): Promise<void> {
     const supervisor = this.#supervisor;
+    const term = this.#term;
     this.#supervisor = undefined;
+    this.#term = undefined;
     // A later term as owner starts with its own record: a write accepted now has ended, or is
     // turned away as `NOT_CONNECTED`, before this context could write it again.
     this.#acceptedWrites = new AcceptedWrites();
 
-    if (supervisor === undefined) {
+    if (supervisor === undefined || term === undefined) {
       // Not holding the port, so there is no ownership to give up. This matters: the election
       // reports the lock lost after `release()` has already stopped being owner, and by then a
       // session set up again under the same name may hold the port - clearing the transport's
@@ -562,15 +608,39 @@ export class ConfigurationSession {
 
     this.transport.setOwnership(this.configuration.name, false);
 
+    await supervisor.stop();
+    // `owner-released` is the term's last word, and a tab that hears it concludes that a write the
+    // term began and did not answer was lost with it (ADR-0026). So the answers go first: the writes
+    // the port drained have ended, and one still hanging is bounded by its own deadline.
+    await this.#reportsSent();
+
     this.transport.send({
       type: 'owner-released',
       v: PROTOCOL_VERSION,
       from: this.transport.clientId,
       to: 'all',
       configName: this.configuration.name,
+      term,
     });
+    this.#terms.end(term);
+  }
 
-    await supervisor.stop();
+  /** Waits, within `writeTimeoutMs`, until every write performed at the port has been answered. */
+  async #reportsSent(): Promise<void> {
+    if (this.#unreported.size === 0) {
+      return;
+    }
+    try {
+      await withDeadline(Promise.all(this.#unreported), this.environment.clock, {
+        timeoutMs: this.configuration.connection.writeTimeoutMs,
+        code: SerialBrokerErrorCode.WRITE_TIMEOUT,
+        message: 'Timed out while waiting for writes to be answered',
+        configName: this.configuration.name,
+      });
+    } catch {
+      // A write still hanging after the port closed. It is answered when it ends; its issuer has
+      // taken it for lost by then, which is what it is.
+    }
   }
 
   // --- Writes ---------------------------------------------------------------------------------
@@ -582,18 +652,19 @@ export class ConfigurationSession {
    * is the first attempt or a re-dispatch after ownership moved. The decision lives there;
    * this method only knows *how* to send, not *whether* to.
    */
-  #dispatchWrite(requestId: RequestId, payload: Uint8Array): void {
+  #dispatchWrite(requestId: RequestId, payload: Uint8Array, term: TermId): void {
     const supervisor = this.#supervisor;
-    if (this.#election.isOwner && supervisor !== undefined) {
+    if (this.#election.isOwner && supervisor !== undefined && term === this.#term) {
       // Straight to the port, with no round trip across the bus - but through the same record as
       // a peer's write: a late `NOT_CONNECTED` from a former owner hands this write on again, and
-      // it may already be queued here.
+      // it may already be queued here. A write that found no open connection never started, so it
+      // goes back to wait for the next one, in the tab holding the port exactly as in any other.
       this.#performWrite(supervisor, this.transport.clientId, requestId, payload, {
         started: () => {
-          this.#writes.markStarted(requestId);
+          this.#writes.markStarted(requestId, term);
         },
         finished: (error) => {
-          this.#settleWrite(requestId, error);
+          this.#writes.handleResult(requestId, term, error);
         },
       });
       return;
@@ -607,38 +678,36 @@ export class ConfigurationSession {
       configName: this.configuration.name,
       requestId,
       payload,
+      term,
     });
   }
 
-  /**
-   * Settles a write this context issued, wherever it was performed.
-   *
-   * A write that found no open connection never started, so it goes back to wait for the next
-   * connection instead of failing - in the tab holding the port exactly as in any other. If it has
-   * begun all the same, it did so with another owner - this answer came late from a former one -
-   * and that owner's answer, or the next owner change, is what settles it.
-   */
-  #settleWrite(requestId: RequestId, error: SerialBrokerError | undefined): void {
-    if (error?.code === SerialBrokerErrorCode.NOT_CONNECTED) {
-      this.#writes.redispatch(requestId);
-      return;
-    }
-    this.#writes.settle(requestId, error);
-  }
-
   /** The owner path for someone else's write. */
-  #performWriteForPeer(origin: ClientId, requestId: RequestId, payload: Uint8Array): void {
+  #performWriteForPeer(
+    origin: ClientId,
+    requestId: RequestId,
+    payload: Uint8Array,
+    requestedTerm: TermId,
+  ): void {
     const supervisor = this.#supervisor;
-    if (supervisor === undefined) {
-      // Ownership moved between the peer sending and this message arriving. Saying so lets
-      // the originator re-send to whoever owns it now, rather than waiting out its deadline.
+    const term = this.#term;
+    if (supervisor === undefined || term === undefined || requestedTerm !== term) {
+      // Ownership moved between the peer sending and this message arriving, or the request was
+      // meant for another term: that term may be writing it, so this one must not (ADR-0026).
+      // Saying so lets the originator hand it on once it is safe to, rather than waiting out its
+      // deadline.
       this.#sendWriteResult(
         origin,
         requestId,
+        term ?? this.#lastTerm,
         new SerialBrokerError(
           SerialBrokerErrorCode.NOT_CONNECTED,
-          'This context no longer owns the port',
-          { configName: this.configuration.name, timestamp: this.environment.clock.now() },
+          'This context does not hold the port in the term the write was addressed to',
+          {
+            configName: this.configuration.name,
+            context: { requestedTerm, term },
+            timestamp: this.environment.clock.now(),
+          },
         ),
       );
       return;
@@ -653,10 +722,11 @@ export class ConfigurationSession {
           to: origin,
           configName: this.configuration.name,
           requestId,
+          term,
         });
       },
       finished: (error) => {
-        this.#sendWriteResult(origin, requestId, error);
+        this.#sendWriteResult(origin, requestId, term, error);
       },
     });
   }
@@ -685,7 +755,7 @@ export class ConfigurationSession {
       return;
     }
 
-    void supervisor.write(payload, report.started).then(
+    const reported = supervisor.write(payload, report.started).then(
       () => {
         accepted.finish(origin, requestId, undefined);
         this.#announceSent(payload, origin);
@@ -697,11 +767,17 @@ export class ConfigurationSession {
         report.finished(failure);
       },
     );
+    // Kept until answered, so that the term's `owner-released` can follow every answer (ADR-0026).
+    this.#unreported.add(reported);
+    void reported.finally(() => {
+      this.#unreported.delete(reported);
+    });
   }
 
   #sendWriteResult(
     origin: ClientId,
     requestId: RequestId,
+    term: TermId | undefined,
     error: SerialBrokerError | undefined,
   ): void {
     this.transport.send({
@@ -713,6 +789,7 @@ export class ConfigurationSession {
       requestId,
       ok: error === undefined,
       error: error?.toJSON(),
+      term,
     });
   }
 
@@ -791,6 +868,7 @@ export class ConfigurationSession {
     // Told to every tab, the one holding the port included, before this tab leaves the bus.
     this.#emitError(conflict);
     this.#writes.failAll(conflict);
+    this.#terms.dispose();
     this.#election.stop();
     this.transport.detach(this.configuration.name);
     this.#slot?.stop();
@@ -808,6 +886,12 @@ export class ConfigurationSession {
   }
 
   #broadcastStatus(status: SerialBrokerStatus): void {
+    const term = this.#term;
+    if (term === undefined) {
+      // Holding the lock without holding the port: released while the lock was being granted. There
+      // is no status of a port to state.
+      return;
+    }
     this.transport.send({
       type: 'status',
       v: PROTOCOL_VERSION,
@@ -816,6 +900,7 @@ export class ConfigurationSession {
       configName: this.configuration.name,
       status,
       maxTabs: this.configuration.maxTabs,
+      term,
       timestamp: this.environment.clock.now(),
     });
   }

@@ -3,7 +3,7 @@ import { describeUnknown, isSerializedError } from '../core/errors.js';
 
 import { isParticipantDiagnostics } from './decode-diagnostics.js';
 import { isFiniteNumber, isNonEmptyString, isRecord, isStatus, isTabLimit } from './guards.js';
-import type { ClientId, MessageTarget, ProtocolMessage, RequestId } from './messages.js';
+import type { ClientId, MessageTarget, ProtocolMessage, RequestId, TermId } from './messages.js';
 import { PROTOCOL_VERSION } from './version.js';
 
 /**
@@ -121,10 +121,15 @@ function decodeChecked(raw: unknown): DecodeResult {
 
     case 'attach':
     case 'detach':
-    case 'owner-claimed':
-    case 'owner-released':
     case 'status-request':
       return isNonEmptyString(raw['configName']) ? accepted(raw) : malformed(type, 'configName');
+
+    case 'owner-claimed':
+    case 'owner-released':
+      if (!isNonEmptyString(raw['configName'])) {
+        return malformed(type, 'configName');
+      }
+      return isNonEmptyString(raw['term']) ? accepted(raw) : malformed(type, 'term');
 
     case 'write-request': {
       if (!isNonEmptyString(raw['configName'])) {
@@ -137,6 +142,9 @@ function decodeChecked(raw: unknown): DecodeResult {
       if (payload === undefined) {
         return malformed(type, 'payload');
       }
+      if (!isNonEmptyString(raw['term'])) {
+        return malformed(type, 'term');
+      }
       return {
         ok: true,
         message: {
@@ -147,6 +155,7 @@ function decodeChecked(raw: unknown): DecodeResult {
           configName: raw['configName'],
           requestId: raw['requestId'] as RequestId,
           payload,
+          term: raw['term'] as TermId,
         },
       };
     }
@@ -155,7 +164,10 @@ function decodeChecked(raw: unknown): DecodeResult {
       if (!isNonEmptyString(raw['configName'])) {
         return malformed(type, 'configName');
       }
-      return isNonEmptyString(raw['requestId']) ? accepted(raw) : malformed(type, 'requestId');
+      if (!isNonEmptyString(raw['requestId'])) {
+        return malformed(type, 'requestId');
+      }
+      return isNonEmptyString(raw['term']) ? accepted(raw) : malformed(type, 'term');
 
     case 'write-result': {
       if (!isNonEmptyString(raw['configName'])) {
@@ -171,6 +183,10 @@ function decodeChecked(raw: unknown): DecodeResult {
       // nothing to report, which is worse than dropping the message.
       if (!raw['ok'] && !isSerializedError(raw['error'])) {
         return malformed(type, 'error');
+      }
+      // Optional: a tab that never held the port has no term to answer with.
+      if (raw['term'] !== undefined && !isNonEmptyString(raw['term'])) {
+        return malformed(type, 'term');
       }
       return accepted(raw);
     }
@@ -243,6 +259,9 @@ function decodeChecked(raw: unknown): DecodeResult {
       }
       if (!isTabLimit(raw['maxTabs'])) {
         return malformed(type, 'maxTabs');
+      }
+      if (!isNonEmptyString(raw['term'])) {
+        return malformed(type, 'term');
       }
       return isFiniteNumber(raw['timestamp']) ? accepted(raw) : malformed(type, 'timestamp');
 

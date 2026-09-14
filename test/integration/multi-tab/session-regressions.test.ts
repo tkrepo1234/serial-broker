@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { FORMER_OWNER_GRACE_MS } from '../../../src/client/owner-terms.js';
 import type { SerialBrokerClient } from '../../../src/client/serial-broker-client.js';
 import { BrowserHarness, TRANSPORT_MODES } from '../../harness/browser-harness.js';
 import { READER, READER_OPTIONS } from '../../harness/devices.js';
@@ -67,7 +68,8 @@ describe.each(TRANSPORT_MODES)('the tab that holds the port (%s)', (transport) =
     // second waits behind it. Then the old answers arrive.
     device.faults.hangOnWrite = true;
     await first.kill();
-    await harness.advance(0);
+    // The first tab crashed, so its term is waited for before the writes handed to it go elsewhere.
+    await harness.advance(FORMER_OWNER_GRACE_MS);
     expect(queuedWritesAt(busy.client)).toBe(2);
     busy.deliverHeld();
     await harness.settle();

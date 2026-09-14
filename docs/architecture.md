@@ -90,15 +90,18 @@ granted it. There is no timeout to tune and no cooperation required from the dep
 This is the single most important property of the design; see
 [ADR-0005](./adr/0005-owner-election-via-web-locks.md).
 
-The new owner announces itself with `owner-claimed`. That message doubles as the death notice
-for the previous owner: the lock cannot be granted while it is held, so a new owner existing
-is proof that the old one is not writing.
+The new owner announces itself with `owner-claimed`. The lock cannot be granted while it is held,
+so a new owner existing is proof that the old one is not writing any more - but not that the old
+one's last messages have arrived, since they come from another sender. So every time of holding
+the port is a term with an identifier, named in the messages about ownership, writes and status,
+and the old term ends when its `owner-released` arrives or, after a crash, when it has been silent
+for a grace period ([ADR-0026](./adr/0026-attribute-messages-to-a-term-of-holding-the-port.md)).
 
 ### 2. A write belongs to the context that issued it
 
 Not to the broker. The issuing context holds the request, marks it non-replayable when the
-owner reports it has begun writing, and resolves it when a result arrives — or when a _new_
-owner announces itself, which means the previous one is gone.
+owner reports it has begun writing, and resolves it when a result arrives — or when the term of
+the owner it was handed to has ended without one.
 
 That placement is what makes the two transports behave identically and what makes the
 guarantee testable:

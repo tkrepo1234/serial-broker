@@ -21,7 +21,7 @@ because of a decision references it in a comment (`// See ADR-0005.`).
 | [0010](./0010-reconnect-supervision-and-backoff.md)                   | Supervise the connection with bounded exponential backoff                           | Accepted                    |
 | [0011](./0011-encapsulation-boundary.md)                              | Expose nothing about the coordination mechanism                                     | Amended by 0018, 0025       |
 | [0012](./0012-error-model.md)                                         | One error type, stable codes, mandatory remediation                                 | Accepted                    |
-| [0013](./0013-write-ordering-and-delivery-semantics.md)               | Per-participant write ordering with at-most-once delivery                           | Accepted                    |
+| [0013](./0013-write-ordering-and-delivery-semantics.md)               | Per-participant write ordering with at-most-once delivery                           | Amended by 0026             |
 | [0014](./0014-dependency-injection-of-the-environment.md)             | Inject the browser environment for testability                                      | Accepted                    |
 | [0015](./0015-text-and-binary-payloads.md)                            | Deliver bytes, offer text as a configured convenience                               | Accepted                    |
 | [0016](./0016-non-usb-devices.md)                                     | Support ports that are not USB devices                                              | Accepted                    |
@@ -34,4 +34,5 @@ because of a decision references it in a comment (`// See ADR-0005.`).
 | [0023](./0023-announce-the-protocol-version.md)                       | Announce the protocol version on an unversioned channel                             | Accepted                    |
 | [0024](./0024-keep-the-worker-handshake-version-independent.md)       | Keep the handshake with the worker readable by every protocol version               | Accepted                    |
 | [0025](./0025-limit-the-tabs-using-a-configuration.md)                | Limit how many tabs use a configuration at once                                     | Accepted                    |
+| [0026](./0026-attribute-messages-to-a-term-of-holding-the-port.md)    | Attribute ownership, write and status messages to a term of holding the port        | Accepted                    |
 | [0027](./0027-keep-a-remembered-configuration-while-a-tab-runs-it.md) | Keep a remembered configuration while any tab runs it                               | Accepted                    |

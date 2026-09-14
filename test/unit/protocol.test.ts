@@ -76,6 +76,7 @@ describe('decodeMessage', () => {
       configName: 'Reader',
       requestId: 'w-1' as RequestId,
       payload: new Uint8Array([1, 2, 3]).buffer,
+      term: 't-1',
     });
 
     expect(result.ok).toBe(true);
@@ -83,6 +84,30 @@ describe('decodeMessage', () => {
       expect(result.message.payload).toBeInstanceOf(Uint8Array);
       expect([...result.message.payload]).toEqual([1, 2, 3]);
     }
+  });
+
+  it.each([
+    ['an ownership claim', { type: 'owner-claimed', configName: 'Reader' }],
+    ['an ownership release', { type: 'owner-released', configName: 'Reader' }],
+    ['a write start', { type: 'write-started', configName: 'Reader', requestId: 'w-1' }],
+    [
+      'a status',
+      { type: 'status', configName: 'Reader', status: 'open', maxTabs: 1, timestamp: 1 },
+    ],
+  ])('rejects %s that names no term (ADR-0026)', (_label, fields) => {
+    expect(decodeMessage({ ...ENVELOPE, ...fields }).ok).toBe(false);
+  });
+
+  it('accepts a write result without a term, from a tab that never held the port', () => {
+    const result = decodeMessage({
+      ...ENVELOPE,
+      type: 'write-result',
+      configName: 'Reader',
+      requestId: 'w-1',
+      ok: true,
+    });
+
+    expect(result.ok).toBe(true);
   });
 
   it('rejects a failed write result that carries no error', () => {
