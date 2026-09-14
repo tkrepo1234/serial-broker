@@ -4,7 +4,11 @@ import { SerialBrokerClient } from '../../src/client/serial-broker-client.js';
 import { SerialBrokerErrorCode } from '../../src/core/error-codes.js';
 import { NOOP_LOGGER, ScopedLogger } from '../../src/core/logger.js';
 import { SerialBrokerStatus } from '../../src/core/types.js';
-import type { SerialLike } from '../../src/environment/environment.js';
+import type {
+  SerialLike,
+  SerialOptionsLike,
+  SerialPortLike,
+} from '../../src/environment/environment.js';
 import { OwnershipElection } from '../../src/owner/election.js';
 import { ownerLockName } from '../../src/protocol/version.js';
 import { BrowserHarness, VirtualTab } from '../harness/browser-harness.js';
@@ -58,7 +62,7 @@ function openSlowTab(
   };
   const environment = harness.createEnvironment(id);
   const serial = environment.serial;
-  const patched = new WeakSet<SerialPort>();
+  const patched = new WeakSet<SerialPortLike>();
 
   const wait = async (delayMs: number): Promise<void> => {
     if (delayMs > 0) {
@@ -87,7 +91,7 @@ function openSlowTab(
         const open = port.open.bind(port);
         const close = port.close.bind(port);
         Object.assign(port, {
-          open: async (options: SerialOptions) => {
+          open: async (options: SerialOptionsLike) => {
             await open(options);
             await wait(timing.openDelayMs);
           },

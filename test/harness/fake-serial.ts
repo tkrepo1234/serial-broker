@@ -1,4 +1,8 @@
-import type { SerialLike } from '../../src/environment/environment.js';
+import type {
+  SerialLike,
+  SerialPortLike,
+  SerialPortRequestOptionsLike,
+} from '../../src/environment/environment.js';
 
 /** How a simulated device misbehaves. Every field is a failure a real adapter produces. */
 export interface DeviceFaults {
@@ -389,7 +393,7 @@ export class FakeSerialRegistry {
         // call is made.
         const listed = [...this.#granted]
           .filter((device) => device.isAttached)
-          .map((device) => this.#portFor(contextId, device) as unknown as SerialPort);
+          .map((device) => this.#portFor(contextId, device) as unknown as SerialPortLike);
         this.onListingPorts?.();
         await Promise.resolve();
         return listed;
@@ -403,7 +407,7 @@ export class FakeSerialRegistry {
           throw domException('NotFoundError', 'No port selected by the user');
         }
         this.#granted.add(chosen);
-        return this.#portFor(contextId, chosen) as unknown as SerialPort;
+        return this.#portFor(contextId, chosen) as unknown as SerialPortLike;
       },
 
       addEventListener: (type, listener) => {
@@ -477,7 +481,7 @@ export class FakeSerialRegistry {
 }
 
 /** `true` if the picker lists a device for these request options, as the browser decides it. */
-function isOffered(device: FakeDevice, options: SerialPortRequestOptions | undefined): boolean {
+function isOffered(device: FakeDevice, options: SerialPortRequestOptionsLike | undefined): boolean {
   const filters = options?.filters;
   if (filters === undefined || filters.length === 0) {
     return true;

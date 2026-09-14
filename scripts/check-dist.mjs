@@ -9,13 +9,13 @@
  *   by its script URL (ADR-0006): a minified build that started a worker of its own would leave its
  *   tabs unable to coordinate with tabs on the readable build.
  * - A minified file is smaller than its readable counterpart.
- * - The declarations every entry point names type-check without the Web Serial types, which the
- *   package cannot make an application install.
+ * - Every declaration the build emitted - not only the ones an entry point names - type-checks
+ *   without the Web Serial types, which the package cannot make an application install.
  *
  * Run by `npm run build`, last. Fails the build with a list of what is wrong.
  */
 
-import { existsSync, readFileSync, statSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -109,38 +109,35 @@ for (const { file, bytes, gzip } of sizes) {
 process.stdout.write('The build matches the package exports.\n');
 
 /**
- * Type-checks every published declaration entry point the way a strict application does.
+ * Type-checks every published declaration the way a strict application does.
  *
  * `skipLibCheck: false`, no `@types` packages and only the `ES2022` and `DOM` libraries: an
  * application that has not installed `@types/w3c-web-serial` must be able to type-check against
- * the package. A declaration reachable from an entry point that names `SerialPort` or another Web
- * Serial type fails here, where the repository's own configuration, which loads those types, would
- * not notice it.
+ * the package. A declaration that names `SerialPort` or another Web Serial type fails here, where
+ * the repository's own configuration, which loads those types, would not notice it.
+ *
+ * Every `.d.ts` under dist/ is checked, not only the ones the entry points reach: a file that no
+ * export names today is one an import of a deep path reaches tomorrow, and `skipLibCheck: false`
+ * in an application checks the lot. dist/debug/ is excluded - it is a page, not a module (ADR-0019).
  *
  * @returns One problem per diagnostic.
  */
 async function checkDeclarations() {
   const { default: ts } = await import('typescript');
-  const entries = new Set(
-    [
-      packageJson.types,
-      ...exportTargets(packageJson.exports),
-      ...exportTargets(packageJson.typesVersions),
-    ].filter((target) => target.endsWith('.d.ts')),
-  );
-  const program = ts.createProgram(
-    [...entries].map((entry) => join(root, entry)),
-    {
-      target: ts.ScriptTarget.ES2022,
-      module: ts.ModuleKind.NodeNext,
-      moduleResolution: ts.ModuleResolutionKind.NodeNext,
-      lib: ['lib.es2022.d.ts', 'lib.dom.d.ts'],
-      types: [],
-      strict: true,
-      skipLibCheck: false,
-      noEmit: true,
-    },
-  );
+  const entries = declarationFiles(join(root, 'dist'));
+  if (entries.length === 0) {
+    return ['the build produced no declaration files'];
+  }
+  const program = ts.createProgram(entries, {
+    target: ts.ScriptTarget.ES2022,
+    module: ts.ModuleKind.NodeNext,
+    moduleResolution: ts.ModuleResolutionKind.NodeNext,
+    lib: ['lib.es2022.d.ts', 'lib.dom.d.ts'],
+    types: [],
+    strict: true,
+    skipLibCheck: false,
+    noEmit: true,
+  });
   return ts.getPreEmitDiagnostics(program).map((diagnostic) => {
     const text = ts.flattenDiagnosticMessageText(diagnostic.messageText, ' ');
     if (diagnostic.file === undefined || diagnostic.start === undefined) {
@@ -150,6 +147,22 @@ async function checkDeclarations() {
     const file = diagnostic.file.fileName.slice(root.length + 1);
     return `declarations: ${file}:${String(line + 1)}: ${text}`;
   });
+}
+
+/** Every `.d.ts` under `directory`, recursively, except the debugging surface's. */
+function declarationFiles(directory) {
+  const found = [];
+  for (const entry of readdirSync(directory, { withFileTypes: true })) {
+    const path = join(directory, entry.name);
+    if (entry.isDirectory()) {
+      if (entry.name !== 'debug') {
+        found.push(...declarationFiles(path));
+      }
+    } else if (entry.name.endsWith('.d.ts')) {
+      found.push(path);
+    }
+  }
+  return found;
 }
 
 /** Every file path named anywhere in an `exports` map, conditions included. */

@@ -26,9 +26,9 @@ import {
  *
  * The same check as {@link SerialBrokerApi.isSupported}, callable without the singleton.
  *
- * A function of its own rather than a re-export of the environment's: the published declaration
- * of a re-export imports the declarations of the module it comes from, and those name the Web
- * Serial types, which an application need not have installed.
+ * A function of its own rather than a re-export of the environment's: the published declaration of
+ * a re-export imports the declarations of the module it comes from, and the environment is the
+ * injection seam this library reserves the right to change (ADR-0014).
  */
 export function isSupported(): boolean {
   return isPlatformSupported();

@@ -8,7 +8,11 @@ import { SerialBrokerErrorCode } from '../core/error-codes.js';
 import { describeUnknown, SerialBrokerError } from '../core/errors.js';
 import type { ScopedLogger } from '../core/logger.js';
 import { SerialBrokerStatus } from '../core/types.js';
-import type { SerialBrokerEnvironment } from '../environment/environment.js';
+import type {
+  SerialOptionsLike,
+  SerialPortLike,
+  SerialBrokerEnvironment,
+} from '../environment/environment.js';
 
 import { findGrantedPort, matchesDevice, toRequestOptions } from './port-matcher.js';
 import { mapOpenError, mapRequestPortError } from './serial-errors.js';
@@ -36,13 +40,13 @@ type ConnectionState =
   | { readonly kind: 'listing' }
   | {
       readonly kind: 'opening';
-      readonly port: SerialPort;
+      readonly port: SerialPortLike;
       /** The platform's `open()`, which may outlive the attempt that started it. */
       readonly opened: Promise<void>;
     }
   | {
       readonly kind: 'open';
-      readonly port: SerialPort;
+      readonly port: SerialPortLike;
       readonly reader: ReadableStreamDefaultReader<Uint8Array>;
       readonly writer: WritableStreamDefaultWriter<Uint8Array>;
       readonly decoder: TextDecoder | undefined;
@@ -84,7 +88,7 @@ export class PortSupervisor {
    * Device events name a port, and only an event for this one concerns this connection: an
    * `any` filter, or two identical adapters, match ports this supervisor has nothing to do with.
    */
-  #foundPort: SerialPort | undefined;
+  #foundPort: SerialPortLike | undefined;
   /**
    * The platform reported {@link #foundPort} unplugged, and has not reported a device plugged in
    * since.
@@ -211,7 +215,7 @@ export class PortSupervisor {
    *   `USER_GESTURE_REQUIRED` if the call was not made during a gesture.
    */
   async requestAccess(): Promise<void> {
-    let port: SerialPort;
+    let port: SerialPortLike;
     try {
       port = await this.environment.serial.requestPort(toRequestOptions(this.configuration));
     } catch (error) {
@@ -450,7 +454,7 @@ export class PortSupervisor {
    *   `null` target, which the platform should never produce, is taken to be that port, because
    *   a missed disconnect stalls a connection and a spurious one costs a reconnect.
    */
-  handleDeviceDisconnected(port: SerialPort | null): void {
+  handleDeviceDisconnected(port: SerialPortLike | null): void {
     const found = this.#foundPort;
     if (found === undefined || (port !== null && port !== found)) {
       return;
@@ -504,7 +508,7 @@ export class PortSupervisor {
       }
     }
 
-    let port: SerialPort | undefined;
+    let port: SerialPortLike | undefined;
     do {
       this.#deviceConnectedWhileListing = false;
       try {
@@ -685,7 +689,7 @@ export class PortSupervisor {
     return this.#foundPortDetached;
   }
 
-  #openOptions(): SerialOptions {
+  #openOptions(): SerialOptionsLike {
     const serial = this.configuration.serial;
     return {
       baudRate: serial.baudRate,

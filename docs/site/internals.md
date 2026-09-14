@@ -41,6 +41,12 @@ An import cycle fails the lint. Library code reaches `navigator`, `window`, `loc
 timer functions only through the injected environment, and a lint rule enforces that too
 [ADR-0014]. It is what lets the test suite run many simulated tabs in one process.
 
+The environment describes each of those APIs in types of its own — `SerialLike`, `SerialPortLike`,
+`LockManagerLike`, `KeyValueStorage`, `Clock` — naming no ambient Web Serial type, so that nothing
+this package publishes needs `@types/w3c-web-serial`. `scripts/check-dist.mjs` type-checks every
+emitted `.d.ts` without those types after each build, and the platform's objects satisfy the
+interfaces as they are [ADR-0014, amended].
+
 ## Ownership
 
 For each configuration, every tab that has set it up requests the Web Lock

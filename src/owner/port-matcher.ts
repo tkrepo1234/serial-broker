@@ -1,6 +1,10 @@
 import type { NormalizedConfiguration } from '../core/defaults.js';
 import type { ScopedLogger } from '../core/logger.js';
-import type { SerialLike } from '../environment/environment.js';
+import type {
+  SerialLike,
+  SerialPortLike,
+  SerialPortRequestOptionsLike,
+} from '../environment/environment.js';
 
 /**
  * Finds the port matching a configuration among those the user has already granted.
@@ -15,7 +19,7 @@ export async function findGrantedPort(
   serial: SerialLike,
   configuration: NormalizedConfiguration,
   logger: ScopedLogger,
-): Promise<SerialPort | undefined> {
+): Promise<SerialPortLike | undefined> {
   const ports = await serial.getPorts();
   const matches = ports.filter((port) => matchesDevice(port, configuration));
 
@@ -52,7 +56,10 @@ export async function findGrantedPort(
  * information at all — a built-in RS-232 interface, a virtual COM port pair, a Bluetooth
  * serial profile. See ADR-0016.
  */
-export function matchesDevice(port: SerialPort, configuration: NormalizedConfiguration): boolean {
+export function matchesDevice(
+  port: SerialPortLike,
+  configuration: NormalizedConfiguration,
+): boolean {
   if (configuration.device.kind === 'any') {
     return true;
   }
@@ -74,7 +81,9 @@ export function matchesDevice(port: SerialPort, configuration: NormalizedConfigu
  * An `any` filter passes no `filters` at all, because a non-USB port cannot be described by
  * one — and passing an empty array would hide exactly the ports it is meant to find.
  */
-export function toRequestOptions(configuration: NormalizedConfiguration): SerialPortRequestOptions {
+export function toRequestOptions(
+  configuration: NormalizedConfiguration,
+): SerialPortRequestOptionsLike {
   if (configuration.device.kind === 'any') {
     return {};
   }

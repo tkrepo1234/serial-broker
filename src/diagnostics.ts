@@ -29,8 +29,8 @@ import { createBrowserEnvironment } from './environment/browser.js';
  * milliseconds.
  *
  * Declared here rather than re-exported from the observer: the published declaration of a
- * re-export imports the observer's declarations, and through them the Web Serial types, which an
- * application need not have installed.
+ * re-export imports the observer's declarations, and with them internals that are no part of this
+ * entry point's surface.
  */
 export const DEFAULT_COLLECT_WINDOW_MS = OBSERVER_COLLECT_WINDOW_MS;
 export {
