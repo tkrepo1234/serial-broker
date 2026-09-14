@@ -70,7 +70,9 @@ const EXPLANATION: Readonly<Record<SerialBrokerStatus, string>> = {
   connecting: 'Opening the port.',
   open: 'Connected. With maxTabs: 1, this is the only tab using the device.',
   reconnecting: 'The connection was lost. serial-broker is reconnecting by itself; nothing to do.',
-  failed: 'Gave up. The error below says why, and "Use the device again" tries once more.',
+  failed:
+    'Stopped, and the error below says why. "Use the device again" releases the device in this ' +
+    'tab and sets it up anew.',
   released:
     'This tab has released the device. A tab that was waiting takes over now. "Use the device ' +
     'again" joins the queue.',
@@ -211,10 +213,19 @@ const onError = (event: ErrorEvent): void => {
  * events tell the rest. The subscriptions are made after it, because a configuration that is not
  * set up has nothing to subscribe to, and they end with the configuration when it is released -
  * hence this runs again for "Use the device again".
+ *
+ * A configuration that shows `failed` is still set up, and `setup()` does nothing for a name that
+ * is set up with the same options - re-running the connection would interrupt a working port. So
+ * a configuration that still exists is released first, which ends the failed attempt, and the
+ * `setup()` after it starts over. That is the library's own remediation for
+ * `CONFIGURATION_CONFLICT` and `RECONNECT_EXHAUSTED`: release, then set up again.
  */
 async function useTheDevice(): Promise<void> {
   hideError();
   try {
+    if (SerialBroker.exists(CONFIGURATION)) {
+      await SerialBroker.release(CONFIGURATION);
+    }
     await SerialBroker.setup(CONFIGURATION, OPTIONS);
   } catch (error) {
     renderStatus('failed');
@@ -261,8 +272,15 @@ elements.release.addEventListener('click', () => {
     });
 });
 
+/**
+ * Starts over: after `released` this joins the queue behind whoever took over; after `failed` it
+ * releases the failed configuration and sets it up anew.
+ */
 elements.setup.addEventListener('click', () => {
-  void useTheDevice();
+  elements.setup.disabled = true;
+  void useTheDevice().finally(() => {
+    elements.setup.disabled = false;
+  });
 });
 
 elements.openSecondTab.addEventListener('click', () => {
