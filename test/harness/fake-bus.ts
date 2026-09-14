@@ -20,6 +20,20 @@ import type { FakeClock } from './fake-clock.js';
 type MessageListener = (event: { readonly data: unknown }) => void;
 
 /**
+ * What crossed the bus, counted where a browser pays for it.
+ *
+ * `sent` is every message a context handed to the bus - heartbeats and handshakes included, which
+ * the transports exchange below the client. `delivered` is every arrival at a context: one per
+ * receiving context, each a structured clone in a browser, so a broadcast to nine peers is one
+ * sent and nine delivered. Only what actually arrives is counted, not what was posted to a
+ * closed port or a dead context.
+ */
+export interface BusMeter {
+  sent: number;
+  delivered: number;
+}
+
+/**
  * Delivers a message the way `postMessage` does.
  *
  * Two properties are copied deliberately. Delivery is **asynchronous**, so a test cannot
@@ -45,8 +59,16 @@ function deliver(listener: MessageListener, message: unknown): void {
 class FakeWorkerPort implements WorkerPort {
   #isOpen = true;
 
-  /** @param toOtherEnd - Receives, asynchronously and cloned, what the worker posts. */
-  constructor(private readonly toOtherEnd: (data: unknown) => void) {}
+  /**
+   * @param toOtherEnd - Receives, asynchronously and cloned, what the worker posts.
+   * @param meter - Counts what arrives at the other end.
+   * @param onClose - Told once, when either end closes the port.
+   */
+  constructor(
+    private readonly toOtherEnd: (data: unknown) => void,
+    private readonly meter: BusMeter,
+    private readonly onClose: (port: FakeWorkerPort) => void = () => undefined,
+  ) {}
 
   postMessage(message: unknown): void {
     if (!this.#isOpen) {
@@ -57,13 +79,18 @@ class FakeWorkerPort implements WorkerPort {
       // posting and the message arriving. A browser simply drops it; a harness that delivered it
       // anyway would let a dead tab keep participating and hide the races these tests exist to find.
       if (this.#isOpen) {
+        this.meter.delivered += 1;
         this.toOtherEnd(event.data);
       }
     }, message);
   }
 
   close(): void {
+    if (!this.#isOpen) {
+      return;
+    }
     this.#isOpen = false;
+    this.onClose(this);
   }
 
   get isOpen(): boolean {
@@ -94,10 +121,12 @@ export class FakeWorkerHost {
   /**
    * @param logger - Receives the worker's own records, which a real worker has no way to hand to a
    *   tab. For tests that assert on them.
+   * @param meter - Counts what crosses this worker's ports.
    */
   constructor(
     private readonly clock: FakeClock,
     logger: Logger = NOOP_LOGGER,
+    private readonly meter: BusMeter = { sent: 0, delivered: 0 },
   ) {
     this.#ports = new WorkerPorts({
       logger: new ScopedLogger(logger, {}),
@@ -146,7 +175,12 @@ export class FakeWorkerHost {
    * @returns The worker's end, to hand what the tab posts to {@link FakeWorkerHost.send}.
    */
   connect(toTab: (data: unknown) => void): FakeWorkerPort {
-    const port = new FakeWorkerPort(toTab);
+    // A closed port is let go of, as a browser lets go of the port of a context that is gone: a
+    // host that kept every port ever connected would hold every dead tab's client with it, and
+    // a measurement of what the library keeps would be measuring the harness.
+    const port = new FakeWorkerPort(toTab, this.meter, (closed) => {
+      this.#allPorts.delete(closed);
+    });
     if (this.#isCrashed) {
       port.close();
     } else {
@@ -160,6 +194,7 @@ export class FakeWorkerHost {
     if (this.#isCrashed || !port.isOpen) {
       return;
     }
+    this.meter.sent += 1;
     this.#ports.receive(port, raw);
   }
 
@@ -180,6 +215,9 @@ export class FakeWorkerHost {
 export class FakeBroadcastHub {
   readonly #channels = new Map<string, Set<{ id: string; listeners: MessageListener[] }>>();
 
+  /** @param meter - Counts what is posted and what arrives. */
+  constructor(private readonly meter: BusMeter = { sent: 0, delivered: 0 }) {}
+
   create(name: string, contextId: string): BroadcastChannelLike {
     // Every listener registered on a channel hears each message, as on the platform: keeping only
     // the last one would hide a listener registered twice, or one replaced by mistake.
@@ -190,6 +228,7 @@ export class FakeBroadcastHub {
 
     return {
       postMessage: (message) => {
+        this.meter.sent += 1;
         for (const peer of set) {
           // A real BroadcastChannel never delivers to the context that posted.
           if (peer.id === contextId) {
@@ -200,6 +239,7 @@ export class FakeBroadcastHub {
           // the dead. Delivering it anyway would let a killed tab keep writing to the device.
           deliver((event) => {
             if (set.has(peer)) {
+              this.meter.delivered += 1;
               for (const listener of peer.listeners) {
                 listener(event);
               }
@@ -272,7 +312,9 @@ export type WorkerScript = 'loads' | 'fails' | 'other-version';
  * rather than an untested branch (ADR-0007).
  */
 export class FakeBus {
-  readonly broadcastHub = new FakeBroadcastHub();
+  /** What crossed the bus so far, on either transport and through every worker started. */
+  readonly meter: BusMeter = { sent: 0, delivered: 0 };
+  readonly broadcastHub = new FakeBroadcastHub(this.meter);
 
   #workerHost: FakeWorkerHost;
   #workerScript: WorkerScript;
@@ -293,7 +335,7 @@ export class FakeBus {
     readonly clock: FakeClock,
   ) {
     this.#workerScript = workerScript;
-    this.#workerHost = new FakeWorkerHost(clock);
+    this.#workerHost = new FakeWorkerHost(clock, NOOP_LOGGER, this.meter);
   }
 
   /** In `sharedworker` mode, the script the browser runs for a worker started now. */
@@ -325,7 +367,7 @@ export class FakeBus {
    */
   crashWorker(restartsAs: WorkerScript = this.#workerScript): void {
     this.#workerHost.crash();
-    this.#workerHost = new FakeWorkerHost(this.clock);
+    this.#workerHost = new FakeWorkerHost(this.clock, NOOP_LOGGER, this.meter);
     this.#workerScript = restartsAs;
   }
 
@@ -349,7 +391,24 @@ export class FakeBus {
     for (const port of this.#workerEnds.get(contextId) ?? []) {
       port.close();
     }
+    // Nothing of a dead context's is kept: its ports are closed, and with them goes the last
+    // reference the bus held to its client.
+    this.#workerEnds.delete(contextId);
     this.broadcastHub.killContext(contextId);
+  }
+
+  /**
+   * Lets go of a context that closed after cleaning up, as the browser lets go of a closed tab.
+   *
+   * Its ports to the worker are closed - the transport said goodbye first, so the worker has
+   * already let go of its end - and dropped. Unlike {@link FakeBus.killContext} nothing is cut off:
+   * a closed context has nothing left to send.
+   */
+  forgetContext(contextId: string): void {
+    for (const port of this.#workerEnds.get(contextId) ?? []) {
+      port.close();
+    }
+    this.#workerEnds.delete(contextId);
   }
 
   #createWorkerTransport(contextId: string, tabRequest: TransportRequest): Transport {

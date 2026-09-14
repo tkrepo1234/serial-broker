@@ -240,6 +240,15 @@ export class FakeSerialPort {
         if (this.device.writeGate !== undefined) {
           await this.device.writeGate;
         }
+        // Checked after the wait, not only before: the browser closes the port of a context that
+        // died while a write was waiting, and nothing of that context's reaches the device
+        // afterwards. The harness cannot stop a killed tab's code from running on, so the port
+        // has to refuse it here - or a dead owner's queue would drain into the device next to
+        // its successor's, and a test of at-most-once delivery would fail for a reason that is
+        // the harness's.
+        if (!this.#isOpen) {
+          throw domException('InvalidStateError', 'The port is closed');
+        }
         if (this.device.faults.hangOnWrite === true) {
           await new Promise<never>(() => {
             /* intentionally never settles */
