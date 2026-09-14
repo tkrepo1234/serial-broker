@@ -36,7 +36,7 @@
   const hint = $derived(
     device.needsPermission && dismissedSince === device.since
       ? 'No port was chosen. Choose the device to connect.'
-      : describeStatus(device.status),
+      : describeStatus(device.status, device.error?.code),
   );
 
   $effect(() => {

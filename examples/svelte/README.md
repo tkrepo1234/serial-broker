@@ -262,6 +262,12 @@ where Svelte destroys no components. A module that did either would do it once p
 application's users, and a team replaces them. `status-text.ts` types them as a `Record` over the
 status union, so a status a later version adds fails the type-check instead of showing a blank.
 
+**`failed` promises no recovery by itself, except after `RECONNECT_EXHAUSTED`.** A `failed` also
+follows a setup that failed and a `CONFIGURATION_CONFLICT`, where plugging the device in again
+changes nothing. So the sentence points to the error and to _Set up again_, and only the error code
+`RECONNECT_EXHAUSTED` - the attempts ran out - selects the sentence saying the device coming back
+resumes the connection.
+
 **_Set up again_ appears in `released` and `failed` only.** Those are the two statuses that end.
 Before the first setup has finished the status is `idle` and the button is absent, so a click
 cannot start over a setup still under way.
