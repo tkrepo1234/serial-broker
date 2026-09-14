@@ -4,6 +4,74 @@ Work that is agreed but not yet started. Ordered by when it becomes relevant, no
 
 ---
 
+## Decided on 2026-09-14
+
+Tim's answers to the open questions, so that the work below needs no further input. Where an item
+further down says otherwise, this section wins.
+
+### Release and distribution
+
+- Tag **`v0.1.0-alpha.1`** now. A stable `v0.1.0` follows once the library has served a real or
+  emulated port.
+- **npm: not before 1.0.** At 1.0, bring the question back to Tim.
+- The repository stays **private** until Tim says otherwise. License stays MIT, "serial-broker
+  contributors".
+- The README says clearly at the top that this is an alpha, that the API may change, and that it has
+  not yet been verified against real hardware; the notice goes once the hardware test has passed.
+- Documentation site: a CI artifact and local builds for now, **GitHub Pages later**.
+
+### Security and package
+
+- The debugging surface keeps asking before it uses a worker URL that only a link names.
+- `devEngines` stays.
+- `debug/index.html` gets a meta content security policy, tested in a browser; the advice to send
+  `frame-ancestors` as a header stays.
+- Enable GitHub's **private vulnerability reporting** and name it in `SECURITY.md`.
+
+### Hardening (protocol version 8)
+
+- A secret in `hello`, bound to the identity by the worker.
+- One Web Lock per term, replacing the one-second grace period.
+- All four session checks: a write's outcome only from the term it was addressed to; claims and
+  statuses checked against the locks; `data-received` and `data-sent` only from the current or
+  awaited sender; a bound on the owner's queue of other tabs' write requests.
+- Rate limits for answers to `status-request` and `diagnostics-request`, for malformed-message
+  warnings and remote `error` events, and for observer reports per collection.
+
+### Robustness
+
+- Stored configurations: **one key per configuration plus an index** (storage version 2). Before
+  1.0 nothing needs migrating.
+- `Clock` gains monotonic time for durations; event timestamps stay wall-clock time.
+- The worker forwards its `warn` records, throttled, to the tabs, which log them as `worker.*`.
+- The internal declaration files use structural types, and `scripts/check-dist.mjs` checks every
+  declaration file without `@types/w3c-web-serial`.
+
+### Tests, hardware and examples
+
+- Hardware: Tim installs usbip-win2 0.9.8.0; the library is then tested against the USB/IP emulator.
+- Real-browser tests with **Playwright**, locally and in CI.
+- **No size budget**: sizes are reported, not enforced.
+- Framework integrations for React, Vue, Svelte and Angular, and above all **SAP OpenUI5**: a runnable
+  example app plus a reusable integration module (model binding and events), on the current OpenUI5
+  long-term maintenance version, with UI5 Tooling and TypeScript, running without an SAP system.
+- Dev dependencies are updated now, `npm audit fix` included, and checked monthly after that.
+- The at-a-glance illustration is reworked in the documentation's style and then **shown to Tim for
+  his assessment** before it goes into the documentation.
+
+### Working mode
+
+- Push after `npm run verify` and `npm run docs` pass; never force-push without asking.
+- Agents and multi-agent workflows as the work needs them.
+- Before 1.0, anything may break: protocol, storage, API. The CHANGELOG says so.
+- Decisions that come up during the work are taken, recorded as an ADR or in the CHANGELOG, and
+  listed in the final report. Only what cannot be undone or reaches outside - force-pushes, the
+  repository's visibility, costs, accounts, npm - is asked.
+- One final report per piece of work, no interim reports. The debugging surface (port 8123) and the
+  documentation (port 8124) are left running at the end.
+
+---
+
 ## Performance tests, example apps and a usability review
 
 **Requested by Tim, 2026-09-14. Scheduled after the hardening round.** Test the software the way
@@ -38,7 +106,9 @@ using only the published entry points:
    remembering and restoring.
 3. **Exclusive operation:** `maxTabs: 1`, with the `queued` state shown to the user.
 4. **Without a bundler:** `serial-broker/min` with an import map.
-5. **Framework integration:** one component framework (React), as a hook.
+5. **Framework integrations:** SAP OpenUI5 first - an example app and a reusable integration module
+   (see "Decided on 2026-09-14") - then React as a hook, Vue as a composable, Svelte as a store and
+   Angular as a service.
 
 Each app runs against the Web Serial stand-in without hardware, and against a real device.
 
@@ -60,14 +130,14 @@ Everything below holds, and nothing beyond it is part of this item.
       with the expectations next to them, to a Performance chapter of the documentation site.
 - [ ] The real-browser numbers for the scenarios above are recorded once in the same chapter, with
       browser, operating system and device or stand-in named.
-- [ ] Size budgets are enforced by `scripts/check-dist.mjs`, so CI fails when a build exceeds them:
-      `index.min.js` at most 25 KB gzipped, `serial-broker.worker.js` at most 12 KB gzipped.
+- [ ] `scripts/check-dist.mjs` reports the gzipped size of every build in CI. There is no size
+      budget (decided on 2026-09-14).
 - [ ] Every result more than ten times worse than its expectation has become a fix or a
       documented limit.
 
 **Example apps**
 
-- [ ] The five apps exist. Each starts with one documented command, type-checks in CI, and has a
+- [ ] The apps above exist, one per framework integration. Each starts with one documented command, type-checks in CI, and has a
       README that says what it shows.
 - [ ] A smoke test per app runs in CI against the stand-in: the page loads, connects, receives and
       sends.
