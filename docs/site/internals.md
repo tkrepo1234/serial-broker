@@ -79,7 +79,16 @@ The bus is an interface, `Transport`, with two implementations [ADR-0006, ADR-00
   own identifier.
 
 Because routing depends only on the addressed envelope, and ownership only on the Web Lock, the two
-behave identically.
+behave identically. Messages meant only for a broker - `hello`, `welcome`, `heartbeat`, `goodbye`,
+`attach`, `detach` - reach nobody above either transport.
+
+Every script of the origin can reach the bus as well, so the worker trusts a port with no more than
+it said about itself (`WorkerPorts`). A port's first message must be `hello`, and names the identity
+the port speaks as from then on; a message before it, or in another sender's name, is dropped. An
+identity may have several ports - a tab that gave up on a worker that hung connects to it again on a
+new one - so a later port never takes an identity's messages from its earlier ports: each of them
+receives them, until the sweep finds a port silent. A `goodbye` ends only the port it arrived on. The
+test harness routes through the same class. `SECURITY.md` lists what this does and does not protect.
 
 In the default mode the worker transport is wrapped in a `FallbackTransport`. A `SharedWorker`
 whose script answers 404 is still created; the browser reports the failure afterwards. So until
@@ -101,7 +110,11 @@ URL runs the same script; only a reload helps [ADR-0024, amended].
 ## The protocol between tabs
 
 Every message carries `{ v, from, to, type }` and is validated completely on arrival; anything
-malformed is dropped [ADR-0008].
+malformed is dropped [ADR-0008]. Every field is also held to a limit - identifiers, names, payloads,
+text, name lists, errors and reports, in `src/protocol/limits.ts` - and an accepted message is
+rebuilt from the fields its type declares, so nothing a sender adds is passed on. A message beyond a
+limit is dropped and logged once per limit, not once per message. The broker bounds what it keeps in
+the same way: participants, ports per participant, and configurations.
 
 | Message                                     | Sent by                 | Purpose                                                                     |
 | ------------------------------------------- | ----------------------- | --------------------------------------------------------------------------- |
