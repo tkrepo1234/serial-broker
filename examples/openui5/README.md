@@ -284,6 +284,12 @@ nearest `package.json`, and without the field it treats the file as CommonJS, wh
 CommonJS - the sources are ES modules and the copy script is `.mjs` - so the field costs nothing
 and the spec reads like the root's own tests.
 
+**The German bundle is UTF-8, with real umlauts.** UI5 Tooling reads `.properties` files as UTF-8
+by default since specification version 2.0 (`propertiesFileSourceEncoding`) and turns every
+non-ASCII character into a `\uXXXX` escape while serving and building, which is what the UI5
+loader expects. `i18n_de.properties` therefore says _Gerät_, not _Geraet_ - visible at
+`index.html?sap-ui-language=de`.
+
 **The i18n model is not `async: true`, and the console says so.** UI5 logs _"Usage of synchronous
 loading is deprecated"_ for a `ResourceModel` created without `async: true`. It is a warning about
 the model's API mode, not about a synchronous request: for a manifest model the component loader
