@@ -251,12 +251,16 @@ export class ConfigurationSession {
 
   // --- Application-facing ------------------------------------------------------------------
 
-  /** Registers an event listener. */
+  /**
+   * Registers an event listener.
+   *
+   * @returns Removes this registration only (see `EventEmitter.add`).
+   */
   subscribe<TEvent extends SerialBrokerEventName>(
     event: TEvent,
     listener: (payload: SerialBrokerEventMap[TEvent]) => void,
-  ): void {
-    this.#emitter.add(event, listener);
+  ): () => void {
+    return this.#emitter.add(event, listener);
   }
 
   /** Removes an event listener. */

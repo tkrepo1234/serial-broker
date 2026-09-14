@@ -430,7 +430,7 @@ export class SerialBrokerClient {
       );
     }
 
-    session.subscribe(event, listener);
+    const remove = session.subscribe(event, listener);
 
     if (event === 'onError' && this.#unheardErrors.length > 0) {
       const unheard = this.#unheardErrors.splice(0);
@@ -442,11 +442,9 @@ export class SerialBrokerClient {
       });
     }
 
-    // Bound to this session, not to the name: once the name is released and set up again, the
-    // same function may be registered anew, and removing this registration must not remove that.
-    return () => {
-      session.unsubscribe(event, listener);
-    };
+    // Bound to this registration, not to the name or the function: once the name is set up again,
+    // or the function removed and registered anew, removing this registration must not remove that.
+    return remove;
   }
 
   /** Removes an event listener. */

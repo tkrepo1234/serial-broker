@@ -19,24 +19,37 @@ export type ListenerErrorReporter = (error: SerialBrokerError) => void;
  *   and the remaining listeners still receive the event.
  */
 export class EventEmitter {
-  readonly #listeners = new Map<SerialBrokerEventName, Set<(event: never) => void>>();
+  /** Each event's listeners, with the registration each one currently belongs to. */
+  readonly #listeners = new Map<SerialBrokerEventName, Map<(event: never) => void, object>>();
 
   constructor(
     private readonly reportListenerError: ListenerErrorReporter,
     private readonly now: () => number,
   ) {}
 
-  /** Registers `listener`. Registering the same function twice has no additional effect. */
+  /**
+   * Registers `listener`. Registering the same function twice has no additional effect.
+   *
+   * @returns Removes this registration, and only this one: once the listener has been removed and
+   *   registered again, calling it leaves the new registration in place.
+   */
   add<TEvent extends SerialBrokerEventName>(
     event: TEvent,
     listener: (payload: SerialBrokerEventMap[TEvent]) => void,
-  ): void {
+  ): () => void {
     let listeners = this.#listeners.get(event);
     if (listeners === undefined) {
-      listeners = new Set();
+      listeners = new Map();
       this.#listeners.set(event, listeners);
     }
-    listeners.add(listener);
+    const registration = listeners.get(listener) ?? {};
+    listeners.set(listener, registration);
+    return () => {
+      const current = this.#listeners.get(event);
+      if (current?.get(listener) === registration) {
+        current.delete(listener);
+      }
+    };
   }
 
   /** Removes `listener`. Removing one that was never added is a no-op. */
@@ -81,7 +94,7 @@ export class EventEmitter {
     }
 
     // Snapshot: a listener may subscribe or unsubscribe during dispatch.
-    for (const listener of [...listeners]) {
+    for (const listener of [...listeners.keys()]) {
       // A listener removed earlier in this dispatch - by another listener, or by `clear()` when
       // the configuration is released - has been told it hears nothing more, as a DOM event
       // target would have told it. Only the set in effect now says so, not the snapshot.

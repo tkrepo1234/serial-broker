@@ -216,6 +216,35 @@ describe('argument handling at the public surface', () => {
     expect(received).toHaveLength(0);
   });
 
+  it('leaves a later registration of the same listener alone when an old unsubscribe runs', async () => {
+    const harness = new BrowserHarness();
+    const device = harness.serial.addDevice(READER.vendorId, READER.productId);
+    harness.serial.grant(device);
+    const tab = harness.openTab();
+    await tab.client.setup('Reader', READER_OPTIONS);
+    await harness.settle();
+
+    const received: unknown[] = [];
+    const listener = (event: unknown): void => {
+      received.push(event);
+    };
+    const stopFirst = tab.client.subscribe('Reader', 'onReceive', listener);
+    stopFirst();
+    tab.client.subscribe('Reader', 'onReceive', listener);
+    // A component that unmounts late, holding the function of its first registration.
+    stopFirst();
+
+    const stopByName = tab.client.subscribe('Reader', 'onReceive', listener);
+    tab.client.unsubscribe('Reader', 'onReceive', listener);
+    tab.client.subscribe('Reader', 'onReceive', listener);
+    stopByName();
+
+    device.emit('x');
+    await harness.settle();
+
+    expect(received).toHaveLength(1);
+  });
+
   it('lists the configurations set up in this tab', async () => {
     const harness = new BrowserHarness();
     harness.serial.grant(harness.serial.addDevice(READER.vendorId, READER.productId));
