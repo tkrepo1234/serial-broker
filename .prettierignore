@@ -7,6 +7,11 @@ docs/site/api/reference
 docs/site/_build
 .claude
 
-# The OpenUI5 example's generated files: the copied library runtime and the bundler cache.
+# The example applications' generated files and caches.
+examples/*/dist
+examples/*/build
+examples/*/.angular
+examples/*/.svelte-kit
+examples/*/.vite
 examples/openui5/webapp/serial-broker
 examples/openui5/.ui5-tooling-modules

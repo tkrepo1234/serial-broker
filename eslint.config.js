@@ -14,13 +14,13 @@ export default defineConfig(
       '.claude/**',
       'coverage/**',
       'node_modules/**',
-      // The OpenUI5 example is an application with its own toolchain and its own TypeScript
-      // configuration. UI5 answers to other conventions than this library does - every module is
-      // a default export, an application reads `window` itself, event handlers are passed as
-      // unbound methods - and these type-aware rules would need the example's own dependencies
-      // installed to say anything true about it. It is gated by its own `npm run typecheck` in
-      // CI instead, and Prettier still formats it.
-      'examples/openui5/**',
+      // The example applications are applications with their own toolchains and TypeScript
+      // configurations (examples/README.md). Each framework answers to conventions of its own -
+      // default exports, reading `window`, unbound event handlers - and these type-aware rules
+      // would need each example's own dependencies installed to say anything true about it. Every
+      // example is gated by its own `npm run typecheck` and its smoke test in CI instead, and
+      // Prettier still formats it.
+      'examples/**',
       // The documentation site's Python environment and build output (ADR-0020).
       'docs/.venv/**',
       'docs/site/_build/**',

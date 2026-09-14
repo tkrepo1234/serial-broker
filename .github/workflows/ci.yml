@@ -30,7 +30,7 @@ jobs:
           path: coverage/
           retention-days: 7
 
-  openui5-example:
+  examples:
     runs-on: ubuntu-latest
 
     steps:
@@ -42,20 +42,39 @@ jobs:
           cache: npm
           cache-dependency-path: |
             package-lock.json
-            examples/openui5/package-lock.json
+            examples/*/package-lock.json
 
-      # The example uses the library from this repository ("file:../..") and type-checks against
-      # its published types, so the library has to be built before the example is installed.
+      # Every example uses the library from this repository ("file:../..") and type-checks against
+      # its published types, so the library has to be built before the examples are installed.
       - run: npm ci
       - run: npm run build
 
-      # Its own dependency tree - OpenUI5 types, UI5 Tooling, the transpiler - deliberately kept
-      # out of the root package.json.
-      - run: npm ci
-        working-directory: examples/openui5
+      # Each example has a dependency tree of its own - a framework, its CLI, its types -
+      # deliberately kept out of the root package.json (examples/README.md).
+      - name: Install and type-check every example
+        run: |
+          set -e
+          for manifest in examples/*/example.json; do
+            example=$(dirname "$manifest")
+            echo "::group::$example"
+            (cd "$example" && npm ci && npm run typecheck)
+            echo "::endgroup::"
+          done
 
-      - run: npm run typecheck
-        working-directory: examples/openui5
+      - run: npx playwright install --with-deps chromium
+
+      # Starts every example on its own port and runs its smoke test against the Web Serial
+      # stand-in: the page loads, connects, sends a line and sees it echoed.
+      - env:
+          SERIAL_BROKER_BROWSER_CHANNEL: chromium
+        run: npm run test:examples
+
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: example-traces
+          path: test-results/
+          retention-days: 7
 
   browser:
     runs-on: ubuntu-latest

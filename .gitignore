@@ -33,3 +33,12 @@ docs/site/_build/
 
 # Agent worktrees and local Claude Code state
 .claude/
+
+# Example applications: their dependencies, builds and caches
+examples/*/node_modules/
+examples/*/dist/
+examples/*/build/
+examples/*/.angular/
+examples/*/.svelte-kit/
+examples/*/.vite/
+test-results/
