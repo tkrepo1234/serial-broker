@@ -9,11 +9,11 @@ import {
 import type { Transport, TransportRequest } from '../../src/client/transport/transport.js';
 import type { Clock } from '../../src/core/clock.js';
 import { NOOP_LOGGER, ScopedLogger } from '../../src/core/logger.js';
-import { decodeMessage } from '../../src/protocol/decode.js';
-import { SILENT_PARTICIPANT_TIMEOUT_MS, SWEEP_INTERVAL_MS } from '../../src/protocol/heartbeat.js';
-import { BROKER_ID, type ClientId, type ProtocolMessage } from '../../src/protocol/messages.js';
+import type { Logger } from '../../src/core/types.js';
+import { SWEEP_INTERVAL_MS } from '../../src/protocol/heartbeat.js';
+import { BROKER_ID, type ClientId } from '../../src/protocol/messages.js';
 import { PROTOCOL_VERSION } from '../../src/protocol/version.js';
-import { Broker } from '../../src/worker/broker.js';
+import { WorkerPorts, type WorkerPort } from '../../src/worker/worker-ports.js';
 
 import type { FakeClock } from './fake-clock.js';
 
@@ -36,36 +36,71 @@ function deliver(listener: MessageListener, message: unknown): void {
 }
 
 /**
- * An in-memory `SharedWorker` hosting the real broker.
+ * The worker's end of one port.
  *
- * The broker under test is the production class, not a stand-in: only the plumbing around it
- * is simulated. A routing bug therefore fails a test rather than surviving into a browser.
+ * Closing either end of a real port disentangles both: what is posted afterwards reaches nobody,
+ * and neither side is told. So the worker keeps posting into a port its tab closed until the sweep
+ * forgets it, and the tab hears none of it.
+ */
+class FakeWorkerPort implements WorkerPort {
+  #isOpen = true;
+
+  /** @param toOtherEnd - Receives, asynchronously and cloned, what the worker posts. */
+  constructor(private readonly toOtherEnd: (data: unknown) => void) {}
+
+  postMessage(message: unknown): void {
+    if (!this.#isOpen) {
+      return;
+    }
+    deliver((event) => {
+      // Re-checked at delivery time, not only when posted: a context can vanish between the worker
+      // posting and the message arriving. A browser simply drops it; a harness that delivered it
+      // anyway would let a dead tab keep participating and hide the races these tests exist to find.
+      if (this.#isOpen) {
+        this.toOtherEnd(event.data);
+      }
+    }, message);
+  }
+
+  close(): void {
+    this.#isOpen = false;
+  }
+
+  get isOpen(): boolean {
+    return this.#isOpen;
+  }
+}
+
+/** A port to the worker held by a script that is not a tab: the test speaks for it (SECURITY.md). */
+export interface ForeignWorkerPort {
+  /** Posts anything, as any script of the origin can. */
+  post(raw: unknown): void;
+  /** Everything the worker posted to this port, in order. */
+  readonly received: unknown[];
+}
+
+/**
+ * An in-memory `SharedWorker` running the worker's real port handling and broker.
+ *
+ * `WorkerPorts` and the `Broker` under test are the production classes, not stand-ins: only the
+ * plumbing around them is simulated. A routing bug, or a hole in how the worker holds a port to its
+ * identity, therefore fails a test rather than surviving into a browser.
  */
 export class FakeWorkerHost {
-  readonly #ports = new Map<ClientId, MessageListener>();
-  readonly #broker: Broker;
+  readonly #ports: WorkerPorts<FakeWorkerPort>;
+  readonly #allPorts = new Set<FakeWorkerPort>();
   #isCrashed = false;
-  /** Every message the broker received, for assertions about protocol traffic. */
-  readonly received: ProtocolMessage[] = [];
 
-  constructor(private readonly clock: FakeClock) {
-    this.#broker = new Broker({
-      deliver: (clientId, message) => {
-        const listener = this.#ports.get(clientId);
-        if (listener === undefined) {
-          return;
-        }
-        // Re-checked at delivery time, not only at routing time: a context can vanish between
-        // the broker deciding where a message goes and the message arriving. A browser simply
-        // drops it; a harness that delivered it anyway would let a dead tab keep participating
-        // and would hide exactly the races these tests exist to find.
-        deliver((event) => {
-          if (this.#ports.get(clientId) === listener) {
-            listener(event);
-          }
-        }, message);
-      },
-      logger: new ScopedLogger(NOOP_LOGGER, {}),
+  /**
+   * @param logger - Receives the worker's own records, which a real worker has no way to hand to a
+   *   tab. For tests that assert on them.
+   */
+  constructor(
+    private readonly clock: FakeClock,
+    logger: Logger = NOOP_LOGGER,
+  ) {
+    this.#ports = new WorkerPorts({
+      logger: new ScopedLogger(logger, {}),
       now: () => clock.now(),
     });
     this.#scheduleSweep();
@@ -73,17 +108,7 @@ export class FakeWorkerHost {
 
   /** Participants the broker currently knows. */
   get clientCount(): number {
-    return this.#broker.clientCount;
-  }
-
-  /**
-   * Simulates a context dying: its port delivers nothing any more, and the broker is not told.
-   *
-   * A real worker never learns that a tab died. It forgets the tab only once its heartbeats have
-   * stopped for long enough (ADR-0021), which is what the sweep here does too.
-   */
-  silence(clientId: ClientId): void {
-    this.#ports.delete(clientId);
+    return this.#ports.clientCount;
   }
 
   /**
@@ -95,8 +120,11 @@ export class FakeWorkerHost {
    */
   crash(): void {
     this.#isCrashed = true;
-    this.#ports.clear();
-    this.#broker.dispose();
+    for (const port of this.#allPorts) {
+      port.close();
+    }
+    this.#allPorts.clear();
+    this.#ports.dispose();
   }
 
   #scheduleSweep(): void {
@@ -104,45 +132,46 @@ export class FakeWorkerHost {
       if (this.#isCrashed) {
         return;
       }
-      this.#broker.forgetSilent(SILENT_PARTICIPANT_TIMEOUT_MS);
+      this.#ports.sweep();
       this.#scheduleSweep();
     }, SWEEP_INTERVAL_MS);
   }
 
-  /** Connects a context's port. */
-  connect(clientId: ClientId, listener: MessageListener): void {
-    if (this.#isCrashed) {
-      return;
-    }
-    this.#ports.set(clientId, listener);
-    this.#broker.handleConnect(clientId);
-  }
-
   /**
-   * Simulates a context closing its port: the port is gone and the broker is told.
+   * Connects a new port, as `new SharedWorker` does. The worker learns who is behind it only from
+   * what arrives on it.
    *
-   * Only the port given: a context that has already connected again on another port keeps that
-   * one, whichever of the two it closes first.
+   * @param toTab - Receives what the worker posts into the port.
+   * @returns The worker's end, to hand what the tab posts to {@link FakeWorkerHost.send}.
    */
-  disconnect(clientId: ClientId, listener: MessageListener): void {
-    if (this.#ports.get(clientId) !== listener) {
-      return;
+  connect(toTab: (data: unknown) => void): FakeWorkerPort {
+    const port = new FakeWorkerPort(toTab);
+    if (this.#isCrashed) {
+      port.close();
+    } else {
+      this.#allPorts.add(port);
     }
-    this.#ports.delete(clientId);
-    this.#broker.handleDisconnect(clientId);
+    return port;
   }
 
-  /** Feeds a message from a context into the broker, validating it first as the worker does. */
-  send(clientId: ClientId, raw: unknown): void {
-    if (this.#isCrashed) {
+  /** Hands the worker a message that arrived on `port`, as the worker's `message` listener does. */
+  send(port: FakeWorkerPort, raw: unknown): void {
+    if (this.#isCrashed || !port.isOpen) {
       return;
     }
-    const result = decodeMessage(raw);
-    if (!result.ok) {
-      return;
-    }
-    this.received.push(result.message);
-    this.#broker.handleMessage(clientId, result.message);
+    this.#ports.receive(port, raw);
+  }
+
+  /** Connects a port for a script that is not a tab, which the test then speaks for. */
+  connectForeign(): ForeignWorkerPort {
+    const received: unknown[] = [];
+    const port = this.connect((data) => received.push(data));
+    return {
+      received,
+      post: (raw) => {
+        this.send(port, structuredClone(raw));
+      },
+    };
   }
 }
 
@@ -249,6 +278,8 @@ export class FakeBus {
   readonly #workerFailures: ((event: unknown) => void)[] = [];
   /** Contexts that died: nothing they send reaches the worker any more, and their timers stop. */
   readonly #killed = new Set<string>();
+  /** The worker's end of every port each context started, so that killing the context stops them. */
+  readonly #workerEnds = new Map<string, FakeWorkerPort[]>();
 
   /**
    * @param mode - Which transport the tabs start on.
@@ -304,12 +335,19 @@ export class FakeBus {
       : new BroadcastChannelTransport(request, (name) => this.broadcastHub.create(name, contextId));
   }
 
-  /** Simulates a context vanishing without cleanup. */
-  killContext(contextId: string, clientId: ClientId): void {
+  /**
+   * Simulates a context vanishing without cleanup.
+   *
+   * @param _clientId - Its identity on the bus. Unused: the worker learns identities only from what
+   *   arrives on a port, so killing the context's ports is what silences it.
+   */
+  killContext(contextId: string, _clientId?: ClientId): void {
     // A real worker is never told that a tab died: the port simply stops, in both directions, and
     // the broker learns of it only when the tab's heartbeats stop arriving (ADR-0021).
     this.#killed.add(contextId);
-    this.#workerHost.silence(clientId);
+    for (const port of this.#workerEnds.get(contextId) ?? []) {
+      port.close();
+    }
     this.broadcastHub.killContext(contextId);
   }
 
@@ -368,21 +406,34 @@ export class FakeBus {
     /**
      * A port whose listener is added with `addEventListener` delivers nothing until `start()`. The
      * fake keeps to that, so a transport that forgets the call fails here and not only in a browser.
+     * What arrives before is kept, as a port queues it.
      */
     let isStarted = false;
-    const connectWhenReady = (): void => {
-      if (loads && isStarted && tabListener !== undefined) {
-        host.connect(clientId, tabListener);
+    const inbox: unknown[] = [];
+    const flushInbox = (): void => {
+      if (isStarted && tabListener !== undefined) {
+        for (const data of inbox.splice(0)) {
+          tabListener({ data });
+        }
       }
     };
+    const toTab = (data: unknown): void => {
+      inbox.push(data);
+      flushInbox();
+    };
+
+    const workerEnd = loads ? host.connect(toTab) : undefined;
+    if (workerEnd !== undefined) {
+      this.#workerEnds.set(contextId, [...(this.#workerEnds.get(contextId) ?? []), workerEnd]);
+    }
 
     const port: MessagePortLike = {
       postMessage: (message) => {
         if (this.#killed.has(contextId)) {
           return;
         }
-        if (loads) {
-          host.send(clientId, structuredClone(message));
+        if (workerEnd !== undefined) {
+          host.send(workerEnd, structuredClone(message));
           return;
         }
         // A port to a worker whose script never ran accepts messages and delivers none. A worker of
@@ -406,19 +457,18 @@ export class FakeBus {
           return;
         }
         isStarted = true;
-        connectWhenReady();
+        flushInbox();
       },
       close: () => {
-        if (loads && tabListener !== undefined) {
-          host.disconnect(clientId, tabListener);
-        }
+        // The worker is not told; it only stops reaching the tab.
+        workerEnd?.close();
       },
       addEventListener: (type: string, listener: unknown) => {
         if (type !== 'message') {
           return;
         }
         tabListener = listener as MessageListener;
-        connectWhenReady();
+        flushInbox();
       },
     } as MessagePortLike;
 
