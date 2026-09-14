@@ -31,6 +31,22 @@ migrated (see below).
 - The debugging surface's **Choose a device…** uses the automatic mode: it asks only for a name and
   the line settings, sets the configuration up and opens the picker in the same click; a dismissed
   picker releases the configuration again. **New configuration** defaults to automatic.
+- `npm run bench`: benchmarks of throughput, latency, handover, start and a simulated hour on the
+  in-process harness, over both transports, judged against expectations written down before the
+  first measurement (ADR-0037), in about six seconds. An opt-in real-browser run
+  (`SERIAL_BROKER_BENCH_BROWSER=1 npm run bench:browser`, never in CI) measures the same in Edge
+  with the Web Serial stand-in. A new Performance chapter holds both sets of results, the build
+  sizes (reported, not enforced) and the documented limits; the size report includes the worker
+  script.
+- `npm run test:extreme`: an opt-in extreme-usage suite (`SERIAL_BROKER_EXTREME=1`, never in CI) of
+  eleven scenarios on both transports - 100 tabs, sustained traffic of 41 MB to 10 tabs, 10 000
+  writes under owner crashes, 50 000 writes through one holder, a simulated week - that bounds heap,
+  timers, listeners, locks, pending writes and messages and checks that every tab still works at the
+  end; and an opt-in real-browser run of 20 Edge pages for five minutes with the page holding the
+  port closed every 30 s, its page and SharedWorker memory read over CDP. Both found no leak or
+  stall in the library; the last runs are recorded in their `RESULTS.md`.
+- The Web Serial stand-in can push bytes without a prior write (`emit()`), and the test harness
+  counts bus messages and keeps nothing of closed or crashed tabs.
 - `examples/openui5`: a runnable OpenUI5 application and a reusable integration module that
   exposes serial-broker as a bindable `JSONModel` - status, errors with remediation, traffic, send,
   connect and release - on OpenUI5 1.148 (long-term maintenance) with UI5 Tooling and TypeScript,

@@ -195,6 +195,12 @@ after this many iterations is what hardens the product now.
 its users meet it: how fast it is, how it holds up in realistic applications, how much it takes to
 do simple things, and whether the documentation explains everything clearly and without ambiguity.
 
+**Status, 2026-09-14:** the benchmarks (`npm run bench`, `bench:browser`, the Performance chapter,
+ADR-0037) and the extreme-usage suites (`npm run test:extreme`, the 20-page browser run) are done;
+they found one limit, the crash of the tab that started the worker (under "Follow-ups from the
+hardening round"). The examples minimal, multi-tab-dashboard, exclusive, no-bundler and openui5
+are done with smoke tests; React, Vue, Svelte and Angular and the usability review are in progress.
+
 ### Performance
 
 Measured in two places: in the simulated browser (`test/harness/`), where the library's own cost is
@@ -283,6 +289,16 @@ What the implementers left open:
 
 ### Worker and bus
 
+- **A crash of the tab that started the SharedWorker stalls the other tabs for a minute** (found by
+  the browser benchmark, 2026-09-14, recorded as a limit in the Performance chapter). In Edge the
+  worker ends with the page that started it, which is usually also the first tab holding the port.
+  The tab that takes the port over is `open` at once, but every other tab stays `reconnecting` for
+  60 s - four minutes in a hidden tab - until its heartbeats give up (ADR-0021), and a write sent
+  meanwhile ends in `WRITE_TIMEOUT`: 240 times the expectation. The fix is the worker-lifetime Web
+  Lock ADR-0021 names as its upgrade path, so that a tab learns of the worker's end at once. Until
+  then `SerialBroker.configure({ transport: 'broadcastchannel' })` avoids it. Rerun
+  `npm run bench:browser` afterwards. Take it up with the complexity reduction, since it changes
+  the message bus.
 - A tab that connects after a worker record was written is never told about it: the worker keeps
   no buffer to replay. A small bounded replay to a newly registered tab would help an operator who
   opens a tab after the fact. The worker's records are not in the diagnostics observer's `collect()`
