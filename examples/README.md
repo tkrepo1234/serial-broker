@@ -8,7 +8,7 @@ entry points only, never through `src/`. Each one lives in its own directory wit
 | ---------------------- | -------------------------------------------------------------------------------------- |
 | `minimal/`             | One page: connect, print what arrives, send text.                                      |
 | `multi-tab-dashboard/` | Several tabs on one device: status, errors, the permission flow, remembering, restore. |
-| `exclusive/`           | `maxTabs: 1`, with the `queued` state shown to the user.                               |
+| `exclusive/`           | `maxTabs: 1`: one tab at a time, `queued` shown as a wait, the takeover, a release.    |
 | `no-bundler/`          | `serial-broker/min` from an import map, no build step.                                 |
 | `openui5/`             | SAP OpenUI5: a reusable integration module (`JSONModel`) and an application using it.  |
 | `react/`               | React: a `useSerialBroker` hook.                                                       |

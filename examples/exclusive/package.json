@@ -1,0 +1,22 @@
+{
+  "name": "serial-broker-exclusive-example",
+  "version": "0.0.0",
+  "private": true,
+  "description": "One tab at a time on a device: serial-broker with maxTabs: 1, the queued state and the takeover.",
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "start": "vite --port 8153 --strictPort",
+    "typecheck": "tsc --noEmit",
+    "build": "vite build",
+    "preview": "vite preview --port 8153 --strictPort"
+  },
+  "dependencies": {
+    "serial-broker": "file:../.."
+  },
+  "devDependencies": {
+    "@types/w3c-web-serial": "^1.0.8",
+    "typescript": "^6.0.3",
+    "vite": "^8.3.0"
+  }
+}
