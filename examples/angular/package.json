@@ -5,6 +5,9 @@
   "description": "An Angular application using serial-broker through an injectable service with signals.",
   "license": "MIT",
   "type": "module",
+  "engines": {
+    "node": "^22.22.3 || ^24.15.0 || >=26.0.0"
+  },
   "scripts": {
     "start": "ng serve --port 8158",
     "typecheck": "ngc -p tsconfig.app.json",
