@@ -23,7 +23,11 @@
       </div>
       <div class="tab-identity">
         This tab is <strong id="tab-label">…</strong>
-        <a id="open-tab" href="." target="_blank" rel="opener">Open another tab</a>
+        <!--
+          noopener, so that the new tab starts with an empty sessionStorage and takes a label of
+          its own; with an opener the browser copies this tab's storage, label included.
+        -->
+        <a id="open-tab" href="." target="_blank" rel="noopener">Open another tab</a>
       </div>
     </header>
 

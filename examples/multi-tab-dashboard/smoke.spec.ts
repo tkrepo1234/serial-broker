@@ -110,4 +110,75 @@ test.describe('the multi-tab dashboard', () => {
     await expect(page.locator('#setup-again')).toBeHidden();
     expect(noise).toEqual([]);
   });
+
+  test('opens its second tab through the link, with a label of its own', async ({ context }) => {
+    await installStandIn(context, GRANTED_DEVICE);
+    const first = await context.newPage();
+    const firstNoise = watchForNoise(first);
+    await first.goto(`${origin}/`);
+    await expect(first.locator('#status')).toHaveAttribute('data-status', 'open');
+
+    // The link is noopener: the new tab starts with an empty sessionStorage rather than a copy
+    // of this tab's, which would have carried the label along.
+    const [second] = await Promise.all([context.waitForEvent('page'), first.click('#open-tab')]);
+    const secondNoise = watchForNoise(second);
+    await expect(second.locator('#status')).toHaveAttribute('data-status', 'open');
+    const firstLabel = await first.locator('#tab-label').innerText();
+    const secondLabel = await second.locator('#tab-label').innerText();
+    expect(secondLabel).not.toBe(firstLabel);
+    await expect(first.locator('#peers li')).toHaveCount(1);
+    await expect(first.locator('#peers li')).toContainText(secondLabel);
+    await expect(second.locator('#peers li')).toContainText(firstLabel);
+    expect(firstNoise.noise).toEqual([]);
+    expect(secondNoise.noise).toEqual([]);
+  });
+
+  test('tells two tabs apart that start with the same stored label', async ({ context }) => {
+    await installStandIn(context, GRANTED_DEVICE);
+    // What a duplicated tab looks like: the same sessionStorage, label included.
+    await context.addInitScript(() => {
+      sessionStorage.setItem('multi-tab-dashboard/tab-label', 'Tab SAME');
+    });
+    const first = await context.newPage();
+    const second = await context.newPage();
+    await first.goto(`${origin}/`);
+    await expect(first.locator('#status')).toHaveAttribute('data-status', 'open');
+    await second.goto(`${origin}/`);
+    await expect(second.locator('#status')).toHaveAttribute('data-status', 'open');
+
+    // One of them - which one, the ids decide - takes a new label; the other keeps it.
+    await expect(async () => {
+      const labels = [
+        await first.locator('#tab-label').innerText(),
+        await second.locator('#tab-label').innerText(),
+      ];
+      expect(labels).toContain('Tab SAME');
+      expect(labels[0]).not.toBe(labels[1]);
+    }).toPass();
+    const secondLabel = await second.locator('#tab-label').innerText();
+    await expect(first.locator('#peers li')).toHaveCount(1);
+    await expect(first.locator('#peers li')).toContainText(secondLabel);
+  });
+
+  test('drops a tab that crashed from the list, and only that one', async ({ context }) => {
+    await installStandIn(context, GRANTED_DEVICE);
+    const first = await context.newPage();
+    const second = await context.newPage();
+    await first.goto(`${origin}/`);
+    await second.goto(`${origin}/`);
+    await expect(first.locator('#peers li[data-status="open"]')).toHaveCount(1);
+    await expect(second.locator('#peers li[data-status="open"]')).toHaveCount(1);
+
+    // A killed renderer runs no pagehide, so no goodbye is said: the second tab has to notice
+    // on its own, from the pings that go unanswered. Three of them, five seconds apart.
+    const session = await context.newCDPSession(first);
+    void session.send('Page.crash').catch(() => {
+      // The target is gone, which is what was asked for.
+    });
+    await first.waitForEvent('crash');
+    await expect(second.locator('#peers li[data-status]')).toHaveCount(0, { timeout: 30_000 });
+    await expect(second.locator('#peers li')).toContainText('No other tab');
+    // And the second tab took the port over meanwhile.
+    await expect(second.locator('#status')).toHaveAttribute('data-status', 'open');
+  });
 });

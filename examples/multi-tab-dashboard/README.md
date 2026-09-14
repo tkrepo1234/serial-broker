@@ -178,9 +178,22 @@ recovering; showing that as a failure would make an operator act on something th
 handled. The strip switches to the information colour and appends a sentence saying so.
 
 **A tab's other tabs are found by the application, not by the library.** The main entry point
-deliberately says nothing about other tabs. A `BroadcastChannel` of the application's own, a label
-per tab in `sessionStorage`, a heartbeat every five seconds and a silence limit of three missed
-heartbeats are all it takes; a tab that crashed drops off the list within sixteen seconds.
+deliberately says nothing about other tabs. A `BroadcastChannel` of the application's own, an id
+per page load, a label per tab in `sessionStorage` and a ping every five seconds are all it takes.
+
+**Liveness counts unanswered pings; it does not measure silence.** A browser runs the timers of a
+hidden tab late - Chromium, after five minutes hidden, once a minute - but delivers messages at
+once. A heartbeat on a timer would make every long-hidden tab, the normal state of a dashboard's
+other tabs, vanish from the lists and flicker back; a ping is answered promptly however long the
+tab has been hidden. A tab that left three pings in a row unanswered is taken off the list: a tab
+that crashed within about twenty seconds, and a tab the browser froze as well - it comes back with
+the first ping it answers. The library's message bus does the same, for the same reason.
+
+**A label is not an identity.** The label survives a reload of its tab because it lives in
+`sessionStorage` - which a browser copies into a tab it duplicates, or opens with an opener; the
+_Open another tab_ link is `rel="noopener"` for that reason. Tabs are told apart by an id per page
+load, and a tab that hears its own label from another id takes a new one. The ids decide which of
+the two changes, so exactly one does.
 
 **The diagnostics panel is read-only and collects on its own schedule.** A collection waits the
 default 500 ms window, because nothing announces how many tabs exist. The panel collects on load,
