@@ -11,6 +11,13 @@ coordinate with each other. See
 
 ## [Unreleased]
 
+### Added
+
+- `examples/openui5`: a runnable OpenUI5 application and a reusable integration module that
+  exposes serial-broker as a bindable `JSONModel` - status, errors with remediation, traffic, send,
+  connect and release - on OpenUI5 1.148 (long-term maintenance) with UI5 Tooling and TypeScript,
+  running without an SAP system. CI type-checks it in a job of its own.
+
 ## [0.1.0-alpha.1] - 2026-09-14
 
 The first release, marked as an alpha: it has not yet been verified against a real serial device.
