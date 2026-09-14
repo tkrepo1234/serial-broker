@@ -61,8 +61,13 @@ export interface TransportRequest {
   readonly onMessage: (message: ProtocolMessage) => void;
   /** Receives messages that failed validation. Reported at `warn`, never thrown. */
   readonly onDecodeFailure: (failure: DecodeFailure) => void;
-  /** Receives transport-level failures, such as the worker script failing to load. */
-  readonly onTransportError: (error: unknown) => void;
+  /**
+   * Receives transport-level failures, such as the worker script failing to load.
+   *
+   * `recovering` is `true` when the transport is already putting the failure right on its own - a
+   * worker that stopped answering is being replaced - so the application has nothing to act on.
+   */
+  readonly onTransportError: (error: unknown, recovering?: boolean) => void;
   /**
    * Called when the transport has reached a new broker after the old one stopped answering
    * (ADR-0021, amended). Whatever was sent or broadcast in between may be lost, so the client asks

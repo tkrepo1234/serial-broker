@@ -301,6 +301,8 @@ export class SharedWorkerTransport implements Transport {
         new Error(
           `The SharedWorker stopped answering: ${String(MAX_UNANSWERED_HEARTBEATS)} heartbeats in a row went unanswered`,
         ),
+        // A new worker is started below: the loss is being put right without the application.
+        true,
       );
       if (this.#disposal.isDisposed) {
         return;

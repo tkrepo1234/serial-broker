@@ -554,12 +554,18 @@ export class SerialBrokerClient {
           session.handleBusReconnected();
         }
       },
-      onTransportError: (error) => {
+      onTransportError: (error, recovering) => {
         this.#reportGlobal(
           new SerialBrokerError(
             SerialBrokerErrorCode.BROKER_UNAVAILABLE,
             `The message bus reported a failure: ${describeUnknown(error)}`,
-            { timestamp: this.environment.clock.now(), cause: error },
+            {
+              timestamp: this.environment.clock.now(),
+              cause: error,
+              // A worker that stopped answering is replaced without the application; a script that
+              // does not load, or a message the browser could not deliver, is not.
+              isRetryable: recovering === true,
+            },
           ),
         );
       },

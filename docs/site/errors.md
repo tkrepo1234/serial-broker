@@ -191,7 +191,8 @@ with `transport: 'sharedworker'`, also when the worker script fails to load. Wit
 `'auto'`, a script that fails to load is replaced by a `BroadcastChannel` and raises nothing.
 Also delivered when the worker stops answering the tabs' heartbeats because it crashed or was
 ended, once in every tab for each such loss; the tabs then connect to a new worker on their own,
-unless it runs another protocol version, which is reported as `PROTOCOL_VERSION_MISMATCH`.
+unless it runs another protocol version, which is reported as `PROTOCOL_VERSION_MISMATCH`. Only
+this case has `isRetryable: true`: the library is already putting it right.
 **Do:** check that `serial-broker.worker.js` is served from the application's origin, at the URL
 every tab uses; see [The worker script](installing.md#the-worker-script).
 

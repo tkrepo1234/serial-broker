@@ -130,6 +130,8 @@ coordinate with each other. See
 - `send()` rejects a payload over 16 MiB with `INVALID_ARGUMENT` in every tab, instead of the write
   timing out when another tab holds the port.
 - Errors raised by the facade's own checks carry the time they arose.
+- `BROKER_UNAVAILABLE` for a worker that stopped answering has `isRetryable: true`: the tabs replace
+  the worker on their own.
 
 ### Notes
 

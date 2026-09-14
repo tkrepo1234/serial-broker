@@ -66,6 +66,10 @@ describe('tabs whose worker dies', () => {
       expect(tab.recordFor('Reader').errors.map((event) => event.error.code)).toEqual([
         SerialBrokerErrorCode.BROKER_UNAVAILABLE,
       ]);
+      // The tabs connect to a new worker on their own, so the application has nothing to act on.
+      expect(tab.recordFor('Reader').errors.map((event) => event.error.isRetryable)).toEqual([
+        true,
+      ]);
     }
   });
 
