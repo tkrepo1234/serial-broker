@@ -1,5 +1,6 @@
 import { DiagnosticsObserver } from '../../src/client/diagnostics-observer.js';
 import { SerialBrokerClient } from '../../src/client/serial-broker-client.js';
+import type { TimerHandle } from '../../src/core/clock.js';
 import { ScopedLogger, NOOP_LOGGER } from '../../src/core/logger.js';
 import type {
   ErrorEvent,
@@ -170,6 +171,8 @@ export type ResumeOrder = 'timers-first' | 'tasks-first';
 interface HeldWork {
   readonly kind: 'timer' | 'task';
   readonly run: () => void;
+  /** The handle of a held timer, so that clearing the timer still cancels it. */
+  readonly timer?: TimerHandle;
 }
 
 /** Options for {@link BrowserHarness}. */
@@ -219,6 +222,8 @@ export class BrowserHarness {
    * behind it, as it does in the browser's task queues.
    */
   readonly #frozenContexts = new Map<string, HeldWork[]>();
+  /** Contexts whose timers are held, as a long-hidden tab's are, with the timers held so far. */
+  readonly #throttledContexts = new Map<string, HeldWork[]>();
   #nextTabNumber = 0;
   #nextIdNumber = 0;
 
@@ -358,13 +363,70 @@ export class BrowserHarness {
     this.#frozenContexts.delete(id);
   }
 
-  /** Runs `work` now, or holds it while the context is frozen or still resuming. */
-  #runOrHold(contextId: string, kind: HeldWork['kind'], run: () => void): void {
-    const held = this.#frozenContexts.get(contextId);
+  /**
+   * Holds a context's timers, as Chromium holds those of a tab hidden for more than five minutes:
+   * they run in a batch once a minute. Messages, events and lock grants go on as usual.
+   * {@link runThrottledTimers} is the minute boundary.
+   */
+  throttleTimers(id: string): void {
+    if (!this.#throttledContexts.has(id)) {
+      this.#throttledContexts.set(id, []);
+    }
+  }
+
+  /**
+   * Runs the timers a throttled context has held so far, one task at a time. A timer falling due
+   * meanwhile waits for the next boundary, and one cleared meanwhile does not run.
+   */
+  async runThrottledTimers(id: string): Promise<void> {
+    const held = this.#throttledContexts.get(id);
+    if (held === undefined) {
+      return;
+    }
+    const due = new Set(held);
+    for (let work = held[0]; work !== undefined && due.has(work); work = held[0]) {
+      held.shift();
+      work.run();
+      await drainMicrotasks();
+    }
+  }
+
+  /** Runs what a throttled context held, and lets its timers run on time again. */
+  async stopThrottlingTimers(id: string): Promise<void> {
+    await this.runThrottledTimers(id);
+    this.#throttledContexts.delete(id);
+  }
+
+  /**
+   * Runs `work` now, or holds it: everything while the context is frozen or still resuming, and
+   * timers while its timers are throttled.
+   */
+  #runOrHold(
+    contextId: string,
+    kind: HeldWork['kind'],
+    run: () => void,
+    timer?: TimerHandle,
+  ): void {
+    const held =
+      this.#frozenContexts.get(contextId) ??
+      (kind === 'timer' ? this.#throttledContexts.get(contextId) : undefined);
     if (held === undefined) {
       run();
     } else {
-      held.push({ kind, run });
+      held.push(timer === undefined ? { kind, run } : { kind, run, timer });
+    }
+  }
+
+  /** Cancels a held timer, as `clearTimeout` cancels a timer task that is queued and has not run. */
+  #dropHeldTimer(contextId: string, handle: TimerHandle): void {
+    for (const held of [
+      this.#frozenContexts.get(contextId),
+      this.#throttledContexts.get(contextId),
+    ]) {
+      const index = held?.findIndex((work) => work.timer === handle) ?? -1;
+      if (index >= 0) {
+        held?.splice(index, 1);
+      }
     }
   }
 
@@ -401,6 +463,7 @@ export class BrowserHarness {
     this.#killedContexts.add(id);
     // A frozen tab that is discarded never runs what it held.
     this.#frozenContexts.delete(id);
+    this.#throttledContexts.delete(id);
     this.#tabs.delete(id);
     this.serial.removeContext(id);
     this.locks.killContext(id);
@@ -472,14 +535,17 @@ export class BrowserHarness {
       // drops them with the tab. A frozen tab's timers fire when it resumes.
       clock: {
         now: () => this.clock.now(),
-        setTimer: (callback, delayMs) =>
-          this.clock.setTimer(() => {
+        setTimer: (callback, delayMs) => {
+          const handle: TimerHandle = this.clock.setTimer(() => {
             if (!this.#killedContexts.has(contextId)) {
-              this.#runOrHold(contextId, 'timer', callback);
+              this.#runOrHold(contextId, 'timer', callback, handle);
             }
-          }, delayMs),
+          }, delayMs);
+          return handle;
+        },
         clearTimer: (handle) => {
           this.clock.clearTimer(handle);
+          this.#dropHeldTimer(contextId, handle);
         },
       },
       // Fixed rather than seeded: backoff delays become exactly predictable, so a test can

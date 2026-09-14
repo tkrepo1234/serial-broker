@@ -497,6 +497,87 @@ describe('BrowserHarness frozen contexts', () => {
 
     expect(fired).toBe(false);
   });
+
+  it('does not run a held timer that was cleared before the tab resumed', async () => {
+    const harness = new BrowserHarness();
+    const clock = harness.createEnvironment('frozen').clock;
+    let fired = false;
+    const handle = clock.setTimer(() => (fired = true), 10);
+
+    harness.freezeContext('frozen');
+    await harness.advance(10);
+    clock.clearTimer(handle);
+    await harness.resumeContext('frozen');
+
+    expect(fired).toBe(false);
+  });
+});
+
+/**
+ * A tab hidden for more than five minutes has its timers run in a batch once a minute (Chromium's
+ * intensive throttling), while its messages and events are delivered as they arrive.
+ */
+describe('BrowserHarness throttled timers', () => {
+  it('holds only the timers, and runs them at the boundary, while messages go on', async () => {
+    const harness = new BrowserHarness({ transport: 'broadcastchannel' });
+    const environment = harness.createEnvironment('hidden');
+    const heard: string[] = [];
+    const hidden = environment.createTransport({
+      clientId: 'hidden' as ClientId,
+      onMessage: (message) => heard.push(message.type),
+      onDecodeFailure: () => undefined,
+      onTransportError: () => undefined,
+      logger: new ScopedLogger(NOOP_LOGGER, {}),
+      clock: harness.busClock,
+    });
+    hidden.attach('Reader');
+    const sender = harness.createEnvironment('sender').createTransport({
+      clientId: 'sender' as ClientId,
+      onMessage: () => undefined,
+      onDecodeFailure: () => undefined,
+      onTransportError: () => undefined,
+      logger: new ScopedLogger(NOOP_LOGGER, {}),
+      clock: harness.busClock,
+    });
+    await harness.settle();
+    heard.splice(0);
+    environment.clock.setTimer(() => heard.push('timer'), 10);
+
+    harness.throttleTimers('hidden');
+    await harness.advance(60_000);
+    sender.send({
+      type: 'owner-released',
+      v: PROTOCOL_VERSION,
+      from: 'sender' as ClientId,
+      to: 'all',
+      configName: 'Reader',
+      term: 'term' as TermId,
+    });
+    await harness.settle();
+    const beforeBoundary = [...heard];
+    await harness.runThrottledTimers('hidden');
+
+    expect(beforeBoundary).toEqual(['owner-released']);
+    expect(heard).toEqual(['owner-released', 'timer']);
+  });
+
+  it('keeps a timer that falls due after the boundary for the next one', async () => {
+    const harness = new BrowserHarness();
+    const clock = harness.createEnvironment('hidden').clock;
+    const fired: string[] = [];
+    clock.setTimer(() => fired.push('first'), 10);
+
+    harness.throttleTimers('hidden');
+    await harness.advance(60_000);
+    await harness.runThrottledTimers('hidden');
+    clock.setTimer(() => fired.push('second'), 10);
+    await harness.advance(60_000);
+    const afterFirstBoundary = [...fired];
+    await harness.stopThrottlingTimers('hidden');
+
+    expect(afterFirstBoundary).toEqual(['first']);
+    expect(fired).toEqual(['first', 'second']);
+  });
 });
 
 describe('FakeSerialRegistry', () => {
