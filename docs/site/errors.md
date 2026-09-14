@@ -166,7 +166,10 @@ it, so this means a restricted context.
 
 `TRANSPORT_UNAVAILABLE`
 : **Raised by** `setup()` when neither `SharedWorker` nor `BroadcastChannel` can be used — in some
-privacy configurations, and in sandboxed iframes without `allow-same-origin`.
+privacy configurations, and in sandboxed iframes without `allow-same-origin`. `isSupported()`
+returns `false` where neither exists. It creates nothing, though, so where there is no
+`BroadcastChannel` it cannot foresee the two ways of ending here anyway: a `SharedWorker` whose
+construction the browser refuses, and `transport: 'broadcastchannel'`.
 **Do:** run the application outside the restriction.
 
 `BROKER_UNAVAILABLE`
@@ -175,7 +178,8 @@ created. **Delivered through `onError`** when the message bus reports a failure 
 with `transport: 'sharedworker'`, also when the worker script fails to load. With the default
 `'auto'`, a script that fails to load is replaced by a `BroadcastChannel` and raises nothing.
 Also delivered when the worker stops answering the tabs' heartbeats because it crashed or was
-ended, once in every tab for each such loss; the tabs then connect to a new worker on their own.
+ended, once in every tab for each such loss; the tabs then connect to a new worker on their own,
+unless it runs another protocol version, which is reported as `PROTOCOL_VERSION_MISMATCH`.
 **Do:** check that `serial-broker.worker.js` is served from the application's origin, at the URL
 every tab uses; see [The worker script](installing.md#the-worker-script).
 
@@ -295,8 +299,18 @@ state. See
 message protocol, once per version. Every tab announces its version when it sets up its first
 configuration, and answers the announcements of tabs on other versions; see
 [Tabs running different versions](shared-ports.md#tabs-running-different-versions).
+Also delivered when the `SharedWorker` script runs another protocol version: a copied
+`serial-broker.worker.js` left over from an earlier release, one kept by a cache, or a new release
+deployed under the same URL while the tab stayed open. With the default `transport: 'auto'`, a tab
+whose first worker runs another version moves to a `BroadcastChannel` and keeps working. With
+`transport: 'sharedworker'`, or when that worker was started in place of one that died, there is
+nothing to move to: the tab gives up on the worker, logs `transport.worker-other-protocol-version`,
+and stays cut off from the other tabs until it is reloaded. Starting another worker would not
+help, because the same URL serves the same script.
 **Context:** `theirVersion`.
-**Do:** reload every tab of the application.
+**Do:** reload every tab of the application. When it was the worker script, first make sure its URL
+serves the `serial-broker.worker.js` of the release the page ships; see
+[The worker script](installing.md#the-worker-script).
 
 A message from another tab that cannot be read raises no error: it is dropped and logged as
 `client.malformed-message`.

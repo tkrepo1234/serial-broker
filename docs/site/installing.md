@@ -91,10 +91,14 @@ what you intended.
 import { isSupported } from 'serial-broker';
 
 if (!isSupported()) {
-  // Web Serial or Web Locks is missing, or this is not a secure context.
+  // Web Serial or Web Locks is missing (browsers offer neither outside a secure context),
+  // or there is neither a SharedWorker nor a BroadcastChannel.
   // Hide the device feature, or explain why it is unavailable.
 }
 ```
+
+Either message bus is enough. Without a `BroadcastChannel`, a tab cannot notice tabs on another
+version of serial-broker, and has nothing to fall back to when the worker script does not load.
 
 `isSupported()` can be called without touching anything else in the library, so it is safe in a
 browser that has no Web Serial at all, and during server-side rendering.

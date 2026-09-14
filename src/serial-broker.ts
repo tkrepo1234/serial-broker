@@ -279,9 +279,10 @@ export interface SerialBrokerApi {
   /**
    * Reports whether this browser can support the library at all.
    *
-   * Checks for a secure context, Web Serial, Web Locks and a message bus. Use it to decide
-   * whether to offer a device-connected feature, rather than discovering the problem at
-   * `setup()`.
+   * Checks for Web Serial, Web Locks and a message bus, a `SharedWorker` or a `BroadcastChannel`.
+   * Browsers offer Web Serial and Web Locks only in a secure context, so that is checked as well.
+   * Use it to decide whether to offer a device-connected feature, rather than discovering the
+   * problem at `setup()`.
    */
   isSupported(): boolean;
 

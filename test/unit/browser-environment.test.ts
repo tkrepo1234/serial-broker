@@ -143,6 +143,46 @@ describe('isSupported', () => {
 
     expect(isSupported()).toBe(false);
   });
+
+  it('is true with a SharedWorker and no BroadcastChannel', () => {
+    stubBrowser({ broadcastChannel: false });
+
+    // Only the version announcement and the fallback need the channel, and both are optional.
+    expect(isSupported()).toBe(true);
+  });
+
+  it('is true with a BroadcastChannel and no SharedWorker', () => {
+    stubBrowser({ sharedWorker: 'absent' });
+
+    expect(isSupported()).toBe(true);
+  });
+
+  it('is false with neither SharedWorker nor BroadcastChannel', () => {
+    stubBrowser({ sharedWorker: 'absent', broadcastChannel: false });
+
+    expect(isSupported()).toBe(false);
+  });
+
+  it('is true only where a message bus can be built', () => {
+    for (const sharedWorker of ['working', 'absent'] as const) {
+      for (const broadcastChannel of [true, false]) {
+        stubBrowser({ sharedWorker, broadcastChannel });
+        const build = (): unknown =>
+          createBrowserEnvironment({ workerUrl: 'https://example.test/w.js' }).createTransport(
+            transportRequest(),
+          );
+
+        if (isSupported()) {
+          expect(build).not.toThrow();
+        } else {
+          expect(build).toThrow(
+            expect.objectContaining({ code: SerialBrokerErrorCode.TRANSPORT_UNAVAILABLE }),
+          );
+        }
+        vi.unstubAllGlobals();
+      }
+    }
+  });
 });
 
 describe('createBrowserEnvironment', () => {

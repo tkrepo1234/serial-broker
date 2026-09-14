@@ -85,3 +85,42 @@ The shapes and the rules are kept in `src/protocol/handshake.ts`.
 `test/unit/transports.test.ts` and `test/unit/fallback-transport.test.ts` (the tab falls back and
 names the reason), and `test/integration/multi-tab/worker-script-fallback.test.ts` (two tabs on a
 worker script of another version share the port).
+
+## Amendment (2026-09-14): give up on a worker of another version
+
+### Context
+
+Where a tab cannot fall back, the mismatch was only reported: with `transport: 'sharedworker'`, and
+on a worker started in place of one that died (ADR-0021, amended), long after the welcome of the
+tab's own version. Such a worker answers `hello` and nothing else, so the tab's heartbeats went
+unanswered and it took the worker for dead. It reported `BROKER_UNAVAILABLE`, whose remediation says
+the tabs reconnect on their own, and started another worker from the same URL, which ran the same
+script - logging `transport.worker-restarted` about every 45 seconds for as long as the tab stayed
+open.
+
+### Decision
+
+A message in another version on the worker's port ends the tab's use of workers wherever it does not
+fall back. The tab closes its port, stops its heartbeats, starts no other worker, and logs
+`transport.worker-other-protocol-version` at `warn`, once. The mismatch is still reported once. A
+broker that only stops answering is still taken for dead and replaced.
+
+Only a reload brings the tab onto a worker again, once the page and the script the URL serves are of
+the same release. Closing the port lets the stale worker end when no tab holds one any more, as for
+tabs that fell back.
+
+### Alternatives considered
+
+- **Keep starting workers, less often.** It would pick up a script fixed on the server while the tab
+  stayed open, but only after every tab let go of the stale worker, and never after a new release
+  was deployed under the same URL, where the tab itself is the older side.
+
+### Consequences
+
+- Such a tab is cut off until it is reloaded, as before, but says so once, and no longer reports a
+  worker that is alive as lost.
+
+### Verification
+
+`test/unit/worker-transport-liveness.test.ts` and
+`test/integration/multi-tab/worker-script-fallback.test.ts`.

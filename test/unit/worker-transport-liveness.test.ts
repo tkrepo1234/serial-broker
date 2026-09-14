@@ -6,10 +6,12 @@ import {
   type WorkerStartup,
 } from '../../src/client/transport/shared-worker-transport.js';
 import type { Clock } from '../../src/core/clock.js';
+import type { Logger } from '../../src/core/types.js';
 import { HEARTBEAT_INTERVAL_MS, MAX_UNANSWERED_HEARTBEATS } from '../../src/protocol/heartbeat.js';
-import type { ClientId, ProtocolMessage } from '../../src/protocol/messages.js';
+import { BROKER_ID, type ClientId, type ProtocolMessage } from '../../src/protocol/messages.js';
 import { PROTOCOL_VERSION } from '../../src/protocol/version.js';
 import type { FakeClock } from '../harness/fake-clock.js';
+import { fieldsOfEvent, recordingLogger } from '../harness/recording-logger.js';
 import {
   envelope,
   FakeMessagePort,
@@ -26,18 +28,29 @@ const THROTTLED_TIMER_MS = 60_000;
 /**
  * A port to a worker whose broker answers `hello` and every heartbeat at once, for as long as the
  * worker lives.
+ *
+ * A worker of another protocol version answers only `hello`, in its own version, and drops
+ * everything else (ADR-0024).
  */
 class WorkerPort extends FakeMessagePort {
   isAlive: boolean;
+  readonly isOtherVersion: boolean;
 
-  constructor(isAlive: boolean) {
+  constructor(isAlive: boolean, isOtherVersion = false) {
     super();
     this.isAlive = isAlive;
+    this.isOtherVersion = isOtherVersion;
   }
 
   override postMessage(message: unknown): void {
     super.postMessage(message);
     const type = (message as { readonly type?: unknown }).type;
+    if (this.isOtherVersion) {
+      if (type === 'hello') {
+        this.deliver({ v: PROTOCOL_VERSION - 1, from: BROKER_ID, to: SELF, type: 'welcome' });
+      }
+      return;
+    }
     if (this.isAlive && (type === 'hello' || type === 'heartbeat')) {
       this.deliver({
         v: PROTOCOL_VERSION,
@@ -65,13 +78,20 @@ function throttled(clock: FakeClock, minimumDelayMs: number): Clock {
  * does once the previous worker has died.
  */
 function start(
-  options: { throttle?: boolean; workersAnswer?: boolean; startup?: WorkerStartup } = {},
+  options: {
+    throttle?: boolean;
+    workersAnswer?: boolean;
+    /** The number of the first worker whose script runs another protocol version. */
+    otherVersionFrom?: number;
+    startup?: WorkerStartup;
+    logger?: Logger;
+  } = {},
 ): TransportRequestRecorder & {
   transport: SharedWorkerTransport;
   workers: WorkerPort[];
   workerErrors: ((event: unknown) => void)[];
 } {
-  const rec = recordTransportRequest(SELF);
+  const rec = recordTransportRequest(SELF, options.logger);
   const workers: WorkerPort[] = [];
   const workerErrors: ((event: unknown) => void)[] = [];
   const request =
@@ -82,7 +102,10 @@ function start(
   const transport = new SharedWorkerTransport(
     request,
     () => {
-      const port = new WorkerPort(options.workersAnswer ?? true);
+      const port = new WorkerPort(
+        options.workersAnswer ?? true,
+        options.otherVersionFrom !== undefined && workers.length >= options.otherVersionFrom,
+      );
       workers.push(port);
       return {
         port,
@@ -267,5 +290,85 @@ describe('SharedWorkerTransport, when its worker never answers at all', () => {
     expect(reasons).toEqual(['worker-not-answering']);
     expect(workers).toHaveLength(1);
     expect(transportErrors).toEqual([]);
+  });
+});
+
+/**
+ * A worker whose script runs another protocol version, where nothing falls back to
+ * `BroadcastChannel` (ADR-0024, amended).
+ *
+ * Such a worker answers `hello` and nothing else, so its silence is no sign of a crash. A new worker
+ * from the same URL runs the same script, and starting one every three heartbeats would only fill
+ * the log.
+ */
+describe('SharedWorkerTransport, when its worker runs another protocol version', () => {
+  it('gives up on the worker for good when nothing falls back', async () => {
+    const { logger, records } = recordingLogger();
+    const { clock, workers, decodeFailures, transportErrors } = start({
+      otherVersionFrom: 0,
+      logger,
+    });
+
+    await clock.advance(10 * DETECTION_MS);
+
+    // `transport: 'sharedworker'`: the mismatch is reported once, and is the only report.
+    expect(decodeFailures).toEqual([expect.objectContaining({ reason: 'version-mismatch' })]);
+    expect(transportErrors).toEqual([]);
+    expect(workers).toHaveLength(1);
+    expect(worker(workers, 0).posted).not.toContainEqual(
+      expect.objectContaining({ type: 'heartbeat' }),
+    );
+    expect(worker(workers, 0).closed).toBe(true);
+    expect(clock.pendingTimerCount).toBe(0);
+    expect(fieldsOfEvent(records, 'transport.worker-other-protocol-version')).toEqual([
+      expect.objectContaining({ theirVersion: PROTOCOL_VERSION - 1 }),
+    ]);
+    expect(fieldsOfEvent(records, 'transport.worker-restarted')).toEqual([]);
+  });
+
+  it('gives up on a worker of another version started in place of one that died', async () => {
+    const { clock, workers, decodeFailures, transportErrors } = start({ otherVersionFrom: 1 });
+    worker(workers, 0).isAlive = false;
+
+    // The application was deployed again under the same worker URL while the tab stayed open.
+    await clock.advance(DETECTION_MS);
+    expect(workers).toHaveLength(2);
+    await clock.advance(10 * DETECTION_MS);
+
+    expect(workers).toHaveLength(2);
+    expect(transportErrors).toHaveLength(1);
+    expect(decodeFailures).toHaveLength(1);
+    expect(clock.pendingTimerCount).toBe(0);
+  });
+
+  it('reports the worker as unusable once when whoever created it keeps it anyway', async () => {
+    const reasons: WorkerLoadFailure[] = [];
+    // What `FallbackTransport` does when it cannot build a `BroadcastChannel` either.
+    const { clock, workers, transportErrors } = start({
+      otherVersionFrom: 0,
+      startup: {
+        onReady: () => undefined,
+        onLoadFailed: (_event, reason) => reasons.push(reason),
+      },
+    });
+
+    await clock.advance(10 * DETECTION_MS);
+
+    expect(reasons).toEqual(['worker-other-protocol-version']);
+    expect(workers).toHaveLength(1);
+    expect(transportErrors).toEqual([]);
+  });
+
+  it('still starts a new worker when a worker of this version dies later', async () => {
+    const { clock, workers, transportErrors } = start({ otherVersionFrom: 2 });
+
+    worker(workers, 0).isAlive = false;
+    await clock.advance(DETECTION_MS);
+    worker(workers, 1).isAlive = false;
+    await clock.advance(DETECTION_MS);
+
+    // Only a worker that said it runs another version is given up on for good.
+    expect(workers).toHaveLength(3);
+    expect(transportErrors).toHaveLength(2);
   });
 });

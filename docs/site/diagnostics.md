@@ -44,41 +44,42 @@ message.
 
 ### What is logged
 
-| Event                             | Level | When                                                                                      |
-| --------------------------------- | ----- | ----------------------------------------------------------------------------------------- |
-| `client.setup`                    | info  | A configuration was set up in this tab.                                                   |
-| `client.restore`                  | info  | Remembered configurations were restored.                                                  |
-| `client.release`                  | info  | A configuration was released in this tab.                                                 |
-| `client.error`                    | error | A failure not tied to one configuration, such as a message bus failure.                   |
-| `client.malformed-message`        | warn  | A message from another tab could not be read and was dropped.                             |
-| `client.forget-failed`            | warn  | The browser could not revoke a device permission.                                         |
-| `client.dispose-failed`           | warn  | A cleanup step failed while the client was disposed; `reason` says which.                 |
-| `client.announcement-unavailable` | warn  | The version announcement cannot be used; tabs on other protocol versions go unnoticed.    |
-| `facade.late-configure`           | warn  | `configure()` was called after the client was built; its options apply after `dispose()`. |
-| `election.acquired`               | info  | This tab now holds the port.                                                              |
-| `election.released`               | info  | This tab gave the port up.                                                                |
-| `election.failed`                 | warn  | Requesting the ownership lock failed; the tab requests it again.                          |
-| `supervisor.open`                 | info  | The port opened.                                                                          |
-| `supervisor.reconnect`            | warn  | The connection was lost; the reason, attempt and delay are in the fields.                 |
-| `supervisor.device-connected`     | info  | The device reappeared, and a reconnect is attempted at once.                              |
-| `supervisor.teardown-failed`      | debug | Closing a lost connection failed or timed out at `step`; the next open may find it open.  |
-| `supervisor.sent`, `.received`    | debug | Traffic, with `byteLength`; with `logPayloads`, also `hex`.                               |
-| `matcher.none`                    | debug | No granted port matches the configured device.                                            |
-| `matcher.ambiguous`               | warn  | Several granted ports match; the first is used.                                           |
-| `environment.transport-fallback`  | warn  | `SharedWorker` is unavailable or its script did not load; `BroadcastChannel` is used.     |
-| `transport.broker-lost`           | warn  | The worker left the tab's heartbeats unanswered; a new worker is started.                 |
-| `transport.worker-restarted`      | info  | A new worker was started after the old one stopped answering.                             |
-| `transport.worker-restart-failed` | warn  | Starting a new worker failed; the next unanswered heartbeats try again.                   |
-| `transport.broker-restored`       | info  | The worker answers again.                                                                 |
-| `transport.dispose-failed`        | warn  | A cleanup step failed while the message bus was closed.                                   |
-| `storage.unavailable`             | warn  | A read or write to `localStorage` failed; configurations may not be remembered.           |
-| `storage.invalid-entry`           | warn  | A remembered configuration was invalid and discarded.                                     |
-| `storage.corrupt`                 | warn  | The stored configurations could not be read and were discarded.                           |
-| `storage.migrated`                | info  | Remembered configurations were moved from the key an earlier build used.                  |
-| `slot.acquired`                   | info  | This tab took one of the `maxTabs` places and joins the configuration.                    |
-| `slot.released`                   | info  | This tab gave its place up.                                                               |
-| `slot.failed`                     | warn  | Requesting a place failed; the tab queues again.                                          |
-| `session.tab-limit-conflict`      | warn  | The tab holding the port runs a different `maxTabs`; this tab withdrew.                   |
+| Event                                     | Level | When                                                                                      |
+| ----------------------------------------- | ----- | ----------------------------------------------------------------------------------------- |
+| `client.setup`                            | info  | A configuration was set up in this tab.                                                   |
+| `client.restore`                          | info  | Remembered configurations were restored.                                                  |
+| `client.release`                          | info  | A configuration was released in this tab.                                                 |
+| `client.error`                            | error | A failure not tied to one configuration, such as a message bus failure.                   |
+| `client.malformed-message`                | warn  | A message from another tab could not be read and was dropped.                             |
+| `client.forget-failed`                    | warn  | The browser could not revoke a device permission.                                         |
+| `client.dispose-failed`                   | warn  | A cleanup step failed while the client was disposed; `reason` says which.                 |
+| `client.announcement-unavailable`         | warn  | The version announcement cannot be used; tabs on other protocol versions go unnoticed.    |
+| `facade.late-configure`                   | warn  | `configure()` was called after the client was built; its options apply after `dispose()`. |
+| `election.acquired`                       | info  | This tab now holds the port.                                                              |
+| `election.released`                       | info  | This tab gave the port up.                                                                |
+| `election.failed`                         | warn  | Requesting the ownership lock failed; the tab requests it again.                          |
+| `supervisor.open`                         | info  | The port opened.                                                                          |
+| `supervisor.reconnect`                    | warn  | The connection was lost; the reason, attempt and delay are in the fields.                 |
+| `supervisor.device-connected`             | info  | The device reappeared, and a reconnect is attempted at once.                              |
+| `supervisor.teardown-failed`              | debug | Closing a lost connection failed or timed out at `step`; the next open may find it open.  |
+| `supervisor.sent`, `.received`            | debug | Traffic, with `byteLength`; with `logPayloads`, also `hex`.                               |
+| `matcher.none`                            | debug | No granted port matches the configured device.                                            |
+| `matcher.ambiguous`                       | warn  | Several granted ports match; the first is used.                                           |
+| `environment.transport-fallback`          | warn  | `SharedWorker` is unavailable or its script did not load; `BroadcastChannel` is used.     |
+| `transport.broker-lost`                   | warn  | The worker left the tab's heartbeats unanswered; a new worker is started.                 |
+| `transport.worker-restarted`              | info  | A new worker was started after the old one stopped answering.                             |
+| `transport.worker-restart-failed`         | warn  | Starting a new worker failed; the next unanswered heartbeats try again.                   |
+| `transport.broker-restored`               | info  | The worker answers again.                                                                 |
+| `transport.worker-other-protocol-version` | warn  | The worker runs another protocol version; the tab uses no worker until it is reloaded.    |
+| `transport.dispose-failed`                | warn  | A cleanup step failed while the message bus was closed.                                   |
+| `storage.unavailable`                     | warn  | A read or write to `localStorage` failed; configurations may not be remembered.           |
+| `storage.invalid-entry`                   | warn  | A remembered configuration was invalid and discarded.                                     |
+| `storage.corrupt`                         | warn  | The stored configurations could not be read and were discarded.                           |
+| `storage.migrated`                        | info  | Remembered configurations were moved from the key an earlier build used.                  |
+| `slot.acquired`                           | info  | This tab took one of the `maxTabs` places and joins the configuration.                    |
+| `slot.released`                           | info  | This tab gave its place up.                                                               |
+| `slot.failed`                             | warn  | Requesting a place failed; the tab queues again.                                          |
+| `session.tab-limit-conflict`              | warn  | The tab holding the port runs a different `maxTabs`; this tab withdrew.                   |
 
 Payload bytes never appear above `debug`, and at `debug` only with `logPayloads: true`.
 

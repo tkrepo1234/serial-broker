@@ -3,9 +3,16 @@ import { describe, expect, it } from 'vitest';
 import { SerialBrokerErrorCode } from '../../../src/core/error-codes.js';
 import { SerialBrokerStatus } from '../../../src/core/types.js';
 import type { LogFields } from '../../../src/core/types.js';
+import {
+  HEARTBEAT_INTERVAL_MS,
+  MAX_UNANSWERED_HEARTBEATS,
+} from '../../../src/protocol/heartbeat.js';
 import { BrowserHarness } from '../../harness/browser-harness.js';
 import { READER, READER_OPTIONS } from '../../harness/devices.js';
 import { recordingLogger } from '../../harness/recording-logger.js';
+
+/** Enough for every tab to miss the heartbeats that mark a broker as gone, whatever its timer's phase. */
+const DETECTION_MS = (MAX_UNANSWERED_HEARTBEATS + 1) * HEARTBEAT_INTERVAL_MS;
 
 /**
  * A worker script that was not deployed, or is served from the wrong path (ADR-0007).
@@ -129,6 +136,40 @@ describe('tabs whose worker script is of another protocol version', () => {
           reason: 'worker-other-protocol-version',
         }) as LogFields,
       );
+    }
+  });
+
+  it('stop starting workers once a worker that died is replaced by one of another version', async () => {
+    const { logger, records } = recordingLogger();
+    const harness = new BrowserHarness({ transport: 'sharedworker', logger });
+    const device = harness.serial.addDevice(READER.vendorId, READER.productId);
+    harness.serial.grant(device);
+    const owner = harness.openTab();
+    await owner.setup('CardReader', READER_OPTIONS);
+    const other = harness.openTab();
+    await other.setup('CardReader', READER_OPTIONS);
+    await harness.settle();
+
+    // Deployed again under the same worker URL while the tabs stayed open. The welcome of this
+    // version came long ago, so there is nothing left to fall back from, and every worker started
+    // from that URL runs the new script: only a reload helps (ADR-0024, amended).
+    harness.bus.crashWorker('other-version');
+    for (let round = 0; round < 10; round += 1) {
+      await harness.busClock.advance(DETECTION_MS);
+      await harness.settle();
+    }
+
+    const fields = records.map((record) => record[2]);
+    for (const tab of [owner, other]) {
+      expect(tab.recordFor('CardReader').errors.map((event) => event.error.code)).toEqual([
+        SerialBrokerErrorCode.BROKER_UNAVAILABLE,
+        SerialBrokerErrorCode.PROTOCOL_VERSION_MISMATCH,
+      ]);
+      const ofTab = fields.filter((entry) => entry['context'] === tab.id);
+      expect(ofTab.filter((entry) => entry.event === 'transport.worker-restarted')).toHaveLength(1);
+      expect(
+        ofTab.filter((entry) => entry.event === 'transport.worker-other-protocol-version'),
+      ).toHaveLength(1);
     }
   });
 });
