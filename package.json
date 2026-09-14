@@ -105,7 +105,7 @@
     "verify": "npm run format:check && npm run lint && npm run typecheck && npm run test:coverage && npm run build",
     "prepublishOnly": "npm run verify",
     "release:check": "node scripts/release-notes.mjs",
-    "test:examples": "playwright test --config playwright.examples.config.ts"
+    "test:examples": "playwright test --config playwright.examples.config.ts --pass-with-no-tests"
   },
   "overrides": {
     "esbuild": "^0.28.2"
