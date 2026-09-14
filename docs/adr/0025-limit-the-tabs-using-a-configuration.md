@@ -1,8 +1,12 @@
 # ADR-0025: Limit how many tabs use a configuration at once
 
-- **Status:** Accepted
+- **Status:** Accepted, amended by [ADR-0030](./0030-hold-a-web-lock-for-every-term-of-holding-the-port.md)
 - **Date:** 2026-09-13
 - **Amends:** ADR-0011
+
+> **Amendment (ADR-0030).** The tab limit of the tab holding the port is part of the name of that
+> term's Web Lock, and `owner-claimed` carries it as `status` does. A tab therefore withdraws only
+> for a limit the tab holding the port demonstrably runs, never for one a message claims.
 
 ## Context
 

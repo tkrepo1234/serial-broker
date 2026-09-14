@@ -1,12 +1,21 @@
 # ADR-0013: Per-participant write ordering with at-most-once delivery
 
-- **Status:** Accepted, amended by [ADR-0026](./0026-attribute-messages-to-a-term-of-holding-the-port.md)
+- **Status:** Accepted, amended by [ADR-0026](./0026-attribute-messages-to-a-term-of-holding-the-port.md), [ADR-0030](./0030-hold-a-web-lock-for-every-term-of-holding-the-port.md) and [ADR-0031](./0031-bound-and-rate-limit-what-the-bus-can-cost-a-tab.md)
 - **Date:** 2026-09-12
 
 > **Amendment (ADR-0026).** A new owner announcing itself proves that the previous one let go of
 > the lock, not that its last messages have arrived. Writes are addressed to a term of holding the
 > port, and the fate of a write is decided when the term it was handed to has ended: its
 > `owner-released` arrived, or it was succeeded and stayed silent for a grace period.
+
+> **Amendment (ADR-0030).** A term is a Web Lock, so it ends when the browser frees that lock, or
+> at the `owner-released` of a holder that is letting go cleanly - not after a grace period. A
+> write is reported started, or answered, only by the term it was addressed to and only by the
+> context that holds that term's lock.
+
+> **Amendment (ADR-0031).** A port keeps a bounded number of waiting writes, and a bounded number
+> of payload bytes. A write beyond either bound is refused with `WRITE_QUEUE_FULL`, which says that
+> nothing of it was written; a request the port has already accepted is never refused.
 
 ## Context
 

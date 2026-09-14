@@ -1,8 +1,15 @@
 # ADR-0026: Attribute ownership, write and status messages to a term of holding the port
 
-- **Status:** Accepted
+- **Status:** Accepted, amended by [ADR-0030](./0030-hold-a-web-lock-for-every-term-of-holding-the-port.md)
 - **Date:** 2026-09-14
 - **Amends:** ADR-0013
+
+> **Amendment (ADR-0030).** A term is a Web Lock, held by the tab holding the port for the whole
+> term, and not merely an identifier in a message. A claim or a status is believed only while that
+> lock is held; a term ends when the browser frees the lock, or - for a holder that is letting go
+> cleanly, which the request it queues on its own term lock says - at its `owner-released`. The
+> grace period of one second is gone, and with it `FORMER_OWNER_GRACE_MS`. A write is reported
+> started or answered only by the term it was addressed to.
 
 ## Context
 
