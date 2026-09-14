@@ -245,6 +245,7 @@ export class FakeBus {
   readonly broadcastHub = new FakeBroadcastHub();
 
   #workerHost: FakeWorkerHost;
+  #workerScript: WorkerScript;
   readonly #workerFailures: ((event: unknown) => void)[] = [];
   /** Contexts that died: nothing they send reaches the worker any more, and their timers stop. */
   readonly #killed = new Set<string>();
@@ -255,11 +256,17 @@ export class FakeBus {
    */
   constructor(
     readonly mode: TransportMode,
-    readonly workerScript: WorkerScript = 'loads',
+    workerScript: WorkerScript = 'loads',
     /** Time for the bus: the heartbeats tabs send and the worker's sweep. */
     readonly clock: FakeClock,
   ) {
+    this.#workerScript = workerScript;
     this.#workerHost = new FakeWorkerHost(clock);
+  }
+
+  /** In `sharedworker` mode, the script the browser runs for a worker started now. */
+  get workerScript(): WorkerScript {
+    return this.#workerScript;
   }
 
   /** The worker a tab reaches if it starts one now: the first, or the one since the last crash. */
@@ -280,10 +287,14 @@ export class FakeBus {
    * As in a browser, the tabs are not told: their ports simply go dead. The next tab to start the
    * worker - one opened later, or one that gave up on the dead one (ADR-0021) - starts a new one,
    * which knows nothing of the tabs that were connected to the old.
+   *
+   * @param restartsAs - The script every worker started from now on runs. A different one is what
+   *   an open tab meets when the application was deployed again under the same worker URL.
    */
-  crashWorker(): void {
+  crashWorker(restartsAs: WorkerScript = this.#workerScript): void {
     this.#workerHost.crash();
     this.#workerHost = new FakeWorkerHost(this.clock);
+    this.#workerScript = restartsAs;
   }
 
   /** Builds the transport a simulated context should use. */
@@ -349,7 +360,9 @@ export class FakeBus {
    */
   #startWorker(contextId: string, clientId: ClientId): SharedWorkerLike {
     const host = this.#workerHost;
-    const loads = this.workerScript === 'loads';
+    // Read once: a worker keeps the script it started with.
+    const script = this.#workerScript;
+    const loads = script === 'loads';
     /** The tab's end of the port. */
     let tabListener: MessageListener | undefined;
     /**
@@ -375,7 +388,7 @@ export class FakeBus {
         // A port to a worker whose script never ran accepts messages and delivers none. A worker of
         // another version drops them too, but answers the frozen handshake (ADR-0024).
         if (
-          this.workerScript === 'other-version' &&
+          script === 'other-version' &&
           isStarted &&
           tabListener !== undefined &&
           (message as { readonly type?: unknown }).type === 'hello'

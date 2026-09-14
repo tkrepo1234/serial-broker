@@ -66,6 +66,10 @@ export interface WorkerStartup {
  * The worker can die as well, and a port to a dead worker reports nothing. The broker therefore
  * answers every heartbeat, and a transport whose heartbeats go unanswered starts a new worker and
  * restores its part there with a heartbeat (ADR-0021, amended).
+ *
+ * A worker whose script runs another protocol version is silent too, but alive: it answers `hello`
+ * and nothing else. A new worker from the same URL would run the same script, so a transport that
+ * does not hand such a worker over to a fallback gives up on workers altogether (ADR-0024, amended).
  */
 export class SharedWorkerTransport implements Transport {
   readonly kind = 'sharedworker' as const;
@@ -90,6 +94,11 @@ export class SharedWorkerTransport implements Transport {
   #unansweredHeartbeats = 0;
   /** A lost broker was reported, and no broker has answered since. */
   #isBrokerLost = false;
+  /**
+   * The worker runs another protocol version, and this transport uses no worker any more: until the
+   * page is reloaded, every worker it could start would run the same script.
+   */
+  #isOtherVersion = false;
   #heartbeat: TimerHandle | undefined;
 
   /**
@@ -187,7 +196,8 @@ export class SharedWorkerTransport implements Transport {
     const isCurrent = (): boolean => !this.#disposal.isDisposed && this.#port === port;
 
     worker.addEventListener('error', (event) => {
-      if (!isCurrent()) {
+      if (!isCurrent() || this.#isOtherVersion) {
+        // A worker given up on for its version has nothing left to report: the mismatch was.
         return;
       }
       // The browser fires this when the script cannot be fetched or evaluated, and a port to
@@ -225,6 +235,11 @@ export class SharedWorkerTransport implements Transport {
   }
 
   #scheduleHeartbeat(): void {
+    if (this.#isOtherVersion) {
+      // Nobody answers heartbeats there, and taking that silence for a crash would only start the
+      // same script again.
+      return;
+    }
     this.#heartbeat = this.#request.clock.setTimer(() => {
       if (this.#disposal.isDisposed) {
         return;
@@ -353,17 +368,8 @@ export class SharedWorkerTransport implements Transport {
       // script runs another protocol version and drops everything this context says. Before a
       // welcome of this version, that means nothing sent so far reached anyone - as when the script
       // does not load at all, and with the same remedy (ADR-0024).
-      if (
-        result.failure.reason === 'version-mismatch' &&
-        !this.#isReady &&
-        this.#startup !== undefined
-      ) {
-        this.#startup.onLoadFailed(
-          new Error(
-            `The SharedWorker script runs protocol version ${String(result.failure.theirVersion)}, not ${String(PROTOCOL_VERSION)}`,
-          ),
-          'worker-other-protocol-version',
-        );
+      if (result.failure.reason === 'version-mismatch') {
+        this.#workerRunsOtherVersion(result.failure.theirVersion);
       }
       return;
     }
@@ -394,6 +400,47 @@ export class SharedWorkerTransport implements Transport {
     }
 
     this.#request.onMessage(result.message);
+  }
+
+  /**
+   * Acts on a worker that said it runs another protocol version.
+   *
+   * Before a welcome of this version, whoever created the transport may send what it sent elsewhere,
+   * and then closes it. Where it cannot - `transport: 'sharedworker'`, a fallback that could not be
+   * built, or a worker started in place of one that died - the transport gives up on workers: it
+   * closes the port, so the stale worker can end once no tab holds one, and stops its heartbeats.
+   * The mismatch itself has been reported by then, once (ADR-0024, amended).
+   */
+  #workerRunsOtherVersion(theirVersion: unknown): void {
+    if (this.#isOtherVersion) {
+      return;
+    }
+    if (!this.#isReady && this.#startup !== undefined) {
+      this.#startup.onLoadFailed(
+        new Error(
+          `The SharedWorker script runs protocol version ${String(theirVersion)}, not ${String(PROTOCOL_VERSION)}`,
+        ),
+        'worker-other-protocol-version',
+      );
+      if (this.#disposal.isDisposed) {
+        return;
+      }
+    }
+
+    this.#isOtherVersion = true;
+    if (this.#heartbeat !== undefined) {
+      this.#request.clock.clearTimer(this.#heartbeat);
+      this.#heartbeat = undefined;
+    }
+    try {
+      this.#port.close();
+    } catch {
+      // Nothing is sent on the port or heard from it any more either way.
+    }
+    this.#request.logger.warn(
+      'the SharedWorker script runs another protocol version; this tab uses no worker until it is reloaded',
+      { event: 'transport.worker-other-protocol-version', theirVersion },
+    );
   }
 
   /** Records that the broker is there. Ends a reported loss, so that a later one is reported too. */

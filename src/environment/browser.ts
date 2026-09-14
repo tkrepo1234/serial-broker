@@ -30,13 +30,24 @@ export interface BrowserEnvironmentOptions {
   readonly logPayloads?: boolean | undefined;
 }
 
-/** `true` if this context has everything the library needs. */
+/**
+ * `true` if this context has everything the library needs: Web Serial, Web Locks and a message bus.
+ *
+ * Browsers offer Web Serial and Web Locks only in a secure context, so their presence is the check
+ * for one. Either bus is enough: `setup()` works on a `SharedWorker` alone, and a `BroadcastChannel`
+ * is otherwise needed only for the version announcement and the fallback, both of which a tab does
+ * without (ADR-0007, ADR-0023). Where neither exists, `setup()` raises `TRANSPORT_UNAVAILABLE`.
+ *
+ * Nothing is constructed, so the answer is for the default `transport: 'auto'` and a worker the
+ * browser lets the page create; see `TRANSPORT_UNAVAILABLE` and `BROKER_UNAVAILABLE` in
+ * docs/site/errors.md.
+ */
 export function isSupported(): boolean {
   return (
     typeof navigator !== 'undefined' &&
     'serial' in navigator &&
     'locks' in navigator &&
-    typeof BroadcastChannel !== 'undefined'
+    (typeof SharedWorker !== 'undefined' || typeof BroadcastChannel !== 'undefined')
   );
 }
 

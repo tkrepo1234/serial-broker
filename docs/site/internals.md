@@ -89,6 +89,11 @@ shape no version may change: a worker answers every `hello`, whatever its versio
 in its own. A tab that receives a message in another version on the worker's port reports
 `PROTOCOL_VERSION_MISMATCH` and falls back as above [ADR-0024].
 
+Where nothing falls back — with `transport: 'sharedworker'`, or on a worker started in place of one
+that died — such a worker answers `hello` and nothing else, and its silence is no crash. The tab
+closes its port, stops its heartbeats and starts no other worker, since one started from the same
+URL runs the same script; only a reload helps [ADR-0024, amended].
+
 ## The protocol between tabs
 
 Every message carries `{ v, from, to, type }` and is validated completely on arrival; anything
