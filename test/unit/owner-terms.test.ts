@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  MAX_MESSAGES_AWAITING_A_TERM,
+  MAX_REMEMBERED_TERMS,
   MAX_TERMS_BEING_CHECKED,
   OwnerTerms,
   type TermClaim,
@@ -275,6 +277,105 @@ describe('OwnerTerms', () => {
     await flushMicrotasks();
 
     expect(ended).toEqual([]);
+  });
+
+  it('applies what arrived while a term was being checked, in the order it arrived', async () => {
+    const { terms, locks } = createTerms();
+    await holdTerm(locks, 'owner', FIRST);
+    const applied: string[] = [];
+
+    terms.observe(FIRST, () => applied.push('claim'));
+    terms.observe(FIRST, () => applied.push('status'));
+    terms.observe(FIRST, () => applied.push('another status'));
+    await flushMicrotasks();
+
+    expect(applied).toEqual(['claim', 'status', 'another status']);
+  });
+
+  it('drops what arrives beyond the messages one term being checked may hold', async () => {
+    const { terms, locks, records } = createTerms();
+    await holdTerm(locks, 'owner', FIRST);
+    const apply = applied();
+
+    for (let index = 0; index < MAX_MESSAGES_AWAITING_A_TERM + 4; index += 1) {
+      terms.observe(FIRST, apply.run);
+    }
+    await flushMicrotasks();
+
+    expect(apply.count()).toBe(MAX_MESSAGES_AWAITING_A_TERM);
+    expect(fieldsOfEvent(records, 'session.term-flood')).toHaveLength(1);
+  });
+
+  it('ends a term whose goodbye arrived while its lock was being checked', async () => {
+    const { terms, locks, ended } = createTerms();
+    const holder = await holdTerm(locks, 'owner', FIRST);
+
+    terms.observe(FIRST, () => undefined);
+    holder.sayGoodbye();
+    terms.heardReleased(FIRST.term, HOLDER);
+    await flushMicrotasks();
+
+    expect(ended).toEqual([{ term: 't1', wasCurrent: true }]);
+  });
+
+  it('ends a term at the free lock where the browser cannot list its locks', async () => {
+    const locks = new FakeLockManager();
+    const ended: TermId[] = [];
+    const { logger } = recordingLogger();
+    const withoutQuery = locks.forContext('watcher');
+    const terms = new OwnerTerms({
+      // A browser without `locks.query()` cannot tell a clean end from a crash.
+      locks: { request: withoutQuery.request.bind(withoutQuery) },
+      configName: CONFIG,
+      logger: new ScopedLogger(logger, {}),
+      onEnded: (term) => ended.push(term),
+    });
+    const holder = await holdTerm(locks, 'owner', FIRST);
+    terms.observe(FIRST, () => undefined);
+    await flushMicrotasks();
+
+    holder.sayGoodbye();
+    holder.letGo();
+    await flushMicrotasks();
+
+    expect(ended).toEqual(['t1']);
+  });
+
+  it('refuses a term whose lock the browser will not answer about, and says so', async () => {
+    const ended: TermId[] = [];
+    const { logger, records } = recordingLogger();
+    const terms = new OwnerTerms({
+      locks: {
+        request: () => Promise.reject(new Error('locks are refused in this context')),
+      },
+      configName: CONFIG,
+      logger: new ScopedLogger(logger, {}),
+      onEnded: (term) => ended.push(term),
+    });
+    const apply = applied();
+
+    terms.observe(FIRST, apply.run);
+    await flushMicrotasks();
+
+    expect(apply.count()).toBe(0);
+    expect(fieldsOfEvent(records, 'session.term-check-failed')).toHaveLength(1);
+  });
+
+  it('remembers a bounded number of terms, forgetting the ones that are over first', async () => {
+    const { terms, locks } = createTerms();
+    for (let index = 0; index <= MAX_REMEMBERED_TERMS; index += 1) {
+      const claim = claimOf(`t-${String(index)}`);
+      await holdTerm(locks, `owner-${String(index)}`, claim);
+      terms.observe(claim, () => undefined);
+      await flushMicrotasks();
+      locks.killContext(`owner-${String(index)}`);
+      await flushMicrotasks();
+    }
+
+    // The oldest term is forgotten, so a message naming it is checked afresh rather than answered
+    // from a record that grows for the life of the tab.
+    expect(terms.isEnded(claimOf('t-0').term)).toBe(false);
+    expect(terms.isEnded(claimOf(`t-${String(MAX_REMEMBERED_TERMS)}`).term)).toBe(true);
   });
 
   it('checks a bounded number of invented terms at once, and logs the flood once', async () => {

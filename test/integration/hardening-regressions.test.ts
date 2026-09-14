@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { SerialBrokerClient } from '../../src/client/serial-broker-client.js';
 import { copyBytes } from '../../src/core/bytes.js';
 import { DisposalStack } from '../../src/core/disposable.js';
 import { EventEmitter } from '../../src/core/emitter.js';
@@ -8,9 +9,11 @@ import { describeUnknown, isSerializedError, SerialBrokerError } from '../../src
 import { NOOP_LOGGER, ScopedLogger } from '../../src/core/logger.js';
 import { normalizeConfiguration, validateName } from '../../src/core/validation.js';
 import type { KeyValueStorage } from '../../src/environment/environment.js';
+import { ELECTION_RETRY_DELAY_MS } from '../../src/owner/election.js';
 import { ConfigurationStore, storageKey } from '../../src/storage/configuration-store.js';
 import { BrowserHarness } from '../harness/browser-harness.js';
 import { READER, READER_OPTIONS } from '../harness/devices.js';
+import { fieldsOfEvent, recordingLogger } from '../harness/recording-logger.js';
 
 /**
  * Defects found in the bug hunt of 2026-09-13 (second round), each pinned by the behaviour it broke.
@@ -201,6 +204,68 @@ describe('remembered configurations', () => {
         .map((configuration) => configuration.name)
         .sort(),
     ).toEqual(['New', 'Old']);
+  });
+});
+
+/**
+ * The lock of a term of holding the port is taken before the tab says anything in that term
+ * (ADR-0030). A browser that refuses the request would otherwise leave a tab holding the ownership
+ * lock without ever opening the port - the one state in which nobody can use the device.
+ */
+describe('a browser that refuses the lock for a term of holding the port', () => {
+  it('opens the port once the request is made again', async () => {
+    const harness = new BrowserHarness();
+    const device = harness.serial.addDevice(READER.vendorId, READER.productId);
+    harness.serial.grant(device);
+    const { logger, records } = recordingLogger();
+    const environment = harness.createEnvironment('tab1');
+    let refusals = 1;
+    const client = new SerialBrokerClient({
+      ...environment,
+      logger: new ScopedLogger(logger, {}),
+      locks: {
+        request: async (name, options, callback) => {
+          if (name.startsWith('serial-broker/term/') && refusals > 0) {
+            refusals -= 1;
+            throw new Error('the browser refused this lock request');
+          }
+          return await environment.locks.request(name, options, callback);
+        },
+      },
+    });
+
+    await client.setup('Reader', READER_OPTIONS);
+    await harness.settle();
+    expect(client.getStatus('Reader').status).not.toBe('open');
+
+    await harness.advance(ELECTION_RETRY_DELAY_MS);
+
+    expect(client.getStatus('Reader').status).toBe('open');
+    expect(device.isOpen).toBe(true);
+    expect(fieldsOfEvent(records, 'session.term-lock-failed')).toHaveLength(1);
+  });
+
+  it('leaves no timer behind when the configuration is released while it waits', async () => {
+    const harness = new BrowserHarness();
+    harness.serial.grant(harness.serial.addDevice(READER.vendorId, READER.productId));
+    const environment = harness.createEnvironment('tab1');
+    const client = new SerialBrokerClient({
+      ...environment,
+      locks: {
+        request: async (name, options, callback) => {
+          if (name.startsWith('serial-broker/term/')) {
+            throw new Error('the browser refused this lock request');
+          }
+          return await environment.locks.request(name, options, callback);
+        },
+      },
+    });
+    await client.setup('Reader', READER_OPTIONS);
+    await harness.settle();
+
+    await client.release('Reader');
+
+    expect(harness.clock.pendingTimerCount).toBe(0);
   });
 });
 
