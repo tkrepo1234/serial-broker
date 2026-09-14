@@ -37,3 +37,7 @@ worked-out framework integration is a project of its own too:
 runnable [OpenUI5](https://openui5.org) application together with a reusable module - a `JSONModel`
 that mirrors one configuration and is bindable in XML views - and a README that explains how to
 take it into an application of your own.
+
+[examples/exclusive](https://github.com/tkrepo1234/serial-broker/tree/main/examples/exclusive) is
+a Vite page without a framework that uses a device with `maxTabs: 1`: it shows `queued` as a wait,
+the takeover when the tab in front releases the device or closes, and a release button.

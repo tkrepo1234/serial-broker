@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>serial-broker - exclusive use of a device</title>
+    <!-- An empty icon: without one the browser asks for /favicon.ico, and the 404 is console noise. -->
+    <link rel="icon" href="data:," />
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body>
+    <main class="app">
+      <header class="app-header">
+        <h1>Cutter</h1>
+        <p class="lead">
+          One tab drives the device at a time (<code>maxTabs: 1</code>). Open this page again to see
+          the second tab wait, and take over when this one lets go.
+        </p>
+      </header>
+
+      <!-- Shown instead of the application where the browser cannot support Web Serial at all. -->
+      <section id="unsupported" class="panel panel-error" hidden>
+        <h2>This browser cannot use the device</h2>
+        <p>
+          Web Serial, Web Locks and a message bus are needed, in a secure context. Chrome or Edge on
+          <code>https://</code> or <code>localhost</code> have all of them.
+        </p>
+      </section>
+
+      <section class="panel" aria-labelledby="status-heading">
+        <h2 id="status-heading">Status</h2>
+        <p class="status-line">
+          <!-- The library's status word, unchanged, so that a test and a support log see the
+               same value the application acted on. -->
+          <span id="status" class="status" data-status="">-</span>
+          <span id="status-explanation" class="status-explanation">Starting.</span>
+        </p>
+        <p class="actions">
+          <!-- The one button that needs a click: the browser shows its port picker only inside a
+               user gesture. It is visible while the status is awaiting-permission and at no
+               other time. -->
+          <button id="connect" type="button" hidden>Choose device</button>
+          <button id="release" type="button" hidden>Release the device</button>
+          <button id="setup" type="button" hidden>Use the device again</button>
+          <button id="open-second-tab" type="button" class="secondary">Open a second tab</button>
+        </p>
+      </section>
+
+      <section id="error" class="panel panel-error" hidden aria-live="polite">
+        <h2 id="error-heading">Error</h2>
+        <p>
+          <code id="error-code"></code>
+          <span id="error-message"></span>
+        </p>
+        <p id="error-remediation" class="remediation"></p>
+        <p id="error-recovering" class="recovering" hidden>
+          serial-broker is recovering from this by itself; the status shows its progress.
+        </p>
+        <p class="actions">
+          <button id="dismiss-error" type="button" class="secondary">Dismiss</button>
+        </p>
+      </section>
+
+      <section class="panel" aria-labelledby="send-heading">
+        <h2 id="send-heading">Send</h2>
+        <form id="send-form" class="send-form">
+          <label for="send-input" class="visually-hidden">Line to send</label>
+          <input
+            id="send-input"
+            type="text"
+            autocomplete="off"
+            placeholder="CUT 10"
+            aria-describedby="send-hint"
+          />
+          <button id="send-button" type="submit" disabled>Send</button>
+        </form>
+        <p id="send-hint" class="hint">A newline is appended. Sending waits for an open port.</p>
+      </section>
+
+      <section class="panel" aria-labelledby="received-heading">
+        <h2 id="received-heading">Received</h2>
+        <pre id="received" class="received" aria-live="polite"></pre>
+      </section>
+
+      <section class="panel" aria-labelledby="log-heading">
+        <h2 id="log-heading">What happened</h2>
+        <ol id="log" class="log" reversed></ol>
+      </section>
+    </main>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

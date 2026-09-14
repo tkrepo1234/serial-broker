@@ -4,17 +4,17 @@ Runnable applications that use serial-broker the way an application does: throug
 entry points only, never through `src/`. Each one lives in its own directory with its own
 `package.json`, dependencies and toolchain, deliberately kept out of the root `package.json`.
 
-| Directory              | Shows                                                                                   |
-| ---------------------- | --------------------------------------------------------------------------------------- |
-| `minimal/`             | One page: connect, print what arrives, send text.                                       |
+| Directory | Shows |
+| ---------------------- | -------------------------------------------------------------------------------------- |
+| `minimal/` | One page: connect, print what arrives, send text. |
 | `multi-tab-dashboard/` | Several tabs on one device: every status, errors, permission, remembering, diagnostics. |
-| `exclusive/`           | `maxTabs: 1`, with the `queued` state shown to the user.                                |
-| `no-bundler/`          | `serial-broker/min` from an import map, no build step.                                  |
-| `openui5/`             | SAP OpenUI5: a reusable integration module (`JSONModel`) and an application using it.   |
-| `react/`               | React: a `useSerialBroker` hook.                                                        |
-| `vue/`                 | Vue 3: a composable.                                                                    |
-| `svelte/`              | Svelte 5: a store.                                                                      |
-| `angular/`             | Angular: a service with signals.                                                        |
+| `exclusive/` | `maxTabs: 1`: one tab at a time, `queued` shown as a wait, the takeover, a release. |
+| `no-bundler/` | `serial-broker/min` from an import map, no build step. |
+| `openui5/` | SAP OpenUI5: a reusable integration module (`JSONModel`) and an application using it. |
+| `react/` | React: a `useSerialBroker` hook. |
+| `vue/` | Vue 3: a composable. |
+| `svelte/` | Svelte 5: a store. |
+| `angular/` | Angular: a service with signals. |
 
 ## The contract every example keeps
 
