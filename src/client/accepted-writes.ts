@@ -42,6 +42,18 @@ export class AcceptedWrites {
 
   constructor(private readonly maxFinished = MAX_REMEMBERED_FINISHED_WRITES) {}
 
+  /**
+   * `true` for a request this record has already seen: one being written, or one that has ended.
+   *
+   * Asked before a write is refused for want of room at the port (ADR-0031): a repeat of a write
+   * already accepted must be answered from here, never refused, because its bytes may already be
+   * on their way to the device.
+   */
+  isKnown(origin: ClientId, requestId: RequestId): boolean {
+    const key = keyOf(origin, requestId);
+    return this.#inProgress.has(key) || this.#finished.has(key);
+  }
+
   /** Decides what to do with a request, and records a new one as in progress. */
   admit(origin: ClientId, requestId: RequestId): Admission {
     const key = keyOf(origin, requestId);

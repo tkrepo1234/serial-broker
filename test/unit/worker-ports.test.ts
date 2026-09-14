@@ -95,7 +95,12 @@ describe('WorkerPorts', () => {
     const alice = join(world, 'alice');
     world.ports.receive(
       alice,
-      envelope('alice', 'all', { type: 'owner-claimed', configName: 'Reader', term: 't-1' }),
+      envelope('alice', 'all', {
+        type: 'owner-claimed',
+        configName: 'Reader',
+        term: 't-1',
+        maxTabs: 1,
+      }),
     );
     const bob = join(world, 'bob');
 

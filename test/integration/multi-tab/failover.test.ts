@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 
-import { FORMER_OWNER_GRACE_MS } from '../../../src/client/owner-terms.js';
 import { SerialBrokerErrorCode } from '../../../src/core/error-codes.js';
 import { SerialBrokerError } from '../../../src/core/errors.js';
 import { SerialBrokerStatus } from '../../../src/core/types.js';
@@ -85,9 +84,6 @@ describe.each(TRANSPORT_MODES)('ownership failover (%s)', (transport) => {
     const write = peer.client.send('Reader', 'QUEUED');
     await owner.kill();
     await harness.settle();
-    // Handed on once the crashed owner's term has been waited for: that the write never reached
-    // it cannot be told from a word of it still on the way (ADR-0026).
-    await harness.advance(FORMER_OWNER_GRACE_MS);
 
     await expect(write).resolves.toBeUndefined();
     expect(device.writtenText()).toBe('QUEUED');
@@ -126,7 +122,6 @@ describe.each(TRANSPORT_MODES)('ownership failover (%s)', (transport) => {
     await harness.settle();
 
     await owner.kill();
-    await harness.advance(FORMER_OWNER_GRACE_MS);
 
     expect(await outcome).toMatchObject({
       code: SerialBrokerErrorCode.OWNER_LOST_DURING_WRITE,
@@ -134,7 +129,7 @@ describe.each(TRANSPORT_MODES)('ownership failover (%s)', (transport) => {
     expect(device.written).toHaveLength(0);
   });
 
-  it('waits for word from a crashed owner for the grace period before failing a write it began', async () => {
+  it('fails a write a crashed owner began as soon as the browser frees the lock of its term', async () => {
     const { harness, device, owner, peer } = await twoTabsSharingAPort();
 
     device.faults.hangOnWrite = true;
@@ -144,13 +139,14 @@ describe.each(TRANSPORT_MODES)('ownership failover (%s)', (transport) => {
       (reason: unknown) => (outcome = reason),
     );
     await harness.settle();
-    await owner.kill();
-
-    // Its result could still be on the way, sent before it crashed.
-    await harness.advance(FORMER_OWNER_GRACE_MS - 1);
     expect(outcome).toBe('pending');
 
-    await harness.advance(1);
+    // No waiting and no timer: the term is over the moment the browser frees its lock, which it
+    // does as it tears the crashed tab down (ADR-0030).
+    await owner.kill();
+
+    // The clock has not moved between the crash and the answer: nothing waits for a grace period
+    // any more.
     expect(outcome).toMatchObject({ code: SerialBrokerErrorCode.OWNER_LOST_DURING_WRITE });
     expect(device.written).toHaveLength(0);
   });
@@ -162,7 +158,6 @@ describe.each(TRANSPORT_MODES)('ownership failover (%s)', (transport) => {
     const outcome = peer.client.send('Reader', 'X').catch((reason: unknown) => reason);
     await harness.settle();
     await owner.kill();
-    await harness.advance(FORMER_OWNER_GRACE_MS);
 
     const error = await outcome;
     expect(error).toBeInstanceOf(SerialBrokerError);

@@ -72,6 +72,11 @@ export const SerialBrokerErrorCode = {
   /** The write did not settle within `writeTimeoutMs`. */
   WRITE_TIMEOUT: 'WRITE_TIMEOUT',
   /**
+   * The tab holding the port already has as many writes waiting as it keeps, so this one was
+   * refused rather than queued. Nothing was written. See ADR-0031.
+   */
+  WRITE_QUEUE_FULL: 'WRITE_QUEUE_FULL',
+  /**
    * The owning context died while this write was in flight. Whether the bytes reached the
    * device is unknowable; the library never retries such a write. See ADR-0013.
    */
@@ -154,6 +159,8 @@ export const REMEDIATION: Record<SerialBrokerErrorCode, string> = {
     'The device rejected the write. `context.bytesWritten` shows how many bytes were handed over before the failure; decide whether your command is safe to repeat.',
   WRITE_TIMEOUT:
     'The write did not complete within connection.writeTimeoutMs. When `context.started` is false nothing was written and it can be sent again; otherwise the device may have received it. If timeouts are frequent while the port is open, check the flowControl serial option and whether the device is ready to receive.',
+  WRITE_QUEUE_FULL:
+    'The tab holding the port has as many writes waiting as it keeps (see MAX_WAITING_WRITES and MAX_WAITING_WRITE_BYTES), so nothing of this write was written and it is safe to send again. Send fewer writes at once, or wait for earlier ones to settle; if the application sends few, a script of the origin is flooding the port.',
   OWNER_LOST_DURING_WRITE:
     'The tab that owned the port closed or crashed mid-write, so it is unknown whether the device received the bytes. Only repeat the command if it is idempotent for your device.',
   PROTOCOL_VERSION_MISMATCH:

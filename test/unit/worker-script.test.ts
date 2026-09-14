@@ -143,7 +143,12 @@ describe('serial-broker.worker', () => {
   it('keeps a port whose message failed to clone, and goes on routing to it', () => {
     const alice = join('alice');
     alice.deliver(
-      envelope('alice', 'all', { type: 'owner-claimed', configName: 'Reader', term: 't-1' }),
+      envelope('alice', 'all', {
+        type: 'owner-claimed',
+        configName: 'Reader',
+        term: 't-1',
+        maxTabs: 1,
+      }),
     );
     const bob = join('bob');
 
@@ -246,7 +251,12 @@ describe('serial-broker.worker', () => {
     const alice = join('alice');
     const bob = join('bob');
     alice.deliver(
-      envelope('alice', 'all', { type: 'owner-claimed', configName: 'Reader', term: 't-1' }),
+      envelope('alice', 'all', {
+        type: 'owner-claimed',
+        configName: 'Reader',
+        term: 't-1',
+        maxTabs: 1,
+      }),
     );
 
     bob.deliver(

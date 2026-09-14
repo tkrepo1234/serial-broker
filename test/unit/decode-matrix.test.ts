@@ -19,7 +19,13 @@ const VALID: Record<ProtocolMessageType, Record<string, unknown>> = {
   heartbeat: { ...BASE, type: 'heartbeat', configNames: ['Reader'], ownedConfigNames: [] },
   attach: { ...BASE, type: 'attach', configName: 'Reader' },
   detach: { ...BASE, type: 'detach', configName: 'Reader' },
-  'owner-claimed': { ...BASE, type: 'owner-claimed', configName: 'Reader', term: 't-1' },
+  'owner-claimed': {
+    ...BASE,
+    type: 'owner-claimed',
+    configName: 'Reader',
+    term: 't-1',
+    maxTabs: Number.POSITIVE_INFINITY,
+  },
   'owner-released': { ...BASE, type: 'owner-released', configName: 'Reader', term: 't-1' },
   'status-request': { ...BASE, type: 'status-request', configName: 'Reader' },
   'write-request': {
@@ -90,7 +96,7 @@ const REQUIRED_FIELDS: Record<ProtocolMessageType, readonly string[]> = {
   heartbeat: ['configNames', 'ownedConfigNames'],
   attach: ['configName'],
   detach: ['configName'],
-  'owner-claimed': ['configName'],
+  'owner-claimed': ['configName', 'maxTabs'],
   'owner-released': ['configName'],
   'status-request': ['configName'],
   'write-request': ['configName', 'requestId', 'payload'],

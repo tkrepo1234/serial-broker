@@ -100,6 +100,14 @@ export interface OwnerClaimedMessage extends Envelope {
   readonly configName: string;
   /** The term that begins. */
   readonly term: TermId;
+  /**
+   * The tab limit the sender runs the configuration with (ADR-0025).
+   *
+   * Here as well as in {@link StatusMessage} because the term's Web Lock is named after all three -
+   * term, sender and limit - and a tab has to know the name before it can check that the lock is
+   * held (ADR-0030).
+   */
+  readonly maxTabs: number;
 }
 
 /**

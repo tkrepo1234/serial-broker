@@ -1,5 +1,6 @@
 import { MAX_CONFIG_NAME_LENGTH } from '../core/defaults.js';
 import type { ScopedLogger } from '../core/logger.js';
+import type { RateLimit } from '../core/rate-limit.js';
 
 /**
  * How much the bus may make a context hold, however hostile the sender.
@@ -121,6 +122,71 @@ export const MAX_PORTS_PER_PARTICIPANT = 8;
  */
 export const MAX_CONFIGURATIONS = 4 * MAX_HEARTBEAT_CONFIGURATIONS;
 
+/**
+ * The most writes waiting at one tab's port at once: queued there, and the one being written.
+ *
+ * Every write a tab performs - its own and every other tab's - waits here until the device has
+ * taken it or its deadline passes. Four times as many as the finished ones a tab remembers
+ * (`client/accepted-writes.ts`), and far more than an application produces: a device that takes a
+ * command in a millisecond drains this in four seconds, and a write that waits longer than
+ * `writeTimeoutMs` leaves the queue unwritten anyway. Beyond it a write is refused with
+ * `WRITE_QUEUE_FULL` rather than held (ADR-0031).
+ */
+export const MAX_WAITING_WRITES = 4096;
+
+/**
+ * The most payload bytes waiting at one tab's port at once: 64 MiB.
+ *
+ * The count alone bounds no memory: one message may carry {@link MAX_PAYLOAD_BYTES}. Four of the
+ * largest writes the bus accepts fit here, which no device drains quickly and no application sends.
+ */
+export const MAX_WAITING_WRITE_BYTES = 4 * MAX_PAYLOAD_BYTES;
+
+/**
+ * The most reports one diagnostics collection keeps (ADR-0018).
+ *
+ * As many as the broker keeps participants: every context that exists can answer once, and each
+ * answer is held until the collection's window closes. Reports beyond it are dropped.
+ */
+export const MAX_REPORTS_PER_COLLECTION = MAX_PARTICIPANTS;
+
+/**
+ * How often the tab holding the port answers `status-request` (ADR-0031).
+ *
+ * One answer is a broadcast that reaches every tab, so a burst of requests needs one answer, not
+ * one each. The burst covers every tab of an origin joining at once; requests beyond the rate are
+ * answered together, by the one answer the rate allows next, so a tab that asked is never left
+ * without a status.
+ */
+export const STATUS_ANSWER_RATE: RateLimit = { burst: 32, perSecond: 32 };
+
+/**
+ * How often a tab answers `diagnostics-request` (ADR-0018, ADR-0031).
+ *
+ * An answer is a report of everything the tab runs, up to {@link MAX_REPORT_CHARACTERS}. An
+ * operator refreshes a diagnostics view by hand, a few times a minute; the burst covers a page that
+ * asks as it opens. Requests beyond the rate go unanswered, and the observer sees fewer
+ * participants.
+ */
+export const DIAGNOSTICS_ANSWER_RATE: RateLimit = { burst: 8, perSecond: 4 };
+
+/**
+ * How often a malformed message is logged (ADR-0031).
+ *
+ * One record per dropped message turns a flood of nonsense into a flood in the application's log,
+ * which is where an operator has to find the real fault. The burst is enough to recognise a broken
+ * sender; beyond it the messages are still dropped, silently.
+ */
+export const MALFORMED_MESSAGE_WARNING_RATE: RateLimit = { burst: 16, perSecond: 2 };
+
+/**
+ * How often errors from other tabs are delivered to an application's `onError` (ADR-0031).
+ *
+ * Errors of a connection reach every tab (ADR-0012), and a reconnecting device produces one every
+ * few seconds at most. The burst covers every tab of an origin reporting a conflict at once.
+ */
+export const REMOTE_ERROR_RATE: RateLimit = { burst: 32, perSecond: 8 };
+
 /** The value of every limit, by name, as it appears in a log record. */
 export const LIMITS = {
   MAX_IDENTIFIER_LENGTH,
@@ -136,6 +202,9 @@ export const LIMITS = {
   MAX_PARTICIPANTS,
   MAX_PORTS_PER_PARTICIPANT,
   MAX_CONFIGURATIONS,
+  MAX_REPORTS_PER_COLLECTION,
+  MAX_WAITING_WRITES,
+  MAX_WAITING_WRITE_BYTES,
 } as const;
 
 /** The name of one limit. */

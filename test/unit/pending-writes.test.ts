@@ -194,6 +194,36 @@ describe('PendingWrites', () => {
     expect(outcome).toBe('pending');
   });
 
+  it('takes a write for started only from the term it was addressed to', async () => {
+    const harness = createHarness();
+    let outcome: unknown = 'pending';
+    void outcomeOf(harness.writes.add(id('w1'), PAYLOAD)).then((value) => (outcome = value));
+
+    // Said by a tab that was never asked to write it: taking it would strand the write, never to
+    // be handed on and never to be answered (ADR-0030).
+    harness.writes.markStarted(id('w1'), SECOND);
+    harness.endTerm(FIRST);
+    await Promise.resolve();
+
+    expect(outcome).toBe('pending');
+    expect(harness.dispatched).toEqual(['w1@t1']);
+  });
+
+  it('ignores an outcome from a term the write was not addressed to', async () => {
+    const harness = createHarness();
+    let outcome: unknown = 'pending';
+    void outcomeOf(harness.writes.add(id('w1'), PAYLOAD)).then((value) => (outcome = value));
+
+    // Only the term that was asked to write it can say how it went; anyone else read the request
+    // id off the bus (ADR-0030).
+    harness.writes.handleResult(id('w1'), SECOND, undefined);
+    harness.writes.handleResult(id('w1'), undefined, undefined);
+    await Promise.resolve();
+
+    expect(outcome).toBe('pending');
+    expect(harness.writes.size).toBe(1);
+  });
+
   it('tells the caller that repeating a lost write is their decision', async () => {
     const harness = createHarness();
     const outcome = outcomeOf(harness.writes.add(id('w1'), PAYLOAD));

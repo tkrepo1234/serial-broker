@@ -17,6 +17,7 @@ import type { Unsubscribe } from '../core/types.js';
 import { invalidArgument, validateName } from '../core/validation.js';
 import type { LockInfoLike, SerialBrokerEnvironment } from '../environment/environment.js';
 import { describeDecodeFailure } from '../protocol/decode.js';
+import { LimitWarnings, MAX_REPORTS_PER_COLLECTION } from '../protocol/limits.js';
 import type { ClientId, ProtocolMessage, RequestId } from '../protocol/messages.js';
 import { PROTOCOL_VERSION } from '../protocol/version.js';
 
@@ -61,6 +62,8 @@ export class DiagnosticsObserver {
   readonly #logger: ScopedLogger;
   readonly #transport: Transport;
   readonly #collections = new Map<RequestId, Collection>();
+  /** Reports beyond what one collection keeps, logged once (ADR-0031). */
+  readonly #reportsDropped: LimitWarnings;
   readonly #watchers = new Map<string, Set<(event: ObservedEvent) => void>>();
   #isClosed = false;
 
@@ -74,6 +77,7 @@ export class DiagnosticsObserver {
     this.#environment = environment;
     this.#clientId = environment.newId('d') as ClientId;
     this.#logger = environment.logger.child({ clientId: this.#clientId, role: 'observer' });
+    this.#reportsDropped = new LimitWarnings(this.#logger, 'diagnostics.limit-exceeded');
     this.#transport = environment.createTransport({
       clientId: this.#clientId,
       onMessage: (message) => {
@@ -231,11 +235,21 @@ export class DiagnosticsObserver {
         // A context answers once, but a bus is not obliged to deliver once; and an answer that
         // arrives after its window has closed belongs to nothing.
         if (
-          collection !== undefined &&
-          !collection.reports.some((report) => report.clientId === message.report.clientId)
+          collection === undefined ||
+          collection.reports.some((report) => report.clientId === message.report.clientId)
         ) {
-          collection.reports.push(message.report);
+          return;
         }
+        if (collection.reports.length >= MAX_REPORTS_PER_COLLECTION) {
+          // Every report is kept until the window closes, and each may be a megabyte
+          // (`MAX_REPORT_CHARACTERS`). A request id is broadcast, so anything on the bus can
+          // answer one - as many times as it invents client ids (ADR-0031).
+          this.#reportsDropped.exceeded('MAX_REPORTS_PER_COLLECTION', {
+            requestId: message.requestId,
+          });
+          return;
+        }
+        collection.reports.push(message.report);
         return;
       }
 
