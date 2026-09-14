@@ -2,9 +2,10 @@ import { describe, expect, it } from 'vitest';
 
 import { SerialBrokerErrorCode } from '../../src/core/error-codes.js';
 import { SerialBrokerStatus } from '../../src/core/types.js';
-import { storageKey } from '../../src/storage/configuration-store.js';
+import { storageIndexKey } from '../../src/storage/configuration-store.js';
 import { BrowserHarness } from '../harness/browser-harness.js';
 import { READER, READER_OPTIONS } from '../harness/devices.js';
+import { remember } from '../harness/stored-configurations.js';
 
 /**
  * Remembering a device across visits.
@@ -172,12 +173,12 @@ describe('permission and persistence', () => {
 
   it('discards a corrupt stored configuration instead of failing to start', async () => {
     const harness = new BrowserHarness();
-    harness.storage.poison(storageKey(), '{ this is not json');
+    harness.storage.poison(storageIndexKey(), '{ this is not json');
 
     const tab = harness.openTab();
 
     await expect(tab.client.restore()).resolves.toEqual([]);
-    expect(harness.storage.getItem(storageKey())).toBeNull();
+    expect(harness.storage.getItem(storageIndexKey())).toBeNull();
   });
 
   it('discards only the invalid entry when others are still usable', async () => {
@@ -185,13 +186,10 @@ describe('permission and persistence', () => {
     const device = harness.serial.addDevice(READER.vendorId, READER.productId);
     harness.serial.grant(device);
 
-    harness.storage.poison(
-      storageKey(),
-      JSON.stringify({
-        Broken: { device: { vendorId: 'not-a-number', productId: 1 }, serial: { baudRate: 9600 } },
-        Reader: { device: READER, serial: { baudRate: 9600 } },
-      }),
-    );
+    remember(harness.storage, {
+      Broken: { device: { vendorId: 'not-a-number', productId: 1 }, serial: { baudRate: 9600 } },
+      Reader: { device: READER, serial: { baudRate: 9600 } },
+    });
 
     const tab = harness.openTab();
     const restored = await tab.client.restore();

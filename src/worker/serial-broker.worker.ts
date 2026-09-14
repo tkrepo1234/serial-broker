@@ -30,7 +30,10 @@ declare const self: {
 
 const logger = new ScopedLogger(NOOP_LOGGER, { event: 'worker' });
 
-const ports = new WorkerPorts<MessagePort>({ logger, now: () => Date.now() });
+// `performance.now()` rather than `Date.now()`: the only thing timed in the worker is how long a
+// tab has been silent, and the system clock being set forward must not make every tab look gone
+// (ADR-0021, ADR-0032).
+const ports = new WorkerPorts<MessagePort>({ logger, now: () => performance.now() });
 
 self.onconnect = (event): void => {
   const port = event.ports[0];

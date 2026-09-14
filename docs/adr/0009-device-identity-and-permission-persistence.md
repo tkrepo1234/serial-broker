@@ -1,12 +1,18 @@
 # ADR-0009: Identify devices by USB IDs, persist configuration, rely on browser permission
 
-- **Status:** Accepted, amended by [ADR-0022](./0022-version-stored-configurations-separately.md)
-  and [ADR-0027](./0027-keep-a-remembered-configuration-while-a-tab-runs-it.md)
+- **Status:** Accepted, amended by [ADR-0022](./0022-version-stored-configurations-separately.md),
+  [ADR-0027](./0027-keep-a-remembered-configuration-while-a-tab-runs-it.md) and
+  [ADR-0033](./0033-one-storage-key-per-configuration.md)
 - **Date:** 2026-09-12
 
 > **Amendment (ADR-0027).** `release(name)` removes the stored configuration only when no other tab
 > still runs it with `persist: true`. The stored entry belongs to the origin, and removing it from
 > one tab cost every other tab running the configuration its next restore.
+
+> **Amendment (ADR-0033).** Configurations no longer share one key. Each lives under
+> `serial-broker/configurations/v2/entry/<name>`, and the names are listed in
+> `serial-broker/configurations/v2/index`, so two tabs remembering different configurations in the
+> same moment cannot write over each other's entry.
 
 ## Context
 
@@ -31,7 +37,10 @@ devices yields `usbVendorId` and `usbProductId` - a _device type_, not a device 
 - A configuration is `{ name, device, serial, ... }` and is persisted in `localStorage` under
   `serial-broker/v<PROTOCOL_VERSION>/configurations`, validated on read and discarded
   per-entry if malformed. (Amended by ADR-0022: the key carries a storage version of its own,
-  `serial-broker/configurations/v<STORAGE_SCHEMA_VERSION>`.)
+  `serial-broker/configurations/v<STORAGE_SCHEMA_VERSION>`. Amended by ADR-0033: there is no
+  longer one key, but one per configuration under
+  `serial-broker/configurations/v<STORAGE_SCHEMA_VERSION>/entry/<name>`, listed in
+  `.../v<STORAGE_SCHEMA_VERSION>/index`.)
 - On `setup()`, the library calls `getPorts()` and selects the first port whose `getInfo()`
   matches the configured vendor and product IDs. If one is found, it opens it - no prompt, no
   user gesture, no application code.

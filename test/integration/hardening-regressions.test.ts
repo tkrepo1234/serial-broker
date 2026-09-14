@@ -8,9 +8,14 @@ import { describeUnknown, isSerializedError, SerialBrokerError } from '../../src
 import { NOOP_LOGGER, ScopedLogger } from '../../src/core/logger.js';
 import { normalizeConfiguration, validateName } from '../../src/core/validation.js';
 import type { KeyValueStorage } from '../../src/environment/environment.js';
-import { ConfigurationStore, storageKey } from '../../src/storage/configuration-store.js';
+import {
+  ConfigurationStore,
+  storageEntryKey,
+  storageIndexKey,
+} from '../../src/storage/configuration-store.js';
 import { BrowserHarness } from '../harness/browser-harness.js';
 import { READER, READER_OPTIONS } from '../harness/devices.js';
+import { remember, rememberedNames } from '../harness/stored-configurations.js';
 
 /**
  * Defects found in the bug hunt of 2026-09-13 (second round), each pinned by the behaviour it broke.
@@ -136,34 +141,23 @@ describe('disposal', () => {
 });
 
 describe('remembered configurations', () => {
-  function stored(...names: string[]): string {
-    return JSON.stringify(
-      Object.fromEntries(
-        names.map((name) => [name, { device: READER, serial: { baudRate: 9600 } }]),
-      ),
-    );
-  }
-
   it('removes an entry left behind when the same name is set up without being remembered', async () => {
     const harness = new BrowserHarness();
-    harness.storage.poison(storageKey(), stored('Reader'));
+    remember(harness.storage, { Reader: { device: READER, serial: { baudRate: 9600 } } });
     const tab = harness.openTab();
 
     await tab.setup('Reader', { ...READER_OPTIONS, persist: false });
     await tab.close();
 
     await expect(harness.openTab().client.restore()).resolves.toEqual([]);
+    expect(rememberedNames(harness.storage)).toEqual([]);
   });
 
   it('removes an invalid entry once instead of reporting it on every restore', () => {
     const storage = new Map<string, string>([
-      [
-        storageKey(),
-        JSON.stringify({
-          Broken: { device: { vendorId: 'no' }, serial: { baudRate: 9600 } },
-          Reader: { device: READER, serial: { baudRate: 9600 } },
-        }),
-      ],
+      [storageIndexKey(), JSON.stringify(['Broken', 'Reader'])],
+      [storageEntryKey('Broken'), JSON.stringify({ device: { vendorId: 'no' }, baudRate: 9600 })],
+      [storageEntryKey('Reader'), JSON.stringify({ device: READER, serial: { baudRate: 9600 } })],
     ]);
     const reported: SerialBrokerError[] = [];
     const store = new ConfigurationStore(mapStorage(storage), silentLogger(), (error) =>
@@ -174,33 +168,35 @@ describe('remembered configurations', () => {
     expect(store.load().map((configuration) => configuration.name)).toEqual(['Reader']);
 
     expect(reported.map((error) => error.code)).toEqual([SerialBrokerErrorCode.STORAGE_CORRUPT]);
-    expect(storage.get(storageKey())).not.toContain('Broken');
+    expect(storage.has(storageEntryKey('Broken'))).toBe(false);
+    expect(storage.get(storageIndexKey())).not.toContain('Broken');
   });
 
-  it('keeps configurations from an earlier key when moving them to the current key fails', () => {
-    const legacy = stored('Old');
-    const storage = new Map<string, string>([['serial-broker/v4/configurations', legacy]]);
+  it('keeps the configurations it has when storing another one is refused', () => {
+    const storage = new Map<string, string>();
+    const refused = storageEntryKey('Too much');
     const quota: KeyValueStorage = {
       ...mapStorage(storage),
       setItem: (key, value) => {
-        if (value === legacy) {
+        if (key === refused) {
           throw new DOMException('quota', 'QuotaExceededError');
         }
         storage.set(key, value);
       },
     };
-    const store = new ConfigurationStore(quota, silentLogger(), () => undefined);
+    const reported: SerialBrokerError[] = [];
+    const store = new ConfigurationStore(quota, silentLogger(), (error) => reported.push(error));
 
-    expect(store.load().map((configuration) => configuration.name)).toEqual(['Old']);
-    store.save(normalizeConfiguration('New', { device: READER, serial: { baudRate: 9600 } }));
+    store.save(normalizeConfiguration('Kept', { device: READER, serial: { baudRate: 9600 } }));
+    store.save(normalizeConfiguration('Too much', { device: READER, serial: { baudRate: 9600 } }));
 
-    // The write that succeeded carried the old configuration along instead of replacing it.
-    expect(
-      store
-        .load()
-        .map((configuration) => configuration.name)
-        .sort(),
-    ).toEqual(['New', 'Old']);
+    // The entry that could not be written is not listed either: a name in the index with no entry
+    // behind it is a configuration reported as gone, on a restore where nothing was ever lost.
+    expect(storage.get(storageIndexKey())).toBe(JSON.stringify(['Kept']));
+    expect(store.load().map((configuration) => configuration.name)).toEqual(['Kept']);
+    expect(reported.map((error) => error.code)).toEqual([
+      SerialBrokerErrorCode.STORAGE_UNAVAILABLE,
+    ]);
   });
 });
 

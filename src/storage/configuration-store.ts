@@ -10,26 +10,62 @@ import type { KeyValueStorage } from '../environment/environment.js';
  *
  * Stored entries are the options `setup()` accepts and are validated again on every read, so a
  * change to the message protocol leaves them usable. This is incremented only for a change to what
- * is stored that the validation on read cannot absorb.
+ * is stored that the validation on read cannot absorb - as version 2 is: each configuration now
+ * lives under a key of its own (ADR-0033).
  */
-export const STORAGE_SCHEMA_VERSION = 1;
+export const STORAGE_SCHEMA_VERSION = 2;
 
-/** Key under which configurations are persisted. */
-export function storageKey(): string {
-  return `serial-broker/configurations/v${String(STORAGE_SCHEMA_VERSION)}`;
+/** What every key of the current format starts with. */
+const KEY_PREFIX = `serial-broker/configurations/v${String(STORAGE_SCHEMA_VERSION)}`;
+
+/** Key holding the names of the remembered configurations, as a JSON array (ADR-0033). */
+export function storageIndexKey(): string {
+  return `${KEY_PREFIX}/index`;
 }
 
 /**
- * Keys used before storage had a version of its own, when the key carried the protocol version.
+ * Key holding one remembered configuration.
  *
- * Newest first: were several present, the most recent build's configurations are the ones kept.
+ * The name comes last, and the segment before it is fixed, so no name can be mistaken for part of
+ * the prefix. Names are validated before they reach here: no control characters, no unpaired
+ * surrogates, bounded in length (`validateName`).
  */
-export const LEGACY_STORAGE_KEYS: readonly string[] = [4, 3, 2, 1].map(
-  (protocolVersion) => `serial-broker/v${String(protocolVersion)}/configurations`,
-);
+export function storageEntryKey(name: string): string {
+  return `${KEY_PREFIX}/entry/${name}`;
+}
+
+/**
+ * Keys of formats this version does not read, removed the first time configurations are restored.
+ *
+ * Version 1 kept every configuration in one JSON object, and the versions before it kept that
+ * object under a key carrying the protocol version (ADR-0022). Nothing is carried over: before
+ * 1.0 a configuration that has to be set up once more costs a click, and a reader for a format
+ * nobody has in production costs a function that can go wrong.
+ */
+export const DISCARDED_STORAGE_KEYS: readonly string[] = [
+  'serial-broker/configurations/v1',
+  ...[4, 3, 2, 1].map(
+    (protocolVersion) => `serial-broker/v${String(protocolVersion)}/configurations`,
+  ),
+];
 
 /** Reported when persistence fails. Never fatal: the library keeps working in memory. */
 export type StorageProblemReporter = (error: SerialBrokerError) => void;
+
+/** What reading one entry produced. */
+type EntryOutcome =
+  | { readonly kind: 'restored'; readonly configuration: NormalizedConfiguration }
+  /** There is nothing usable under that name any more; the name leaves the index. */
+  | { readonly kind: 'discarded' }
+  /** Storage itself refused. Nothing is known about the entry, so its name stays in the index. */
+  | { readonly kind: 'unreadable' };
+
+/** The names the index lists, and whether the index needs writing back. */
+interface StoredIndex {
+  readonly names: readonly string[];
+  /** `false` when the stored list held something that is not a name, or a name twice. */
+  readonly isIntact: boolean;
+}
 
 /**
  * Persists configurations so they are restored after a reload.
@@ -38,6 +74,11 @@ export type StorageProblemReporter = (error: SerialBrokerError) => void;
  * it. The permission to use the device belongs to the browser and cannot be stored, forged or
  * inspected by script; it is what makes the restore prompt-free (ADR-0009). Nothing sensitive
  * lives here.
+ *
+ * One key per configuration, plus an index listing their names (ADR-0033). Two tabs remembering
+ * different configurations in the same moment write different keys, so neither can lose the
+ * other's; the index is the only key they share, and a name missing from it is put back the next
+ * time that tab saves - which it does as soon as its persistence hold is granted (ADR-0027).
  *
  * Stored data is treated as hostile. It may come from an older version, from a hand-edited
  * developer console, or be truncated by a browser that ran out of quota mid-write, so every
@@ -56,57 +97,34 @@ export class ConfigurationStore {
    * Reads every valid stored configuration.
    *
    * Invalid entries are discarded individually: one corrupt configuration must not cost the
-   * application the others.
+   * application the others. So is a name the index lists without an entry to go with it, and an
+   * index that cannot be read at all - which leaves nothing behind that would be reported again on
+   * every restore.
+   *
+   * This is the only call that reports an unreadable index to the application: it is the call an
+   * application observes, and reporting from a save would say the same thing on every write.
    */
   load(): NormalizedConfiguration[] {
-    const raw = this.#read();
-    if (raw === undefined) {
-      return [];
-    }
+    this.#discardOldFormats();
 
-    let parsed: unknown;
-    try {
-      parsed = JSON.parse(raw);
-    } catch (error) {
-      this.#discardAll('stored configurations were not valid JSON', error);
-      return [];
-    }
-
-    if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
-      this.#discardAll('stored configurations were not an object', undefined);
-      return [];
-    }
-
+    const { names, isIntact } = this.#readIndex(true);
     const restored: NormalizedConfiguration[] = [];
-    const discarded = new Set<string>();
-    for (const [name, options] of Object.entries(parsed)) {
-      try {
-        restored.push(normalizeConfiguration(name, options));
-      } catch (error) {
-        discarded.add(name);
-        this.logger.warn('discarded a stored configuration that failed validation', {
-          configName: name,
-          event: 'storage.invalid-entry',
-          reason: describeUnknown(error),
-        });
-        this.reportProblem(
-          new SerialBrokerError(
-            SerialBrokerErrorCode.STORAGE_CORRUPT,
-            `The stored configuration "${name}" was discarded because it is no longer valid`,
-            { configName: name, cause: error, timestamp: this.now() },
-          ),
-        );
+    const kept: string[] = [];
+
+    for (const name of names) {
+      const outcome = this.#restore(name);
+      if (outcome.kind === 'restored') {
+        restored.push(outcome.configuration);
+      }
+      if (outcome.kind !== 'discarded') {
+        // A name whose entry could not be read is kept: nothing says it is gone.
+        kept.push(name);
       }
     }
 
-    if (discarded.size > 0) {
-      // Removed, not only skipped: an entry left behind would be reported on every restore, and
-      // carried forward by every save.
-      this.#write(
-        Object.fromEntries(Object.entries(parsed).filter(([name]) => !discarded.has(name))),
-      );
+    if (!isIntact || kept.length !== names.length) {
+      this.#writeIndex(kept);
     }
-
     return restored;
   }
 
@@ -115,6 +133,9 @@ export class ConfigurationStore {
    *
    * A configuration that is not to be remembered removes an entry an earlier setup of the same
    * name left behind: otherwise `restore()` would bring it back, remembered after all.
+   *
+   * The entry is written before the name is listed, and the name only if it is missing: an index
+   * written for nothing is an index another tab's concurrent write could be lost to.
    */
   save(configuration: NormalizedConfiguration): void {
     if (!configuration.persist) {
@@ -122,112 +143,233 @@ export class ConfigurationStore {
       return;
     }
 
-    // Rebuilt rather than assigned to: assigning to a key such as `__proto__` on a plain object
-    // sets its prototype instead of adding an entry, and the configuration would silently vanish.
-    const others = Object.entries(this.#readRecord()).filter(
-      ([name]) => name !== configuration.name,
-    );
-    this.#write(Object.fromEntries([...others, [configuration.name, toStorable(configuration)]]));
-  }
-
-  /** Removes one configuration. */
-  remove(name: string): void {
-    const all = this.#readRecord();
-    // `Object.hasOwn`, not `in`: `in` also finds `constructor`, `toString` and every other name on
-    // the prototype chain, and would write storage - or report it unavailable - for a name that
-    // was never stored.
-    if (!Object.hasOwn(all, name)) {
+    if (
+      !this.#write(storageEntryKey(configuration.name), JSON.stringify(toStorable(configuration)))
+    ) {
+      // An entry that was not written must not be listed: the next restore would find a name with
+      // nothing under it and forget it again, having told the application it was remembered.
       return;
     }
-    // Rebuilt rather than deleted from: a dynamic `delete` on an object built from untrusted
-    // JSON is exactly the shape that invites prototype-pollution surprises.
-    const remaining = Object.fromEntries(Object.entries(all).filter(([key]) => key !== name));
-    this.#write(remaining);
+    this.#listName(configuration.name);
   }
 
-  /** Removes everything this library stored. */
-  clear(): void {
-    try {
-      this.storage.removeItem(storageKey());
-    } catch (error) {
-      this.#reportUnavailable('clear', error);
+  /**
+   * Removes one configuration.
+   *
+   * Storage is not touched for a name the index does not list, nor for one whose index could not
+   * be read: the configuration was never stored there, and a removal for it would be a write - or,
+   * where storage refuses, a second report of the failure the read has just reported - for nothing.
+   *
+   * The name leaves the index first, and the entry only once that write has landed: an entry
+   * nothing lists is simply never read again, while an entry removed under a name the index still
+   * lists would be a configuration the next restore has to reason about.
+   */
+  remove(name: string): void {
+    const { names } = this.#readIndex(false);
+    if (!names.includes(name)) {
+      return;
+    }
+    if (this.#writeIndex(names.filter((listed) => listed !== name))) {
+      this.#removeEntry(name);
     }
   }
 
-  #readRecord(): Record<string, unknown> {
-    const raw = this.#read();
-    if (raw === undefined) {
-      return {};
-    }
-
+  /** Reads one entry, discarding it if it is there and cannot be used. */
+  #restore(name: string): EntryOutcome {
+    let raw: string | null;
     try {
-      const parsed: unknown = JSON.parse(raw);
-      return typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)
-        ? (parsed as Record<string, unknown>)
-        : {};
-    } catch {
-      // Unparseable content is replaced wholesale by the write that follows. Reporting
-      // happens in `load`, which is the path an application actually observes.
-      return {};
-    }
-  }
-
-  #read(): string | undefined {
-    try {
-      return this.storage.getItem(storageKey()) ?? this.#moveLegacyEntries();
+      raw = this.storage.getItem(storageEntryKey(name));
     } catch (error) {
       this.#reportUnavailable('read', error);
-      return undefined;
+      return { kind: 'unreadable' };
+    }
+
+    if (raw === null) {
+      // Listed but not there: another tab removed the configuration while this index was stale
+      // (ADR-0033), a write failed after the name was listed, a browser evicted the entry, or a
+      // developer console did. Nothing is corrupt - the name is, so it leaves the index without a
+      // word to the application, which has nothing to act on and may have asked for the removal.
+      this.logger.info('forgot a remembered configuration that has no entry left', {
+        configName: name,
+        event: 'storage.stale-name',
+        reason: 'the entry is gone',
+      });
+      return { kind: 'discarded' };
+    }
+
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(raw);
+    } catch (error) {
+      this.#discardEntry(name, 'the entry is not valid JSON', error);
+      return { kind: 'discarded' };
+    }
+
+    try {
+      return { kind: 'restored', configuration: normalizeConfiguration(name, parsed) };
+    } catch (error) {
+      this.#discardEntry(name, 'it is no longer valid', error);
+      return { kind: 'discarded' };
     }
   }
 
   /**
-   * Moves configurations remembered under a protocol-versioned key to the current key, once.
+   * Reads the names the index lists.
    *
-   * Their format is unchanged, and they are validated on the way in like any other entry. The old
-   * keys are removed afterwards, so nothing is moved twice and no key lingers that no version of
-   * the library reads any more.
+   * An index that cannot be read at all is removed either way - leaving it would mean reading the
+   * same rubbish on every call - but only `load()` reports it.
+   *
+   * @param reportProblems - Whether an index that could not be read, or could only be read in
+   *   part, is reported to the application. Only `load()` passes `true`.
    */
-  #moveLegacyEntries(): string | undefined {
-    const present = LEGACY_STORAGE_KEYS.flatMap((key) => {
-      const value = this.storage.getItem(key);
-      return value === null ? [] : [{ key, value }];
-    });
-    const newest = present[0];
-    if (newest === undefined) {
-      return undefined;
+  #readIndex(reportProblems: boolean): StoredIndex {
+    let raw: string | null;
+    try {
+      raw = this.storage.getItem(storageIndexKey());
+    } catch (error) {
+      this.#reportUnavailable('read', error);
+      return { names: [], isIntact: true };
     }
 
-    // Written before the old keys are removed: a write that fails must not lose them.
-    try {
-      this.storage.setItem(storageKey(), newest.value);
-    } catch (error) {
-      // The configurations are still restored from the old key, and the next write that succeeds
-      // carries them to the current one. Answering "nothing stored" instead would let that write
-      // replace them, and strand them under the old key for good.
-      this.#reportUnavailable('write', error);
-      return newest.value;
+    if (raw === null) {
+      return { names: [], isIntact: true };
     }
+
+    let parsed: unknown;
     try {
-      for (const { key } of present) {
-        this.storage.removeItem(key);
-      }
+      parsed = JSON.parse(raw);
     } catch (error) {
-      // What matters has been moved; an old key left behind is only untidy.
-      this.#reportUnavailable('clear', error);
+      this.#discardIndex(
+        'The list of remembered configurations was not valid JSON',
+        error,
+        reportProblems,
+      );
+      return { names: [], isIntact: true };
     }
-    this.logger.info('moved remembered configurations to the current storage key', {
-      event: 'storage.migrated',
-      from: newest.key,
-    });
-    return newest.value;
+
+    if (!Array.isArray(parsed)) {
+      this.#discardIndex(
+        'The list of remembered configurations was not an array',
+        undefined,
+        reportProblems,
+      );
+      return { names: [], isIntact: true };
+    }
+
+    // A list that is partly rubbish is not thrown away: the names in it still point at entries
+    // that restore perfectly well.
+    const names = [...new Set(parsed.filter((entry) => typeof entry === 'string'))];
+    if (names.length !== parsed.length && reportProblems) {
+      this.logger.warn('discarded entries of the list of remembered configurations', {
+        event: 'storage.corrupt',
+        reason: 'the list held something that is not a configuration name',
+      });
+      this.#report(
+        SerialBrokerErrorCode.STORAGE_CORRUPT,
+        'Entries of the list of remembered configurations were discarded because they are not names',
+        undefined,
+      );
+    }
+    return { names, isIntact: names.length === parsed.length };
   }
 
-  #write(all: Record<string, unknown>): void {
+  /** Lists `name` among the remembered configurations, if it is not listed already. */
+  #listName(name: string): void {
+    const { names, isIntact } = this.#readIndex(false);
+    if (isIntact && names.includes(name)) {
+      return;
+    }
+    this.#writeIndex(names.includes(name) ? names : [...names, name]);
+  }
+
+  /** @returns Whether the write succeeded. */
+  #writeIndex(names: readonly string[]): boolean {
+    return this.#write(storageIndexKey(), JSON.stringify(names));
+  }
+
+  /** @returns Whether the write succeeded. */
+  #write(key: string, value: string): boolean {
     try {
-      this.storage.setItem(storageKey(), JSON.stringify(all));
+      this.storage.setItem(key, value);
+      return true;
     } catch (error) {
       this.#reportUnavailable('write', error);
+      return false;
+    }
+  }
+
+  #removeEntry(name: string): void {
+    try {
+      this.storage.removeItem(storageEntryKey(name));
+    } catch (error) {
+      this.#reportUnavailable('clear', error);
+    }
+  }
+
+  /**
+   * Removes what versions before this one stored.
+   *
+   * Their formats are not read (see {@link DISCARDED_STORAGE_KEYS}), and leaving them would leave
+   * a copy of every configuration a user ever had in `localStorage` for good. A key that is not
+   * there is not written to, so this is a few reads on the restore path and nothing else.
+   */
+  #discardOldFormats(): void {
+    const discarded: string[] = [];
+    try {
+      for (const key of DISCARDED_STORAGE_KEYS) {
+        if (this.storage.getItem(key) !== null) {
+          this.storage.removeItem(key);
+          discarded.push(key);
+        }
+      }
+    } catch (error) {
+      // Not reported: the index is read next and says the same thing about storage, in the words
+      // the application can act on.
+      this.logger.debug('could not remove configurations stored in an older format', {
+        event: 'storage.old-format-kept',
+        reason: describeUnknown(error),
+      });
+    }
+
+    if (discarded.length > 0) {
+      this.logger.info('removed configurations stored in a format this version does not read', {
+        event: 'storage.old-format-discarded',
+        keys: discarded.join(', '),
+      });
+    }
+  }
+
+  /** Reports one entry as unusable, and removes it. */
+  #discardEntry(name: string, reason: string, error: unknown): void {
+    this.logger.warn('discarded a stored configuration that could not be restored', {
+      configName: name,
+      event: 'storage.invalid-entry',
+      reason,
+      ...(error === undefined ? {} : { error: describeUnknown(error) }),
+    });
+    this.#report(
+      SerialBrokerErrorCode.STORAGE_CORRUPT,
+      `The stored configuration "${name}" was discarded because ${reason}`,
+      error,
+      name,
+    );
+    // Removed, not only skipped: an entry left behind would be reported on every restore.
+    this.#removeEntry(name);
+  }
+
+  /** Removes the index as unreadable, and reports it where the caller reports problems. */
+  #discardIndex(reason: string, error: unknown, reportProblem: boolean): void {
+    this.logger.warn('discarding the list of remembered configurations', {
+      event: 'storage.corrupt',
+      reason,
+    });
+    if (reportProblem) {
+      this.#report(SerialBrokerErrorCode.STORAGE_CORRUPT, reason, error);
+    }
+    try {
+      this.storage.removeItem(storageIndexKey());
+    } catch (removalError) {
+      this.#reportUnavailable('clear', removalError);
     }
   }
 
@@ -246,18 +388,14 @@ export class ConfigurationStore {
     );
   }
 
-  #discardAll(reason: string, error: unknown): void {
-    this.logger.warn('discarding all stored configurations', {
-      event: 'storage.corrupt',
-      reason,
-    });
+  #report(code: SerialBrokerErrorCode, message: string, cause: unknown, configName?: string): void {
     this.reportProblem(
-      new SerialBrokerError(SerialBrokerErrorCode.STORAGE_CORRUPT, reason, {
-        cause: error,
+      new SerialBrokerError(code, message, {
+        ...(configName === undefined ? {} : { configName }),
+        cause,
         timestamp: this.now(),
       }),
     );
-    this.clear();
   }
 }
 

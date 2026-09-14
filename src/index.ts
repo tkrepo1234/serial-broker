@@ -61,8 +61,8 @@ export {
  * without touching the singleton - for instance to decide whether to load a feature at all.
  *
  * Re-exported from the facade rather than from `environment/browser`: a re-export makes the
- * published declarations import that module's, and through them the Web Serial types, which an
- * application type-checking without `@types/w3c-web-serial` does not have.
+ * published declarations import that module's, and with them the injection seam this library
+ * reserves the right to change (ADR-0014).
  */
 export { isSupported } from './serial-broker.js';
 

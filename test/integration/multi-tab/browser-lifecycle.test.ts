@@ -129,7 +129,7 @@ describe.each(TRANSPORT_MODES)('the browser lifecycle (%s)', (transport) => {
     expect(device.writtenText()).toBe('AB');
   });
 
-  it('refuses a write that waited at the port across the wall clock being set forward, and writes the next', async () => {
+  it('writes a write waiting at the port when the wall clock is set forward, its time not being up', async () => {
     const { harness, device, participant } = await twoTabs({
       ...READER_OPTIONS,
       connection: { maxWriteChunkBytes: 1 },
@@ -147,13 +147,11 @@ describe.each(TRANSPORT_MODES)('the browser lifecycle (%s)', (transport) => {
     const next = outcomeOf(participant.client.send('Reader', 'N'));
     await harness.settle();
 
-    // Refusing too early is the safe direction: the write did not start, and says so.
-    expect(await waiting).toMatchObject({
-      code: SerialBrokerErrorCode.WRITE_TIMEOUT,
-      context: { started: false },
-    });
+    // How long a write has waited is measured on the monotonic clock (ADR-0032): the system time
+    // being set forward an hour refuses nothing that is still within `writeTimeoutMs`.
+    expect(await waiting).toBe('resolved');
     expect(await next).toBe('resolved');
-    expect(device.writtenText()).toBe('ABN');
+    expect(device.writtenText()).toBe('ABZN');
   });
 
   it('lets a frozen tab that is discarded leave the queue for the port, as a closed tab does', async () => {

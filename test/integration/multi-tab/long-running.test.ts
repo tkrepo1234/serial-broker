@@ -7,10 +7,10 @@ import {
   SWEEP_INTERVAL_MS,
 } from '../../../src/protocol/heartbeat.js';
 import { ownerLockName } from '../../../src/protocol/version.js';
-import { storageKey } from '../../../src/storage/configuration-store.js';
 import { persistenceLockName } from '../../../src/storage/persistence-hold.js';
 import { BrowserHarness, TRANSPORT_MODES } from '../../harness/browser-harness.js';
 import { READER, READER_OPTIONS } from '../../harness/devices.js';
+import { rememberedNames } from '../../harness/stored-configurations.js';
 
 /**
  * A tab left open for weeks, under load, through everything a browser and a device put it through.
@@ -157,7 +157,7 @@ describe.each(TRANSPORT_MODES)('a deployment left running (%s)', (transport) => 
       expect(harness.locks.queueLength(ownerLockName(name))).toBe(0);
       expect(harness.locks.holdersOf(persistenceLockName(name))).toEqual([]);
     }
-    expect(JSON.parse(harness.storage.getItem(storageKey()) ?? '{}')).toEqual({});
+    expect(rememberedNames(harness.storage)).toEqual([]);
   });
 
   it('returns to where it started after 10,000 watchers and 100 collections come and go', async () => {

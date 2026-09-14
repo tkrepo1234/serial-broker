@@ -4,7 +4,7 @@ import { SerialBrokerClient } from '../../src/client/serial-broker-client.js';
 import { SerialBrokerErrorCode } from '../../src/core/error-codes.js';
 import type { SerialBrokerError } from '../../src/core/errors.js';
 import { NOOP_LOGGER, ScopedLogger } from '../../src/core/logger.js';
-import { ConfigurationStore, storageKey } from '../../src/storage/configuration-store.js';
+import { ConfigurationStore, storageIndexKey } from '../../src/storage/configuration-store.js';
 import { BrowserHarness } from '../harness/browser-harness.js';
 import { READER, READER_OPTIONS } from '../harness/devices.js';
 import { fieldsOfEvent, recordingLogger } from '../harness/recording-logger.js';
@@ -91,7 +91,7 @@ describe('errors thrown at the public surface', () => {
 
 describe('storage problems', () => {
   it('are reported with the time they happened', () => {
-    const entries = new Map([[storageKey(), '{ not json']]);
+    const entries = new Map([[storageIndexKey(), '{ not json']]);
     const reported: SerialBrokerError[] = [];
     const store = new ConfigurationStore(
       {

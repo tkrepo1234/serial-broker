@@ -1,7 +1,38 @@
 # ADR-0014: Inject the browser environment for testability
 
-- **Status:** Accepted
+- **Status:** Accepted, amended by [ADR-0032](./0032-measure-durations-on-a-monotonic-clock.md)
 - **Date:** 2026-09-12
+
+> **Amendment (ADR-0032).** `Clock` has a second reading, `monotonicNow()` (`performance.now()`),
+> and every duration is measured with it; `now()` remains the wall clock, for timestamps.
+
+> **Amendment (2026-09-14): the narrowed interfaces name no ambient type.** `SerialLike` described
+> the part of `Serial` this library uses, but in the platform's own types: `getPorts(): Promise<SerialPort[]>`.
+> `SerialPort`, `SerialOptions`, `SerialPortRequestOptions` and the rest are _ambient_ types,
+> declared globally by `@types/w3c-web-serial` — a package this library cannot make an application
+> install, and whose version it must not dictate. Every published declaration that named one of them
+> therefore failed to type-check in an application without that package, and the entry points worked
+> around it by not re-exporting anything that reached those declarations.
+>
+> `src/environment/environment.ts` now declares `SerialPortLike`, `SerialOptionsLike`,
+> `SerialPortInfoLike`, `SerialPortRequestOptionsLike` and `SerialPortFilterLike` — the same
+> narrowing as `SerialLike`, one level deeper — and nothing in `src/` names an ambient Web Serial
+> type any more. `navigator.serial` satisfies them structurally, so the composition root still
+> assigns it without a cast; the one exception is a device event's `target`, which the platform
+> types as the `EventTarget` every event has, and which `SerialBrokerClient` reads as a port in the
+> single place that does so.
+>
+> `scripts/check-dist.mjs` type-checks **every** emitted `.d.ts`, not only the ones an entry point
+> reaches, with `skipLibCheck: false`, `types: []` and the `ES2022` and `DOM` libraries — so a
+> declaration for a deep import is held to the same rule, and a Web Serial type creeping back into
+> any of them fails the build. The repository keeps `@types/w3c-web-serial` as a dev dependency:
+> `navigator.serial` is reachable only through its `Navigator` augmentation.
+>
+> Rejected: shipping the ambient types with the package (they would collide with the copy an
+> application already has, and a global declaration is not a package's to make); a `declare global`
+> of our own (the same collision, plus a global for a library that needs none); telling applications
+> to install `@types/w3c-web-serial` (a transport wrapper must not dictate a types version, and
+> nothing in the public API exposes a `SerialPort` anyway).
 
 ## Context
 
@@ -21,7 +52,7 @@ All platform access goes through a single injected `SerialBrokerEnvironment`:
       readonly locks: LockManagerLike;    // navigator.locks
       readonly storage: KeyValueStorage;  // localStorage
       readonly createTransport: TransportFactory;
-      readonly clock: Clock;              // now(), setTimeout, clearTimeout
+      readonly clock: Clock;              // now(), monotonicNow(), setTimeout, clearTimeout
       readonly random: () => number;      // for backoff jitter
       readonly newId: IdGenerator;        // client and request identifiers
       readonly logger: Logger;

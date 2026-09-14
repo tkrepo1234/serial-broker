@@ -41,6 +41,12 @@ An import cycle fails the lint. Library code reaches `navigator`, `window`, `loc
 timer functions only through the injected environment, and a lint rule enforces that too
 [ADR-0014]. It is what lets the test suite run many simulated tabs in one process.
 
+The environment describes each of those APIs in types of its own — `SerialLike`, `SerialPortLike`,
+`LockManagerLike`, `KeyValueStorage`, `Clock` — naming no ambient Web Serial type, so that nothing
+this package publishes needs `@types/w3c-web-serial`. `scripts/check-dist.mjs` type-checks every
+emitted `.d.ts` without those types after each build, and the platform's objects satisfy the
+interfaces as they are [ADR-0014, amended].
+
 ## Ownership
 
 For each configuration, every tab that has set it up requests the Web Lock
@@ -137,7 +143,8 @@ never exchange messages or contend for the same lock, and both will try to open 
 they can still detect each other, every tab also announces its protocol version on
 `serial-broker/announcements`, a channel whose name and single message never change [ADR-0023].
 Remembered configurations carry a storage version of their own, so they survive a protocol change
-[ADR-0022].
+[ADR-0022]. Each lives under a key of its own, listed in an index, so that two tabs saving at the
+same moment cannot overwrite each other's [ADR-0033].
 
 ## The connection
 
@@ -242,5 +249,7 @@ real browser, with real or emulated hardware [ADR-0017], and where every hardwar
 | 0025 | Limit how many tabs use a configuration at once                                     |
 | 0026 | Attribute ownership, write and status messages to a term of holding the port        |
 | 0027 | Keep a remembered configuration while any tab runs it                               |
+| 0032 | Measure durations on a monotonic clock, timestamp events on the wall clock          |
+| 0033 | One storage key per configuration, with an index of the names                       |
 | 0034 | Start the debugging surface from a chosen port, under its own policy                |
 | 0035 | Test the built package in a real browser, and against real hardware                 |

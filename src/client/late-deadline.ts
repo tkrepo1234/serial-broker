@@ -31,17 +31,16 @@ export interface Deadline {
  * delay. That timer is queued behind the tasks already waiting, and those run first. A deadline that
  * runs on time decides at once, as before.
  *
- * Lateness is measured with `clock.now()`, which the system time can move. A wall clock set forward
- * makes a punctual deadline look late, and it yields once for nothing; a wall clock set back hides a
- * late one, which then decides at once, as without this.
+ * Lateness is measured on the monotonic clock, the one the timer itself runs on (ADR-0032): the
+ * system time being set forward or back changes nothing about whether this tab ran its timer late.
  */
 export function scheduleDeadline(clock: Clock, onExpired: () => void, delayMs: number): Deadline {
-  const dueAt = clock.now() + delayMs;
+  const dueAt = clock.monotonicNow() + delayMs;
   let handle: TimerHandle | undefined;
 
   const expire = (mayYield: boolean): void => {
     handle = undefined;
-    if (mayYield && clock.now() - dueAt >= LATE_DEADLINE_MS) {
+    if (mayYield && clock.monotonicNow() - dueAt >= LATE_DEADLINE_MS) {
       handle = clock.setTimer(() => {
         expire(false);
       }, 0);

@@ -8,9 +8,9 @@ import {
   versionAnnouncement,
 } from '../../../src/protocol/announcement.js';
 import { ownerLockName, PROTOCOL_VERSION } from '../../../src/protocol/version.js';
-import { storageKey } from '../../../src/storage/configuration-store.js';
 import { BrowserHarness, TRANSPORT_MODES } from '../../harness/browser-harness.js';
 import { READER, READER_OPTIONS } from '../../harness/devices.js';
+import { remember } from '../../harness/stored-configurations.js';
 
 /**
  * Defects in the client found in the bug hunt of 2026-09-13, each pinned by the behaviour it broke.
@@ -207,13 +207,10 @@ describe('errors that arrive while nothing listens for them', () => {
 
   it('reports a corrupt remembered configuration found by restore() in a fresh tab', async () => {
     const harness = new BrowserHarness();
-    harness.storage.poison(
-      storageKey(),
-      JSON.stringify({
-        Broken: { device: { vendorId: 'no' }, serial: { baudRate: 9600 } },
-        Reader: { device: READER, serial: { baudRate: 9600 } },
-      }),
-    );
+    remember(harness.storage, {
+      Broken: { device: { vendorId: 'no' }, serial: { baudRate: 9600 } },
+      Reader: { device: READER, serial: { baudRate: 9600 } },
+    });
     const tab = harness.openTab();
 
     await tab.client.restore();

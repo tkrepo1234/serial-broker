@@ -21,7 +21,7 @@ import {
   validateName,
   invalidArgument,
 } from '../core/validation.js';
-import type { SerialBrokerEnvironment } from '../environment/environment.js';
+import type { SerialPortLike, SerialBrokerEnvironment } from '../environment/environment.js';
 import { matchesDevice } from '../owner/port-matcher.js';
 import {
   ANNOUNCEMENT_CHANNEL_NAME,
@@ -670,9 +670,11 @@ export class SerialBrokerClient {
 
   #forEachMatchingSession(
     event: { readonly target: EventTarget | null },
-    action: (session: ConfigurationSession, port: SerialPort | null) => void,
+    action: (session: ConfigurationSession, port: SerialPortLike | null) => void,
   ): void {
-    const port = event.target as SerialPort | null;
+    // The platform declares the target as the `EventTarget` every event has; for a device event
+    // it is the port. This is the one place that says so, so that nothing else has to know.
+    const port = event.target as unknown as SerialPortLike | null;
 
     for (const session of this.#sessions.values()) {
       // A null target should not happen, but a device event with no port is better treated as

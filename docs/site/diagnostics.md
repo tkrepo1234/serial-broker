@@ -79,8 +79,10 @@ message.
 | `transport.limit-exceeded`                | warn  | A message beyond a limit of the bus was dropped; once per `limit`, with its `limitValue`. |
 | `storage.unavailable`                     | warn  | A read or write to `localStorage` failed; configurations may not be remembered.           |
 | `storage.invalid-entry`                   | warn  | A remembered configuration was invalid and discarded.                                     |
-| `storage.corrupt`                         | warn  | The stored configurations could not be read and were discarded.                           |
-| `storage.migrated`                        | info  | Remembered configurations were moved from the key an earlier build used.                  |
+| `storage.corrupt`                         | warn  | The list of remembered configurations could not be read and was discarded.                |
+| `storage.stale-name`                      | info  | A remembered name had no configuration left under it and was forgotten.                   |
+| `storage.old-format-discarded`            | info  | Configurations stored by an earlier version were removed, unread.                         |
+| `storage.old-format-kept`                 | debug | Removing what an earlier version stored failed; the next read reports storage itself.     |
 | `storage.hold-failed`                     | warn  | The lock that keeps a remembered configuration for other tabs could not be requested.     |
 | `slot.acquired`                           | info  | This tab took one of the `maxTabs` places and joins the configuration.                    |
 | `slot.released`                           | info  | This tab gave its place up.                                                               |

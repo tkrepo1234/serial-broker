@@ -12,7 +12,7 @@ import {
   type SerialBrokerEventName,
   type SerialBrokerStatusSnapshot,
 } from '../core/types.js';
-import type { SerialBrokerEnvironment } from '../environment/environment.js';
+import type { SerialPortLike, SerialBrokerEnvironment } from '../environment/environment.js';
 import { OwnershipElection } from '../owner/election.js';
 import { PortSupervisor } from '../owner/port-supervisor.js';
 import type { ClientId, ProtocolMessage, RequestId, TermId } from '../protocol/messages.js';
@@ -518,7 +518,7 @@ export class ConfigurationSession {
    *   matching the filter is not enough, since an `any` filter or two identical adapters match
    *   ports this configuration never opened.
    */
-  handleDeviceDisconnected(port: SerialPort | null): void {
+  handleDeviceDisconnected(port: SerialPortLike | null): void {
     this.#supervisor?.handleDeviceDisconnected(port);
   }
 

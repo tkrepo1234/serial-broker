@@ -2,10 +2,10 @@ import { describe, expect, it } from 'vitest';
 
 import { SerialBrokerErrorCode } from '../../../src/core/error-codes.js';
 import { normalizeConfiguration } from '../../../src/core/validation.js';
-import { storageKey } from '../../../src/storage/configuration-store.js';
 import { BrowserHarness, TRANSPORT_MODES } from '../../harness/browser-harness.js';
 import { READER, READER_OPTIONS } from '../../harness/devices.js';
 import type { TransportMode } from '../../harness/fake-bus.js';
+import { rememberedEntry } from '../../harness/stored-configurations.js';
 
 /**
  * Limiting how many tabs use a configuration at once (ADR-0025).
@@ -170,7 +170,7 @@ describe('the maxTabs option', () => {
     await tab.setup('Unlimited', READER_OPTIONS);
     await tab.close();
 
-    expect(harness.storage.getItem(storageKey())).not.toContain('null');
+    expect(JSON.stringify(rememberedEntry(harness.storage, 'Unlimited'))).not.toContain('null');
     const reloaded = harness.openTab();
     await reloaded.client.restore();
 
