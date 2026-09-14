@@ -134,12 +134,17 @@ export interface SerialBrokerConnection {
   /**
    * Stops using the configuration in this tab. The other tabs keep it, and one of them takes the
    * port over if this tab held it. The status ends at `released`.
+   *
+   * Only a configuration this connection set up is released: after a setup that failed - a
+   * `CONFIGURATION_CONFLICT` with a configuration of the same name that other code set up, say -
+   * that configuration is left alone. A setup still under way finishes first.
    */
   release(): Promise<void>;
   /**
-   * Starts over: releases the configuration if it is still set up, then sets it up again. The way
-   * back from `released`, and from a `failed` that does not end by itself - `setup()` alone does
-   * nothing for a name that is still set up.
+   * Starts over: releases the configuration if this connection set it up, then sets it up again.
+   * The way back from `released`, and from a `failed` that does not end by itself - `setup()` alone
+   * does nothing for a name that is still set up. Waits for a setup or a restart still under way,
+   * so two of them never run side by side.
    */
   restart(): Promise<void>;
   /** Clears `error`, for an error panel the user dismissed. */
@@ -211,6 +216,14 @@ class ReactiveConnection implements SerialBrokerConnection {
   readonly #releaseOnDestroy: boolean;
   #subscriptions: Unsubscribe[] = [];
   #starting: Promise<void> | undefined;
+  #restarting: Promise<void> | undefined;
+  /**
+   * Whether this connection's own `setup()` succeeded and nothing has released the configuration
+   * since. Only then do release(), restart() and destroy() release it: a configuration of the same
+   * name that other code set up - one this connection's setup conflicted with - is not theirs to
+   * end.
+   */
+  #ownsSetup = false;
   #destroyed = false;
 
   constructor(name: string, options: SerialBrokerOptions, settings: SerialBrokerSettings) {
@@ -284,10 +297,15 @@ class ReactiveConnection implements SerialBrokerConnection {
   }
 
   async release(): Promise<void> {
-    try {
-      await this.#release();
-    } catch (error) {
-      this.#report(error);
+    // A setup that finished after the release would leave the configuration set up.
+    await this.#settled();
+    if (this.#ownsSetup) {
+      this.#ownsSetup = false;
+      try {
+        await this.#release();
+      } catch (error) {
+        this.#report(error);
+      }
     }
     // `released` is the configuration's last event and normally arrives through the subscription;
     // set here as well for a configuration that ended without one, such as a failed setup.
@@ -296,19 +314,12 @@ class ReactiveConnection implements SerialBrokerConnection {
     this.#applyStatus('released', Date.now());
   }
 
-  async restart(): Promise<void> {
-    this.#error = null;
-    if (SerialBroker.exists(this.name)) {
-      try {
-        await this.#release();
-      } catch (error) {
-        this.#report(error);
-        return;
-      }
-    }
-    this.#unsubscribe();
-    this.#starting = undefined;
-    await this.start();
+  restart(): Promise<void> {
+    // One after the other, and after the first setup: two starts side by side would both subscribe,
+    // and every chunk would be counted and shown twice.
+    const restarting = this.#settled().then(() => this.#restartNow());
+    this.#restarting = restarting;
+    return restarting;
   }
 
   clearError(): void {
@@ -323,15 +334,53 @@ class ReactiveConnection implements SerialBrokerConnection {
   destroy(): void {
     this.#destroyed = true;
     this.#unsubscribe();
-    if (this.#releaseOnDestroy) {
-      // After any setup still under way, so that it cannot finish after the release. Nothing is
-      // left to show a failure to.
-      void (this.#starting ?? Promise.resolve())
-        .then(async () => {
-          await this.#release();
-        })
-        .catch(() => undefined);
+    if (!this.#releaseOnDestroy) {
+      return;
     }
+    // After any setup or restart still under way, so that neither can finish after the release -
+    // and only once it is known whether this connection set the configuration up at all. Nothing
+    // is left to show a failure to.
+    void this.#settled()
+      .then(async () => {
+        if (this.#ownsSetup) {
+          this.#ownsSetup = false;
+          await this.#release();
+        }
+      })
+      .catch(() => undefined);
+  }
+
+  /** Resolves once no setup and no restart of this connection is under way. */
+  async #settled(): Promise<void> {
+    try {
+      await this.#restarting;
+      // Read after the restart: it replaces the setup it started over.
+      await this.#starting;
+    } catch {
+      // Rethrown by #report as a bug in the application, where the call that met it reported it.
+    }
+  }
+
+  async #restartNow(): Promise<void> {
+    if (this.#destroyed) {
+      return;
+    }
+    this.#error = null;
+    if (this.#ownsSetup) {
+      this.#ownsSetup = false;
+      try {
+        await this.#release();
+      } catch (error) {
+        this.#report(error);
+        return;
+      }
+    }
+    this.#unsubscribe();
+    this.#starting = undefined;
+    if (this.#destroyed) {
+      return;
+    }
+    await this.start();
   }
 
   async #start(): Promise<void> {
@@ -344,41 +393,59 @@ class ReactiveConnection implements SerialBrokerConnection {
       }
       // A plain copy: `options` may be a `$state` proxy, and a proxy cannot be passed between tabs.
       await SerialBroker.setup(this.name, $state.snapshot(this.#options) as SerialBrokerOptions);
+      // Set up by this connection, so released by it - on destroy as well, which waits for this.
+      this.#ownsSetup = true;
+      if (this.#destroyed) {
+        return;
+      }
+      this.#subscribe();
     } catch (error) {
-      // setup() fails for invalid options, and where there is no Web Serial at all - outside
-      // Chromium, or outside https:// and localhost - with WEB_SERIAL_UNAVAILABLE.
+      // setup() fails for invalid options, for a name set up with different options
+      // (CONFIGURATION_CONFLICT), and where there is no Web Serial at all - outside Chromium, or
+      // outside https:// and localhost - with WEB_SERIAL_UNAVAILABLE. subscribe() fails with
+      // UNKNOWN_CONFIGURATION when other code released the configuration in the meantime.
+      this.#unsubscribe();
+      this.#isSetUp = false;
       this.#report(error);
       this.#applyStatus('failed', Date.now());
       // Not remembered as done: restart() tries again.
       this.#starting = undefined;
-      return;
     }
-    if (this.#destroyed) {
-      return;
-    }
+  }
 
-    this.#isSetUp = true;
+  #subscribe(): void {
+    // Never two sets of listeners: every chunk would be shown and counted twice.
+    this.#unsubscribe();
     this.#receivedBytes = 0;
     this.#sentBytes = 0;
-    this.#subscriptions = [
+    // One at a time into the list, so that a subscribe() that throws leaves nothing behind that
+    // #unsubscribe() does not reach.
+    this.#subscriptions.push(
       SerialBroker.subscribe(this.name, 'onStatusChange', (event) => {
         this.#applyStatus(event.status, event.timestamp);
       }),
+    );
+    this.#subscriptions.push(
       SerialBroker.subscribe(this.name, 'onReceive', (event) => {
         this.#receivedBytes += event.data.byteLength;
         this.#append(event.text ?? `${toHex(event.data)} `);
       }),
+    );
+    this.#subscriptions.push(
       SerialBroker.subscribe(this.name, 'onSend', (event) => {
         // Fires in every tab for every write that reached the device, whichever tab issued it.
         this.#sentBytes += event.data.byteLength;
       }),
+    );
+    this.#subscriptions.push(
       SerialBroker.subscribe(this.name, 'onError', (event) => {
         // Failures no call answers for: the device unplugged, the port not opening.
         this.#report(event.error);
       }),
-    ];
+    );
     // The status may have moved on between setup() resolving and the subscriptions above.
     const snapshot = SerialBroker.getStatus(this.name);
+    this.#isSetUp = true;
     this.#applyStatus(snapshot.status, snapshot.since);
   }
 
@@ -399,7 +466,10 @@ class ReactiveConnection implements SerialBrokerConnection {
     this.#status = status;
     this.#since = since;
     if (status === 'released') {
+      // Ended - by this connection or by other code in the tab. Nothing is left to release, and a
+      // configuration of the same name set up later belongs to whoever sets it up.
       this.#isSetUp = false;
+      this.#ownsSetup = false;
     }
     // The recovery a retryable error announced has succeeded; the note is out of date.
     if (status === 'open' && this.#error?.isRetryable === true) {

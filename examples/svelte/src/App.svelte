@@ -112,7 +112,8 @@
           Release in this tab
         </button>
       {/if}
-      {#if !device.isSetUp || device.status === 'failed'}
+      <!-- The two statuses that end: not while the first setup is still under way. -->
+      {#if device.status === 'released' || device.status === 'failed'}
         <button id="restart" type="button" disabled={busy} onclick={() => run(() => device.restart())}>
           Set up again
         </button>

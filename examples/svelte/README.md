@@ -159,7 +159,7 @@ releases in one while the other keeps sending, and sets up again.
 | `receivedBytes`, `sentBytes`      | Byte counters since the last setup; `sentBytes` counts every tab's writes.          |
 | `connect()`                       | The port picker. Resolves `'granted'`, `'dismissed'` or `'failed'`; never rejects.  |
 | `send(data)`                      | Resolves `true` once the bytes reached the device, `false` with `error` set.        |
-| `release()`, `restart()`          | Give the configuration up in this tab; release if needed and set it up again.       |
+| `release()`, `restart()`          | Give up what this connection set up; release that if needed and set up again.       |
 | `clearError()`, `clearReceived()` | Empty `error` or `received`.                                                        |
 
 ## Stable element ids
@@ -212,10 +212,26 @@ more would keep the port open, or keep a place in the queue, for nothing. The Op
 decides the other way, because there the model lives as long as the application. Where other code
 in the tab uses the same configuration, `releaseOnDestroy: false` keeps it.
 
+**A connection releases only what it set up.** A configuration name is one configuration for the
+whole tab. A connection whose `setup()` failed - a dialog asking for another baud rate under a name
+the page already uses, which is a `CONFIGURATION_CONFLICT` - or that was destroyed before its setup
+began, has set nothing up, and its `release()`, `restart()` and destroy leave the configuration
+alone. Otherwise closing the dialog would end the page's working connection. A `released` status
+from any source ends the ownership too. Two connections that both set up the same name with the
+same options do both own it, and the first one destroyed ends it for the other; that case is what
+`releaseOnDestroy: false` is for.
+
 **A setup waits for a release of the same name still under way.** A component destroyed and
 created again at once - a `{#key}` block, hot module replacement while developing - releases and
 sets up in the same moment. The release resolves once the port is closed, and the module keeps it
 in a map by name so the new setup waits for it rather than race it.
+
+**Setups, restarts and releases of one connection run one after the other.** `restart()` waits for
+the first setup and for an earlier restart, `release()` for both, and destroy for both before it
+decides whether there is anything to release. Two setups side by side would both subscribe, and
+every chunk would be shown and counted twice. The listeners are also always removed before new ones
+are added, and a `subscribe()` that fails - the configuration released by other code between setup
+and subscribe - becomes `failed` with its error rather than an unhandled rejection.
 
 **Options are passed on as a plain copy.** `$state.snapshot()` turns a `$state` proxy - options
 built from a form, say - into an object the library can hand between tabs; a proxy cannot be
@@ -245,6 +261,10 @@ where Svelte destroys no components. A module that did either would do it once p
 **The status sentences are in the application, not in the module.** They are words for the
 application's users, and a team replaces them. `status-text.ts` types them as a `Record` over the
 status union, so a status a later version adds fails the type-check instead of showing a blank.
+
+**_Set up again_ appears in `released` and `failed` only.** Those are the two statuses that end.
+Before the first setup has finished the status is `idle` and the button is absent, so a click
+cannot start over a setup still under way.
 
 **Buttons that do not apply are not rendered; _Send_ is disabled.** A missing button says the step
 does not apply; a disabled one suggests a state the user could reach. _Send_ is the exception,
