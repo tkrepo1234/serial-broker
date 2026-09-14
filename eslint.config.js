@@ -142,7 +142,7 @@ export default defineConfig(
   // Build scripts are plain Node JavaScript with no TypeScript program behind them, so rules that
   // need type information cannot apply to them (ADR-0020).
   {
-    files: ['docs/site/build.mjs', 'scripts/*.mjs'],
+    files: ['docs/site/build.mjs', 'scripts/*.mjs', 'test/browser/*.mjs'],
     extends: [tseslint.configs.disableTypeChecked],
     languageOptions: { globals: { process: 'readonly' } },
   },
