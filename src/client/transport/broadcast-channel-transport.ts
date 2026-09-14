@@ -1,10 +1,25 @@
 import { DisposalStack } from '../../core/disposable.js';
 import { decodeMessage } from '../../protocol/decode.js';
-import { configNameOf, type ProtocolMessage } from '../../protocol/messages.js';
+import { LimitWarnings } from '../../protocol/limits.js';
+import {
+  configNameOf,
+  type ProtocolMessage,
+  type ProtocolMessageType,
+} from '../../protocol/messages.js';
 import { brokerChannelName } from '../../protocol/version.js';
 
 import { MessageSender } from './message-sender.js';
 import type { Transport, TransportRequest } from './transport.js';
+
+/** The messages that tell a broker about a context, and concern no context in turn. */
+const PRESENCE_MESSAGE_TYPES: ReadonlySet<ProtocolMessageType> = new Set([
+  'hello',
+  'welcome',
+  'heartbeat',
+  'goodbye',
+  'attach',
+  'detach',
+]);
 
 /** The `BroadcastChannel` surface this transport uses. */
 export interface BroadcastChannelLike {
@@ -44,10 +59,12 @@ export class BroadcastChannelTransport implements Transport {
   readonly #request: TransportRequest;
   readonly #attached = new Set<string>();
   readonly #owned = new Set<string>();
+  readonly #limits: LimitWarnings;
 
   constructor(request: TransportRequest, createChannel: BroadcastChannelFactory) {
     this.clientId = request.clientId;
     this.#request = request;
+    this.#limits = new LimitWarnings(request.logger, 'transport.limit-exceeded');
     this.#channel = createChannel(brokerChannelName());
     this.#sender = new MessageSender(
       request,
@@ -120,11 +137,26 @@ export class BroadcastChannelTransport implements Transport {
   #receive(raw: unknown): void {
     const result = decodeMessage(raw);
     if (!result.ok) {
+      if (result.failure.reason === 'limit-exceeded') {
+        // Logged once, not reported per message: a sender that exceeds a limit repeats itself.
+        this.#limits.exceeded(result.failure.limit, {
+          messageType: result.failure.type,
+          field: result.failure.field,
+        });
+        return;
+      }
       this.#request.onDecodeFailure(result.failure);
       return;
     }
 
     const message = result.message;
+
+    if (PRESENCE_MESSAGE_TYPES.has(message.type)) {
+      // Addressed to a broker, and there is none here. Every script of the origin can post them, and
+      // nobody above the transport reads them - on the worker the broker never passes them on - so
+      // they go no further, and both transports deliver the same messages.
+      return;
+    }
 
     // `BroadcastChannel` does not deliver to the sender, but a future transport swap or a
     // polyfill might, and double-delivering every local event would be a miserable bug to

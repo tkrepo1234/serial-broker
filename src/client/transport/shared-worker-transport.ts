@@ -3,6 +3,7 @@ import { DisposalStack } from '../../core/disposable.js';
 import { describeUnknown } from '../../core/errors.js';
 import { decodeMessage } from '../../protocol/decode.js';
 import { HEARTBEAT_INTERVAL_MS, MAX_UNANSWERED_HEARTBEATS } from '../../protocol/heartbeat.js';
+import { LimitWarnings } from '../../protocol/limits.js';
 import type { ProtocolMessage } from '../../protocol/messages.js';
 import { brokerChannelName, PROTOCOL_VERSION } from '../../protocol/version.js';
 
@@ -100,6 +101,7 @@ export class SharedWorkerTransport implements Transport {
    */
   #isOtherVersion = false;
   #heartbeat: TimerHandle | undefined;
+  readonly #limits: LimitWarnings;
 
   /**
    * @param startup - When given, a script that fails to load before the broker answers is
@@ -116,6 +118,7 @@ export class SharedWorkerTransport implements Transport {
     this.#createWorker = createWorker;
     this.#url = url;
     this.#startup = startup;
+    this.#limits = new LimitWarnings(request.logger, 'transport.limit-exceeded');
     this.#sender = new MessageSender(
       request,
       (message) => {
@@ -357,6 +360,15 @@ export class SharedWorkerTransport implements Transport {
 
   #receive(raw: unknown): void {
     const result = decodeMessage(raw);
+    if (!result.ok && result.failure.reason === 'limit-exceeded') {
+      // A broker of this build passes on nothing beyond the limits, so this is another build's, or a
+      // broker's bug. Logged once, not reported per message, and never taken for another version.
+      this.#limits.exceeded(result.failure.limit, {
+        messageType: result.failure.type,
+        field: result.failure.field,
+      });
+      return;
+    }
     if (!result.ok) {
       this.#request.onDecodeFailure(result.failure);
       if (this.#disposal.isDisposed) {

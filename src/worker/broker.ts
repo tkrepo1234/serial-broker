@@ -1,5 +1,6 @@
 import type { ScopedLogger } from '../core/logger.js';
 import { welcomeFor } from '../protocol/handshake.js';
+import { LimitWarnings, MAX_CONFIGURATIONS } from '../protocol/limits.js';
 import { configNameOf, type ClientId, type ProtocolMessage } from '../protocol/messages.js';
 
 /** What the broker needs from whichever transport is hosting it. */
@@ -46,8 +47,11 @@ export class Broker {
   readonly #clients = new Set<ClientId>();
   /** When each participant last sent anything. Any message counts, not only heartbeats. */
   readonly #lastHeardFrom = new Map<ClientId, number>();
+  readonly #limits: LimitWarnings;
 
-  constructor(private readonly host: BrokerHost) {}
+  constructor(private readonly host: BrokerHost) {
+    this.#limits = new LimitWarnings(host.logger, 'broker.limit-exceeded');
+  }
 
   /** Number of participants the broker knows. For tests: the worker script has no use for it. */
   get clientCount(): number {
@@ -179,9 +183,20 @@ export class Broker {
 
   // --- Participation ---------------------------------------------------------------------
 
-  #stateFor(configName: string): ConfigurationState {
+  /**
+   * The bookkeeping for a configuration, created on first use.
+   *
+   * @returns `undefined` for a configuration the broker has no room for: any participant can name any
+   *   configuration, so their number is bounded ({@link MAX_CONFIGURATIONS}). Nothing about such a
+   *   configuration is kept or routed until another one is let go of.
+   */
+  #stateFor(configName: string): ConfigurationState | undefined {
     let state = this.#configurations.get(configName);
     if (state === undefined) {
+      if (this.#configurations.size >= MAX_CONFIGURATIONS) {
+        this.#limits.exceeded('MAX_CONFIGURATIONS');
+        return undefined;
+      }
       state = { participants: new Set(), owner: undefined };
       this.#configurations.set(configName, state);
     }
@@ -191,7 +206,7 @@ export class Broker {
   #attach(clientId: ClientId, configName: string): void {
     // Nothing beyond bookkeeping: a joining context asks the owner for the current status
     // itself, so that the broker and the broker-less fallback behave identically (ADR-0007).
-    this.#stateFor(configName).participants.add(clientId);
+    this.#stateFor(configName)?.participants.add(clientId);
   }
 
   /**
@@ -207,10 +222,13 @@ export class Broker {
     ownedConfigNames: readonly string[],
   ): void {
     for (const configName of configNames) {
-      this.#stateFor(configName).participants.add(clientId);
+      this.#stateFor(configName)?.participants.add(clientId);
     }
     for (const configName of ownedConfigNames) {
       const state = this.#stateFor(configName);
+      if (state === undefined) {
+        continue;
+      }
       state.participants.add(clientId);
       if (state.owner === undefined) {
         state.owner = clientId;
@@ -240,6 +258,9 @@ export class Broker {
 
   #setOwner(clientId: ClientId, configName: string): void {
     const state = this.#stateFor(configName);
+    if (state === undefined) {
+      return;
+    }
     state.participants.add(clientId);
     state.owner = clientId;
     this.host.logger.info('ownership claimed', {

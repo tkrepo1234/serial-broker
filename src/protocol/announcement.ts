@@ -1,4 +1,5 @@
 import { isRecord } from './guards.js';
+import { isProtocolVersion } from './version.js';
 
 /**
  * The version announcement: how tabs on different protocol versions learn of each other.
@@ -42,10 +43,11 @@ export function decodeAnnouncement(raw: unknown): VersionAnnouncement | undefine
     return undefined;
   }
   const { type, protocolVersion, isReply } = raw;
+  // Only a positive safe integer: a sender choosing `-0`, `2 ** 60` or a negative number names no
+  // build, and every distinct value would be reported as a version of its own.
   if (
     type !== ANNOUNCEMENT_TYPE ||
-    typeof protocolVersion !== 'number' ||
-    !Number.isInteger(protocolVersion) ||
+    !isProtocolVersion(protocolVersion) ||
     typeof isReply !== 'boolean'
   ) {
     return undefined;
