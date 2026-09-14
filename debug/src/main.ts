@@ -22,12 +22,7 @@ import type { SerialBrokerEnvironment } from '../../src/environment/environment.
 import { PROTOCOL_VERSION } from '../../src/protocol/version.js';
 import { ConfigurationStore } from '../../src/storage/configuration-store.js';
 
-import {
-  formValuesForPort,
-  isPickerDismissed,
-  noteForChosenPort,
-  type ChosenPortInfo,
-} from './chosen-port.js';
+import { formValuesForChosenDevice } from './chosen-port.js';
 import { ConfigurationDetail, type DetailHost } from './detail.js';
 import { byId, element } from './dom.js';
 import { EventLog } from './event-log.js';
@@ -237,8 +232,35 @@ const dialog = new SetupDialog(byId('setupDialog') as HTMLDialogElement, async (
     }
   }
   selectedName = request.name;
+  if (request.requestsAccess) {
+    await chooseDeviceFor(request.name);
+  }
   refreshNow();
 });
+
+/**
+ * Opens the browser's port picker for a configuration just set up in auto mode, in the click that
+ * set it up (ADR-0036).
+ *
+ * The configuration takes its device from the port chosen, and the library remembers it. A
+ * dismissed picker is an answer, not a failure: the configuration is released again, so nothing
+ * waits for a device nobody chose, and nothing is remembered.
+ */
+async function chooseDeviceFor(name: string): Promise<void> {
+  const page = requireClient();
+  let granted: boolean;
+  try {
+    granted = await page.requestAccess(name);
+  } catch (error) {
+    logFailure(`choose a device for "${name}"`, error);
+    await page.release(name);
+    throw error;
+  }
+  if (!granted) {
+    await page.release(name);
+    showChooseMessage('The picker was dismissed; nothing was set up.', 'notice');
+  }
+}
 for (const id of ['newButton', 'emptyNewButton']) {
   byId(id).addEventListener('click', () => {
     dialog.open();
@@ -316,64 +338,25 @@ window.addEventListener('pagehide', (event) => {
 // --- Choosing a device ------------------------------------------------------------------------
 
 /**
- * Opens the browser's port picker with no filter, and offers a configuration for what was chosen.
+ * Offers a configuration in auto mode: a name and the line settings, and the browser's port
+ * picker on _Connect_.
  *
  * This is where someone who has not used serial-broker before starts: no vendor ID, no product
- * ID, no device type - choose the port, confirm the settings, and the page is connected to it
- * (ADR-0034). `requestPort()` is called inside the click, because the browser shows the picker
- * only for a fresh user gesture.
+ * ID, no device type - confirm the settings, choose the port, and the page is connected to it
+ * (ADR-0034, ADR-0036). The picker is opened by `requestAccess()` in the click that submits the
+ * dialog, because the browser shows it only for a fresh user gesture.
  */
 function chooseADevice(): void {
   showChooseMessage('');
-  let chosen: Promise<SerialPort>;
   try {
-    // Reported before the picker opens: a page that cannot run a configuration must not ask for
+    // Reported before anything is asked: a page that cannot run a configuration must not ask for
     // a device permission it would then have no use for.
     requireClient();
-    chosen = navigator.serial.requestPort();
   } catch (error) {
     showChooseMessage(describeError(error).text, 'error');
     return;
   }
-  void chosen.then(
-    async (port) => {
-      await offerConfigurationFor(port);
-    },
-    (error: unknown) => {
-      if (isPickerDismissed(error)) {
-        // Closing the picker is an answer, not a failure: nothing was granted, nothing changed.
-        showChooseMessage('The picker was dismissed; nothing changed.', 'notice');
-        return;
-      }
-      showChooseMessage(describeError(error).text, 'error');
-      logFailure('choose a device', error);
-    },
-  );
-}
-
-/** Opens the setup dialog on the chosen port, filled in from what the port reports. */
-async function offerConfigurationFor(port: SerialPort): Promise<void> {
-  const info = port.getInfo();
-  try {
-    dialog.connectToPort(
-      formValuesForPort(info, knownNames()),
-      noteForChosenPort(info, await grantedPortInfos()),
-    );
-  } catch (error) {
-    showChooseMessage(describeError(error).text, 'error');
-    logFailure('read the chosen device', error);
-  }
-}
-
-/** What every port this browser allows this site to use reports, for the ambiguity warning. */
-async function grantedPortInfos(): Promise<ChosenPortInfo[]> {
-  try {
-    return (await navigator.serial.getPorts()).map((port) => port.getInfo());
-  } catch (error) {
-    // Only the warning about several matching ports is lost, so the flow carries on without it.
-    logFailure('list the granted ports', error);
-    return [];
-  }
+  dialog.chooseDevice(formValuesForChosenDevice(knownNames()));
 }
 
 /** Every configuration name this origin knows, so a suggested name is not one of them. */

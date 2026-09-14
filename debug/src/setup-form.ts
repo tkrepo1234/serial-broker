@@ -25,10 +25,19 @@ type ConnectionField = keyof ConnectionSettings;
 /** Every connection setting, in the order the library documents them. */
 const CONNECTION_FIELDS = Object.keys(DEFAULT_CONNECTION_SETTINGS) as ConnectionField[];
 
+/** How the form names the device: the device list's non-preset entries (ADR-0036). */
+export type DeviceKindChoice = 'auto' | 'usb' | 'non-usb' | 'any';
+
 /** Every field of the form. An empty string means "leave it to the library's default". */
 export interface SetupFormValues {
   readonly name: string;
-  readonly deviceKind: 'usb' | 'any';
+  readonly deviceKind: DeviceKindChoice;
+  /**
+   * What an auto-mode configuration has resolved to, kept so that editing its line settings does
+   * not ask for the device again: `'usb'` with the IDs in `vendorId` and `productId`, `'non-usb'`,
+   * or blank for one that has not resolved. Meaningless unless `deviceKind` is `'auto'`.
+   */
+  readonly resolved: '' | 'usb' | 'non-usb';
   readonly vendorId: string;
   readonly productId: string;
   readonly baudRate: string;
@@ -60,11 +69,15 @@ export const DEVICE_PRESETS: readonly DevicePreset[] = [
   { label: 'Emulated device (emulator/)', vendorId: '0x1209', productId: '0x0001' },
 ];
 
-/** What the form holds when the dialog opens. */
+/**
+ * What the form holds when the dialog opens: auto mode, so the device comes from the port the
+ * user chooses, with the first preset's IDs ready should they switch to naming one.
+ */
 export function defaultFormValues(): SetupFormValues {
   return {
     name: 'Device',
-    deviceKind: 'usb',
+    deviceKind: 'auto',
+    resolved: '',
     vendorId: '0x1a86',
     productId: '0x7523',
     baudRate: '9600',
@@ -103,12 +116,12 @@ export function defaultPlaceholders(): Readonly<Record<string, string>> {
 }
 
 /**
- * Works out which entry of the device list describes the values: a preset's index, `'custom'`,
- * or `'any'`.
+ * Works out which entry of the device list describes the values: `'auto'`, a preset's index,
+ * `'custom'`, `'non-usb'` or `'any'`.
  */
 export function deviceChoiceFor(values: SetupFormValues): string {
-  if (values.deviceKind === 'any') {
-    return 'any';
+  if (values.deviceKind !== 'usb') {
+    return values.deviceKind;
   }
   const index = DEVICE_PRESETS.findIndex(
     (preset) =>
@@ -131,9 +144,7 @@ export function formValuesFor(name: string, settings: EffectiveSettings): SetupF
   }
   return {
     name,
-    deviceKind: 'any' in device ? 'any' : 'usb',
-    vendorId: 'any' in device ? '' : formatUsbId(device.vendorId),
-    productId: 'any' in device ? '' : formatUsbId(device.productId),
+    ...deviceValuesFor(device),
     baudRate: String(serial.baudRate),
     dataBits: String(serial.dataBits),
     stopBits: String(serial.stopBits),
@@ -146,6 +157,67 @@ export function formValuesFor(name: string, settings: EffectiveSettings): SetupF
     persist: settings.persist,
     maxTabs: String(settings.maxTabs),
   };
+}
+
+/** The device fields of the form for a device filter as a configuration reports it. */
+function deviceValuesFor(
+  device: EffectiveSettings['device'],
+): Pick<SetupFormValues, 'deviceKind' | 'resolved' | 'vendorId' | 'productId'> {
+  if ('any' in device) {
+    return { deviceKind: 'any', resolved: '', vendorId: '', productId: '' };
+  }
+  if ('nonUsb' in device) {
+    return { deviceKind: 'non-usb', resolved: '', vendorId: '', productId: '' };
+  }
+  if ('auto' in device) {
+    const resolved = device.resolved;
+    if (resolved === undefined) {
+      return { deviceKind: 'auto', resolved: '', vendorId: '', productId: '' };
+    }
+    return 'nonUsb' in resolved
+      ? { deviceKind: 'auto', resolved: 'non-usb', vendorId: '', productId: '' }
+      : {
+          deviceKind: 'auto',
+          resolved: 'usb',
+          vendorId: formatUsbId(resolved.vendorId),
+          productId: formatUsbId(resolved.productId),
+        };
+  }
+  return {
+    deviceKind: 'usb',
+    resolved: '',
+    vendorId: formatUsbId(device.vendorId),
+    productId: formatUsbId(device.productId),
+  };
+}
+
+/** The `device` option the form describes; see {@link buildSetupOptions}. */
+function deviceOptionFor(values: SetupFormValues): Record<string, unknown> {
+  switch (values.deviceKind) {
+    case 'any':
+      return { any: true };
+    case 'non-usb':
+      return { nonUsb: true };
+    case 'auto':
+      // The resolution travels with the configuration, so editing a baud rate does not ask for
+      // the device again (ADR-0036).
+      switch (values.resolved) {
+        case 'usb':
+          return {
+            auto: true,
+            resolved: {
+              vendorId: toNumber(values.vendorId),
+              productId: toNumber(values.productId),
+            },
+          };
+        case 'non-usb':
+          return { auto: true, resolved: { nonUsb: true } };
+        default:
+          return { auto: true };
+      }
+    default:
+      return { vendorId: toNumber(values.vendorId), productId: toNumber(values.productId) };
+  }
 }
 
 /**
@@ -167,10 +239,7 @@ export function buildSetupOptions(values: SetupFormValues): Record<string, unkno
   }
 
   return {
-    device:
-      values.deviceKind === 'any'
-        ? { any: true }
-        : { vendorId: toNumber(values.vendorId), productId: toNumber(values.productId) },
+    device: deviceOptionFor(values),
     serial: {
       baudRate: toNumber(values.baudRate),
       ...optionalNumber('dataBits', values.dataBits),
@@ -232,9 +301,11 @@ export function readSetupForm(form: HTMLFormElement): SetupFormValues {
   for (const field of CONNECTION_FIELDS) {
     connection[field] = textField(form, `connection.${field}`);
   }
+  const resolved = textField(form, 'resolved');
   return {
     name: textField(form, 'name').trim(),
-    deviceKind: textField(form, 'device') === 'any' ? 'any' : 'usb',
+    deviceKind: deviceKindOf(textField(form, 'device')),
+    resolved: resolved === 'usb' || resolved === 'non-usb' ? resolved : '',
     vendorId: textField(form, 'vendorId'),
     productId: textField(form, 'productId'),
     baudRate: textField(form, 'baudRate'),
@@ -257,6 +328,7 @@ export function writeSetupForm(form: HTMLFormElement, values: SetupFormValues): 
     input(form, name).value = value;
   };
   set('name', values.name);
+  set('resolved', values.resolved);
   set('vendorId', values.vendorId);
   set('productId', values.productId);
   set('baudRate', values.baudRate);
@@ -272,6 +344,11 @@ export function writeSetupForm(form: HTMLFormElement, values: SetupFormValues): 
   checkbox(form, 'decodeText').checked = values.decodeText;
   checkbox(form, 'persist').checked = values.persist;
   set('maxTabs', values.maxTabs);
+}
+
+/** The device kind a device list entry stands for: every entry not named here is a USB one. */
+function deviceKindOf(choice: string): DeviceKindChoice {
+  return choice === 'auto' || choice === 'any' || choice === 'non-usb' ? choice : 'usb';
 }
 
 function input(form: HTMLFormElement, name: string): HTMLInputElement | HTMLSelectElement {

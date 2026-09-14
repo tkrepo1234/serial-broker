@@ -155,17 +155,18 @@
     <div id="help-choose-device" class="help-text" popover>
       <h3>Choose a device</h3>
       <p>
-        Opens the browser's port picker with no filter, so every port this browser offers is in it,
-        USB adapters and built-in ports alike. Pick the one your device is on.
+        Proposes a configuration with no device named: a name and the line settings, starting at
+        9600 baud. Change what your device needs and press <b>Connect</b>: the browser's port picker
+        opens with no filter, so every port this browser offers is in it, USB adapters and built-in
+        ports alike. Pick the one your device is on.
       </p>
       <p>
-        This page then proposes a configuration for it: a name, the device's USB vendor and product
-        IDs — or <b>any port</b>, where the port reports none — and the line settings, starting at
-        9600 baud. Change what your device needs and press <b>Connect</b>. The browser has the
-        permission from the picker by then, so connecting asks for nothing more, this visit and
-        every later one.
+        The configuration takes its identity from the port you chose — its USB vendor and product
+        IDs, or the fact that it has none — and remembers it, so this visit and every later one
+        connect without asking again. Other tabs that set the same name up without a device follow
+        it.
       </p>
-      <p>Closing the picker without choosing changes nothing.</p>
+      <p>Closing the picker without choosing sets nothing up.</p>
     </div>
     <div id="help-worker-url" class="help-text" popover>
       <h3>Worker URL</h3>
@@ -530,7 +531,7 @@
             <label for="name">Name</label>
             <input id="name" name="name" required />
           </div>
-          <div>
+          <div data-part="deviceField">
             <div class="label-row">
               <label for="device">Device</label>
               <button
@@ -543,6 +544,8 @@
               </button>
             </div>
             <select id="device" name="device"></select>
+            <!-- What an automatic device has resolved to; written by the dialog, never typed. -->
+            <input id="resolved" name="resolved" type="hidden" />
           </div>
           <div>
             <div class="label-row">
@@ -571,11 +574,11 @@
               <option value="921600"></option>
             </datalist>
           </div>
-          <div>
+          <div data-part="vendorIdField">
             <label for="vendorId">Vendor ID</label>
             <input id="vendorId" name="vendorId" />
           </div>
-          <div>
+          <div data-part="productIdField">
             <label for="productId">Product ID</label>
             <input id="productId" name="productId" />
           </div>
@@ -746,14 +749,16 @@
       <div id="help-device" class="help-text" popover>
         <h3>Device</h3>
         <p>
-          Which device the configuration connects to. Choose a common adapter to fill in its USB
-          IDs, or enter the <b>vendor ID</b> and <b>product ID</b> the device reports, such as
-          <code>0x1a86</code>. The IDs name a kind of device, not a particular one.
+          Which device the configuration connects to. <b>Automatic</b> takes it from the port you
+          choose in the browser's picker once the configuration waits for a device, and remembers
+          it. Or name it: choose a common adapter to fill in its USB IDs, or enter the
+          <b>vendor ID</b> and <b>product ID</b> the device reports, such as <code>0x1a86</code>.
+          The IDs name a kind of device, not a particular one.
         </p>
         <p>
           For a port with no USB identity, such as a built-in RS-232 port, a Bluetooth serial port
-          or a virtual COM port, choose <b>Any port, no USB identity</b>: the configuration then
-          accepts whatever port is chosen.
+          or a virtual COM port, choose <b>Port without USB identity</b>: the configuration then
+          accepts only such ports. <b>Any port</b> accepts whatever port this browser allows.
         </p>
       </div>
       <div id="help-line" class="help-text" popover>

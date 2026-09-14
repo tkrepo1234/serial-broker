@@ -444,9 +444,16 @@ function hintFor(view: ConfigurationView, now: number): string {
     return 'This page uses a different tab limit than the tab that holds the port, and withdrew. Edit the settings to use the same limit.';
   }
   if (view.status === 'awaiting-permission') {
-    return owner?.isThisTab === true
-      ? 'No granted port matches this device. Choose it once; the browser remembers it.'
-      : 'Waiting for a device. Only the tab that holds the port can open the picker.';
+    const isUnresolved =
+      view.settings !== undefined &&
+      'auto' in view.settings.device &&
+      view.settings.device.resolved === undefined;
+    if (owner?.isThisTab !== true) {
+      return 'Waiting for a device. Only the tab that holds the port can open the picker.';
+    }
+    return isUnresolved
+      ? 'No device chosen yet. Choose it once; the configuration takes its identity from the port and remembers it.'
+      : 'No granted port matches this device. Choose it once; the browser remembers it.';
   }
   if (view.status === 'reconnecting') {
     const next = owner?.configuration.connection?.nextAttemptAt;

@@ -9,23 +9,22 @@ you are talking to your device — no vendor ID, no product ID, nothing to insta
 
 ## Starting with a device
 
-**Choose a device…**, the page's main action, opens the browser's own port picker with no filter,
-so every port it offers is in the list: USB adapters, built-in RS-232 ports, virtual COM ports,
-Bluetooth serial ports. Pick the one your device is on.
+**Choose a device…**, the page's main action, proposes a configuration with no device named:
 
-The page reads what the port reports and proposes a configuration for it:
-
-- the **device**, as its USB vendor and product IDs, or as _any port_ where it reports none;
-- a **name** no configuration on this origin uses yet, such as `USB 0x1a86:7523` or `Serial port`;
+- a **name** no configuration on this origin uses yet, `Device` or `Device 2`;
 - the **baud rate**, starting at 9600, with the common rates in the list, and every other line
   setting at the library's default under _More options_.
 
-Change what your device needs and press **Connect**. The browser granted the permission in the
-picker, so this connects without asking again — this visit and every later one, because the
-browser remembers the port for the site. Closing the picker without choosing changes nothing.
+Change what your device needs and press **Connect**. The configuration is set up in the library's
+_auto mode_ and the browser's own port picker opens with no filter, in that same click, so every
+port it offers is in the list: USB adapters, built-in RS-232 ports, virtual COM ports, Bluetooth
+serial ports. Pick the one your device is on. The configuration takes its identity from that port
+— its USB vendor and product IDs, or the fact that it has none — and remembers it, so this visit
+and every later one connect without asking again, and other tabs that set the same name up
+without a device follow it. Closing the picker without choosing sets nothing up.
 
-Where several ports the browser allows match the settings, the dialog says so before you connect:
-identical devices report identical IDs, and the configuration opens the first of them.
+Where several ports the browser allows match the chosen device, the configuration opens the first
+of them: identical devices report identical IDs, and the log says so.
 
 ## What it looks like
 
@@ -43,9 +42,10 @@ device_, which also revokes the browser's permission. The detail has three secti
 - **Traffic** — the traffic of every tab, and a send box while this page is connected;
 - **Settings** — every setting, grouped as the dialog asks for them, and _Edit settings…_.
 
-_Choose a device…_ sets one up from a port you pick in the browser's picker. _New configuration_
-opens the same dialog empty, for a device you know the IDs of: name, device, baud rate. Every
-other option of `setup()` is under _More options_. Editing opens the same dialog on the settings in use; saving disconnects this
+_Choose a device…_ sets one up for a port you pick in the browser's picker. _New configuration_
+opens the same dialog with the device list: _Automatic (from the chosen device)_ by default, the
+common adapters, _Other USB device_ for IDs you know, _Port without USB identity_ and _Any port_.
+Every other option of `setup()` is under _More options_. Editing opens the same dialog on the settings in use; saving disconnects this
 page and connects again with the new settings, while other tabs keep theirs. A **?** beside a
 setting or a section opens a short explanation of it. Settings of the page itself — worker URL,
 transport, payload logging — and the browser checks, port locks and granted ports are behind the
