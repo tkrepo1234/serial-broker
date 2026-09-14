@@ -13,9 +13,28 @@ The package contains three things:
 | `serial-broker`                         | The library, as ES module and CommonJS, with type definitions.                   |
 | `serial-broker/serial-broker.worker.js` | The script that coordinates tabs. It has to be served as a file of its own.      |
 | `serial-broker/diagnostics`             | A read-only view of every tab, for operators. See [Diagnostics](diagnostics.md). |
+| `serial-broker/min`                     | The library as a minified ES module, with the same exports and types.            |
+| `serial-broker/diagnostics/min`         | The diagnostics entry point, minified.                                           |
 
 It also ships a debugging surface under `dist/debug/`, as static files that nothing serves
 unless you do. See [Diagnostics](diagnostics.md).
+
+### Minified build
+
+`dist/index.min.js` and `dist/diagnostics.min.js` are the same code, minified, with source maps.
+They are meant for pages that load the library without a bundler — from a CDN or your own static
+files, with `<script type="module">` or an import map. A bundler minifies on its own, so there the
+readable build is the better choice.
+
+```html
+<script type="module">
+  import { SerialBroker } from '/assets/serial-broker/index.min.js';
+</script>
+```
+
+Both builds look for the same worker script, `serial-broker.worker.js`, next to them. Tabs on the
+minified build and tabs on the readable build therefore share one worker and coordinate — as long
+as the script is served at the same URL for both, as described below.
 
 ## The worker script
 

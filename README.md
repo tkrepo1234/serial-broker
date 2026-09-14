@@ -69,6 +69,10 @@ SerialBroker.configure({ workerUrl: '/assets/serial-broker.worker.js' });
 If the worker cannot be loaded at all, the library falls back to a `BroadcastChannel` and
 keeps working. You will see it in the logs, not in the behaviour.
 
+For pages without a bundler, `serial-broker/min` is the same library as a minified ES module
+(`dist/index.min.js`, with a source map). It uses the same worker script, so its tabs coordinate
+with tabs on the readable build.
+
 ## Permission: the one thing the library cannot do for you
 
 A browser only shows the serial port picker during a **user gesture**, and nothing can work

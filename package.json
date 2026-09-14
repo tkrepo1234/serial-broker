@@ -39,6 +39,12 @@
     "*": {
       "diagnostics": [
         "./dist/diagnostics.d.ts"
+      ],
+      "min": [
+        "./dist/index.d.ts"
+      ],
+      "diagnostics/min": [
+        "./dist/diagnostics.d.ts"
       ]
     }
   },
@@ -63,13 +69,21 @@
         "default": "./dist/diagnostics.cjs"
       }
     },
+    "./min": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.min.js"
+    },
+    "./diagnostics/min": {
+      "types": "./dist/diagnostics.d.ts",
+      "default": "./dist/diagnostics.min.js"
+    },
     "./debug/*": "./dist/debug/*",
     "./worker": "./dist/serial-broker.worker.js",
     "./serial-broker.worker.js": "./dist/serial-broker.worker.js",
     "./package.json": "./package.json"
   },
   "scripts": {
-    "build": "tsup && tsup --config tsup.debug.config.ts && tsc -p tsconfig.build.json && node scripts/cjs-types.mjs",
+    "build": "tsup && tsup --config tsup.debug.config.ts && tsc -p tsconfig.build.json && node scripts/cjs-types.mjs && node scripts/check-dist.mjs",
     "typecheck": "tsc --noEmit && tsc -p emulator && tsc -p docs/site/examples/code",
     "emulator": "node emulator/launch.mjs",
     "lint": "eslint .",

@@ -34,6 +34,9 @@ coordinate with each other. See
 - A worker script of another protocol version - a copied worker file from another release, or a
   cached one - is reported as `PROTOCOL_VERSION_MISMATCH`, and the tabs move to `BroadcastChannel`
   instead of staying cut off from each other with nothing reported.
+- Minified ES module builds, `serial-broker/min` and `serial-broker/diagnostics/min`, for pages
+  without a bundler. They use the same worker script as the readable build, and every build is
+  checked against the package exports.
 - An opt-in structured logger. The library writes nothing to the console uninvited.
 - A read-only diagnostics entry point, `serial-broker/diagnostics`. Every tab of the origin
   reports its role, connection state, reconnect timing, pending writes, listeners and effective

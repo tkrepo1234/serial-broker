@@ -28,6 +28,11 @@ const common = {
  *
  * The worker is built as an ES module only: it is started with `type: 'module'`, and a CommonJS
  * copy would be a file nothing can load.
+ *
+ * `index` and `diagnostics` are built once more, minified, as `*.min.js` ES modules for pages that
+ * load the library without a bundler. They keep looking for the same `serial-broker.worker.js`:
+ * a worker of their own would be a different `SharedWorker`, and their tabs could not coordinate
+ * with tabs on the readable build. scripts/check-dist.mjs checks both after every build.
  */
 export default defineConfig([
   {
@@ -40,7 +45,12 @@ export default defineConfig([
     outExtension: ({ format }) => ({ js: format === 'cjs' ? '.cjs' : '.js' }),
     // tsup runs both configurations at once, so this clean spares the worker's output rather
     // than racing to delete it.
-    clean: ['!serial-broker.worker.js', '!serial-broker.worker.js.map'],
+    clean: [
+      '!serial-broker.worker.js',
+      '!serial-broker.worker.js.map',
+      '!*.min.js',
+      '!*.min.js.map',
+    ],
     esbuildOptions(options, { format }) {
       if (format === 'cjs') {
         // CommonJS has no `import.meta.url` to find the worker script with. See
@@ -54,6 +64,17 @@ export default defineConfig([
     ...common,
     entry: { 'serial-broker.worker': 'src/worker/serial-broker.worker.ts' },
     format: ['esm'],
+    clean: false,
+  },
+  {
+    ...common,
+    entry: {
+      index: 'src/index.ts',
+      diagnostics: 'src/diagnostics.ts',
+    },
+    format: ['esm'],
+    minify: true,
+    outExtension: () => ({ js: '.min.js' }),
     clean: false,
   },
 ]);
