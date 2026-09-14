@@ -758,8 +758,12 @@ export class ConfigurationSession {
     const reported = supervisor.write(payload, report.started).then(
       () => {
         accepted.finish(origin, requestId, undefined);
-        this.#announceSent(payload, origin);
+        // The outcome goes to the issuer before any tab hears `onSend`. A listener may release the
+        // configuration from there, which fails every write still pending as released - and this one
+        // is known to have reached the device. For another tab's write, `write-result` therefore goes
+        // out before `data-sent`: the messages of one sender keep their order.
         report.finished(undefined);
+        this.#announceSent(payload, origin);
       },
       (error: unknown) => {
         const failure = toSerialBrokerError(error, this.configuration.name);

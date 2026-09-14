@@ -198,6 +198,11 @@ export class SerialBrokerClient {
 
     this.#sessions.set(configuration.name, session);
     this.#remember(session);
+    if (this.#sessions.get(configuration.name) !== session) {
+      // Released by a listener while it was being remembered (see `#remember`). That release takes
+      // care of the session; starting it now would only join the bus and the election to leave them.
+      return;
+    }
     session.start();
 
     this.#logger.info('configuration registered', {
@@ -242,15 +247,21 @@ export class SerialBrokerClient {
     const validName = this.#validName(name);
     const session = this.#sessions.get(validName);
     if (session === undefined) {
+      const releasing = this.#releasing.get(validName);
       if (this.#setUpDuringRelease.has(validName)) {
         // A `setup()` called before this waits for the release in progress and then sets the name
         // up again. This call came later, so it releases what that `setup()` builds - which it has
         // built by the time this wait ends, having waited first.
-        await this.#releasing.get(validName);
+        await releasing;
         await this.release(validName, options);
+        return;
       }
       // Releasing something that is not set up is a no-op, not an error: it leaves the caller
-      // in the state it asked for.
+      // in the state it asked for. A release of the name still under way is not that state yet: this
+      // call resolves with it, once the port is closed and the lock let go, as `release()` promises -
+      // resolving at once would let the caller open the device elsewhere while this tab still holds
+      // it. The options of the release under way apply.
+      await releasing;
       return;
     }
 
@@ -311,7 +322,6 @@ export class SerialBrokerClient {
       return;
     }
 
-    this.#store.save(configuration);
     const hold = new PersistenceHold(
       this.environment.locks,
       name,
@@ -323,8 +333,15 @@ export class SerialBrokerClient {
       this.#logger,
       this.environment.clock,
     );
+    // Registered before the entry is saved. Storage that fails reports to the listeners of every
+    // configuration, and one of them may release this very configuration from there; that release
+    // lets go of the hold it finds. A hold registered only afterwards would be found by nobody, and
+    // kept for the life of the tab - keeping the entry remembered for every other tab as well.
     this.#holds.set(name, hold);
-    hold.start();
+    this.#store.save(configuration);
+    if (this.#holds.get(name) === hold) {
+      hold.start();
+    }
   }
 
   /**
@@ -354,6 +371,9 @@ export class SerialBrokerClient {
     for (const name of names) {
       await this.release(name, options);
     }
+    // A release another call started is part of "every configuration" too, and has not closed its
+    // port until it has finished.
+    await Promise.all(this.#releasing.values());
   }
 
   /** Writes to a device. */
