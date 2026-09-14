@@ -57,12 +57,17 @@ export interface SerialConnectionSettings {
   readonly maxLines?: number | undefined;
   /**
    * How long a line may grow before it is cut, for a device that never sends a line ending.
+   * Without `decodeText` every line is cut, since bytes carry no line ending, and the cut falls on
+   * whole bytes: at most 333 of them, `999` characters, by default.
    * @defaultValue 1000
    */
   readonly maxLineLength?: number | undefined;
 }
 
 const LINE_ENDING = /\r\n|\r|\n/u;
+
+/** Characters per byte in {@link toHex}'s output: two digits and a space. */
+const HEX_WIDTH = 3;
 
 /** The store for one configuration name. Obtain it with {@link getSerialConnection}. */
 export class SerialConnection {
@@ -246,7 +251,11 @@ export class SerialConnection {
           this.#onStatus(event.status);
         }),
         SerialBroker.subscribe(name, 'onReceive', (event) => {
-          this.#onReceive(event.text ?? toHex(event.data), event.timestamp);
+          if (event.text === undefined) {
+            this.#onReceive(toHex(event.data), event.timestamp, HEX_WIDTH);
+          } else {
+            this.#onReceive(event.text, event.timestamp, 1);
+          }
         }),
         SerialBroker.subscribe(name, 'onError', (event) => {
           // Failures no call answers for: the device unplugged, the port not opening.
@@ -277,25 +286,33 @@ export class SerialConnection {
     this.#update(lastError ? { status, lastError: null } : { status });
   }
 
-  #onReceive(chunk: string, timestamp: number): void {
+  /**
+   * @param chunk - Decoded text, or bytes as `1A 2B ` triplets.
+   * @param unit - Characters per unit that must not be cut: 1 for text, 3 for a byte's triplet.
+   */
+  #onReceive(chunk: string, timestamp: number, unit: number): void {
+    if (chunk === '') {
+      // Nothing to add, and a pending CR still waits for the LF that may follow it.
+      return;
+    }
     // A chunk is an arbitrary piece of the byte stream, not a line. A CR LF can be cut between two
-    // chunks; its LF must not count as a second, empty line.
-    let text = chunk;
-    if (this.#afterCarriageReturn && text.startsWith('\n')) {
-      text = text.slice(1);
-    }
-    if (text.length > 0) {
-      this.#afterCarriageReturn = text.endsWith('\r');
-    }
+    // chunks; its LF must not count as a second, empty line. That LF ends the CR LF, so the next
+    // chunk's LF - even after a chunk that was only this one - is a line ending of its own.
+    const lfOfCarriageReturn = this.#afterCarriageReturn && chunk.startsWith('\n');
+    const text = lfOfCarriageReturn ? chunk.slice(1) : chunk;
+    this.#afterCarriageReturn = text.endsWith('\r');
 
     const parts = `${this.#partial}${text}`.split(LINE_ENDING);
     this.#partial = parts.pop() ?? '';
     for (const part of parts) {
       this.#completeLine(part, timestamp);
     }
-    while (this.#partial.length > this.#maxLineLength) {
-      this.#completeLine(this.#partial.slice(0, this.#maxLineLength), timestamp);
-      this.#partial = this.#partial.slice(this.#maxLineLength);
+    // Bytes never contain a line ending, so they are always cut - at whole bytes, never between the
+    // two digits of one.
+    const cut = Math.max(unit, Math.floor(this.#maxLineLength / unit) * unit);
+    while (this.#partial.length > cut) {
+      this.#completeLine(this.#partial.slice(0, cut), timestamp);
+      this.#partial = this.#partial.slice(cut);
     }
     this.#partialTimestamp = timestamp;
 

@@ -166,7 +166,8 @@ and ESLint run, as [examples/README.md](../README.md) describes.
 
 None of the actions rejects: a failure resolves `false` (or nothing) and lands in `lastError`, so a
 click handler can `void` them. The hook's third argument sets `maxLines` (500) and `maxLineLength`
-(1000), the length at which a line the device never ends is cut.
+(1000), the length at which a line the device never ends is cut. Without `decodeText`, bytes arrive
+as `1A 2B ` and carry no line ending, so every line is cut - at whole bytes, 333 of them by default.
 
 ### Turning the hook into a package of your own
 
