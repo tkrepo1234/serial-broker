@@ -59,7 +59,26 @@ downloads OpenUI5 1.148 from npm into the UI5 Tooling cache; later starts are of
 
 Chrome or Edge is required - Web Serial exists nowhere else - and a secure context, which
 `localhost` counts as. Without a device you still see the whole application: the status stays
-_Waiting for permission_, and _Connect_ opens the browser's port picker.
+_Waiting for permission_, and _Connect_ opens the browser's port picker. German texts:
+`index.html?sap-ui-language=de`.
+
+### The smoke test
+
+[`smoke.spec.ts`](smoke.spec.ts) drives the application in the installed Edge with the Web Serial
+stand-in in place of a device: it clicks _Connect_, sees the status become _Open_, sends `PING`
+and sees the loopback device echo it into the traffic list. It loads the page with
+`?sap-ui-language=en`, so the texts it asserts are the English bundle's whatever language the
+machine speaks. It runs through the repository root, which starts the application on port 8150
+first:
+
+```sh
+# in the repository root, after `npm run build` there and `npm ci` here
+npm run test:examples -- examples/openui5/smoke.spec.ts
+```
+
+The test itself is checked by the root, not by this folder: it is in the root's TypeScript program
+and ESLint run (`npm run typecheck`, `npm run lint` at the repository root), as
+[examples/README.md](../README.md) describes.
 
 ## Taking the integration module into your own application
 
@@ -226,11 +245,15 @@ moves the class body into an object literal, where `#private` members are a synt
 everything internal is `private _name` instead. The integration module deliberately has no
 `@namespace`, so it stays an ordinary class and can be copied into any application.
 
-**The root ESLint configuration ignores this folder.** UI5 answers to other conventions than the
-library does: every module is a default export, an application reads `window` itself, handlers are
-passed as unbound methods, and the type-aware rules would need this example's dependencies
-installed to say anything true. `npm run typecheck` here is the gate instead, and it runs in CI as
-a job of its own. Prettier still formats the folder.
+**The root ESLint configuration ignores this folder - except the smoke test.** UI5 answers to
+other conventions than the library does: every module is a default export, an application reads
+`window` itself, handlers are passed as unbound methods, and the type-aware rules would need this
+example's dependencies installed to say anything true. `npm run typecheck` here is the gate for
+`webapp/` instead, and it runs in CI as a job of its own. Prettier still formats the folder.
+`smoke.spec.ts` is the exception: it is a test of the root's kind, written against the root's
+Playwright and the stand-in under `test/browser/`, and this folder's `tsconfig.json` does not
+include it - so the root's TypeScript program and ESLint run do, with the relaxations the root's
+own tests get. Without that, nothing would check it: Playwright strips types and checks none.
 
 **Stable control ids.** `index.html` fixes the id of both the component container (`container`) and
 the component (`serialbroker`), and the root view is `app`, so every DOM id is
@@ -253,12 +276,54 @@ ones a test will want, verified in the browser:
 
 A control that is currently invisible keeps its id on a placeholder named
 `sap-ui-invisible-<id>` - that is how UI5 renders `visible="false"`, and it is worth knowing before
-a test concludes the control is missing.
+a test concludes the control is missing. Two more things the smoke test learned: a `sap.m.Input`
+puts its id on a wrapper, and the element that takes keystrokes is `<id>-inner`; and an
+`ObjectStatus` keeps its text in `<id>-text`, next to a screen-reader label that would otherwise
+end up in the assertion.
+
+**The smoke test starts with an ungranted device.** The stand-in is installed with
+`granted: false`, so that the application's own connect path is what runs: a device the origin had
+already been granted would open with no click at all, and the click matters - `requestPort()`,
+the stand-in's as much as the browser's, needs the transient activation of a real gesture. It
+sends with _Append CR LF_ on, as a user would, and takes the counters (`6 bytes received, 6 bytes
+sent`) as the proof that the same bytes went out and came back.
+
+**The smoke test fixes the language in the URL.** UI5 takes its language from the browser, and the
+browser reports the machine's - on a German Windows, Edge under Playwright loads
+`i18n_de.properties`, and a test that expects _Waiting for permission_ reads _Wartet auf die
+Freigabe_ and times out for a reason that has nothing to do with serial-broker. The
+`sap-ui-language` URL parameter wins over the browser's language, so the test loads
+`index.html?sap-ui-language=en`. That pins it in the test, where the asserted texts are, rather
+than in the root's Playwright configuration, where a `locale` would fix `navigator.language` for
+every example but leave the reason a directory away from the assertion.
+
+**`"type": "module"` in `package.json`.** Playwright decides how to read `smoke.spec.ts` from the
+nearest `package.json`, and without the field it treats the file as CommonJS, where the
+`import.meta.url` that finds `example.json` is a syntax error. Nothing in the example itself is
+CommonJS - the sources are ES modules and the copy script is `.mjs` - so the field costs nothing
+and the spec reads like the root's own tests.
+
+**The German bundle is UTF-8, with real umlauts.** UI5 Tooling reads `.properties` files as UTF-8
+by default since specification version 2.0 (`propertiesFileSourceEncoding`) and turns every
+non-ASCII character into a `\uXXXX` escape while serving and building, which is what the UI5
+loader expects. `i18n_de.properties` therefore says _Gerät_, not _Geraet_ - visible at
+`index.html?sap-ui-language=de`.
+
+**The i18n model is not `async: true`, and the console says so.** UI5 logs _"Usage of synchronous
+loading is deprecated"_ for a `ResourceModel` created without `async: true`. It is a warning about
+the model's API mode, not about a synchronous request: for a manifest model the component loader
+fetches the bundle asynchronously before it creates the model (`afterPreload` in
+`sap/ui/core/Component`). With `async: true`, `getResourceBundle()` returns a promise, and every
+formatter in the controller - which needs the bundle synchronously, while rendering - would have
+to cache it first. The synchronous model keeps the controller simple, at the price of that one
+line in the log.
 
 ## Files
 
 ```
 examples/openui5/
+├── example.json                          the manifest the root's test runner reads
+├── smoke.spec.ts                         connect, send, echo - in a real browser
 ├── ui5.yaml                              UI5 Tooling: framework, transpile, npm modules
 ├── tsconfig.json                         type-check only; @openui5/types
 ├── scripts/copy-serial-broker-assets.mjs copies the broker script into webapp/

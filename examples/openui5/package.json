@@ -2,6 +2,7 @@
   "name": "serial-broker-openui5-example",
   "version": "0.0.0",
   "private": true,
+  "type": "module",
   "description": "OpenUI5 application showing serial-broker through a reusable UI5 integration module.",
   "license": "MIT",
   "scripts": {
