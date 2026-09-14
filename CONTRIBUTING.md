@@ -85,6 +85,19 @@ The same scenarios run in a real browser with `SERIAL_BROKER_BENCH_BROWSER=1 npm
 on port 8147, in about ten minutes. That run is never part of CI: its numbers are one machine's, and
 they are recorded once in the chapter with the machine named. A result more than ten times worse
 than its expectation has to become a fix with a test, or a limit recorded in the chapter.
+The **extreme suite** measures what the library costs at sizes no operator reaches - a hundred
+tabs, an hour of full-rate traffic, ten thousand writes under crashes, a simulated week - and
+asserts bounds on memory, timers, listeners, locks and messages. It is opt-in, never runs in CI,
+and records its last run in `test/integration/extreme/RESULTS.md`:
+
+```sh
+npm run test:extreme                       # the simulated browser, about a minute
+SERIAL_BROKER_EXTREME=1 npm run test:browser -- test/browser/extreme --workers=1   # Edge, six minutes
+```
+
+Every size has a `SERIAL_BROKER_EXTREME_*` variable; see
+[the testing guideline](./docs/guidelines/testing.md#the-extreme-suite). Run it after a change to
+`src/client/`, `src/worker/` or `src/owner/`, and commit the updated `RESULTS.md` with the change.
 
 ## Making a change
 

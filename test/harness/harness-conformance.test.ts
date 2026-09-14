@@ -1,10 +1,14 @@
+import { setFlagsFromString } from 'node:v8';
+import { runInNewContext } from 'node:vm';
+
 import { describe, expect, it } from 'vitest';
 
 import { NOOP_LOGGER, ScopedLogger } from '../../src/core/logger.js';
+import { SILENT_PARTICIPANT_TIMEOUT_MS, SWEEP_INTERVAL_MS } from '../../src/protocol/heartbeat.js';
 import type { ClientId, ProtocolMessage, TermId } from '../../src/protocol/messages.js';
 import { PROTOCOL_VERSION } from '../../src/protocol/version.js';
 
-import { BrowserHarness } from './browser-harness.js';
+import { BrowserHarness, TRANSPORT_MODES } from './browser-harness.js';
 import { READER, READER_OPTIONS } from './devices.js';
 import { FakeClock, flushMicrotasks } from './fake-clock.js';
 import { FakeLockManager } from './fake-locks.js';
@@ -695,6 +699,29 @@ describe('FakeSerialRegistry', () => {
     expect(device.openCount).toBe(2);
   });
 
+  it('writes nothing of a context that went away, not even a write that was waiting', async () => {
+    const registry = new FakeSerialRegistry();
+    const device = registry.addDevice(1, 2);
+    registry.grant(device);
+    const [port] = await registry.forContext('tab1').getPorts();
+    await port!.open({ baudRate: 9600 });
+    const writer = port!.writable!.getWriter();
+    device.pauseWrites();
+    const waiting = writer.write(new Uint8Array([1, 2, 3])).then(
+      () => 'written',
+      (error: unknown) => (error as { name?: string }).name,
+    );
+
+    // The context dies with the write waiting at the device, and the device takes writes again.
+    // The harness cannot stop the dead context's code, so the port has to: in a browser, nothing
+    // of a dead context reaches the device.
+    registry.removeContext('tab1');
+    device.resumeWrites();
+
+    expect(await waiting).toBe('InvalidStateError');
+    expect(device.written).toEqual([]);
+  });
+
   it('does not let a port object from before an unplug release the device opened since', async () => {
     const registry = new FakeSerialRegistry();
     const device = registry.addDevice(1, 2);
@@ -744,4 +771,66 @@ describe('FakeSerialRegistry', () => {
 
     expect(await registry.forContext('tab2').getPorts()).toHaveLength(1);
   });
+});
+
+describe.each(TRANSPORT_MODES)('FakeBus (%s)', (transport) => {
+  /**
+   * A full garbage collection, from inside the ordinary suite.
+   *
+   * The flag is set at run time and `gc` taken from a fresh context, which is the one way to reach
+   * it without starting Node with `--expose-gc`.
+   */
+  function collectGarbage(): void {
+    setFlagsFromString('--expose-gc');
+    const gc = runInNewContext('gc') as () => void;
+    gc();
+    gc();
+  }
+
+  it('counts a chunk from the tab holding the port as one message sent and one delivery per other tab', async () => {
+    const harness = new BrowserHarness({ transport });
+    const device = harness.serial.addDevice(READER.vendorId, READER.productId);
+    harness.serial.grant(device);
+    for (let index = 0; index < 3; index += 1) {
+      await harness.openTab().client.setup('Reader', READER_OPTIONS);
+    }
+    await harness.advance(1_000);
+    const sentBefore = harness.bus.meter.sent;
+    const deliveredBefore = harness.bus.meter.delivered;
+
+    device.emit('one chunk');
+    await harness.settle();
+
+    expect(harness.bus.meter.sent - sentBefore).toBe(1);
+    expect(harness.bus.meter.delivered - deliveredBefore).toBe(2);
+  });
+
+  it.each(['closed', 'killed'] as const)(
+    'keeps nothing of a tab that was %s: its client can be collected',
+    async (ending) => {
+      const harness = new BrowserHarness({ transport });
+      const device = harness.serial.addDevice(READER.vendorId, READER.productId);
+      harness.serial.grant(device);
+      await harness.openTab().client.setup('Reader', READER_OPTIONS);
+      // Opened and ended in a function of its own, so that no variable of the test holds the tab.
+      const client = await (async () => {
+        const leaving = harness.openTab();
+        await leaving.client.setup('Reader', READER_OPTIONS);
+        await harness.advance(1_000);
+        await (ending === 'closed' ? leaving.close() : leaving.kill());
+        return new WeakRef(leaving.client);
+      })();
+      // Long enough for the worker to forget a tab that went silent (ADR-0021) - until then it keeps
+      // the port by design, as it would a throttled tab's - and a task later, so that nothing of
+      // this job keeps the client alive.
+      await harness.busClock.advance(SILENT_PARTICIPANT_TIMEOUT_MS + SWEEP_INTERVAL_MS);
+      await harness.advance(1_000);
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      collectGarbage();
+
+      // A harness that held on to a gone tab would have every measurement of what the library
+      // keeps measure the harness instead (test/integration/extreme/).
+      expect(client.deref()).toBeUndefined();
+    },
+  );
 });

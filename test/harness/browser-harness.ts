@@ -457,6 +457,7 @@ export class BrowserHarness {
   forgetTab(id: string): void {
     this.#tabs.delete(id);
     this.serial.removeContext(id);
+    this.bus.forgetContext(id);
   }
 
   /** @internal Used by {@link VirtualTab.kill}. */
