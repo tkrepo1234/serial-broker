@@ -30,6 +30,33 @@ jobs:
           path: coverage/
           retention-days: 7
 
+  openui5-example:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            examples/openui5/package-lock.json
+
+      # The example uses the library from this repository ("file:../..") and type-checks against
+      # its published types, so the library has to be built before the example is installed.
+      - run: npm ci
+      - run: npm run build
+
+      # Its own dependency tree - OpenUI5 types, UI5 Tooling, the transpiler - deliberately kept
+      # out of the root package.json.
+      - run: npm ci
+        working-directory: examples/openui5
+
+      - run: npm run typecheck
+        working-directory: examples/openui5
+
   docs:
     runs-on: ubuntu-latest
 
