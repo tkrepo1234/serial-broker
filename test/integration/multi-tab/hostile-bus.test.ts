@@ -9,7 +9,11 @@ import {
   REMOTE_ERROR_RATE,
   STATUS_ANSWER_RATE,
 } from '../../../src/protocol/limits.js';
-import { brokerChannelName, PROTOCOL_VERSION } from '../../../src/protocol/version.js';
+import {
+  brokerChannelName,
+  PROTOCOL_VERSION,
+  termLockName,
+} from '../../../src/protocol/version.js';
 import { BrowserHarness } from '../../harness/browser-harness.js';
 import { READER, READER_OPTIONS } from '../../harness/devices.js';
 import { fieldsOfEvent, recordingLogger } from '../../harness/recording-logger.js';
@@ -173,6 +177,37 @@ describe('a script of the origin that forges messages about the port', () => {
     expect(device.writtenText()).toBe('PING');
   });
 
+  it('cannot end that term by queueing on its lock and saying goodbye for it', async () => {
+    const { harness, device, owner, other, mallory } = await twoWatchedTabs();
+    const term = termOnTheBus(mallory.heard);
+
+    // A request of the script's own on the real term's lock. It stays queued while the tab holding
+    // the port holds that lock, and looks exactly like the goodbye request a tab queues before it
+    // lets go - so the goodbye below must not be believed for it.
+    void harness.locks
+      .forContext('mallory')
+      .request(
+        termLockName('Reader', term, owner.client.clientId, Number.POSITIVE_INFINITY),
+        { mode: 'exclusive' },
+        async () => undefined,
+      );
+    await harness.settle();
+    mallory.post({
+      ...FORGED,
+      from: owner.client.clientId,
+      type: 'owner-released',
+      configName: 'Reader',
+      term,
+    });
+    await harness.settle();
+    const sending = other.client.send('Reader', 'PING');
+    await harness.settle();
+
+    expect(other.client.getStatus('Reader').status).toBe(SerialBrokerStatus.Open);
+    await expect(sending).resolves.toBeUndefined();
+    expect(device.writtenText()).toBe('PING');
+  });
+
   it('cannot settle a write in flight by answering it in another term', async () => {
     const { harness, device, other, mallory } = await twoWatchedTabs();
 
@@ -246,6 +281,39 @@ describe('a script of the origin that floods the bus with well-formed messages',
     await joining.setup('Reader', READER_OPTIONS);
     await harness.advance(1_000);
 
+    expect(joining.client.getStatus('Reader').status).toBe(SerialBrokerStatus.Open);
+  });
+
+  it('makes a tab joining during the flood miss the chunks that arrive before it learns the term', async () => {
+    const { harness, device, records } = await twoTabs('broadcastchannel');
+    const mallory = eavesdrop(harness);
+
+    for (let round = 0; round < 2 * STATUS_ANSWER_RATE.burst; round += 1) {
+      mallory.post({ ...FORGED, type: 'status-request', configName: 'Reader' });
+    }
+    await harness.settle();
+
+    // This tab has asked for the status, and the answer that tells it which term holds the port
+    // waits for the next one the rate allows. Device data cannot be told from what any script of
+    // the origin says until then (ADR-0030), so it is dropped - once with a record, then silently.
+    const joining = harness.openTab();
+    await joining.client.setup('Reader', READER_OPTIONS);
+    const received: string[] = [];
+    joining.client.subscribe('Reader', 'onReceive', (event) => {
+      received.push(new TextDecoder().decode(event.data));
+    });
+    device.emit('EARLY');
+    await harness.settle();
+
+    expect(received).toEqual([]);
+    expect(fieldsOfEvent(records, 'session.data-without-a-term')).toHaveLength(1);
+
+    // The answer arrives within the rate, and from then on the tab sees every chunk.
+    await harness.advance(1_000);
+    device.emit('LATE');
+    await harness.settle();
+
+    expect(received).toEqual(['LATE']);
     expect(joining.client.getStatus('Reader').status).toBe(SerialBrokerStatus.Open);
   });
 

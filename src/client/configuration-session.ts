@@ -90,6 +90,8 @@ export class ConfigurationSession {
   #waitingWriteBytes = 0;
   /** A write refused because the port's queue was full has been logged. */
   #hasLoggedQueueFull = false;
+  /** Device data dropped from a context speaking for no term this tab knows has been logged. */
+  #hasLoggedDataWithoutTerm = false;
   /** How often this context answers `status-request`, and the answer a flood is coalesced into. */
   readonly #statusAnswers: RateLimiter;
   #delayedStatusAnswer: TimerHandle | undefined;
@@ -484,6 +486,7 @@ export class ConfigurationSession {
         // From the tab holding the port, or one that held it a moment ago and is still being
         // waited for. What any other context says the device sent is not what the device sent.
         if (!this.#terms.isKnownSender(message.from)) {
+          this.#logDataWithoutTerm(message.type, message.from);
           return;
         }
         this.#emitter.emit('onReceive', {
@@ -496,6 +499,7 @@ export class ConfigurationSession {
 
       case 'data-sent':
         if (!this.#terms.isKnownSender(message.from)) {
+          this.#logDataWithoutTerm(message.type, message.from);
           return;
         }
         this.#emitter.emit('onSend', {
@@ -947,6 +951,31 @@ export class ConfigurationSession {
     return (
       this.#unreported.size < MAX_WAITING_WRITES &&
       this.#waitingWriteBytes + byteLength <= MAX_WAITING_WRITE_BYTES
+    );
+  }
+
+  /**
+   * Records, once, that device data was dropped for want of a term to attribute it to.
+   *
+   * The sender may be a script of the origin making data up - which is why the check exists
+   * (ADR-0030) - or the tab holding the port, heard by a tab that is still learning which term
+   * that is: this tab has asked for the status and is waiting for the answer and for the browser's
+   * word on the term's lock. What arrives in that window is dropped, so a tab joining while a
+   * device streams starts with what comes after it (`docs/site/shared-ports.md`).
+   */
+  #logDataWithoutTerm(type: 'data-received' | 'data-sent', from: ClientId): void {
+    if (this.#hasLoggedDataWithoutTerm) {
+      return;
+    }
+    this.#hasLoggedDataWithoutTerm = true;
+    this.logger.warn(
+      'dropped device data from a context that speaks for no term of holding the port; further ones are dropped without a record',
+      {
+        configName: this.configuration.name,
+        event: 'session.data-without-a-term',
+        messageType: type,
+        from,
+      },
     );
   }
 

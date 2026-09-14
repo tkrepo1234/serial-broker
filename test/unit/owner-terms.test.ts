@@ -172,17 +172,47 @@ describe('OwnerTerms', () => {
     expect(terms.current).toBeUndefined();
   });
 
-  it('ends a term at its goodbye, once its holder has queued for the lock before saying it', async () => {
+  it('ends a term at its goodbye, once its holder has let the lock go', async () => {
     const { terms, locks, ended } = createTerms();
     const holder = await holdTerm(locks, 'owner', FIRST);
     terms.observe(FIRST, () => undefined);
     await flushMicrotasks();
 
+    // The goodbye reached this tab before the lock was free, which is the usual order: the holder
+    // posts it and then lets the lock go.
     holder.sayGoodbye();
     terms.heardReleased(FIRST.term, HOLDER);
     await flushMicrotasks();
+    expect(ended).toEqual([]);
+
+    holder.letGo();
+    await flushMicrotasks();
 
     expect(ended).toEqual([{ term: 't1', wasCurrent: true }]);
+  });
+
+  it('does not end a live term at a goodbye with somebody else queued on the lock', async () => {
+    const { terms, locks, ended } = createTerms();
+    await holdTerm(locks, 'owner', FIRST);
+    terms.observe(FIRST, () => undefined);
+    await flushMicrotasks();
+
+    // What a script of the origin can produce: a request of its own on the real term's lock, which
+    // no tab can tell from the holder's goodbye request, and a goodbye in the holder's name.
+    void locks
+      .forContext('mallory')
+      .request(
+        termLockName(CONFIG, FIRST.term, FIRST.from, FIRST.maxTabs),
+        { mode: 'exclusive' },
+        async () => undefined,
+      );
+    terms.heardReleased(FIRST.term, HOLDER);
+    await flushMicrotasks();
+
+    // The holder still holds the lock, and is still writing to the device.
+    expect(ended).toEqual([]);
+    expect(terms.current).toBe('t1');
+    expect(terms.isEnded(FIRST.term)).toBe(false);
   });
 
   it('does not end a live term at a goodbye nobody queued for', async () => {
@@ -314,6 +344,10 @@ describe('OwnerTerms', () => {
     holder.sayGoodbye();
     terms.heardReleased(FIRST.term, HOLDER);
     await flushMicrotasks();
+    expect(ended).toEqual([]);
+
+    holder.letGo();
+    await flushMicrotasks();
 
     expect(ended).toEqual([{ term: 't1', wasCurrent: true }]);
   });
@@ -341,17 +375,45 @@ describe('OwnerTerms', () => {
     expect(ended).toEqual(['t1']);
   });
 
-  it('refuses a term whose lock the browser will not answer about, and says so', async () => {
+  it('checks a claim of the term that holds the port after a flood of invented ones', async () => {
+    const { terms, locks, records } = createTerms();
+    await holdTerm(locks, 'owner', FIRST);
+    const apply = applied();
+
+    // More invented terms than are checked at once, posted before the browser can answer about any
+    // of them, and then the claim of the term that really holds the port.
+    for (let index = 0; index < 4 * MAX_TERMS_BEING_CHECKED; index += 1) {
+      terms.observe(claimOf(`t-invented-${String(index)}`), () => undefined);
+    }
+    terms.observe(FIRST, apply.run);
+    await flushMicrotasks();
+
+    expect(apply.count()).toBe(1);
+    expect(terms.current).toBe('t1');
+    expect(fieldsOfEvent(records, 'session.term-flood')).toHaveLength(1);
+  });
+
+  it('checks a term again after a lock request the browser would not answer', async () => {
+    const locks = new FakeLockManager();
     const ended: TermId[] = [];
     const { logger, records } = recordingLogger();
+    const answering = locks.forContext('watcher');
+    let refusals = 1;
     const terms = new OwnerTerms({
       locks: {
-        request: () => Promise.reject(new Error('locks are refused in this context')),
+        request: async (name, options, callback) => {
+          if (refusals > 0) {
+            refusals -= 1;
+            throw new Error('locks are refused in this context');
+          }
+          return await answering.request(name, options, callback);
+        },
       },
       configName: CONFIG,
       logger: new ScopedLogger(logger, {}),
       onEnded: (term) => ended.push(term),
     });
+    await holdTerm(locks, 'owner', FIRST);
     const apply = applied();
 
     terms.observe(FIRST, apply.run);
@@ -359,6 +421,16 @@ describe('OwnerTerms', () => {
 
     expect(apply.count()).toBe(0);
     expect(fieldsOfEvent(records, 'session.term-check-failed')).toHaveLength(1);
+
+    // A refused request says nothing about the term, so nothing is remembered about it: the next
+    // message naming it is checked afresh, rather than the tab ignoring the term that holds the
+    // port until it next changes hands.
+    terms.observe(FIRST, apply.run);
+    await flushMicrotasks();
+
+    expect(apply.count()).toBe(1);
+    expect(terms.current).toBe('t1');
+    expect(terms.isKnownSender(HOLDER)).toBe(true);
   });
 
   it('remembers a bounded number of terms, forgetting the ones that are over first', async () => {

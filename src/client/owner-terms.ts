@@ -12,7 +12,9 @@ export const MAX_REMEMBERED_TERMS = 64;
  * How many terms may be checked at once.
  *
  * Every term heard of costs one lock request until the browser has answered whether it is held. A
- * handover produces one term; anything beyond a handful at once is a sender inventing them.
+ * handover produces one term; anything beyond a handful at once is a sender inventing them. Beyond
+ * it the oldest check gives way to the newest claim, so that a flood of invented terms cannot keep
+ * the tab from checking the term that really holds the port.
  */
 export const MAX_TERMS_BEING_CHECKED = 8;
 
@@ -52,6 +54,8 @@ interface KnownTerm {
   isSucceeded: boolean;
   /** Its holder is letting go cleanly: it has a request of its own queued on the term's lock. */
   isEnding: boolean;
+  /** Its holder's `owner-released` has arrived: the term is over once its lock is free. */
+  hasHeardGoodbye: boolean;
   /** What arrived while the lock was being checked, in the order it arrived. */
   readonly waiting: (() => void)[];
   /** Withdraws the request that watches for the end of this term. */
@@ -76,6 +80,10 @@ interface KnownTerm {
  * its own on the term's lock beforehand. That request is what tells the difference between a tab
  * that let go - whose last words are on their way, and are waited for - and one that died, whose
  * term is over the moment the browser frees its lock.
+ *
+ * A goodbye is therefore never what ends a term: it is remembered until the browser frees the lock,
+ * and only the two together end it. Anyone of the origin can queue a request on a term's lock, so a
+ * queued request proves a clean end only once the lock is free - before that it proves nothing.
  */
 export class OwnerTerms {
   /** Every term heard of, oldest first: a `Map` iterates in insertion order. */
@@ -158,9 +166,10 @@ export class OwnerTerms {
   /**
    * `owner-released` of `term` arrived, from `from`.
    *
-   * Believed only from the term's own holder, and only while that holder is letting go: the
-   * request it queued on its term lock before saying goodbye is the proof. So a forged goodbye
-   * cannot end a term whose holder is still writing to the device.
+   * Noted, never believed on its own: a goodbye ends a term only once the browser has freed that
+   * term's lock, and only from the term's own holder. So no message ends a term whose holder is
+   * still writing to the device - not even one posted while a request of somebody else's waits on
+   * the lock, which no tab can tell from the holder's own goodbye request.
    */
   heardReleased(term: TermId, from: ClientId): void {
     const entry = this.#terms.get(term);
@@ -176,15 +185,11 @@ export class OwnerTerms {
     if (entry.phase !== 'live' || entry.isOwn) {
       return;
     }
+    entry.hasHeardGoodbye = true;
     if (entry.isEnding) {
+      // The lock is free and its holder was letting go cleanly: this was the word being waited for.
       this.#end(entry);
-      return;
     }
-    void this.#isEndingCleanly(entry).then((isEnding) => {
-      if (isEnding && this.#terms.get(term) === entry) {
-        this.#end(entry);
-      }
-    });
   }
 
   /** This tab has been granted the port, and holds `claim.term`'s lock itself. */
@@ -195,6 +200,7 @@ export class OwnerTerms {
       isOwn: true,
       isSucceeded: false,
       isEnding: false,
+      hasHeardGoodbye: false,
       waiting: [],
       watch: new AbortController(),
     };
@@ -229,8 +235,15 @@ export class OwnerTerms {
       }
     }
     if (checking >= MAX_TERMS_BEING_CHECKED) {
+      // The oldest check gives way, rather than this claim being dropped: the newest claim is the
+      // one that can be the term holding the port now, and a sender inventing terms faster than
+      // the browser answers must not be able to keep the real one from ever being checked.
+      const oldest = this.#firstMatching((known) => known.phase === 'checking');
+      if (oldest === undefined) {
+        return;
+      }
+      this.#forget(oldest);
       this.#logFlood(claim);
-      return;
     }
 
     const entry: KnownTerm = {
@@ -239,6 +252,7 @@ export class OwnerTerms {
       isOwn: false,
       isSucceeded: false,
       isEnding: false,
+      hasHeardGoodbye: false,
       waiting: [
         () => {
           this.observe(claim, apply);
@@ -248,11 +262,18 @@ export class OwnerTerms {
     };
     this.#remember(entry);
 
-    void this.#isLockHeld(entry).then((isHeld) => {
+    void this.#checkLock(entry).then((held) => {
       if (this.#terms.get(claim.term) !== entry || entry.phase !== 'checking') {
         return;
       }
-      if (!isHeld) {
+      if (held === 'unknown') {
+        // The browser would not answer, so nothing is known about this term - including that it is
+        // not held. Nothing is remembered about it either: the next message naming it is checked
+        // afresh, rather than the tab ignoring a term that may well hold the port.
+        this.#forget(entry);
+        return;
+      }
+      if (held === 'free') {
         entry.phase = 'refused';
         entry.waiting.length = 0;
         this.#logRefusal(claim);
@@ -266,6 +287,13 @@ export class OwnerTerms {
     });
   }
 
+  /** Drops everything this tab held about a term, as if it had never heard of it. */
+  #forget(entry: KnownTerm): void {
+    entry.waiting.length = 0;
+    entry.watch.abort();
+    this.#terms.delete(entry.claim.term);
+  }
+
   #waitFor(entry: KnownTerm, run: () => void): void {
     if (entry.waiting.length >= MAX_MESSAGES_AWAITING_A_TERM) {
       this.#logFlood(entry.claim);
@@ -274,15 +302,20 @@ export class OwnerTerms {
     entry.waiting.push(run);
   }
 
-  /** `true` while somebody holds the term's lock: the term is live. */
-  async #isLockHeld(entry: KnownTerm): Promise<boolean> {
+  /**
+   * Asks the browser whether the term's lock is held: the term is live while it is.
+   *
+   * `unknown` is not `free`: a browser that refuses the request has said nothing about the term,
+   * and a term that is in fact live must not be refused because one request failed.
+   */
+  async #checkLock(entry: KnownTerm): Promise<'held' | 'free' | 'unknown'> {
     try {
       return await this.host.locks.request(
         this.#lockNameOf(entry),
         { mode: 'shared', ifAvailable: true },
         // Granted means nobody holds it: no tab is in this term. The grant is given up again by
         // returning, so the check leaves nothing behind either way.
-        (lock) => Promise.resolve(lock === null),
+        (lock) => Promise.resolve(lock === null ? 'held' : 'free'),
       );
     } catch (error: unknown) {
       this.host.logger.warn('could not check whether a term of holding the port is live', {
@@ -291,7 +324,7 @@ export class OwnerTerms {
         term: entry.claim.term,
         error: describeUnknown(error),
       });
-      return false;
+      return 'unknown';
     }
   }
 
@@ -308,11 +341,12 @@ export class OwnerTerms {
           if (this.#terms.get(entry.claim.term) !== entry || entry.phase !== 'live') {
             return;
           }
-          if (isEnding) {
+          if (isEnding && !entry.hasHeardGoodbye) {
             // Its last words are on their way; `owner-released` is the last of them, and ends it.
             entry.isEnding = true;
             return;
           }
+          // The lock is free, and either its holder died or its goodbye has already arrived.
           this.#end(entry);
         },
       )
@@ -328,10 +362,12 @@ export class OwnerTerms {
   }
 
   /**
-   * `true` while the term's holder has a request of its own queued on the term's lock.
+   * `true` while a request of somebody's is queued on the term's lock.
    *
-   * A tab letting go of the port queues that request before it says goodbye, so this is the one
-   * sign of a clean end that cannot be posted by anyone: a tab that died leaves nothing queued.
+   * A tab letting go of the port queues one before it says goodbye, and a tab that died leaves
+   * nothing queued: asked while the lock is free - and only then - this tells a clean end from a
+   * crash. It says nothing about a lock that is still held, because any script of the origin can
+   * queue a request too (SECURITY.md); all such a script achieves is the wait for a goodbye.
    */
   async #isEndingCleanly(entry: KnownTerm): Promise<boolean> {
     const locks = this.host.locks;

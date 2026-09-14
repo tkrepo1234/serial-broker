@@ -49,7 +49,8 @@ cannot: every tab can send, receive and watch the status. For people operating a
 
 Every tab that has set up a configuration receives:
 
-- **`onReceive`** for every chunk the device sends, with the same bytes in every tab.
+- **`onReceive`** for every chunk the device sends, with the same bytes in every tab — from the
+  moment that tab knows which tab holds the port (see below).
 - **`onSend`** for every write that reached the device — including writes from other tabs.
   `event.origin` is `'local'` for writes this tab issued and `'remote'` for the others.
 - **`onStatusChange`** whenever the connection status changes. The owner decides the status;
@@ -59,6 +60,13 @@ Every tab that has set up a configuration receives:
 
 A tab that sets a configuration up while another tab already has the port open asks the owner for
 the current status, so it does not sit at `idle` until something changes.
+
+Until that answer arrives, the joining tab does not yet know which tab holds the port, and what any
+script of the origin says the device sent cannot be told from what the owner says. Chunks that
+arrive in that window — a round trip across the bus and one question to the browser about a Web
+Lock — are therefore dropped rather than delivered, and the tab logs `session.data-without-a-term`
+once. A device that streams continuously starts, in a tab that has just joined, with the chunk
+after that.
 
 Data only reaches tabs that have set the configuration up. A tab that has not, sees nothing.
 

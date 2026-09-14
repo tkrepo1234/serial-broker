@@ -156,8 +156,10 @@ describe.each(TRANSPORT_MODES)(
       const device = harness.serial.addDevice(READER.vendorId, READER.productId);
       const owner = harness.openTab();
       await owner.setup('Reader', READER_OPTIONS);
-      const other = harness.openTab();
-      await other.setup('Reader', READER_OPTIONS);
+      const others = [harness.openTab(), harness.openTab()];
+      for (const tab of others) {
+        await tab.setup('Reader', READER_OPTIONS);
+      }
 
       // The tab holding the port gives it up as soon as it opens.
       owner.client.subscribe('Reader', 'onStatusChange', (event) => {
@@ -170,9 +172,16 @@ describe.each(TRANSPORT_MODES)(
       await harness.advance(0);
       await harness.advance(0);
 
-      // Once told the port was given up, the other tab must not hear the port is open from the
-      // tab that gave it up - only from itself, when it opens the port in turn.
-      const trail = other.statusTrail('Reader');
+      // The tab that did not take the port over is the one that sees it with nobody: its
+      // successor goes from the old time of holding the port straight to its own (ADR-0030).
+      const watching = others.find(
+        (tab) => tab.client.diagnostics()?.configurations[0]?.role !== 'owner',
+      );
+      expect(watching).toBeDefined();
+
+      // Once told the port was given up, that tab must not hear the port is open from the tab
+      // that gave it up - only from the tab that opens it in turn.
+      const trail = watching?.statusTrail('Reader') ?? [];
       const releasedAt = trail.lastIndexOf('reconnecting');
       expect(releasedAt).toBeGreaterThanOrEqual(0);
       expect(trail.slice(releasedAt + 1, releasedAt + 2)).not.toEqual(['open']);

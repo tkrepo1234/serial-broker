@@ -63,8 +63,12 @@ From that, four rules:
    and no timer - **unless its holder is letting go cleanly**, which the goodbye request queued on
    the lock says. Then the term ends at its `owner-released`, the last message it sends, so that
    everything it said about its writes has arrived first (ADR-0026).
-3. **A goodbye is believed only from the term's own holder, and only while that goodbye request is
-   queued.** So no message ends a term whose holder is still writing to the device.
+3. **A goodbye is believed only from the term's own holder, and never before the browser has freed
+   the term's lock.** It is remembered until then, and the two together end the term. Anyone of the
+   origin can queue a request on a term's lock, and no tab can tell such a request from the
+   holder's goodbye request; what a queued request means is therefore only asked of a lock that is
+   free, where a crash leaves nothing queued. So no message ends a term whose holder is still
+   writing to the device.
 4. **`maxTabs` is believed because it is part of the lock's name.** A tab withdraws for a tab limit
    the tab holding the port demonstrably runs, never for one a message claims.
 
@@ -74,7 +78,17 @@ The session takes the same line with the rest of what a term says:
   from the context that speaks for that term. A result from anywhere else concerns a copy that
   reached the wrong tab, or was forged.
 - `data-received` and `data-sent` are delivered only from a context that speaks for a term this tab
-  knows of - the one holding the port, one still being waited for, or one being checked.
+  knows of - the one holding the port, one still being waited for, or one being checked. A tab that
+  has just joined knows none until the status it asked for arrives, so what reaches it in that
+  window is dropped, with one record per configuration (`session.data-without-a-term`).
+
+Two bounds keep a sender from turning the checks into work of its own. A tab checks at most
+`MAX_TERMS_BEING_CHECKED` terms at once; beyond that the **oldest** check gives way to the newest
+claim, because the newest is the one that can be the term holding the port now and a sender
+inventing terms must not be able to keep the real claim from ever being checked. And a check that
+the browser refuses says nothing about the term: the tab forgets it rather than refusing it, so the
+next message naming that term is checked afresh. Only a granted `ifAvailable` request - the
+browser's word that nobody holds the lock - refuses a term.
 
 `FORMER_OWNER_GRACE_MS` and the tracker's timers are gone; `OwnerTerms` now holds lock requests
 instead.
@@ -133,8 +147,13 @@ instead.
   teardown of a crashed renderer, and only for a write in flight at that instant.
 - **A script of the origin can take Web Locks**, as SECURITY.md says. It can hold a lock named for a
   term it invented and have that term believed, or queue an exclusive request on a real term's lock
-  so that tabs wait for a goodbye that never comes. Both are beyond what a message alone can do, and
-  a script that takes locks can already keep every tab away from the device.
+  so that tabs wait for a goodbye that never comes - a delay, never an end: that wait begins only
+  once the holder has let the lock go. Both are beyond what a message alone can do, and a script
+  that takes locks can already keep every tab away from the device.
+- **A tab that joins while a device streams misses what arrives before it knows the term.** It is
+  the price of taking device data from the holder of the port alone; the window is one round trip
+  across the bus, and longer where the answer waits for the rate `status-request` is answered at
+  (ADR-0031). A tab that must read a device's whole output has to be open before the port is.
 
 ## Verification
 
@@ -142,7 +161,9 @@ instead.
 the lock is held, a term kept alive while it is held, the exact end when the holder dies, the wait
 for a goodbye when it does not.
 `test/integration/multi-tab/hostile-bus.test.ts` posts the forged claim, status, goodbye, write
-result and device data as a script of the origin, on the `BroadcastChannel`.
+result and device data as a script of the origin, on the `BroadcastChannel` - including a goodbye
+posted with a request of the script's own queued on the real term's lock, and the chunks a tab
+joining during a flood misses.
 `test/integration/multi-tab/failover.test.ts` and `handover-races.test.ts` cover the exact end after
 a crash and the clean handover heard out of order, in both transport modes;
 `test/unit/pending-writes.test.ts` covers a write started or answered by another term.

@@ -84,8 +84,10 @@ sends, and in its diagnostics report.
 - **End, or invent, a term of holding the port.** A term is a Web Lock held by the tab that holds
   the port, from before its first word in that term until after its last (ADR-0030). A claim, a
   status or a goodbye naming a term nobody holds changes nothing, and no message ends a term whose
-  lock is still held — so a forged goodbye cannot fail a write that a tab is still performing, and
-  a forged claim cannot make the other tabs address their writes into the void.
+  lock is still held — not even a goodbye posted while a request of the script's own waits on that
+  lock, because a term ends only once the browser has freed it. So a forged goodbye cannot fail a
+  write that a tab is still performing, and a forged claim cannot make the other tabs address their
+  writes into the void.
 - **Make a tab withdraw over a tab limit.** The limit of the tab holding the port is part of that
   term's lock name, so a status naming another limit names no term of the configuration
   (ADR-0025).
@@ -131,7 +133,11 @@ These follow from the missing sender identity, and no validation can prevent the
   the first assumption of this document is why.
 - **Cost work up to the rates.** Every well-formed message is decoded, and a flood can crowd
   legitimate answers, reports and log records out of the rates above - the tabs go on sharing the
-  port either way. Every tab also reports each distinct protocol version announced once.
+  port either way. Every tab also reports each distinct protocol version announced once. A flood of
+  claims naming invented terms costs each tab one lock check per term, up to the few it checks at
+  once; the newest claim is always one of them, so the term that really holds the port is checked.
+  What a tab misses while it is learning which term that is - the chunks of a device streaming into
+  a tab that has just joined - it misses; the drop is recorded once per configuration.
 - **Occupy the broker.** A script that keeps as many participants alive as the broker keeps leaves
   no room for tabs opened afterwards, which then fall back to `BroadcastChannel` or, with
   `transport: 'sharedworker'`, keep trying.
@@ -145,24 +151,24 @@ the same origin is kept out.
 Every limit is far above what serial-broker sends itself. They are defined, with the reasons for
 each value, in `src/protocol/limits.ts`.
 
-| Limit                          | Value            | Bounds                                                                       |
-| ------------------------------ | ---------------- | ---------------------------------------------------------------------------- |
-| `MAX_IDENTIFIER_LENGTH`        | 256 characters   | A client id, request id, term, diagnostics request id, and a `hello` sender. |
-| `MAX_CONFIG_NAME_LENGTH`       | 128 characters   | A configuration name in a message: the limit `setup()` enforces.             |
-| `MAX_PAYLOAD_BYTES`            | 16 MiB           | The payload of a `write-request`, `data-received` or `data-sent`.            |
-| `MAX_TEXT_LENGTH`              | 32 MiB of UTF-16 | The decoded text of a `data-received`.                                       |
-| `MAX_HEARTBEAT_CONFIGURATIONS` | 1024 names       | Each list of configuration names in a heartbeat.                             |
-| `MAX_ERROR_VALUES`             | 256 values       | A serialised error, its context and cause, however nested.                   |
-| `MAX_ERROR_CHARACTERS`         | 64 KiB           | All strings of a serialised error together.                                  |
-| `MAX_REPORT_VALUES`            | 65 536 values    | A diagnostics report, however nested.                                        |
-| `MAX_REPORT_CHARACTERS`        | 1 MiB            | All strings of a diagnostics report together.                                |
-| `MAX_REPORTED_CONFIGURATIONS`  | 1024             | The configurations one diagnostics report describes.                         |
-| `MAX_PARTICIPANTS`             | 1024             | The tabs and observers the broker keeps.                                     |
-| `MAX_PORTS_PER_PARTICIPANT`    | 8                | The ports the broker keeps for one identity.                                 |
-| `MAX_CONFIGURATIONS`           | 4096             | The configurations the broker keeps bookkeeping for.                         |
-| `MAX_REPORTS_PER_COLLECTION`   | 1024             | The reports one diagnostics collection keeps.                                |
-| `MAX_WAITING_WRITES`           | 4096             | The writes waiting at one tab's port.                                        |
-| `MAX_WAITING_WRITE_BYTES`      | 64 MiB           | The payload bytes waiting at one tab's port.                                 |
+| Limit                                  | Value            | Bounds                                                                       |
+| -------------------------------------- | ---------------- | ---------------------------------------------------------------------------- |
+| `MAX_IDENTIFIER_LENGTH`                | 256 characters   | A client id, request id, term, diagnostics request id, and a `hello` sender. |
+| `MAX_CONFIG_NAME_LENGTH`               | 128 characters   | A configuration name in a message: the limit `setup()` enforces.             |
+| `MAX_PAYLOAD_BYTES`                    | 16 MiB           | The payload of a `write-request`, `data-received` or `data-sent`.            |
+| `MAX_TEXT_LENGTH`                      | 32 MiB of UTF-16 | The decoded text of a `data-received`.                                       |
+| `MAX_HEARTBEAT_CONFIGURATIONS`         | 1024 names       | Each list of configuration names in a heartbeat.                             |
+| `MAX_ERROR_VALUES`                     | 256 values       | A serialised error, its context and cause, however nested.                   |
+| `MAX_ERROR_CHARACTERS`                 | 64 KiB           | All strings of a serialised error together.                                  |
+| `MAX_REPORT_VALUES`                    | 65 536 values    | A diagnostics report, however nested.                                        |
+| `MAX_REPORT_CHARACTERS`                | 1 MiB            | All strings of a diagnostics report together.                                |
+| `MAX_REPORTED_CONFIGURATIONS`          | 1024             | The configurations one diagnostics report describes.                         |
+| `MAX_PARTICIPANTS`                     | 1024             | The tabs and observers the broker keeps.                                     |
+| `MAX_PORTS_PER_PARTICIPANT`            | 8                | The ports the broker keeps for one identity.                                 |
+| `MAX_CONFIGURATIONS`                   | 4096             | The configurations the broker keeps bookkeeping for.                         |
+| `MAX_REPORTS_PER_COLLECTION`           | 1024             | The reports one diagnostics collection keeps.                                |
+| `MAX_WAITING_WRITES`                   | 4096             | The writes waiting at one tab's port.                                        |
+| `MAX_WAITING_WRITE_BYTES`              | 64 MiB           | The payload bytes waiting at one tab's port.                                 |
 
 A cycle, a value shared between two places, a function or a symbol inside an error or a report
 exceeds its limit too. A tab logs an exceeded limit as `transport.limit-exceeded`, with the limit's
