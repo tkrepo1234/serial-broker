@@ -153,16 +153,25 @@ export class ConfigurationStore {
     this.#listName(configuration.name);
   }
 
-  /** Removes one configuration. */
+  /**
+   * Removes one configuration.
+   *
+   * Storage is not touched for a name the index does not list, nor for one whose index could not
+   * be read: the configuration was never stored there, and a removal for it would be a write - or,
+   * where storage refuses, a second report of the failure the read has just reported - for nothing.
+   *
+   * The name leaves the index first, and the entry only once that write has landed: an entry
+   * nothing lists is simply never read again, while an entry removed under a name the index still
+   * lists would be a configuration the next restore has to reason about.
+   */
   remove(name: string): void {
-    const { names, isIntact } = this.#readIndex(false);
-    const remaining = names.filter((listed) => listed !== name);
-    if (!isIntact || remaining.length !== names.length) {
-      // The name goes first: an entry that is listed but gone is reported on the next restore,
-      // while an entry nothing lists is simply never read again.
-      this.#writeIndex(remaining);
+    const { names } = this.#readIndex(false);
+    if (!names.includes(name)) {
+      return;
     }
-    this.#removeEntry(name);
+    if (this.#writeIndex(names.filter((listed) => listed !== name))) {
+      this.#removeEntry(name);
+    }
   }
 
   /** Reads one entry, discarding it if it is there and cannot be used. */
@@ -273,8 +282,9 @@ export class ConfigurationStore {
     this.#writeIndex(names.includes(name) ? names : [...names, name]);
   }
 
-  #writeIndex(names: readonly string[]): void {
-    this.#write(storageIndexKey(), JSON.stringify(names));
+  /** @returns Whether the write succeeded. */
+  #writeIndex(names: readonly string[]): boolean {
+    return this.#write(storageIndexKey(), JSON.stringify(names));
   }
 
   /** @returns Whether the write succeeded. */

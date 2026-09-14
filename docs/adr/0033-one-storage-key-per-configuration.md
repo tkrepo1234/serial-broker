@@ -37,7 +37,9 @@ Storage version 2 splits the object into one key per configuration, with an inde
 `save()` writes the entry first and adds the name to the index only if the index does not list it
 already. Two tabs saving different configurations write different keys, so neither can touch the
 other's entry; the index is the only key they share, and the only thing at stake there is a name.
-`remove()` takes the name out of the index first and then removes the entry.
+`remove()` takes the name out of the index first and removes the entry once that write has landed.
+A name the index does not list is not stored, so `remove()` does not touch storage for it — which
+also keeps a storage that refuses everything from reporting the same failure twice for one call.
 
 Reads are defensive at both levels. An index that is not valid JSON, or not an array, is removed,
 and `load()` reports it as `STORAGE_CORRUPT`; a save or a removal that finds it removes it just as
@@ -98,8 +100,9 @@ old keys, and must not be counted as a tab running a configuration stored in the
   is a round trip to the browser's lock manager later. `save()` writes the index only when the name
   is missing, so a tab that has nothing to add cannot be the one to lose it.
 - An index that could not be read at all leaves its entries behind, unreadable and unreferenced,
-  until the same names are saved again. They are a few hundred bytes of JSON and hold nothing
-  sensitive (SECURITY.md).
+  until the same names are saved again. So does a `remove()` for a name a concurrent write has
+  already taken out of the index. They are a few hundred bytes of JSON, are never read again — a
+  restore reads the index, not the keyspace — and hold nothing sensitive (SECURITY.md).
 - A configuration that disappears from storage for a reason nothing else notices — a browser
   evicting one key of an origin, say — is logged and not reported. That case is indistinguishable
   from the far commoner benign one, and an error the application cannot act on is worse than a log
@@ -117,11 +120,19 @@ old keys, and must not be counted as a tab running a configuration stored in the
 
 ## Verification
 
+`test/unit/configuration-store.test.ts` holds the proof of the lost update this record removes:
+"does not write another tab's entry back from a stale copy of storage" drives two stores over the
+same entries, one of them reading from a copy taken before the other's write — which is what a
+second renderer sees, and what no shared `Map` can show — and asserts that the newer entry survives
+the stale tab's save. It fails on any design where a save writes keys it did not change. The same
+file covers the index written only when the name is missing, entries of other configurations left
+alone by a removal, a name re-listed by the tab that owns it, a listed name kept when storage itself
+refuses, a listed name with no entry forgotten in silence, an unreadable index not reported from a
+save, one report rather than two when storage refuses a removal, and nothing but an empty index left
+once every configuration is removed.
+
 `test/integration/storage-schema.test.ts`: the shape of the keys, a configuration per key with the
 names listed, an unreadable index, an index that is partly rubbish, a listed name whose entry is
 gone, the keys of older formats removed unread, and two tabs setting up different configurations at
-the same moment. `test/unit/configuration-store.test.ts`: the index written only when the name is
-missing, entries of other configurations left alone by a removal, an entry written by another tab
-surviving this tab's save, a listed name kept when storage itself refuses, and nothing but an empty
-index left once every configuration is removed. `test/integration/hardening-regressions.test.ts`: an invalid entry reported once, and
-a name never listed when its entry could not be written.
+the same moment. `test/integration/hardening-regressions.test.ts`: an invalid entry reported once,
+and a name never listed when its entry could not be written.

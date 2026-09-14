@@ -62,6 +62,14 @@ function withStaleReads(entries: Map<string, string>): KeyValueStorage {
   };
 }
 
+/** Storage that refuses everything, as a sandboxed iframe does. */
+function unavailableStorage(): KeyValueStorage {
+  const refuse = (): never => {
+    throw new DOMException('denied', 'SecurityError');
+  };
+  return { getItem: refuse, setItem: refuse, removeItem: refuse };
+}
+
 /** Storage as an earlier visit would have left it. */
 function stored(...names: string[]): Record<string, string> {
   return {
@@ -219,6 +227,23 @@ describe('ConfigurationStore', () => {
     // write, on a path the application never asked to read storage on.
     expect(reported).toEqual([]);
     expect(entries.get(storageIndexKey())).toBe(JSON.stringify(['Reader']));
+  });
+
+  it('reports one failure, not two, when storage refuses a removal', () => {
+    const reported: SerialBrokerError[] = [];
+    const store = new ConfigurationStore(
+      unavailableStorage(),
+      new ScopedLogger(NOOP_LOGGER, {}),
+      (error) => reported.push(error),
+    );
+
+    // A configuration that is not to be remembered removes what an earlier setup left - and in a
+    // sandboxed iframe there is nothing to remove and nothing that can be read to find out.
+    store.save(normalizeConfiguration('Reader', { ...OPTIONS, persist: false }));
+
+    expect(reported.map((error) => error.code)).toEqual([
+      SerialBrokerErrorCode.STORAGE_UNAVAILABLE,
+    ]);
   });
 
   it('reports an index that is not an array and starts over', () => {
