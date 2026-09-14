@@ -11,14 +11,15 @@ import { brokerChannelName } from '../../protocol/version.js';
 import { MessageSender } from './message-sender.js';
 import type { Transport, TransportRequest } from './transport.js';
 
-/** The messages that tell a broker about a context, and concern no context in turn. */
-const PRESENCE_MESSAGE_TYPES: ReadonlySet<ProtocolMessageType> = new Set([
+/** The messages a broker sends or is sent, which concern no context in turn. */
+const BROKER_MESSAGE_TYPES: ReadonlySet<ProtocolMessageType> = new Set([
   'hello',
   'welcome',
   'heartbeat',
   'goodbye',
   'attach',
   'detach',
+  'worker-log',
 ]);
 
 /** The `BroadcastChannel` surface this transport uses. */
@@ -86,6 +87,8 @@ export class BroadcastChannelTransport implements Transport {
       this.#channel.close();
     });
 
+    // No secret: every context of the origin receives what is posted here, so one would be no
+    // secret, and nothing on this transport is held to an identity anyway (ADR-0028, SECURITY.md).
     this.#sender.sendHello();
   }
 
@@ -151,10 +154,11 @@ export class BroadcastChannelTransport implements Transport {
 
     const message = result.message;
 
-    if (PRESENCE_MESSAGE_TYPES.has(message.type)) {
-      // Addressed to a broker, and there is none here. Every script of the origin can post them, and
-      // nobody above the transport reads them - on the worker the broker never passes them on - so
-      // they go no further, and both transports deliver the same messages.
+    if (BROKER_MESSAGE_TYPES.has(message.type)) {
+      // Addressed to a broker, or written by one, and there is none here. Every script of the origin
+      // can post them, and nobody above the transport reads them - on the worker the broker never
+      // passes them on - so they go no further, and both transports deliver the same messages. A
+      // forwarded worker record posted here is nobody's record, and is dropped with them (ADR-0029).
       return;
     }
 

@@ -555,6 +555,10 @@ export class BrowserHarness {
         this.#nextIdNumber += 1;
         return `${prefix}-${contextId}-${String(this.#nextIdNumber)}`;
       },
+      // Named after the context rather than drawn at random, so that a test can say which secret a
+      // tab shows the worker, and a test that speaks for another script can show a different one
+      // (ADR-0028). A context keeps the same secret across the transports it builds, as a tab does.
+      newSecret: () => `secret-${contextId}`,
       logger,
     };
   }

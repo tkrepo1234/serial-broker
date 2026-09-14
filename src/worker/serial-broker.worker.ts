@@ -28,6 +28,9 @@ declare const self: {
   onconnect: ((event: { readonly ports: readonly MessagePort[] }) => void) | null;
 };
 
+// Nothing here writes anywhere: a `SharedWorker` cannot reach the logger an application configured.
+// What the worker records at `warn` is instead sent to the connected tabs, which log it through
+// their own loggers (ADR-0029); `WorkerPorts` does that with every record it writes.
 const logger = new ScopedLogger(NOOP_LOGGER, { event: 'worker' });
 
 const ports = new WorkerPorts<MessagePort>({ logger, now: () => Date.now() });
@@ -47,10 +50,7 @@ self.onconnect = (event): void => {
   // the sweep. The port stays open: closing it would cut a live tab - perhaps the owner - off from
   // every other for good, and nothing would tell it so, which is why ADR-0021 never closes ports.
   port.addEventListener('messageerror', () => {
-    logger.warn('dropped a message that could not be cloned', {
-      clientId: ports.identityOf(port),
-      event: 'worker.message-error',
-    });
+    ports.reportMessageError(port);
   });
 
   // A `SharedWorker` port does not deliver anything until it is started.

@@ -32,17 +32,35 @@ async function twoTabs(transport: 'sharedworker' | 'broadcastchannel'): Promise<
 }
 
 describe('a script on the SharedWorker that uses the identity of a tab', () => {
-  it('does not take the write requests of the tab holding the port by saying hello as it', async () => {
-    const { harness, device, owner, other } = await twoTabs('sharedworker');
+  it('hears nothing addressed to the tab holding the port by saying hello as it', async () => {
+    const { harness, device, owner, other, records } = await twoTabs('sharedworker');
     const mallory = harness.bus.workerHost.connectForeign();
 
-    mallory.post({ v: PROTOCOL_VERSION, from: owner.client.clientId, to: 'all', type: 'hello' });
+    // The identity is no secret - it is in every message the tab sends - but the secret the tab
+    // showed the worker in its hello is (ADR-0028).
+    mallory.post({
+      v: PROTOCOL_VERSION,
+      from: owner.client.clientId,
+      to: 'all',
+      type: 'hello',
+      secret: 'guessed',
+    });
     await harness.settle();
     const writing = other.client.send('Reader', 'PING');
     await harness.settle();
 
     expect(device.writtenText()).toBe('PING');
     await expect(writing).resolves.toBeUndefined();
+    expect(mallory.received).toEqual([]);
+    // The worker has no logger of its own, so the tabs write its records for it (ADR-0029).
+    expect(fieldsOfEvent(records, 'worker.message-refused')).toEqual([
+      expect.objectContaining({
+        reason: 'secret-mismatch',
+        claimedClientId: owner.client.clientId,
+        reportedBy: owner.client.clientId,
+      }),
+      expect.objectContaining({ reason: 'secret-mismatch', reportedBy: other.client.clientId }),
+    ]);
   });
 
   it('does not cut a tab off by saying goodbye in its name', async () => {

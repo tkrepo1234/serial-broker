@@ -7,7 +7,7 @@ import {
 } from '../../src/protocol/heartbeat.js';
 import type { ClientId, ProtocolMessage } from '../../src/protocol/messages.js';
 import { PROTOCOL_VERSION } from '../../src/protocol/version.js';
-import { envelope, FakeMessagePort } from '../harness/transport-doubles.js';
+import { envelope, FakeMessagePort, hello } from '../harness/transport-doubles.js';
 
 /**
  * The `SharedWorker` entry point.
@@ -41,6 +41,14 @@ afterEach(() => {
 
 const HEARTBEAT = { type: 'heartbeat', configNames: ['Reader'], ownedConfigNames: [] };
 
+/** What was routed to a port: everything but the worker's own records, which every port gets. */
+const routed = (port: FakeMessagePort): unknown[] =>
+  port.posted.filter((message) => (message as { type: unknown }).type !== 'worker-log');
+
+/** The worker's records forwarded to a port (ADR-0029). */
+const recordsPosted = (port: FakeMessagePort): unknown[] =>
+  port.posted.filter((message) => (message as { type: unknown }).type === 'worker-log');
+
 /**
  * Connects a port and says hello on it as `id`, as every tab's transport does first (ADR-0024),
  * attaching to `configNames`. What the worker answered is cleared, so a test sees only what follows.
@@ -48,7 +56,7 @@ const HEARTBEAT = { type: 'heartbeat', configNames: ['Reader'], ownedConfigNames
 function join(id: string, configNames: readonly string[] = ['Reader']): FakeMessagePort {
   const port = new FakeMessagePort();
   connect({ ports: [port] });
-  port.deliver(envelope(id, 'all', { type: 'hello' }));
+  port.deliver(hello(id));
   for (const configName of configNames) {
     port.deliver(envelope(id, 'all', { type: 'attach', configName }));
   }
@@ -66,7 +74,7 @@ describe('serial-broker.worker', () => {
     connect({ ports: [alice] });
     const bob = join('bob');
 
-    alice.deliver(envelope('alice', 'all', { type: 'hello' }));
+    alice.deliver(hello('alice'));
 
     // The welcome is how a tab learns that this script loaded at all (ADR-0007).
     expect(alice.posted).toEqual([expect.objectContaining({ type: 'welcome', to: 'alice' })]);
@@ -90,7 +98,18 @@ describe('serial-broker.worker', () => {
     expect(alice.posted).toEqual([
       expect.objectContaining({ type: 'welcome', v: PROTOCOL_VERSION, to: 'alice' }),
     ]);
-    expect(bob.posted).toHaveLength(0);
+    expect(routed(bob)).toEqual([]);
+    // Bob, on this version, is told what the worker recorded about it (ADR-0029).
+    expect(recordsPosted(bob)).toEqual([
+      expect.objectContaining({
+        type: 'worker-log',
+        level: 'warn',
+        fields: expect.objectContaining({
+          event: 'worker.other-protocol-version',
+          clientId: 'alice',
+        }) as unknown,
+      }),
+    ]);
   });
 
   it('answers a hello whose version is not a number at all, as the frozen handshake promises', () => {
@@ -161,7 +180,13 @@ describe('serial-broker.worker', () => {
     );
 
     expect(alice.closed).toBe(false);
-    expect(alice.posted).toEqual([expect.objectContaining({ type: 'write-request' })]);
+    expect(routed(alice)).toEqual([expect.objectContaining({ type: 'write-request' })]);
+    // The tab also learns what the worker recorded about the message it lost (ADR-0029).
+    expect(recordsPosted(alice)).toEqual([
+      expect.objectContaining({
+        fields: expect.objectContaining({ event: 'worker.message-error' }) as unknown,
+      }),
+    ]);
   });
 
   it('listens for clone failures on a port once, however often the port is forgotten and returns', () => {
@@ -290,7 +315,7 @@ describe('serial-broker.worker', () => {
     const alice = join('alice');
     const hostile = new FakeMessagePort();
     connect({ ports: [hostile] });
-    hostile.deliver(envelope('hostile', 'all', { type: 'hello' }));
+    hostile.deliver(hello('hostile'));
     hostile.deliver(envelope('hostile', 'all', { type: 'attach', configName: 'Reader' }));
     Object.assign(hostile, {
       postMessage: () => {
@@ -309,7 +334,7 @@ describe('serial-broker.worker', () => {
     const port = join('alice');
 
     expect(() => {
-      port.deliver(envelope('alice', 'all', { type: 'hello' }));
+      port.deliver(hello('alice'));
       port.deliver(envelope('alice', 'all', { type: 'attach', configName: 'Reader' }));
     }).not.toThrow();
     expect(port.posted).toEqual([expect.objectContaining({ type: 'welcome' })]);
