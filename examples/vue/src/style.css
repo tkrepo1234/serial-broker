@@ -1,0 +1,247 @@
+/*
+ * Plain styling for an operator's screen. The status colour follows `data-tone`, which the page
+ * derives from the meaning of a status, so an unknown status falls back to the neutral colour.
+ */
+
+:root {
+  color-scheme: light;
+  --text: #1c2330;
+  --muted: #5b6573;
+  --panel: #ffffff;
+  --page: #f2f4f7;
+  --border: #d5dae2;
+  --accent: #1f5fbf;
+  --neutral: #dfe4ea;
+  --busy: #ffe8b3;
+  --action: #cfe0fa;
+  --good: #c6f0d2;
+  --bad: #f8c9c9;
+  --bad-line: #c0392b;
+  --note-line: #b97a00;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  padding: 1.5rem 1rem;
+  background: var(--page);
+  color: var(--text);
+  font:
+    15px/1.5 system-ui,
+    -apple-system,
+    'Segoe UI',
+    Roboto,
+    sans-serif;
+}
+
+.app {
+  max-width: 50rem;
+  margin: 0 auto;
+  display: grid;
+  gap: 1rem;
+}
+
+h1 {
+  margin: 0 0 0.25rem;
+  font-size: 1.5rem;
+}
+
+h1 small {
+  font-weight: normal;
+  color: var(--muted);
+}
+
+.muted {
+  color: var(--muted);
+}
+
+header p,
+.app > p {
+  margin: 0;
+}
+
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  padding: 1rem 1.25rem;
+}
+
+.panel h2 {
+  margin: 0 0 0.5rem;
+  font-size: 0.9rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+
+.panel p {
+  margin: 0.5rem 0 0;
+}
+
+.status-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
+}
+
+.status {
+  display: inline-block;
+  padding: 0.15rem 0.75rem;
+  border-radius: 1rem;
+  font-family: ui-monospace, 'Cascadia Mono', Consolas, monospace;
+  font-size: 1.1rem;
+  background: var(--neutral);
+}
+
+.status[data-tone='good'] {
+  background: var(--good);
+}
+
+.status[data-tone='busy'] {
+  background: var(--busy);
+}
+
+.status[data-tone='action'] {
+  background: var(--action);
+}
+
+.status[data-tone='bad'] {
+  background: var(--bad);
+}
+
+/* Connecting, reconnecting and queued pulse: the page is waiting, not stuck. */
+.status[aria-busy='true'] {
+  animation: pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  50% {
+    opacity: 0.55;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .status[aria-busy='true'] {
+    animation: none;
+  }
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+button,
+.button,
+input,
+select {
+  font: inherit;
+}
+
+button,
+.button {
+  padding: 0.35rem 0.9rem;
+  border: 1px solid var(--accent);
+  border-radius: 0.3rem;
+  background: var(--accent);
+  color: #fff;
+  cursor: pointer;
+  text-decoration: none;
+}
+
+button.secondary,
+.button.secondary {
+  background: #fff;
+  color: var(--accent);
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.error {
+  border-left: 4px solid var(--bad-line);
+}
+
+.error[data-retryable='true'] {
+  border-left-color: var(--note-line);
+}
+
+.error-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 0.6rem;
+}
+
+.error code {
+  font-weight: bold;
+}
+
+.remediation {
+  font-style: italic;
+}
+
+.legend {
+  font-size: 0.85rem;
+}
+
+.traffic {
+  list-style: none;
+  margin: 0.5rem 0 0;
+  padding: 0.4rem 0.6rem;
+  min-height: 10rem;
+  max-height: 22rem;
+  overflow: auto;
+  border: 1px solid var(--border);
+  background: #f6f8fa;
+  font-family: ui-monospace, 'Cascadia Mono', Consolas, monospace;
+  font-size: 0.9rem;
+}
+
+.traffic li {
+  display: flex;
+  gap: 0.6rem;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.traffic .time {
+  color: var(--muted);
+  flex: none;
+}
+
+.traffic .arrow {
+  flex: none;
+  width: 1ch;
+}
+
+.traffic li[data-kind='sent-here'] .text,
+.traffic li[data-kind='sent-elsewhere'] .text {
+  color: var(--accent);
+}
+
+.traffic .empty {
+  color: var(--muted);
+}
+
+.partial code {
+  white-space: pre-wrap;
+}
+
+.send {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.send input {
+  flex: 1 1 14rem;
+  padding: 0.35rem 0.5rem;
+}
