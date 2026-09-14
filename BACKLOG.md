@@ -63,6 +63,15 @@ further down says otherwise, this section wins.
 ### Tests, hardware and examples
 
 - Hardware: Tim installs usbip-win2 0.9.8.0; the library is then tested against the USB/IP emulator.
+  Installed on 2026-09-14; the machine restarts once the current work is done, and the emulator test
+  follows the restart.
+- **Real hardware is available (Tim, 2026-09-14):** an Arduino on COM3 (USB `2341:0078`) runs an
+  echo sketch at 9600 baud with default settings: it sends back what it receives. The library is
+  tested against it in a real browser.
+- **Long-running and extreme-usage tests (Tim, 2026-09-14):** many tabs, large amounts of data, long
+  running times, for the edge cases of an extreme power user. They measure what the library
+  consumes - memory, timers, listeners, locks, messages - and whether it stays stable, in the
+  simulated browser and in a real browser.
 - Real-browser tests with **Playwright**, locally and in CI.
 - **No size budget**: sizes are reported, not enforced.
 - Framework integrations for React, Vue, Svelte and Angular, and above all **SAP OpenUI5**: a runnable
