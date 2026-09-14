@@ -37,3 +37,4 @@ because of a decision references it in a comment (`// See ADR-0005.`).
 | [0026](./0026-attribute-messages-to-a-term-of-holding-the-port.md)    | Attribute ownership, write and status messages to a term of holding the port        | Accepted                    |
 | [0027](./0027-keep-a-remembered-configuration-while-a-tab-runs-it.md) | Keep a remembered configuration while any tab runs it                               | Accepted                    |
 | [0034](./0034-start-the-debugging-surface-from-a-chosen-port.md)      | Start the debugging surface from a chosen port, under its own policy                | Accepted                    |
+| [0035](./0035-browser-tests-with-playwright.md)                       | Test the built package in a real browser, and against real hardware                 | Accepted                    |

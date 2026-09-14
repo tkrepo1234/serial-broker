@@ -202,8 +202,15 @@ tab observed. Every scenario that involves coordination runs against both transp
 has tests of its own, because a simulation that is wrong in the same way as the code would make
 every test pass for the wrong reason.
 
-What the simulation cannot prove is recorded in `docs/manual-test-plan.md`, which is worked through
-in a real browser, with real or emulated hardware [ADR-0017].
+A second suite, `test/browser/`, runs the **built** package in a real Chromium: several pages of one
+origin sharing a port through a real `SharedWorker`, failover when the page holding it is closed or
+killed, the `BroadcastChannel` fallback, and the minified entry point. It answers what the
+simulation cannot — that the platform behaves as the harness claims, and that the published files
+load and find each other — and a part of it runs against a real serial device when one is attached
+[ADR-0035].
+
+What neither suite can prove is recorded in `docs/manual-test-plan.md`, which is worked through in a
+real browser, with real or emulated hardware [ADR-0017], and where every hardware run is recorded.
 
 ## Decision records
 
@@ -236,3 +243,4 @@ in a real browser, with real or emulated hardware [ADR-0017].
 | 0026 | Attribute ownership, write and status messages to a term of holding the port        |
 | 0027 | Keep a remembered configuration while any tab runs it                               |
 | 0034 | Start the debugging surface from a chosen port, under its own policy                |
+| 0035 | Test the built package in a real browser, and against real hardware                 |

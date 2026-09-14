@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>serial-broker browser test page</title>
+  </head>
+  <body>
+    <h1>serial-broker browser test page</h1>
+    <p>
+      Drives the library through <code>window.harness</code>; see test/browser/pages/harness.ts.
+    </p>
+    <!-- Clicked by tests that need transient activation for the port picker. -->
+    <button id="request-access" type="button" data-configuration="">Choose device…</button>
+
+    <script type="module">
+      import { PROTOCOL_VERSION, SerialBroker } from '/dist/index.js';
+      import { installHarness } from '/harness.js';
+
+      installHarness(SerialBroker, PROTOCOL_VERSION, window.webSerialStandIn);
+    </script>
+  </body>
+</html>

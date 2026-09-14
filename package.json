@@ -99,6 +99,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
+    "test:browser": "npm run build && playwright test",
     "docs": "node docs/site/build.mjs",
     "debug": "npm run build && npx --yes serve dist",
     "verify": "npm run format:check && npm run lint && npm run typecheck && npm run test:coverage && npm run build",
@@ -110,6 +111,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "@playwright/test": "1.63.0",
     "@types/node": "^22.20.2",
     "@types/w3c-web-serial": "^1.0.8",
     "@vitest/coverage-v8": "^5.0.0",
