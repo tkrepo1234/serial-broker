@@ -293,6 +293,54 @@ export class Tab {
     }, name);
   }
 
+  /** Has the page send `line` every `everyMs` milliseconds, from a timer of its own. */
+  async startTraffic(name: string, everyMs: number, line: string): Promise<void> {
+    await this.page.evaluate(
+      ([configName, interval, payload]) => {
+        (window as unknown as HarnessWindow).harness.startTraffic(configName, interval, payload);
+      },
+      [name, everyMs, line] as const,
+    );
+  }
+
+  async stopTraffic(): Promise<void> {
+    await this.page.evaluate(() => {
+      (window as unknown as HarnessWindow).harness.stopTraffic();
+    });
+  }
+
+  async trafficCounts(name: string): Promise<{ readonly sent: number; readonly failed: number }> {
+    return await this.page.evaluate(
+      (configName) => (window as unknown as HarnessWindow).harness.trafficCounts(configName),
+      name,
+    );
+  }
+
+  /** Forgets everything the page harness collected, so that its memory is the library's. */
+  async resetHistory(name: string): Promise<void> {
+    await this.page.evaluate((configName) => {
+      (window as unknown as HarnessWindow).harness.resetHistory(configName);
+    }, name);
+  }
+
+  /**
+   * What the page holds, after a garbage collection: heap in use, DOM nodes, event listeners.
+   *
+   * Read over CDP (`Performance.getMetrics`), as the memory panel of the developer tools reads
+   * it; the collection first is what makes two readings comparable.
+   */
+  async memory(): Promise<MemorySample> {
+    const session = await this.page.context().newCDPSession(this.page);
+    try {
+      await session.send('HeapProfiler.collectGarbage');
+      await session.send('Performance.enable');
+      const { metrics } = await session.send('Performance.getMetrics');
+      return memorySampleOf(metrics);
+    } finally {
+      await session.detach();
+    }
+  }
+
   /** Unplugs the device for every page of the origin. */
   async unplugDevice(): Promise<void> {
     await this.page.evaluate(() => {
@@ -400,6 +448,107 @@ export async function terminateSharedWorkers(tab: Tab): Promise<readonly SharedW
     await session.detach();
   }
   return workers;
+}
+
+/** What a context holds, as `Performance.getMetrics` reports it. */
+export interface MemorySample {
+  /** `JSHeapUsedSize`, in MiB. */
+  readonly heapMiB: number;
+  /** `Nodes`: DOM nodes alive, detached ones included. */
+  readonly nodes: number;
+  /** `JSEventListeners`: listeners registered on event targets. */
+  readonly listeners: number;
+}
+
+function memorySampleOf(metrics: readonly { name: string; value: number }[]): MemorySample {
+  const valueOf = (name: string): number =>
+    metrics.find((metric) => metric.name === name)?.value ?? Number.NaN;
+  return {
+    heapMiB: Math.round((valueOf('JSHeapUsedSize') / (1024 * 1024)) * 100) / 100,
+    nodes: valueOf('Nodes'),
+    listeners: valueOf('JSEventListeners'),
+  };
+}
+
+/** What a worker holds: a worker has no DOM, and CDP counts no event listeners for it. */
+export interface WorkerMemorySample {
+  /** `Runtime.getHeapUsage().usedSize`, in MiB. */
+  readonly heapMiB: number;
+}
+
+/**
+ * What the `SharedWorker` of this tab's context holds, or `undefined` where it cannot be read.
+ *
+ * A worker is not a page, so the reading goes through the browser's own session: the worker
+ * target is attached to, and the commands are sent to it through `Target.sendMessageToTarget`,
+ * answered on `Target.receivedMessageFromTarget`. `Performance.getMetrics` is a page's domain and
+ * a worker does not answer it; `Runtime.getHeapUsage` it does. Should a Chromium not answer even
+ * that, `undefined` is the answer rather than a failure, and the record says so.
+ */
+export async function sharedWorkerMemory(tab: Tab): Promise<WorkerMemorySample | undefined> {
+  const [worker] = await sharedWorkersOf(tab);
+  if (worker === undefined) {
+    return undefined;
+  }
+  const session = await browserSessionOf(tab);
+  try {
+    const { sessionId } = await session.send('Target.attachToTarget', {
+      targetId: worker.targetId,
+      flatten: false,
+    });
+    let nextId = 1;
+    const ask = async (method: string): Promise<unknown> => {
+      const id = nextId;
+      nextId += 1;
+      const answer = new Promise<unknown>((resolve, reject) => {
+        const timer = setTimeout(() => {
+          session.off('Target.receivedMessageFromTarget', onMessage);
+          reject(new Error(`No answer to ${method} from the shared worker`));
+        }, 5_000);
+        const onMessage = (event: { sessionId: string; message: string }): void => {
+          if (event.sessionId !== sessionId) {
+            return;
+          }
+          const parsed = JSON.parse(event.message) as {
+            id?: number;
+            result?: unknown;
+            error?: { message: string };
+          };
+          if (parsed.id !== id) {
+            return;
+          }
+          clearTimeout(timer);
+          session.off('Target.receivedMessageFromTarget', onMessage);
+          if (parsed.error !== undefined) {
+            reject(new Error(parsed.error.message));
+          } else {
+            resolve(parsed.result);
+          }
+        };
+        session.on('Target.receivedMessageFromTarget', onMessage);
+      });
+      await session.send('Target.sendMessageToTarget', {
+        sessionId,
+        message: JSON.stringify({ id, method }),
+      });
+      return await answer;
+    };
+    try {
+      await ask('HeapProfiler.collectGarbage');
+      const { usedSize } = (await ask('Runtime.getHeapUsage')) as { usedSize: number };
+      return { heapMiB: Math.round((usedSize / (1024 * 1024)) * 100) / 100 };
+    } catch {
+      // The worker did not answer, or answered with an error: a reading is not to be had from this
+      // Chromium, and the caller says so in its record.
+      return undefined;
+    } finally {
+      await session.send('Target.detachFromTarget', { sessionId }).catch(() => {
+        // Already detached, or the worker went away meanwhile.
+      });
+    }
+  } finally {
+    await session.detach();
+  }
 }
 
 /** The id Chromium gives the browser context this tab lives in. */

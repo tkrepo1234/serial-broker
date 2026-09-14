@@ -91,6 +91,21 @@ export interface PageHarness {
   /** `true` while this page holds the device open. Only with the Web Serial stand-in. */
   isPortOpenHere(): boolean;
   protocolVersion(): number;
+  /**
+   * Sends `line` every `everyMs` milliseconds until {@link PageHarness.stopTraffic}, from a timer
+   * in the page, so that a long run costs the test runner nothing per write. Each send is counted
+   * in {@link PageHarness.trafficCounts}; a send that fails is counted, not thrown.
+   */
+  startTraffic(name: string, everyMs: number, line: string): void;
+  stopTraffic(): void;
+  /** Sends issued by {@link PageHarness.startTraffic}, and how many of them were refused. */
+  trafficCounts(name: string): { readonly sent: number; readonly failed: number };
+  /**
+   * Forgets everything collected so far for the configuration - text, counts, statuses, sends -
+   * and every log record, so that a page's memory over a long run is the library's, not this
+   * harness's.
+   */
+  resetHistory(name: string): void;
 }
 
 /**
@@ -135,6 +150,8 @@ export function installHarness(
   const records: HarnessLogRecord[] = [];
   const errorCodes: string[] = [];
   const collected = new Map<string, Collected>();
+  const traffic = new Map<string, { sent: number; failed: number }>();
+  let trafficTimer: ReturnType<typeof setInterval> | undefined;
   let accessRequestName = '';
   let lastAccessRequest: string | undefined;
 
@@ -276,6 +293,36 @@ export function installHarness(
     logRecords: () => [...records],
     isPortOpenHere: () => standIn?.isOpenHere() === true,
     protocolVersion: () => protocolVersion,
+    startTraffic: (name, everyMs, line) => {
+      if (trafficTimer !== undefined) {
+        clearInterval(trafficTimer);
+      }
+      const counts = traffic.get(name) ?? { sent: 0, failed: 0 };
+      traffic.set(name, counts);
+      trafficTimer = setInterval(() => {
+        counts.sent += 1;
+        api.send(name, line).catch(() => {
+          counts.failed += 1;
+        });
+      }, everyMs);
+    },
+    stopTraffic: () => {
+      if (trafficTimer !== undefined) {
+        clearInterval(trafficTimer);
+        trafficTimer = undefined;
+      }
+    },
+    trafficCounts: (name) => ({ ...(traffic.get(name) ?? { sent: 0, failed: 0 }) }),
+    resetHistory: (name) => {
+      const entry = collect(name);
+      entry.statuses.length = 0;
+      entry.text = '';
+      entry.byteCount = 0;
+      entry.patternRun = 0;
+      entry.patternLongestRun = 0;
+      entry.sends.length = 0;
+      records.length = 0;
+    },
   };
 
   // Called synchronously from the click, so that the gesture is not spent before the picker is
