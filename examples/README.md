@@ -67,10 +67,10 @@ provides:
   example with its `start` command on its port, and runs the `smoke.spec.ts` files. CI does the same
   with Chromium, after `npm ci` in every example directory.
 
-  Unlike the rest of the example, `smoke.spec.ts` belongs to the root's toolchain: it is part of the
-  root's TypeScript program and its ESLint run (`npm run typecheck` and `npm run lint` at the
-  repository root), because it is written against the root's dependencies and would otherwise be
-  checked by nothing - Playwright strips types without checking them. It therefore follows
+  Unlike the rest of the example, `smoke.spec.ts` is type-checked by the root (`npm run typecheck`
+  at the repository root), because it is written against the root's dependencies and would otherwise
+  be checked by nothing - Playwright strips types without checking them. It is not linted: typed
+  linting would build a TypeScript program for every example's own configuration. It follows
   `docs/guidelines/`, not the framework's conventions. The texts it asserts must not depend on the
   machine the browser runs on: an application that follows the browser's language is loaded with
   its language fixed (for OpenUI5, `?sap-ui-language=en`).
