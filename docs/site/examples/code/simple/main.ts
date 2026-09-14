@@ -18,10 +18,8 @@ function showStatus(status: string): void {
   }
 }
 
-// No `device`: the configuration takes it from the port the user picks, and remembers it for
-// `restore()`, which brings it back on a later visit. Name one with `device: { vendorId, productId }`
-// to filter the picker to a known USB device.
-await SerialBroker.restore();
+// No `device`: the configuration takes it from the port the user picks, and remembers it. Name
+// one with `device: { vendorId, productId }` to filter the picker to a known USB device.
 await SerialBroker.setup(DEVICE, {
   serial: { baudRate: 9600 },
   encoding: { decodeText: true },

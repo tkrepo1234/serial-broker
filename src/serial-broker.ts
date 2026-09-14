@@ -59,8 +59,11 @@ export interface SerialBrokerApi {
    * it waits with `awaiting-permission` until `requestAccess()` opens the picker with no filter,
    * and takes its device from the port the user chooses - its USB IDs, or the fact that it has
    * none. The device is remembered with the configuration, reported by `getStatus()`, and adopted
-   * by the other tabs that set the name up in auto mode (ADR-0036). A remembered configuration
-   * restored with its device reconnects without a prompt, like an explicit one.
+   * by the other tabs that set the name up in auto mode (ADR-0036). On a later visit this call
+   * takes the device from the configuration remembered under the same name, so it reconnects
+   * without a prompt, like an explicit one, whether or not `restore()` ran first. A `device` passed
+   * here, or `resolved`, wins over what is remembered; so does `persist: false`, which uses nothing
+   * remembered.
    *
    * Calling this again with the same name and equivalent options is a no-op, so it is safe to
    * call on every page initialisation. Calling it with options that would open the port

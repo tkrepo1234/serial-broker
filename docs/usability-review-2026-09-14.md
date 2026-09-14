@@ -28,13 +28,14 @@ counts, a cold read of every example application, and the check that no task nee
 
 1. **A page in auto mode that calls only `setup()` asks for the device again on every visit, and
    forgets the remembered one.** The Quickstart, the Simple tier and the README said otherwise. The
-   documentation now calls `restore()` first; [P1](#p1-auto-mode-takes-the-remembered-device-in-setup)
-   proposes the fix in the library.
+   documentation called `restore()` first until
+   [P1](#p1-auto-mode-takes-the-remembered-device-in-setup) fixed it in the library (2026-09-15),
+   and says again what it said before.
 2. Four steps that every integration writes come from the API, not from the application: reading
    the status after subscribing ([P3](#p3-a-new-onstatuschange-listener-hears-the-current-status)),
    releasing before a retry ([P2](#p2-setup-starts-a-failed-configuration-again)), `restore()` in auto
-   mode ([P1](#p1-auto-mode-takes-the-remembered-device-in-setup)), and finding the one tab that may
-   ask for permission ([P4](#p4-requestaccess-from-any-tab)).
+   mode ([P1](#p1-auto-mode-takes-the-remembered-device-in-setup), done), and finding the one tab that
+   may ask for permission ([P4](#p4-requestaccess-from-any-tab)).
 3. The rest were gaps in the documentation, each closed by a sentence or two where a reader looks
    for it.
 
@@ -65,6 +66,7 @@ entry was `{ "device": { "auto": true }, … }`. A third tab's `restore()` then 
 `awaiting-permission`. `restore()` _before_ `setup()` reconnects, as `auto-device.test.ts` shows.
 _Fixed in the documentation:_ the Quickstart, the Simple tier's code and text, the README and the
 `setup()` TSDoc call `restore()` first. _Proposal:_ [P1](#p1-auto-mode-takes-the-remembered-device-in-setup).
+_Fixed in the library (2026-09-15):_ P1 is implemented, and the documentation fix is reverted.
 
 **U4. `subscribe()` needs the name to be set up, so how do I see a status change in between?** All
 nine. The Simple tier answers it: read `getStatus()` after subscribing. All nine examples do.
@@ -162,7 +164,8 @@ and no change to the library would take it away.
 
 **U21. What does `restore()` add for a page that knows its one configuration?** `multi-tab-dashboard`.
 Nothing, when the device is named by USB IDs; with auto mode it is needed (U3). _Fixed:_ the Tasks
-chapter (Remember and restore) says both.
+chapter (Remember and restore) says both. Since P1 (2026-09-15) it adds nothing in auto mode either,
+and the chapter says so.
 
 **U22. Should Send be disabled while the port is not open?** `minimal` and every framework example.
 The documentation says a write waits for a connection up to `connection.writeTimeoutMs`. _Left:_
@@ -187,25 +190,29 @@ counted from its sources:
 
 The exceptions, and why each stays:
 
-| Beyond the five                    | Where                                | Reason                                                                                                                                                            |
-| ---------------------------------- | ------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `getStatus()` after `subscribe()`  | all nine                             | Forced by the API: the status can change before the listener exists. [P3](#p3-a-new-onstatuschange-listener-hears-the-current-status).                            |
-| `exists()` and a release, to retry | four by `exists()`, two by own state | Forced by the API: `setup()` does nothing for a failed configuration. [P2](#p2-setup-starts-a-failed-configuration-again).                                        |
-| `restore()`                        | `multi-tab-dashboard`, `openui5`     | Remembering is the task itself where users define configurations. For a page in auto mode it is forced. [P1](#p1-auto-mode-takes-the-remembered-device-in-setup). |
-| `configure({ workerUrl })`         | all nine                             | Installation, not a task: the URL is the deployment's decision, and a bundler that emits the script needs no call.                                                |
-| `dispose()` on `pagehide`          | `exclusive`, `svelte`                | Optional: the browser lets go of everything when the tab dies; the call only hands the port on sooner.                                                            |
-| `isSupported()`                    | `exclusive`, `no-bundler`, `openui5` | Optional: `setup()` rejects with `WEB_SERIAL_UNAVAILABLE` and its remediation anyway.                                                                             |
-| `openDiagnostics()`                | `multi-tab-dashboard`                | Operators' tooling behind an entry point of its own, deliberately outside the application API (ADR-0018).                                                         |
-| `PROTOCOL_VERSION`                 | `no-bundler`                         | Shown as build information; nothing depends on it.                                                                                                                |
+| Beyond the five                    | Where                                | Reason                                                                                                                                                       |
+| ---------------------------------- | ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `getStatus()` after `subscribe()`  | all nine                             | Forced by the API: the status can change before the listener exists. [P3](#p3-a-new-onstatuschange-listener-hears-the-current-status).                       |
+| `exists()` and a release, to retry | four by `exists()`, two by own state | Forced by the API: `setup()` does nothing for a failed configuration. [P2](#p2-setup-starts-a-failed-configuration-again).                                   |
+| `restore()`                        | `multi-tab-dashboard`, `openui5`     | Remembering is the task itself where users define configurations. In auto mode it was forced until [P1](#p1-auto-mode-takes-the-remembered-device-in-setup). |
+| `configure({ workerUrl })`         | all nine                             | Installation, not a task: the URL is the deployment's decision, and a bundler that emits the script needs no call.                                           |
+| `dispose()` on `pagehide`          | `exclusive`, `svelte`                | Optional: the browser lets go of everything when the tab dies; the call only hands the port on sooner.                                                       |
+| `isSupported()`                    | `exclusive`, `no-bundler`, `openui5` | Optional: `setup()` rejects with `WEB_SERIAL_UNAVAILABLE` and its remediation anyway.                                                                        |
+| `openDiagnostics()`                | `multi-tab-dashboard`                | Operators' tooling behind an entry point of its own, deliberately outside the application API (ADR-0018).                                                    |
+| `PROTOCOL_VERSION`                 | `no-bundler`                         | Shown as build information; nothing depends on it.                                                                                                           |
 
 The `SerialBrokerError` fields (`code`, `remediation`, `isRetryable`) are counted as part of
 `subscribe` and of every call that rejects, not as a concept of their own.
 
 ## Design proposals
 
-Each removes a step that the API forces. None is implemented here.
+Each removes a step that the API forces. None is implemented here; P1 was implemented afterwards.
 
 ### P1. Auto mode takes the remembered device in `setup()`
+
+**Status: done, 2026-09-15.** Implemented as proposed, and recorded as an amendment to ADR-0036. An
+explicit device, a `resolved` passed to `setup()` and `persist: false` take nothing remembered,
+and only a remembered auto-mode resolution is taken. The documentation fixes for U3 are reverted.
 
 **Problem.** U3. A configuration in auto mode forgets its device on every visit that calls `setup()`
 without `restore()` first, and overwrites the remembered device with nothing. It hits the path the

@@ -29,8 +29,8 @@ hand. The serial-broker code imports `SerialBroker` from `serial-broker`.
 Each cell reads _calls / options / concepts_.
 
 Every task uses only `setup()`, `subscribe()`, `requestAccess()`, `send()` and `release()`, with two
-exceptions: `getStatus()` reads the status once after subscribing, and `restore()` brings back a
-device the user chose in an earlier visit.
+exceptions: `getStatus()` reads the status once after subscribing, and `restore()` brings back the
+configurations a page does not set up itself.
 
 ## Connect and print received text
 
@@ -180,9 +180,10 @@ tab's `open()` fails, and hands over the writes it has not begun.
 ```
 
 **Concepts:** the browser keeps the permission and serial-broker keeps the configuration; a device
-the user chose in the picker is kept with the remembered configuration, so `restore()` has to run
-before `setup()` to reconnect to it with no prompt. An application that names its device by USB IDs
-needs no `restore()`: `setup()` on every load finds the granted port.
+the user chose in the picker is kept with the remembered configuration, and `setup()` takes it from
+there. A page that sets its configurations up on every load needs no `restore()`: `setup()` finds
+the granted port, whether the device was named by USB IDs or chosen. `restore()` brings back the
+configurations the page does not set up itself, such as those its users defined.
 
 With Web Serial alone:
 
