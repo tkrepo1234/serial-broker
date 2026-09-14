@@ -6,12 +6,13 @@
 npm install serial-broker
 ```
 
-The package contains three things:
+The package contains:
 
 | Path                                    | What it is                                                                       |
 | --------------------------------------- | -------------------------------------------------------------------------------- |
 | `serial-broker`                         | The library, as ES module and CommonJS, with type definitions.                   |
-| `serial-broker/serial-broker.worker.js` | The script that coordinates tabs. It has to be served as a file of its own.      |
+| `serial-broker/worker`                  | The script that coordinates tabs. It has to be served as a file of its own.      |
+| `serial-broker/serial-broker.worker.js` | The same script, under its file name.                                            |
 | `serial-broker/diagnostics`             | A read-only view of every tab, for operators. See [Diagnostics](diagnostics.md). |
 | `serial-broker/min`                     | The library as a minified ES module, with the same exports and types.            |
 | `serial-broker/diagnostics/min`         | The diagnostics entry point, minified.                                           |
@@ -33,7 +34,7 @@ to keep it that way. The definitions check cleanly with `skipLibCheck: false` un
 ### Minified build
 
 `dist/index.min.js` and `dist/diagnostics.min.js` are the same code, minified, with source maps.
-They are meant for pages that load the library without a bundler — from a CDN or your own static
+Each is one file that imports nothing else. They are meant for pages that load the library without a bundler — from a CDN or your own static
 files, with `<script type="module">` or an import map. A bundler minifies on its own, so there the
 readable build is the better choice.
 
@@ -53,16 +54,23 @@ Tabs coordinate through a [`SharedWorker`][shared-worker]. A shared worker is id
 URL of its script, so the script must be a real file with **the same URL in every tab** — a
 `Blob` URL, which differs per tab, would give each tab a worker of its own.
 
-Bundlers that understand `new URL('./file', import.meta.url)` — Vite, webpack 5, Parcel 2,
-Rollup with the right plugin — find and emit the script on their own. Nothing needs to be done.
-
-If yours does not, or if your assets are served from a path the bundler does not know about,
-copy `node_modules/serial-broker/dist/serial-broker.worker.js` to your static assets and say
-where it is **before the first `setup()`**:
+Name that URL **before the first `setup()`**. Bundlers that understand
+`new URL('./file', import.meta.url)` — Vite, webpack 5, Parcel 2, Rollup with the right plugin — find
+and emit the script without it, but not every toolchain does, and naming it puts the one URL every
+tab has to share in one line. With Vite, import the URL:
 
 ```ts
 import { SerialBroker } from 'serial-broker';
+import workerUrl from 'serial-broker/worker?url';
 
+SerialBroker.configure({ workerUrl });
+```
+
+With any other toolchain, copy `node_modules/serial-broker/dist/serial-broker.worker.js` to your
+static assets — the Angular CLI does it with an entry in the `assets` of `angular.json` — and pass
+its path:
+
+```ts
 SerialBroker.configure({ workerUrl: '/assets/serial-broker.worker.js' });
 ```
 
