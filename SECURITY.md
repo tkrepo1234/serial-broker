@@ -38,8 +38,9 @@ numbers and PINs — and appear at `debug` only when `logPayloads` is explicitly
 boundary is validated before a field is read, held to the limits below, and a malformed one is
 dropped rather than partially applied. This defends against bugs, noise and unrelated scripts
 using the same channel name. It is not a defence against a hostile same-origin script, which by
-the first assumption above is already inside the boundary. The next section says precisely what
-such a script can and cannot do.
+the first assumption above is already inside the boundary. The one exception is the handshake with
+the `SharedWorker`, where a port shows a secret and cannot connect as an identity another context
+bound (ADR-0028). The next section says precisely what such a script can and cannot do.
 
 ## The bus is open to every script of the origin
 
@@ -68,10 +69,16 @@ sends, and in its diagnostics report.
 - **Speak on the worker for more than one identity per port.** The worker holds each port to the
   identity its first message, `hello`, named. A message before `hello`, one that names another
   sender, and a `hello` in the name of the broker itself are refused.
-- **Take a tab's messages away on the worker, or end its participation.** A port that says `hello`
-  under a tab's identity is served next to the tab's own port, never instead of it, and its
-  `goodbye` ends only its own port. (A tab that connects again after a worker hung does the same
-  thing, and the worker cannot tell the two apart; see below.)
+- **Connect to the worker as a tab whose identity it heard.** Every `hello` on a worker port carries
+  a secret the tab drew from `crypto.getRandomValues` and sends in no other message. The worker binds
+  the identity to the first secret it sees, and refuses a later `hello` that names that identity with
+  another secret, or with none. A tab that gave up on a worker that hung connects again with the same
+  secret and is served (ADR-0028). **This holds on the `SharedWorker` only.** On `BroadcastChannel`
+  every context of the origin receives every message, so a secret would be no secret: none is sent
+  there, and nothing on that transport is held to an identity.
+- **Take a tab's messages away on the worker, or end its participation.** Ports of one identity are
+  served next to each other, never instead of each other, and a `goodbye` ends only the port it
+  arrived on.
 - **Grow the broker without bound.** It keeps a bounded number of participants, ports per
   participant, and configurations.
 
@@ -80,13 +87,14 @@ sends, and in its diagnostics report.
 These follow from the missing sender identity, and no validation can prevent them:
 
 - **Read** all traffic, statuses and errors of a configuration, by attaching to it on the worker or
-  by listening on the channel. On the worker, by saying `hello` under a tab's identity, it also
-  receives a copy of what is addressed to that tab alone, such as the write requests sent to the tab
-  holding the port.
+  by listening on the channel. On `BroadcastChannel` that includes what is addressed to one tab
+  alone, such as the write requests sent to the tab holding the port; on the worker it does not,
+  because it cannot connect under that tab's identity (see above).
 - **Write to the device**, with a `write-request` addressed to the current term, which every status
   names - or by calling serial-broker itself.
-- **Say anything a tab can say**, on either transport. On the worker it must first say `hello` under
-  the identity it speaks for. The consequences include:
+- **Say anything a tab can say**, on either transport, in a name of its own. On the worker it must
+  first say `hello` under that name, which binds it like any other identity; it cannot speak in the
+  name of a tab already on the worker. The consequences include:
   - device data, sent data and errors that never happened, delivered to `onReceive`, `onSend` and
     `onError`;
   - a status that is not the device's, in every tab that does not hold the port;
@@ -129,11 +137,17 @@ each value, in `src/protocol/limits.ts`.
 | `MAX_PARTICIPANTS`             | 1024             | The tabs and observers the broker keeps.                                     |
 | `MAX_PORTS_PER_PARTICIPANT`    | 8                | The ports the broker keeps for one identity.                                 |
 | `MAX_CONFIGURATIONS`           | 4096             | The configurations the broker keeps bookkeeping for.                         |
+| `MAX_BOUND_IDENTITIES`         | 4096             | The identities the worker remembers a `hello` secret for.                    |
+| `MAX_LOG_RECORD_VALUES`        | 32 fields        | The fields of one of the worker's records, forwarded to a tab.               |
+| `MAX_LOG_RECORD_CHARACTERS`    | 4 KiB            | The message and fields of such a record together.                            |
 
 A cycle, a value shared between two places, a function or a symbol inside an error or a report
 exceeds its limit too. A tab logs an exceeded limit as `transport.limit-exceeded`, with the limit's
 name and value. The worker logs `worker.limit-exceeded`, `broker.limit-exceeded` and
-`worker.message-refused`, which no tab sees.
+`worker.message-refused`, and sends those records to the tabs connected to it, which write them to
+their own loggers — at most eight records a minute, the surplus counted and reported
+(`worker.records-dropped`). Such a record names identities, limits, message types and reasons; never
+a payload, and never the secret of a `hello`.
 
 ## Threat model: the application side
 

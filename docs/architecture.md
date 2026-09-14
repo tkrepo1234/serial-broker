@@ -152,6 +152,13 @@ went unanswered takes the worker for dead — crashed, ended for memory, termina
 `chrome://inspect` — reports `BROKER_UNAVAILABLE`, starts a new worker, and hands on what it had
 sent into the old one.
 
+Every tab shows the worker a random secret in its `hello` and in no other message, so that no other
+script of the origin can connect to the worker under that tab's identity; a tab that replaces its
+worker shows the same secret
+([ADR-0028](./adr/0028-bind-an-identity-on-the-worker-to-a-secret.md)). The worker can reach no
+logger of its own, so it sends the records it writes at `warn` to the tabs, which log them as its
+events ([ADR-0029](./adr/0029-forward-the-workers-records-to-the-tabs.md)).
+
 A worker script that does not load, or that runs another protocol version, sends no welcome in
 this version, and the tabs move to a `BroadcastChannel`
 ([ADR-0007](./adr/0007-broadcastchannel-fallback-transport.md),
