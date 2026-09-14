@@ -12,12 +12,16 @@ import {
   echoConfiguration,
   GRANTED_DEVICE,
   installStandIn,
+  sharedWorkersOf,
   Tab,
   waitForPortHolder,
 } from './support/tab.js';
 
 test.describe('a port shared across tabs', () => {
-  test('is opened once for three tabs, and every tab sees the traffic', async ({ context }) => {
+  test('is opened once for three tabs, and every tab sees the traffic', async ({
+    baseURL,
+    context,
+  }) => {
     await installStandIn(context, GRANTED_DEVICE);
     const first = await Tab.open(context);
     const second = await Tab.open(context);
@@ -49,6 +53,11 @@ test.describe('a port shared across tabs', () => {
       expect(await tab.logEvents()).not.toContain('environment.transport-fallback');
       expect(tab.pageErrors).toEqual([]);
     }
+    // And there is exactly one of them for the three tabs, from the built worker file - the
+    // claim the whole design rests on, which only the browser can be asked about.
+    const workers = await sharedWorkersOf(first);
+    expect(workers).toHaveLength(1);
+    expect(workers[0]?.url).toBe(new URL('/dist/serial-broker.worker.js', baseURL).href);
   });
 
   test('carries bytes from every tab to the device exactly once', async ({ context }) => {
@@ -89,5 +98,32 @@ test.describe('a port shared across tabs', () => {
     // The library chunks at 4 KiB and the stand-in answers in 255-byte reads, so this crosses
     // both boundaries in both directions.
     expect(await tab.receivedPatternLength('Echo')).toBe(40_000);
+  });
+
+  test('decodes text whose characters are cut in half by a read boundary', async ({ context }) => {
+    await installStandIn(context, GRANTED_DEVICE);
+    const first = await Tab.open(context);
+    const second = await Tab.open(context);
+    const tabs = [first, second];
+
+    // `Grüße, 温度` is 15 bytes of UTF-8, and the device answers in reads of 8: 8 and 15 share
+    // no factor, so the boundary walks through every offset of the phrase and `ü`, `ß`, `温`
+    // and `度` are each split between two reads. A decoder that starts afresh on every read
+    // answers with U+FFFD instead.
+    const options = echoConfiguration({ serial: { baudRate: 9600, bufferSize: 8 } });
+    for (const tab of tabs) {
+      await tab.setup('Echo', options);
+      await tab.waitForStatus('Echo', 'open');
+    }
+    const sent = 'Grüße, 温度'.repeat(20);
+
+    await first.send('Echo', sent);
+
+    // In the tab that decoded it and in the tab it was carried to: the text that was sent,
+    // exactly, with nothing lost at a boundary and nothing replaced.
+    for (const tab of tabs) {
+      await tab.waitForReceivedText('Echo', sent);
+      expect(await tab.receivedText('Echo')).toBe(sent);
+    }
   });
 });
