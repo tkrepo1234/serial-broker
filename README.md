@@ -36,7 +36,6 @@ for a production line.
 import { SerialBroker } from 'serial-broker';
 
 await SerialBroker.setup('CardReader', {
-  device: { vendorId: 0x1a86, productId: 0x7523 },
   serial: { baudRate: 9600 },
   encoding: { decodeText: true },
 });
@@ -47,6 +46,10 @@ SerialBroker.subscribe('CardReader', 'onReceive', (event) => {
 
 await SerialBroker.send('CardReader', 'STATUS?');
 ```
+
+No `device` is named: the configuration takes it from the port the user chooses in the browser's
+picker the first time, and remembers it. Name it with `device: { vendorId, productId }` when you
+know the USB IDs and want no picker but the one for that device.
 
 That is the whole integration. Nothing in it says which tab owns the port, and nothing can:
 the coordination is deliberately invisible.
@@ -105,8 +108,8 @@ around that. So connecting has two shapes:
 **The device was granted on an earlier visit.** `setup()` finds it and opens it immediately.
 Nothing else is needed — this is the normal case after the first time.
 
-**The device has never been granted.** `setup()` reports the status
-`awaiting-permission` and waits. Call `requestAccess()` from a click handler:
+**The device has never been granted, or the configuration names none.** `setup()` reports the
+status `awaiting-permission` and waits. Call `requestAccess()` from a click handler:
 
 ```ts
 connectButton.addEventListener('click', async () => {
@@ -127,7 +130,7 @@ calling it again with equivalent options does nothing.
 
 ```ts
 await SerialBroker.setup('Scale', {
-  device: { vendorId: 0x0403, productId: 0x6001 }, // USB vendor and product ID, or { any: true }
+  device: { vendorId: 0x0403, productId: 0x6001 }, // optional: omitted, the chosen port decides
   serial: {
     baudRate: 19200, // required
     dataBits: 8, // 7 | 8                    default 8
@@ -156,23 +159,37 @@ await SerialBroker.setup('Scale', {
 });
 ```
 
+### Letting the user choose the device
+
+Leave `device` out, or pass `{ auto: true }`, and the configuration takes its device from the
+port the user picks in the browser's picker — its USB IDs, or the fact that it has none. It waits
+with `awaiting-permission` until `requestAccess()` has shown the picker, then remembers the choice
+with the configuration, reports it in `getStatus()` (`deviceKind`, `vendorId`, `productId`), and
+shares it with every other tab that set the name up without a device: choose once, in any tab.
+Until the user has chosen, nothing is opened, however many ports are granted. `setup()` and
+`requestAccess()` may follow each other in the same click. See
+[ADR-0036](./docs/adr/0036-take-the-device-identity-from-the-chosen-port.md).
+
 ### Devices without USB IDs
 
 `SerialPort.getInfo()` reports vendor and product IDs **only for USB devices**. A built-in
 RS-232 interface on an industrial PC, a virtual COM port pair, a Bluetooth serial profile:
-none of them report anything to filter on. For those, say so:
+none of them report anything to filter on. Auto mode handles them — it resolves to
+`{ nonUsb: true }` for such a port — and so does naming it:
 
 ```ts
 await SerialBroker.setup('PanelPort', {
-  device: { any: true },
+  device: { nonUsb: true }, // or { any: true }: whatever port the user granted
   serial: { baudRate: 9600 },
 });
 ```
 
-The library then accepts whatever port the user granted, and the picker is shown unfiltered.
+`{ nonUsb: true }` accepts only ports without a USB identity; `{ any: true }` accepts whatever
+port the user granted. Both show the picker unfiltered.
 
 The trade-off is real: with more than one such port granted, the library cannot tell them
-apart — it uses the first and warns. **Use the USB filter whenever the device has IDs.** See
+apart — it uses the first and warns. **Use the USB IDs whenever the device has them**, by naming
+them or by letting the user choose the device. See
 [ADR-0016](./docs/adr/0016-non-usb-devices.md).
 
 ### `send(name, data): Promise<void>`
@@ -302,9 +319,9 @@ origin through the diagnostics observer — which tab owns each port, reconnect 
 writes, settings, locks, and live traffic. It sets nothing up on its own, so opening it never
 moves a port.
 
-It is also the quickest first connection: **Choose a device…** opens the browser's port picker with
-no filter, and the port you pick becomes a configuration — its USB IDs, or _any port_ where it has
-none, with the line settings to confirm. One click connects, with no second prompt.
+It is also the quickest first connection: **Choose a device…** asks for a name and the line
+settings, and **Connect** opens the browser's port picker with no filter. The port you pick becomes
+the configuration's device — its USB IDs, or the fact that it has none — and is remembered.
 
 It is static content. Nothing serves it unless you do, and whether to is your decision: it can send
 bytes to devices and revoke device permissions. Serve it on the application's origin, next to the

@@ -1,8 +1,14 @@
 # ADR-0016: Support ports that are not USB devices
 
-- **Status:** Accepted
+- **Status:** Accepted, amended by [ADR-0036](./0036-take-the-device-identity-from-the-chosen-port.md)
 - **Date:** 2026-09-12
 - **Amends:** ADR-0009 (device identity), which remains the rule for USB devices
+
+> **Amendment (ADR-0036).** The filter has two more shapes: `{ nonUsb: true }`, which matches only
+> ports that report no USB identity - a port reporting one of the two IDs counts as having none -
+> and `{ auto: true }`, also what an omitted `device` means, which takes the device from the port
+> the user chooses and resolves to a USB identity or to `nonUsb`. `any` and a USB filter still do
+> not mix; `nonUsb` is its own kind, compatible with `nonUsb` and with nothing else.
 
 ## Context
 

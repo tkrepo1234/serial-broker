@@ -88,4 +88,5 @@ Every tab has to pass the same `maxTabs`. See
 `configure()` has to run before the first `setup()`. A logger receives structured records from
 every part of serial-broker; see [Diagnostics](../diagnostics.md) for what is logged at which
 level. `device: { any: true }` accepts whatever port the user granted, for ports that report no
-USB vendor or product ID.
+USB vendor or product ID; `{ nonUsb: true }` accepts only such ports, and leaving `device` out
+lets the port the user picks decide (see [`device`](../configuration.md#device)).

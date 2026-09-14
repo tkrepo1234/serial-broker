@@ -18,8 +18,9 @@ function showStatus(status: string): void {
   }
 }
 
+// No `device`: the configuration takes it from the port the user picks, and remembers it. Name
+// one with `device: { vendorId, productId }` to filter the picker to a known USB device.
 await SerialBroker.setup(DEVICE, {
-  device: { vendorId: 0x1a86, productId: 0x7523 },
   serial: { baudRate: 9600 },
   encoding: { decodeText: true },
 });

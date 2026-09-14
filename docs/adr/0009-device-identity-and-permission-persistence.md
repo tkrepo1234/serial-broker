@@ -1,9 +1,15 @@
 # ADR-0009: Identify devices by USB IDs, persist configuration, rely on browser permission
 
 - **Status:** Accepted, amended by [ADR-0022](./0022-version-stored-configurations-separately.md),
-  [ADR-0027](./0027-keep-a-remembered-configuration-while-a-tab-runs-it.md) and
-  [ADR-0033](./0033-one-storage-key-per-configuration.md)
+  [ADR-0027](./0027-keep-a-remembered-configuration-while-a-tab-runs-it.md),
+  [ADR-0033](./0033-one-storage-key-per-configuration.md) and
+  [ADR-0036](./0036-take-the-device-identity-from-the-chosen-port.md)
 - **Date:** 2026-09-12
+
+> **Amendment (ADR-0036).** The device may be left out of the configuration: it is then taken from
+> the port the user chooses in the picker, remembered in the stored entry as the resolution of an
+> auto-mode filter, and shared with the other tabs through the `status` message. `requestAccess()`
+> may also be called by a tab that does not yet know whether another tab holds the port.
 
 > **Amendment (ADR-0027).** `release(name)` removes the stored configuration only when no other tab
 > still runs it with `persist: true`. The stored entry belongs to the origin, and removing it from

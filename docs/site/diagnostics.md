@@ -69,7 +69,8 @@ message.
 | `supervisor.teardown-failed`              | debug | Closing a lost connection failed or timed out at `step`; the next open may find it open.                                              |
 | `supervisor.write-expired`                | debug | A write waited `writeTimeoutMs` behind others and was not begun; `queuedWrites` remain.                                               |
 | `supervisor.sent`, `.received`            | debug | Traffic, with `byteLength`; with `logPayloads`, also `hex`.                                                                           |
-| `matcher.none`                            | debug | No granted port matches the configured device.                                                                                        |
+| `session.device-resolved`                 | info  | A configuration in auto mode took its device from the picker (`source: 'picker'`) or from the tab holding the port (`'holder'`).      |
+| `matcher.none`                            | debug | No granted port matches the configured device, or none is chosen yet (`filter: 'auto'`).                                              |
 | `matcher.ambiguous`                       | warn  | Several granted ports match; the first is used.                                                                                       |
 | `environment.transport-fallback`          | warn  | `SharedWorker` is unavailable or its script did not load; `BroadcastChannel` is used.                                                 |
 | `transport.broker-lost`                   | warn  | The worker left the tab's heartbeats unanswered; a new worker is started.                                                             |
@@ -212,23 +213,24 @@ The page sets nothing up by itself, so opening it to look never makes it take a 
 ### Starting from it
 
 It is also the shortest way to your first connection, before you write any code. Serve `dist/`,
-open `/debug/`, and press **Choose a device…**: the browser's port picker opens with no filter, and
-the port you pick becomes a configuration — its USB IDs, or _any port_ where it reports none, a
-name that is free on this origin, and 9600 baud to change. One **Connect** opens the port, without
-a second prompt, because the picker granted the permission. Send a line on the _Traffic_ panel to
-see the device answer, and copy the settings from the _Settings_ panel into your own `setup()`
-call:
+open `/debug/`, and press **Choose a device…**: the dialog asks for a name that is free on this
+origin and the line settings, starting at 9600 baud, and nothing about the device. **Connect** sets
+the configuration up in auto mode and opens the browser's port picker with no filter, in that same
+click; the port you pick becomes the configuration's device — its USB IDs, or the fact that it has
+none — and is remembered, so no later visit asks again. Send a line on the _Traffic_ panel to see
+the device answer, and copy the settings from the _Settings_ panel into your own `setup()` call,
+with or without the device it resolved to:
 
 ```ts
-await SerialBroker.setup('USB 0x1a86:7523', {
+await SerialBroker.setup('Device', {
   device: { vendorId: 0x1a86, productId: 0x7523 },
   serial: { baudRate: 9600 },
 });
 ```
 
-Closing the picker without choosing changes nothing. If several ports the browser allows match the
-same settings, the dialog says so before you connect: identical devices report identical IDs, and
-the configuration opens the first of them.
+Closing the picker without choosing sets nothing up. If several ports the browser allows match the
+device, the configuration opens the first of them: identical devices report identical IDs, and the
+log says so (`matcher.ambiguous`).
 
 ### Serving it
 

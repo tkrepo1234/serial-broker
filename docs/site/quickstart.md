@@ -17,19 +17,18 @@ the API addresses it by that name.
 import { SerialBroker } from 'serial-broker';
 
 await SerialBroker.setup('Adapter', {
-  device: { vendorId: 0x1a86, productId: 0x7523 },
   serial: { baudRate: 9600 },
   encoding: { decodeText: true },
 });
 ```
 
-`vendorId` and `productId` identify the kind of USB device. On Windows they are in Device Manager
-under the device's _Hardware Ids_ (`VID_1A86&PID_7523`); on Linux, `lsusb` prints them.
-
-If you would rather not look them up, the [debugging surface](diagnostics.md) reads them off the
-device: serve `dist/`, open `/debug/`, press **Choose a device…**, and pick your port. It connects
-to it there and then, and its _Settings_ panel shows the values for the call above — including the
-ones for a port that has no USB IDs at all.
+No device is named: the configuration takes it from the port the user picks in the browser's
+picker the first time (step 3), remembers it, and shares it with the other tabs. To name the
+device instead, pass `device: { vendorId: 0x1a86, productId: 0x7523 }`: the USB IDs identify the
+kind of device, the picker is then filtered to it, and nothing else is ever offered. On Windows the
+IDs are in Device Manager under the device's _Hardware Ids_ (`VID_1A86&PID_7523`); on Linux,
+`lsusb` prints them; and the [debugging surface](diagnostics.md) shows them in its _Settings_
+panel once a device has been chosen there.
 
 `setup()` resolves as soon as the configuration is registered. It does not wait for the port to
 open, because that may need the user — see step 3.
@@ -54,9 +53,10 @@ bytes; `event.text` is there because `decodeText` is enabled.
 
 ## 3. Ask for permission, once
 
-The first time, the browser has not been told which port the device is, and it will only show its
+The first time, nobody has chosen which port the device is, and the browser will only show its
 port picker in response to a click. The status becomes `awaiting-permission` and stays there until
-you ask:
+you ask. The picker is unfiltered, and the port the user picks becomes the configuration's device,
+for this visit, every later one, and every tab:
 
 ```ts
 connectButton.addEventListener('click', () => {

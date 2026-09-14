@@ -133,14 +133,17 @@ raise nothing, and `exists()` answers `false`.
 `CONFIGURATION_CONFLICT`
 : **Raised by** `setup()` for a name already set up in this tab with a different device, baud rate,
 data bits, stop bits, parity, flow control, buffer size or `maxTabs`. Other differences are ignored,
-and identical options make the second `setup()` a no-op.
+and identical options make the second `setup()` a no-op. A `device` in auto mode never conflicts
+with one in auto mode, an unresolved one conflicts with no device at all, and a resolved one counts
+as the device it resolved to (see [`device`](configuration.md#device)).
 **Delivered through `onError`**, in every tab, when a tab finds the tab holding the port running
 the configuration with a different `maxTabs`. That tab withdraws and shows `failed`; its pending
 writes, and every `send()` there until it is released, are rejected with this error.
 **Context:** from `setup()`, `existing` and `requested`, the two device filters in their normalised
-form (`{ kind: 'usb', vendorId, productId }` or `{ kind: 'any' }`), which are equal when only the
-line settings or the tab limit differ; through `onError`, for a differing tab limit, `maxTabs` of
-the tab that withdrew and `holdingTabMaxTabs` of the tab holding the port.
+form (`{ kind: 'usb', vendorId, productId }`, `{ kind: 'non-usb' }`, `{ kind: 'any' }` or
+`{ kind: 'auto', resolved }`, where `resolved` is one of the first two or `undefined`), which are
+equal when only the line settings or the tab limit differ; through `onError`, for a differing tab
+limit, `maxTabs` of the tab that withdrew and `holdingTabMaxTabs` of the tab holding the port.
 **Do:** `release()` the configuration first, then set it up with the new options. See
 [Restoring, releasing and forgetting](examples/all-features.md#restoring-releasing-and-forgetting)
 for the typical case of a remembered configuration from an older version of the application.
@@ -199,10 +202,12 @@ every tab uses; see [The worker script](installing.md#the-worker-script).
 ### Permission
 
 `PERMISSION_REQUIRED`
-: **Raised by** `requestAccess()` in a tab that does not hold the port, whenever the status is not
-`open` — `awaiting-permission`, but also `connecting`, `reconnecting`, `failed`, and `queued`, where
-the message says the tab is waiting for a place. Only the tab holding the port can use the user's
-choice.
+: **Raised by** `requestAccess()` in a tab that knows another tab holds the port, whenever the
+status is not `open` — `awaiting-permission`, but also `connecting`, `reconnecting`, `failed`, and
+`queued`, where the message says the tab is waiting for a place. Only the tab holding the port can
+use the user's choice. Not raised in a tab that has just set the configuration up and has not yet
+heard who holds the port: it may ask in the same click as `setup()`, and its choice is used once
+it holds the port.
 **Context:** `status`.
 **Do:** in practice, show the button only in response to `awaiting-permission`, which is reported
 in every tab, and show this error if it occurs anyway: the button may be clicked in a tab that does
@@ -221,8 +226,12 @@ most common cause is an `await` before the call, which uses up the gesture.
 **Do:** call `requestAccess()` as the first thing in the event handler.
 
 `DEVICE_MISMATCH`
-: **Raised by** `requestAccess()` when the chosen port's USB IDs differ from the configured ones.
-**Context:** `expectedVendorId`, `expectedProductId`, `actualVendorId`, `actualProductId`.
+: **Raised by** `requestAccess()` when the chosen port is not the configured device: its USB IDs
+differ from the configured ones, or it reports a USB identity where `{ nonUsb: true }` was
+configured. Not raised for a configuration in auto mode that has not resolved — the chosen port
+becomes its device — but for one that has, as for the device it resolved to.
+**Context:** `expectedDevice` (`'usb'` or `'non-usb'`), `expectedVendorId`, `expectedProductId`,
+`actualVendorId`, `actualProductId`.
 **Do:** compare the IDs. An adapter from a different production run sometimes reports different
 ones; configure the IDs the device really reports.
 
