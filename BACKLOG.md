@@ -125,6 +125,14 @@ do, because it needs a decision, a protocol change or a real browser:
   write messages in between are lost. Needs a real browser to confirm.
 - The fake worker keeps every routed message, which grows test memory in long runs.
 
+### Declarations
+
+- The internal declaration files (`dist/owner/port-supervisor.d.ts`, `dist/environment/environment.d.ts`
+  and a few more) still name the ambient Web Serial types, so they need `@types/w3c-web-serial` to
+  type-check. No export path reaches them, and `scripts/check-dist.mjs` checks that the published
+  entry points do not; structural types in `src/environment/environment.ts` would make them clean
+  too.
+
 ---
 
 ## Open findings from the bug hunt of 2026-09-13
