@@ -139,11 +139,6 @@ export class WorkerPorts<Port extends WorkerPort> {
     return this.#ports.size;
   }
 
-  /** The identity a port said hello as, if it has. */
-  identityOf(port: Port): ClientId | undefined {
-    return this.#identities.get(port);
-  }
-
   /** Handles one message as it arrived on `port`. Never throws. */
   receive(port: Port, raw: unknown): void {
     const result = decodeMessage(raw);
