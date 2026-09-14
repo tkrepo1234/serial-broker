@@ -100,6 +100,7 @@
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "test:browser": "npm run build && playwright test",
+    "test:extreme": "node scripts/test-extreme.mjs",
     "docs": "node docs/site/build.mjs",
     "debug": "npm run build && npx --yes serve dist",
     "verify": "npm run format:check && npm run lint && npm run typecheck && npm run test:coverage && npm run build",

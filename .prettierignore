@@ -15,3 +15,7 @@ examples/*/.svelte-kit
 examples/*/.vite
 examples/openui5/webapp/serial-broker
 examples/openui5/.ui5-tooling-modules
+
+# The extreme suite's records of its last run, written by the runs themselves.
+test/integration/extreme/RESULTS.md
+test/browser/extreme/RESULTS.md
