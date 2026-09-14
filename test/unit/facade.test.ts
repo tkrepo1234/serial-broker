@@ -284,6 +284,29 @@ describe('SerialBroker', () => {
       );
     });
 
+    it('gives the errors of its own checks the time they arose, with or without a client', async () => {
+      const now = vi.spyOn(Date, 'now').mockReturnValue(1_700_000_000_000);
+      const atThatTime: unknown = expect.objectContaining({
+        code: SerialBrokerErrorCode.INVALID_ARGUMENT,
+        timestamp: 1_700_000_000_000,
+      });
+      try {
+        expect(() => {
+          SerialBroker.configure(null as never);
+        }).toThrow(atThatTime);
+        expect(() => {
+          SerialBroker.unsubscribe(42 as never, 'onReceive', () => undefined);
+        }).toThrow(atThatTime);
+        await expect(SerialBroker.release('Reader', 7 as never)).rejects.toThrow(atThatTime);
+        await expect(SerialBroker.releaseAll(7 as never)).rejects.toThrow(atThatTime);
+
+        await SerialBroker.setup('Reader', READER_OPTIONS);
+        await expect(SerialBroker.release('Reader', 7 as never)).rejects.toThrow(atThatTime);
+      } finally {
+        now.mockRestore();
+      }
+    });
+
     it('acts on forgetDevice as it was when release() was called, not once the port has closed', async () => {
       await SerialBroker.setup('Reader', READER_OPTIONS);
       await settle();

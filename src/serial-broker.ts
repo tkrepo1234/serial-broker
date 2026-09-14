@@ -1,4 +1,5 @@
 import { SerialBrokerClient } from './client/serial-broker-client.js';
+import { withTimestamp } from './core/errors.js';
 import type {
   ReleaseOptions,
   SendableData,
@@ -15,6 +16,7 @@ import {
   validateName,
 } from './core/validation.js';
 import {
+  BROWSER_CLOCK,
   createBrowserEnvironment,
   isSupported as isPlatformSupported,
 } from './environment/browser.js';
@@ -357,6 +359,20 @@ function client(): SerialBrokerClient {
 }
 
 /**
+ * Runs a check from core code, filling in the time of the error it throws (see `withTimestamp`).
+ *
+ * The client does the same for the checks it runs; these are the ones the facade runs itself,
+ * before or without a client.
+ */
+function checked<T>(check: () => T): T {
+  try {
+    return check();
+  } catch (error) {
+    throw withTimestamp(error, BROWSER_CLOCK.now());
+  }
+}
+
+/**
  * Shared access to a serial port across every tab of an origin.
  *
  * One tab holds the physical port; every tab can read from it and write to it. When that tab
@@ -398,19 +414,24 @@ export const SerialBroker: SerialBrokerApi = {
       // Nothing is set up, so there is nothing to release - and no reason to build a client,
       // which would throw in a browser without Web Serial. A disposal under way may still be
       // closing the port, though.
-      validateName(name);
-      normalizeReleaseOptions(options);
+      checked(() => {
+        validateName(name);
+        normalizeReleaseOptions(options);
+      });
       await disposing;
       return;
     }
     // Checked, and read once, before anything is released: an invalid value must leave the
     // configuration running, and the client reads the options only after the port has closed.
-    await instance.release(name, normalizeReleaseOptions(options));
+    await instance.release(
+      name,
+      checked(() => normalizeReleaseOptions(options)),
+    );
   },
 
   /** {@inheritDoc SerialBrokerApi.releaseAll} */
   async releaseAll(options) {
-    const releaseOptions = normalizeReleaseOptions(options);
+    const releaseOptions = checked(() => normalizeReleaseOptions(options));
     await instance?.releaseAll(releaseOptions);
     await disposing;
   },
@@ -430,7 +451,7 @@ export const SerialBroker: SerialBrokerApi = {
     if (instance === undefined) {
       // Nothing is set up, so no listener can be registered - and building a client to find
       // that out would throw in a browser without Web Serial.
-      validateName(name);
+      checked(() => validateName(name));
       return;
     }
     instance.unsubscribe(name, event, listener);
@@ -469,7 +490,7 @@ export const SerialBroker: SerialBrokerApi = {
   configure(options) {
     // Validated and copied now: the client reads the settings only when it is built, which may be
     // long after this call, and must find the values that were checked.
-    const validated = normalizeGlobalOptions(options);
+    const validated = checked(() => normalizeGlobalOptions(options));
     globalOptions = { ...globalOptions, ...validated };
     // The client has already read the settings it was built with. Silence would leave an
     // application wondering why its worker URL or logger is not used.

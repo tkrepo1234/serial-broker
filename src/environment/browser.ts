@@ -77,7 +77,11 @@ export function createBrowserEnvironment(
   };
 }
 
-const BROWSER_CLOCK: Clock = {
+/**
+ * The platform's clock. Exported for the facade, which checks arguments before any environment
+ * exists and must still give the errors it throws the time they arose.
+ */
+export const BROWSER_CLOCK: Clock = {
   now: () => Date.now(),
   setTimer: (callback, delayMs) => setTimeout(callback, delayMs),
   clearTimer: (handle) => {
