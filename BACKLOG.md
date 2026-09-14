@@ -125,6 +125,57 @@ test:browser`, ADR-0035); the Web Serial stand-in in `test/browser/stand-in/` is
 
 ---
 
+## Complexity and code reduction (Tim, 2026-09-14)
+
+**Requested by Tim, 2026-09-14, to start once the work in progress on that day is merged.** After
+many iterations everything has grown - on 2026-09-14: 12 900 lines in `src/` (50 files), 21 300
+lines of tests (89 files), 9 500 lines of Markdown, 36 ADRs, 19 protocol message types. The
+library's complexity has to come down sharply, above all the synchronisation protocol. Shrinking
+after this many iterations is what hardens the product now.
+
+### Scope
+
+- **The synchronisation protocol.** Fewer message types, fewer states, fewer special cases. Each of
+  the layers added over time - terms, term locks, tab slots, persistence holds, accepted writes,
+  owner terms, pending writes, late deadlines, rate limits, record forwarding - is questioned:
+  what does it protect against, is there a simpler mechanism that covers the same case, can two of
+  them become one? The guarantees stay (at-most-once writes, failover without cooperation,
+  exclusive use, no coordination vocabulary on the public surface); the machinery that provides
+  them shrinks.
+- **Code.** Remove what is dead, duplicated or only there for a case that no longer exists; merge
+  modules that only exist to be small; make the remaining code read top-down. Measure before and
+  after (lines, files, message types, cyclomatic complexity where a tool gives it).
+- **Documentation.** Find duplicated statements across README, the site chapters, ADRs,
+  SECURITY.md, CONTRIBUTING.md, the guidelines and TSDoc, and keep each fact in one place with
+  links from the others. Check every statement against the code (documentation drift) and every
+  documented behaviour against a test (code drift). Shorten.
+- **ADR roll-up.** Merge ADRs that amend each other into one current decision each (with the
+  history kept as a short "superseded" trail), retire ADRs whose decision no longer exists, and
+  renumber nothing - a superseded ADR keeps its number and points forward.
+- **Tests.** Walk the whole test base for duplicates (the same behaviour pinned twice under
+  different names, in unit and integration alike), for tests of code that is gone, for tests that
+  assert an implementation rather than a contract, and for slow tests that a faster one covers.
+  Keep the scenario matrix in docs/guidelines/testing.md as the yardstick for what must remain.
+- **The project directory.** A thorough clean-up: leftover files, scripts nobody runs, generated
+  artefacts, stale configuration, `.gitignore` and ignore lists that name things that no longer
+  exist, the top-level layout.
+
+### Definition of done
+
+- [ ] A written inventory before the work starts: what each protocol mechanism protects against,
+      what each ADR decides, what each test file pins; and the same inventory afterwards.
+- [ ] `src/` is materially smaller with every scenario of docs/guidelines/testing.md still green,
+      the real-browser and hardware suites included; the numbers before and after are in the
+      CHANGELOG.
+- [ ] Every fact in the documentation lives in exactly one place; a drift check (docs against
+      code, code against tests) is recorded with its findings resolved.
+- [ ] The ADR index shows only current decisions plus a short superseded trail.
+- [ ] No two tests pin the same behaviour; no test covers code that is gone.
+- [ ] The repository root and every directory contain only what is used, and a reader can tell
+      what each is for from the top-level README.
+
+---
+
 ## Performance tests, example apps and a usability review
 
 **Requested by Tim, 2026-09-14. Scheduled after the hardening round.** Test the software the way
