@@ -13,7 +13,7 @@ entry points only, never through `src/`. Each one lives in its own directory wit
 | `openui5/`             | SAP OpenUI5: a reusable integration module (`JSONModel`) and an application using it.   |
 | `react/`               | React: a `useSerialBroker` hook.                                                        |
 | `vue/`                 | Vue 3: a composable.                                                                    |
-| `svelte/`              | Svelte 5: a store.                                                                      |
+| `svelte/`              | Svelte 5: `createSerialBroker()`, reactive state through runes, and an app using it.    |
 | `angular/`             | Angular: a service with signals.                                                        |
 
 ## The contract every example keeps
