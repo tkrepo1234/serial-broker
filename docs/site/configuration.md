@@ -63,8 +63,11 @@ the user chooses. Given, it is exactly one of four shapes; passing two at once i
   shape it resolved to — matching, picker filter, `getStatus()` — and stays in auto mode.
 - **Remembered:** the resolved device is written into the remembered configuration as
   `{ auto: true, resolved: { vendorId, productId } }` or `{ auto: true, resolved: { nonUsb: true } }`,
-  so `restore()` and a later visit reconnect without a prompt. Passing `resolved` yourself seeds
-  the resolution.
+  so a later visit reconnects without a prompt, with `restore()` or `setup()` alike: `setup()` in
+  auto mode takes the device from the configuration remembered under the same name. Only a
+  remembered auto-mode resolution is taken — not a device the remembered configuration named
+  explicitly — and nothing is taken with `persist: false`. Passing `resolved` yourself seeds the
+  resolution, and wins over the remembered one.
 - **Shared:** a tab in auto mode adopts the device of the tab holding the port, whether that tab
   chose it in the picker or named it. Choose it once, in any tab.
 - **Keep in mind:** until the user has chosen, an auto-mode configuration matches no granted port,

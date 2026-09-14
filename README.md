@@ -48,9 +48,9 @@ await SerialBroker.send('CardReader', 'STATUS?');
 ```
 
 No `device` is named: the configuration takes it from the port the user chooses in the browser's
-picker the first time, and remembers it; `SerialBroker.restore()` before `setup()` brings it back on
-a later visit. Name it with `device: { vendorId, productId }` when you know the USB IDs and want no
-picker but the one for that device.
+picker the first time, and remembers it: on a later visit, `setup()` opens it with no prompt. Name
+it with `device: { vendorId, productId }` when you know the USB IDs and want no picker but the one
+for that device.
 
 That is the whole integration. Nothing in it says which tab owns the port, and nothing can:
 the coordination is deliberately invisible.

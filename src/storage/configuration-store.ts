@@ -144,7 +144,10 @@ export class ConfigurationStore {
     }
 
     if (
-      !this.#write(storageEntryKey(configuration.name), JSON.stringify(toStorable(configuration)))
+      !this.#write(
+        storageEntryKey(configuration.name),
+        JSON.stringify(toStorable(this.#keepingStoredResolution(configuration))),
+      )
     ) {
       // An entry that was not written must not be listed: the next restore would find a name with
       // nothing under it and forget it again, having told the application it was remembered.
@@ -172,6 +175,55 @@ export class ConfigurationStore {
     if (this.#writeIndex(names.filter((listed) => listed !== name))) {
       this.#removeEntry(name);
     }
+  }
+
+  /**
+   * Reads the one remembered configuration of that name, or `undefined` if there is none to use.
+   *
+   * Quiet: unlike {@link load}, it reports nothing, repairs nothing and removes nothing. It is read
+   * on the way to a save of the same name (`setup()`), which writes over whatever it found and
+   * reports a storage that refuses; reporting here as well would say the same thing twice, and to
+   * nobody - the configuration has no listeners yet. A name the index does not list is not
+   * remembered, even if an entry is left under it.
+   */
+  find(name: string): NormalizedConfiguration | undefined {
+    try {
+      const index: unknown = JSON.parse(this.storage.getItem(storageIndexKey()) ?? '[]');
+      if (!Array.isArray(index) || !index.includes(name)) {
+        return undefined;
+      }
+      const raw = this.storage.getItem(storageEntryKey(name));
+      return raw === null ? undefined : normalizeConfiguration(name, JSON.parse(raw));
+    } catch (error) {
+      this.logger.debug('could not read a remembered configuration', {
+        configName: name,
+        event: 'storage.lookup-failed',
+        reason: describeUnknown(error),
+      });
+      return undefined;
+    }
+  }
+
+  /**
+   * An auto-mode configuration that has not resolved keeps the device a remembered entry of the
+   * same name resolved to (ADR-0036, amended 2026-09-15).
+   *
+   * `setup()` already starts such a configuration with the remembered device, so this matters only
+   * where another tab resolved the name after this tab set it up and before this tab saved again -
+   * its persistence hold is granted later. The resolution is what that tab chose; an unresolved
+   * configuration has chosen nothing, and writing over the choice would cost the next visit a
+   * prompt. Anything else - an explicit device, a resolution of its own - replaces the entry.
+   */
+  #keepingStoredResolution(configuration: NormalizedConfiguration): NormalizedConfiguration {
+    const device = configuration.device;
+    if (device.kind !== 'auto' || device.resolved !== undefined) {
+      return configuration;
+    }
+    const stored = this.find(configuration.name)?.device;
+    if (stored?.kind !== 'auto' || stored.resolved === undefined) {
+      return configuration;
+    }
+    return { ...configuration, device: stored };
   }
 
   /** Reads one entry, discarding it if it is there and cannot be used. */

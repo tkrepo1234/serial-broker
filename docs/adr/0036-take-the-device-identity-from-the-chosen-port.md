@@ -194,3 +194,59 @@ differently converging on the holder's device. `test/integration/multi-tab/hosti
 posts a status naming a device in a script's own name and in the holder's name for an invented
 term, and shows that neither is adopted. `test/unit/debug-surface.test.ts` pins the page's part:
 auto mode by default, a resolution kept through the edit dialog, and the summaries.
+
+## Amendment (2026-09-15): `setup()` takes the remembered device
+
+The decision said that "`restore()` and a later visit" reconnect without a prompt. Only `restore()`
+did. `setup()` never read the remembered configurations, so an auto-mode configuration set up on a
+later visit started unresolved and waited with `awaiting-permission` although its port was granted;
+and it saved itself unresolved, over the entry that held the device, so a `restore()` after it
+waited too. The usability review of 2026-09-14 (finding U3, proposal P1) measured it, and the
+documentation worked around it by calling `restore()` before `setup()`. That workaround is reverted
+with this amendment.
+
+**`setup()` in auto mode starts with the remembered resolution.** When `setup()` creates a
+configuration in auto mode that has not resolved and is set up with `persist: true`, it reads the
+remembered entry of the same name. If that entry is in auto mode and has resolved, the new
+configuration starts resolved to that device, exactly as if the call had passed `resolved`: it finds
+the granted port without a prompt, reports the device, and saves the resolution back. The log
+records it as `session.device-resolved` with `source: 'remembered'`.
+
+- **What the call says wins.** An explicit `device`, or a `resolved` passed to `setup()`, is used as
+  given; nothing remembered is read.
+- **Only an auto-mode resolution is taken.** A remembered entry that names its device explicitly -
+  USB IDs, `{ any: true }` or `{ nonUsb: true }` - is not turned into a resolution. None of them was
+  chosen by the user in auto mode, and the second decision above promises the device the user
+  chose, not one that happens to be named somewhere; `any` is not a device at all. Such an entry
+  stays what it was until the auto-mode configuration saves over it, as any `setup()` of a
+  different shape does.
+- **`persist: false` takes nothing.** A configuration that is not remembered does not use what is
+  remembered either; it forgets the entry, as before (ADR-0027).
+- **The conflict rules are unchanged.** The entry is read only for a name not yet set up in the tab.
+  A second `setup()` is judged against the configuration that runs, so an unresolved auto-mode call
+  still conflicts with nothing, and no remembered device can make it conflict.
+
+**A save does not replace a stored resolution with nothing.** Saving an auto-mode configuration
+that has not resolved keeps the resolution a stored auto-mode entry of the same name holds. With
+`setup()` seeding, this matters only in a race: another tab resolves the name after this tab set it
+up and before this tab's persistence hold is granted and saves again. The other tab's choice is
+kept. Any other save - an explicit device, or a resolution of its own - replaces the entry as
+before.
+
+To choose a different device, release the configuration: the last tab to release it forgets the
+entry (ADR-0027), and the next `setup()` waits for the user. `release({ forgetDevice: true })`
+also revokes the permission.
+
+Considered and rejected: **letting `restore()` stay the only reader.** It made the path the
+Quickstart teaches ask the user again on every visit, and destroy the choice it asked for.
+**Seeding from any remembered device** - an explicit USB entry would, after all, resolve cleanly. It
+would change an auto-mode configuration into a device nobody chose in that mode, which is the guess
+this ADR rejects for the single granted port.
+
+_Verification:_ `test/integration/multi-tab/auto-device.test.ts`, in both transport modes: a later
+visit that calls only `setup()` opens the remembered device without a prompt; the entry it saves
+keeps the resolution; `restore()` after such a `setup()`, and on the visit after it, still
+reconnects; an explicit `setup()` ignores a remembered auto-mode resolution of its name. Beside them:
+entries naming USB IDs, `any` or `nonUsb` are not taken, `persist: false` takes nothing, and a
+`resolved` passed to `setup()` wins. `test/unit/configuration-store.test.ts` covers the quiet
+lookup and the save that keeps a stored resolution.

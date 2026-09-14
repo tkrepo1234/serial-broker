@@ -239,7 +239,7 @@ export class SerialBrokerClient {
     const session: ConfigurationSession = new ConfigurationSession(
       this.environment,
       this.#ensureTransport(),
-      configuration,
+      this.#withRememberedDevice(configuration),
       this.#logger.child({ configName: configuration.name }),
       () => {
         this.#rememberResolution(session);
@@ -263,6 +263,42 @@ export class SerialBrokerClient {
     // `setup` is asynchronous so that a future version can await something here without a
     // breaking change, and so callers write `await setup(...)` from the start.
     await Promise.resolve();
+  }
+
+  /**
+   * Starts an auto-mode configuration with the device its remembered entry resolved to (ADR-0036,
+   * amended 2026-09-15), so that a later visit calling only `setup()` reconnects without a prompt,
+   * as `restore()` does, and saves the resolution back rather than a configuration waiting again.
+   *
+   * Read only for a new configuration: a name already set up in this tab is judged against what it
+   * runs, so `CONFIGURATION_CONFLICT` is decided as before. Taken only from an entry in auto mode
+   * that has resolved: an entry naming its device explicitly was not chosen by the user in this
+   * mode, and `any` is not a device. Not taken for a configuration set up with `persist: false`,
+   * which does not use what is remembered, nor for one that passes `resolved` itself, or names its
+   * device - what the call says wins.
+   */
+  #withRememberedDevice(configuration: NormalizedConfiguration): NormalizedConfiguration {
+    const device = configuration.device;
+    if (!configuration.persist || device.kind !== 'auto' || device.resolved !== undefined) {
+      return configuration;
+    }
+    const remembered = this.#store.find(configuration.name)?.device;
+    if (remembered?.kind !== 'auto' || remembered.resolved === undefined) {
+      return configuration;
+    }
+    const resolved = remembered.resolved;
+    this.#logger.info('auto mode resolved the device', {
+      configName: configuration.name,
+      event: 'session.device-resolved',
+      source: 'remembered',
+      device: resolved.kind,
+      vendorId: resolved.kind === 'usb' ? resolved.vendorId : undefined,
+      productId: resolved.kind === 'usb' ? resolved.productId : undefined,
+    });
+    return Object.freeze({
+      ...configuration,
+      device: Object.freeze({ kind: 'auto' as const, resolved }),
+    });
   }
 
   /**
