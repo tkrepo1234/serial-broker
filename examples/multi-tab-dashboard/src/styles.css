@@ -1,0 +1,440 @@
+/*
+ * A plain, legible look for an operator's screen: neutral greys, one accent, and a colour per
+ * tone that reads at a distance. Nothing here is required by the library.
+ */
+
+:root {
+  --ink: #1d232a;
+  --ink-muted: #5b6672;
+  --paper: #f4f6f8;
+  --panel: #ffffff;
+  --line: #d5dbe1;
+  --accent: #1f5fa8;
+  --ok: #1d7a3e;
+  --busy: #a8650f;
+  --attention: #1f5fa8;
+  --problem: #b3261e;
+  --neutral: #5b6672;
+  --info-bg: #eaf1fb;
+  --problem-bg: #fbeceb;
+  font-family:
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    Roboto,
+    sans-serif;
+  color: var(--ink);
+  background: var(--paper);
+}
+
+body {
+  margin: 0;
+  padding: 1rem 1.25rem 2rem;
+  line-height: 1.45;
+}
+
+h1 {
+  font-size: 1.4rem;
+  margin: 0;
+}
+
+h2 {
+  font-size: 1rem;
+  margin: 0 0 0.6rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--ink-muted);
+}
+
+h3 {
+  font-size: 0.95rem;
+  margin: 1rem 0 0.3rem;
+}
+
+code {
+  font-family: ui-monospace, Consolas, 'Cascadia Mono', monospace;
+  font-size: 0.9em;
+}
+
+.muted {
+  color: var(--ink-muted);
+  font-size: 0.9rem;
+  margin: 0.25rem 0;
+}
+
+.note {
+  color: var(--ink-muted);
+  font-size: 0.9rem;
+}
+
+.masthead {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  justify-content: space-between;
+  align-items: flex-end;
+  margin-bottom: 1rem;
+}
+
+.tagline {
+  margin: 0.2rem 0 0;
+  color: var(--ink-muted);
+}
+
+.tab-identity {
+  display: flex;
+  gap: 1rem;
+  align-items: baseline;
+}
+
+.dashboard {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(22rem, 1fr));
+  align-items: start;
+}
+
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 1rem;
+}
+
+.panel-diagnostics,
+.error-strip {
+  grid-column: 1 / -1;
+}
+
+/* --- Error strip ---------------------------------------------------------------------------- */
+
+.error-strip {
+  border: 1px solid var(--problem);
+  border-left-width: 6px;
+  border-radius: 6px;
+  background: var(--problem-bg);
+  padding: 0.75rem 1rem;
+}
+
+.error-strip[data-tone='info'] {
+  border-color: var(--attention);
+  background: var(--info-bg);
+}
+
+.error-strip-head {
+  display: flex;
+  gap: 0.75rem;
+  align-items: baseline;
+}
+
+.error-context {
+  font-weight: 600;
+}
+
+.error-code {
+  font-weight: 600;
+  color: var(--problem);
+}
+
+.error-strip[data-tone='info'] .error-code {
+  color: var(--attention);
+}
+
+.error-strip-head .link-button {
+  margin-left: auto;
+}
+
+.error-message {
+  margin: 0.4rem 0;
+}
+
+.error-remediation-label {
+  margin: 0.5rem 0 0;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--ink-muted);
+}
+
+.error-remediation {
+  margin: 0.1rem 0 0;
+}
+
+/* --- Status --------------------------------------------------------------------------------- */
+
+.status-line {
+  margin: 0;
+}
+
+.status {
+  display: inline-block;
+  font-size: 1.5rem;
+  font-weight: 650;
+  padding: 0.1rem 0.6rem;
+  border-radius: 4px;
+  border-left: 6px solid var(--neutral);
+  color: var(--neutral);
+}
+
+[data-tone='ok'] {
+  color: var(--ok);
+  border-color: var(--ok);
+}
+
+[data-tone='busy'] {
+  color: var(--busy);
+  border-color: var(--busy);
+}
+
+[data-tone='attention'] {
+  color: var(--attention);
+  border-color: var(--attention);
+}
+
+[data-tone='problem'] {
+  color: var(--problem);
+  border-color: var(--problem);
+}
+
+[data-tone='neutral'] {
+  color: var(--neutral);
+  border-color: var(--neutral);
+}
+
+.status-hint {
+  margin: 0.5rem 0 0.75rem;
+  min-height: 2.9em;
+}
+
+.legend {
+  margin-top: 0.75rem;
+  font-size: 0.9rem;
+}
+
+/* The legend is a table of sentences: while it is open, the status panel takes the full width. */
+.panel-status:has(.legend[open]) {
+  grid-column: 1 / -1;
+}
+
+.legend summary {
+  cursor: pointer;
+  color: var(--ink-muted);
+}
+
+.legend table {
+  margin-top: 0.5rem;
+}
+
+.legend tr.current {
+  background: var(--info-bg);
+}
+
+.legend tr.current td:first-child {
+  font-weight: 600;
+}
+
+/* --- Controls ------------------------------------------------------------------------------- */
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+  margin: 0.5rem 0;
+}
+
+button {
+  font: inherit;
+  padding: 0.35rem 0.8rem;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--panel);
+  color: var(--ink);
+  cursor: pointer;
+}
+
+button:hover:not(:disabled) {
+  border-color: var(--accent);
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+button.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+.link-button {
+  border: none;
+  background: none;
+  color: var(--accent);
+  padding: 0;
+  text-decoration: underline;
+}
+
+.checkbox {
+  display: inline-flex;
+  gap: 0.4rem;
+  align-items: center;
+  margin: 0.25rem 0;
+}
+
+input[type='text'] {
+  font: inherit;
+  padding: 0.35rem 0.5rem;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  flex: 1 1 10rem;
+  min-width: 0;
+}
+
+/* --- Traffic -------------------------------------------------------------------------------- */
+
+.received {
+  list-style: none;
+  margin: 0;
+  padding: 0.5rem;
+  height: 14rem;
+  overflow-y: auto;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: #fbfcfd;
+  font-family: ui-monospace, Consolas, 'Cascadia Mono', monospace;
+  font-size: 0.85rem;
+}
+
+.received li {
+  display: grid;
+  grid-template-columns: 5.5rem 6.5rem 1fr;
+  gap: 0.5rem;
+  padding: 0.1rem 0;
+}
+
+.received time {
+  color: var(--ink-muted);
+}
+
+.entry-kind {
+  color: var(--ink-muted);
+}
+
+.received li[data-kind='received'] .entry-kind {
+  color: var(--ok);
+}
+
+.received li[data-kind='sent-elsewhere'] .entry-kind {
+  color: var(--attention);
+}
+
+.entry-text {
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.received-partial {
+  margin: 0.25rem 0 0;
+  font-family: ui-monospace, Consolas, 'Cascadia Mono', monospace;
+  font-size: 0.85rem;
+  color: var(--ink-muted);
+}
+
+.send-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+  margin-top: 0.75rem;
+}
+
+/* --- Peers ---------------------------------------------------------------------------------- */
+
+.peers {
+  list-style: none;
+  margin: 0.5rem 0 0;
+  padding: 0;
+}
+
+.peers li {
+  padding: 0.2rem 0;
+  border-top: 1px solid var(--line);
+}
+
+.peers li[data-status='open'] .peer-status {
+  color: var(--ok);
+}
+
+.peers li[data-status='connecting'] .peer-status,
+.peers li[data-status='reconnecting'] .peer-status,
+.peers li[data-status='queued'] .peer-status {
+  color: var(--busy);
+}
+
+.peers li[data-status='awaiting-permission'] .peer-status {
+  color: var(--attention);
+}
+
+.peers li[data-status='failed'] .peer-status {
+  color: var(--problem);
+}
+
+/* --- Tables and the log ------------------------------------------------------------------- */
+
+.table-scroll {
+  overflow-x: auto;
+}
+
+table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 0.9rem;
+}
+
+th,
+td {
+  text-align: left;
+  padding: 0.3rem 0.5rem;
+  border-bottom: 1px solid var(--line);
+  vertical-align: top;
+}
+
+th {
+  color: var(--ink-muted);
+  font-weight: 600;
+}
+
+#diagnostics tr[data-role='owner'] td:nth-child(2) {
+  color: var(--ok);
+  font-weight: 600;
+}
+
+.library-log {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  font-size: 0.85rem;
+}
+
+.library-log li {
+  display: grid;
+  grid-template-columns: 5.5rem 16rem 1fr;
+  gap: 0.5rem;
+  padding: 0.15rem 0;
+  border-top: 1px solid var(--line);
+}
+
+.library-log li[data-level='error'] code {
+  color: var(--problem);
+}
+
+.library-log li[data-level='warn'] code {
+  color: var(--busy);
+}
+
+.library-log:empty::before {
+  content: 'Nothing so far.';
+  color: var(--ink-muted);
+}

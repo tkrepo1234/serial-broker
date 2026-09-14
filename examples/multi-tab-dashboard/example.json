@@ -1,0 +1,7 @@
+{
+  "name": "multi-tab-dashboard",
+  "port": 8152,
+  "start": "npm start",
+  "readyPath": "/",
+  "summary": "Several tabs on one device: every status named, errors with code and remediation, the permission flow, remembering and restoring, what the other tabs see, and the diagnostics entry point."
+}
