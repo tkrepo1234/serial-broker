@@ -77,10 +77,22 @@ coordinate with each other. See
 - New log records: `supervisor.teardown-failed`, `client.dispose-failed`,
   `transport.dispose-failed`, and the `transport.*` records of a worker that stopped answering.
 - The package requires Node 22.13 or later to build and test, as the toolchain does.
+- A clean handover no longer fails a write that succeeded, or writes one twice: messages carry the
+  term of holding the port, and a started write is failed with `OWNER_LOST_DURING_WRITE` only once
+  that term has provably ended (ADR-0026). After a crash this takes up to one second. Other tabs
+  show `reconnecting` only once the departing tab has closed the port.
+- A `SecurityError` from opening the port, or ports that cannot be listed, end in `failed` at once
+  instead of being retried forever or showing `awaiting-permission`; logged as
+  `supervisor.gave-up`.
+- `release()` forgets a remembered configuration only when no other tab still runs it with
+  `persist: true` (ADR-0027); each such tab holds a shared Web Lock for it.
+- A tab that meets a worker script of another protocol version and cannot fall back reports it
+  once and stops starting new workers, instead of restarting one every 45 seconds.
+- `isSupported()` needs a `SharedWorker` or a `BroadcastChannel`, no longer both.
 
 ### Notes
 
-- Wire protocol version: **6**. Version 1 was never released; 2 added the diagnostics request and
+- Wire protocol version: **7**. Version 1 was never released; 2 added the diagnostics request and
   report, 3 the broker's `welcome`, 4 the `heartbeat`, and 5 has the broker answer every heartbeat
   with a `welcome` and freezes the shape of `hello` and `welcome` for every later version
   ([ADR-0024](./docs/adr/0024-keep-the-worker-handshake-version-independent.md)), and 6 adds the tab limit to the `status` message ([ADR-0025](./docs/adr/0025-limit-the-tabs-using-a-configuration.md)), and 7 names the term of holding the port in ownership, write and status messages ([ADR-0026](./docs/adr/0026-attribute-messages-to-a-term-of-holding-the-port.md)).
