@@ -100,6 +100,9 @@ export class ConfigurationStore {
    * application the others. So is a name the index lists without an entry to go with it, and an
    * index that cannot be read at all - which leaves nothing behind that would be reported again on
    * every restore.
+   *
+   * This is the only call that reports an unreadable index to the application: it is the call an
+   * application observes, and reporting from a save would say the same thing on every write.
    */
   load(): NormalizedConfiguration[] {
     this.#discardOldFormats();
@@ -204,9 +207,11 @@ export class ConfigurationStore {
   /**
    * Reads the names the index lists.
    *
-   * @param reportProblems - Whether an unreadable index is reported to the application and
-   *   removed. Only `load()` does that: it is the call an application observes, and reporting from
-   *   a save would say the same thing on every write.
+   * An index that cannot be read at all is removed either way - leaving it would mean reading the
+   * same rubbish on every call - but only `load()` reports it.
+   *
+   * @param reportProblems - Whether an index that could not be read, or could only be read in
+   *   part, is reported to the application. Only `load()` passes `true`.
    */
   #readIndex(reportProblems: boolean): StoredIndex {
     let raw: string | null;
@@ -225,12 +230,20 @@ export class ConfigurationStore {
     try {
       parsed = JSON.parse(raw);
     } catch (error) {
-      this.#discardIndex('The list of remembered configurations was not valid JSON', error);
+      this.#discardIndex(
+        'The list of remembered configurations was not valid JSON',
+        error,
+        reportProblems,
+      );
       return { names: [], isIntact: true };
     }
 
     if (!Array.isArray(parsed)) {
-      this.#discardIndex('The list of remembered configurations was not an array', undefined);
+      this.#discardIndex(
+        'The list of remembered configurations was not an array',
+        undefined,
+        reportProblems,
+      );
       return { names: [], isIntact: true };
     }
 
@@ -334,13 +347,15 @@ export class ConfigurationStore {
     this.#removeEntry(name);
   }
 
-  /** Reports the index as unreadable, and removes it. */
-  #discardIndex(reason: string, error: unknown): void {
+  /** Removes the index as unreadable, and reports it where the caller reports problems. */
+  #discardIndex(reason: string, error: unknown, reportProblem: boolean): void {
     this.logger.warn('discarding the list of remembered configurations', {
       event: 'storage.corrupt',
       reason,
     });
-    this.#report(SerialBrokerErrorCode.STORAGE_CORRUPT, reason, error);
+    if (reportProblem) {
+      this.#report(SerialBrokerErrorCode.STORAGE_CORRUPT, reason, error);
+    }
     try {
       this.storage.removeItem(storageIndexKey());
     } catch (removalError) {

@@ -210,6 +210,17 @@ describe('ConfigurationStore', () => {
     expect(entries.get(storageIndexKey())).toBe(JSON.stringify(['Reader']));
   });
 
+  it('does not report an unreadable index from a save', () => {
+    const { store, entries, reported } = createStore({ [storageIndexKey()]: '["Reader"' });
+
+    store.save(normalizeConfiguration('Reader', OPTIONS));
+
+    // `STORAGE_CORRUPT` is a restore-time report: saying it from a save would say it on every
+    // write, on a path the application never asked to read storage on.
+    expect(reported).toEqual([]);
+    expect(entries.get(storageIndexKey())).toBe(JSON.stringify(['Reader']));
+  });
+
   it('reports an index that is not an array and starts over', () => {
     const { store, entries, reported } = createStore({
       [storageIndexKey()]: JSON.stringify({ Reader: OPTIONS }),

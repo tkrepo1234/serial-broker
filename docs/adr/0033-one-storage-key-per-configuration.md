@@ -39,9 +39,11 @@ already. Two tabs saving different configurations write different keys, so neith
 other's entry; the index is the only key they share, and the only thing at stake there is a name.
 `remove()` takes the name out of the index first and then removes the entry.
 
-Reads are defensive at both levels. An index that is not valid JSON, or not an array, is reported
-as `STORAGE_CORRUPT` and removed. An index that is partly rubbish keeps the names in it and is
-written back without the rest. A listed name whose entry is unparseable or no longer valid is
+Reads are defensive at both levels. An index that is not valid JSON, or not an array, is removed,
+and `load()` reports it as `STORAGE_CORRUPT`; a save or a removal that finds it removes it just as
+quietly, because `STORAGE_CORRUPT` is a report about reading stored state and a save is not a read
+the application asked for. An index that is partly rubbish keeps the names in it and is written
+back without the rest. A listed name whose entry is unparseable or no longer valid is
 reported as `STORAGE_CORRUPT` with its `configName`, removed, and dropped from the index.
 
 A listed name with no entry at all is _not_ reported. With one key per configuration it is an
