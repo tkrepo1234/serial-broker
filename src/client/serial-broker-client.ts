@@ -42,8 +42,25 @@ import { ConfigurationSession } from './configuration-session.js';
 import type { BroadcastChannelLike } from './transport/broadcast-channel-transport.js';
 import type { Transport } from './transport/transport.js';
 
-/** How many errors nobody listened for are kept for the first `onError` listener: the latest. */
-const MAX_UNHEARD_ERRORS = 16;
+/**
+ * How many errors nobody listened for are kept for the first `onError` listener: the latest.
+ *
+ * Errors not tied to a configuration can arrive long before an application registers `onError` - a
+ * corrupt remembered entry on `restore()`, a bus that keeps failing in a tab that sets nothing up.
+ * The latest are the ones worth handing over. Every error is logged as `client.error` when it
+ * arrives; dropping the oldest from this record is logged once, as `client.unheard-errors-dropped`.
+ */
+export const MAX_UNHEARD_ERRORS = 16;
+
+/**
+ * How many other protocol versions a tab reports, each once, as `PROTOCOL_VERSION_MISMATCH`.
+ *
+ * A real mixed deployment has one or two (ADR-0023). The versions come from other contexts of the
+ * origin, where any script can post them, and each distinct one was remembered - and reported - for
+ * the life of the tab. The versions already reported stay recognised; reaching the limit is logged
+ * once, as `client.peer-versions-limit`.
+ */
+export const MAX_REPORTED_PEER_VERSIONS = 8;
 
 /** Every event a listener can be registered for. A record, so that a new event cannot be missed. */
 const EVENT_NAMES: Readonly<Record<SerialBrokerEventName, true>> = {
@@ -76,6 +93,10 @@ export class SerialBrokerClient {
   readonly #unheardErrors: SerialBrokerError[] = [];
   /** Peer protocol versions already reported: a mixed deployment is reported once per version. */
   readonly #reportedPeerVersions = new Set<unknown>();
+  /** {@link MAX_UNHEARD_ERRORS} was exceeded and logged. */
+  #hasDroppedUnheardErrors = false;
+  /** {@link MAX_REPORTED_PEER_VERSIONS} was reached and logged. */
+  #hasReachedPeerVersionLimit = false;
   readonly #store: ConfigurationStore;
   /**
    * The holds that tell other tabs this one still runs a remembered configuration, by name
@@ -703,6 +724,20 @@ export class SerialBrokerClient {
     if (this.#reportedPeerVersions.has(theirVersion)) {
       return;
     }
+    if (this.#reportedPeerVersions.size >= MAX_REPORTED_PEER_VERSIONS) {
+      if (!this.#hasReachedPeerVersionLimit) {
+        this.#hasReachedPeerVersionLimit = true;
+        this.#logger.warn(
+          'heard of more protocol versions than are reported; further ones are not',
+          {
+            event: 'client.peer-versions-limit',
+            limit: MAX_REPORTED_PEER_VERSIONS,
+            theirVersion: describeUnknown(theirVersion),
+          },
+        );
+      }
+      return;
+    }
     this.#reportedPeerVersions.add(theirVersion);
     this.#reportGlobal(
       new SerialBrokerError(
@@ -727,6 +762,13 @@ export class SerialBrokerClient {
       this.#unheardErrors.push(error);
       if (this.#unheardErrors.length > MAX_UNHEARD_ERRORS) {
         this.#unheardErrors.shift();
+        if (!this.#hasDroppedUnheardErrors) {
+          this.#hasDroppedUnheardErrors = true;
+          this.#logger.warn('dropped the oldest error nobody listened for', {
+            event: 'client.unheard-errors-dropped',
+            limit: MAX_UNHEARD_ERRORS,
+          });
+        }
       }
     }
   }
