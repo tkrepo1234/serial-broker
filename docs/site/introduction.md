@@ -25,6 +25,24 @@ serial-broker removes that limit for every tab of one origin:
 The application never learns which tab holds the port, and has no need to. How that works, and
 what it means for an application, is the subject of [How shared ports behave](shared-ports.md).
 
+## Who it is for
+
+serial-broker is built for industrial use: production interfaces where a browser-based application
+on the shop floor, at a test station or in a control room talks to scales, scanners, label
+printers, PLCs, measuring instruments and controllers over serial lines. Two things matter most
+there, and the library is designed around them:
+
+- **Simple installation.** One package and one worker script served next to the application - no
+  native helper, no driver, no browser extension. Rolling out the application rolls out the serial
+  access, on every workstation alike.
+- **Robustness.** A crashing tab, an unplugged device, a worker the browser ends: each is handled
+  without application code, and whatever cannot be handled is reported with a stable error code and
+  a sentence saying what to do. Writes reach the device at most once, and a write that may already
+  have arrived is never retried.
+
+It serves a point-of-sale screen or a hobby project just as well; the trade-offs are made for a
+production line.
+
 ## Features
 
 | Feature                        | What it gives you                                                                                                  |

@@ -33,6 +33,14 @@ further down says otherwise, this section wins.
   support TypeScript 7 yet, and Node 22 is the oldest Node the toolchain supports. Check again at
   the monthly update.
 
+### Target audience: industry (Tim, 2026-09-14)
+
+The library is for **industrial use**: production interfaces where simple, robust installation
+matters. README, the documentation's introduction and the package description say so. Every
+design decision, example and documentation chapter is judged against that audience first: one
+package and one worker script to install, no native helpers, behaviour that is predictable on a
+production line, and errors that say what to do.
+
 ### Device identity: explicit or automatic (Tim, 2026-09-14)
 
 Vendor and product ID must always be optional. A configuration is set up either **explicitly**, with

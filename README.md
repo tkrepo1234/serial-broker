@@ -12,6 +12,25 @@ gets `InvalidStateError`. This library removes that limit. One tab holds the por
 reads from it and writes to it. When that tab closes, another takes over. When the device is
 unplugged or powered off, the connection comes back on its own.
 
+## Who it is for
+
+serial-broker is built for **industrial use**: production interfaces where a browser-based
+application on the shop floor, at a test station or in a control room talks to scales, scanners,
+label printers, PLCs, measuring instruments and controllers over serial lines. What matters there
+is what this library is designed around:
+
+- **Simple installation.** One package, one worker script served next to the application, no
+  native helper, no driver, no browser extension. Installing the application installs the serial
+  access.
+- **Robustness over convenience.** A tab that crashes, a device that is unplugged, a worker the
+  browser ends: each is handled without application code, and what cannot be handled is reported
+  with a stable error code and a sentence saying what to do.
+- **Nothing surprising in production.** Writes reach the device at most once, the library never
+  retries a write that may have arrived, and every limit and every assumption is documented.
+
+It works just as well for a point-of-sale screen or a hobby project, but the trade-offs are made
+for a production line.
+
 ```ts
 import { SerialBroker } from 'serial-broker';
 

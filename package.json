@@ -1,7 +1,7 @@
 {
   "name": "serial-broker",
   "version": "0.1.0-alpha.1",
-  "description": "Cross-tab Web Serial access for Chromium: one shared port, every tab, automatic reconnect and failover.",
+  "description": "Cross-tab Web Serial access for Chromium, built for industrial production interfaces: one shared port, every tab, automatic reconnect and failover.",
   "keywords": [
     "web-serial",
     "serial",
@@ -10,7 +10,9 @@
     "chromium",
     "web-locks",
     "rs232",
-    "usb-serial"
+    "usb-serial",
+    "industrial",
+    "production"
   ],
   "license": "MIT",
   "repository": {
