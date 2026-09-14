@@ -13,7 +13,7 @@
  * system clock, and the difference includes the round trip that orders the crash. Everything
  * else is stamped inside the pages.
  *
- * Opt-in only, never in CI: `SERIAL_BROKER_BENCH_BROWSER=1 npm run bench:browser`. See ADR-0036.
+ * Opt-in only, never in CI: `SERIAL_BROKER_BENCH_BROWSER=1 npm run bench:browser`. See ADR-0037.
  */
 
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';

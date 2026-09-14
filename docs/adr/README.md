@@ -44,4 +44,4 @@ because of a decision references it in a comment (`// See ADR-0005.`).
 | [0033](./0033-one-storage-key-per-configuration.md)                      | One storage key per configuration, with an index of the names                       | Accepted                          |
 | [0034](./0034-start-the-debugging-surface-from-a-chosen-port.md)         | Start the debugging surface from a chosen port, under its own policy                | Accepted                          |
 | [0035](./0035-browser-tests-with-playwright.md)                          | Test the built package in a real browser, and against real hardware                 | Accepted                          |
-| [0036](./0036-measure-performance-against-expectations-written-first.md) | Measure performance against expectations written first                              | Accepted                          |
+| [0037](./0037-measure-performance-against-expectations-written-first.md) | Measure performance against expectations written first                              | Accepted                          |

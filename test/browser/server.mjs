@@ -12,7 +12,7 @@
  *   changed, which is how a tab meets a worker of another version without a second checkout
  *   (ADR-0024).
  * - `/bench/*` - the browser benchmark's pages (`bench/browser/pages/`), served the same way: a
- *   `.js` that is TypeScript on disk is stripped on the way out (ADR-0036).
+ *   `.js` that is TypeScript on disk is stripped on the way out (ADR-0037).
  *
  * Plain JavaScript, like the other tool scripts in this repository, so that it needs no build step
  * of its own.

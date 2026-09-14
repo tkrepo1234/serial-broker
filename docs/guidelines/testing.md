@@ -15,7 +15,7 @@ that matter, and they must be **deterministic**.
 | **Hardware**        | `test/browser/hardware/`      | The same scenarios against a real serial device, through a real UART.                                                                         | Runs only with `SERIAL_BROKER_HARDWARE=arduino`; results in `docs/manual-test-plan.md`.  |
 | **Emulated device** | `emulator/`                   | Real Chromium and the real Windows serial stack against a USB device whose failures are scriptable.                                           | Its own tests live in `emulator/test/`; runs are recorded in `docs/manual-test-plan.md`. |
 | **Manual**          | `debug/`                      | Real Chromium, real hardware. Documented, checklisted, never a substitute for the above.                                                      | Recorded in `docs/manual-test-plan.md`.                                                  |
-| **Benchmark**       | `bench/`                      | What the library costs: latency, throughput, handover and start times, an hour's steady state; on the harness and in a real browser.          | Not a test: nothing gates on a number. `npm run bench`; see below and ADR-0036.          |
+| **Benchmark**       | `bench/`                      | What the library costs: latency, throughput, handover and start times, an hour's steady state; on the harness and in a real browser.          | Not a test: nothing gates on a number. `npm run bench`; see below and ADR-0037.          |
 
 ## Determinism is mandatory
 
@@ -124,7 +124,7 @@ version, device, result.
 ## The benchmarks
 
 `bench/` measures what the library costs, in two places, against expectations that were written
-down before the first measurement (`bench/expectations.ts`, ADR-0036). The results are the
+down before the first measurement (`bench/expectations.ts`, ADR-0037). The results are the
 [Performance chapter](../site/performance.md) of the documentation.
 
 ```sh

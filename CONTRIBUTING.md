@@ -76,7 +76,7 @@ prompt and no machine-wide setting is changed. Record what you saw in
 `npm run bench` measures what the library costs on the simulated browser - latency and throughput
 from the device to 1, 5 and 10 tabs, write latency, handover and start times, an hour's steady
 state, over both transports - in about a second, and judges every number against the expectation
-written down for it in `bench/expectations.ts` (ADR-0036). It writes `bench/results/harness.json`
+written down for it in `bench/expectations.ts` (ADR-0037). It writes `bench/results/harness.json`
 and the fragments under `docs/site/_generated/` that the documentation's Performance chapter
 includes; commit them with a change that is meant to be faster, or that touches what they measure.
 

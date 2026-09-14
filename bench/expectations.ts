@@ -11,7 +11,7 @@
  * one Node process, with no browser and no device: microtasks, structured clones and validation,
  * with every delay simulated. The browser numbers include the platform - a real `SharedWorker`
  * hop, real `postMessage` cloning, real Web Locks and a real renderer crash - and are expected to
- * be an order of magnitude larger. See ADR-0036.
+ * be an order of magnitude larger. See ADR-0037.
  */
 
 /** Which way a metric is better. */

@@ -14,7 +14,7 @@
  *
  * Nothing here asserts a bound. A scenario checks that it did what it says - every chunk arrived
  * in every tab, every write reached the device - and reports what it measured; the judgement
- * against the expectations happens in `main.ts`. See ADR-0036.
+ * against the expectations happens in `main.ts`. See ADR-0037.
  */
 
 import { performance } from 'node:perf_hooks';

@@ -148,7 +148,7 @@ test plan step 29.
 
 ### Note (2026-09-14): the worker ends with the tab that started it
 
-The browser benchmark (ADR-0036) found that the death this amendment handles is not rare. In
+The browser benchmark (ADR-0037) found that the death this amendment handles is not rare. In
 Microsoft Edge 153 on Windows 11, the `SharedWorker` ended when the renderer of the page that
 started it crashed, and it survived the crash of any other page. That page is usually also the
 first to hold the port. The tab that takes the port over reports `open` as soon as the browser

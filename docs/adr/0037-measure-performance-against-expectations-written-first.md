@@ -1,4 +1,4 @@
-# ADR-0036: Measure performance against expectations written first
+# ADR-0037: Measure performance against expectations written first
 
 - **Status:** Accepted
 - **Date:** 2026-09-14

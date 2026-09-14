@@ -1,6 +1,6 @@
 # Benchmarks
 
-What the library costs, measured against expectations that were written down first (ADR-0036).
+What the library costs, measured against expectations that were written down first (ADR-0037).
 The results are in the documentation's Performance chapter (`docs/site/performance.md`).
 
 | Path              | What                                                                                                                                              |
