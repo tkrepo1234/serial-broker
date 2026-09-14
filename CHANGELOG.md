@@ -21,7 +21,16 @@ migrated (see below).
 - `examples/openui5`: a runnable OpenUI5 application and a reusable integration module that
   exposes serial-broker as a bindable `JSONModel` - status, errors with remediation, traffic, send,
   connect and release - on OpenUI5 1.148 (long-term maintenance) with UI5 Tooling and TypeScript,
-  running without an SAP system. CI type-checks it in a job of its own.
+  running without an SAP system. Its German texts use real umlauts.
+- Runnable example applications, each with its own README, a fixed port and a Playwright smoke
+  test against the Web Serial stand-in: `examples/minimal` (a Vite page that connects, prints what
+  arrives and sends text), `examples/multi-tab-dashboard` (permission, remembering and restoring,
+  what the other tabs see, the diagnostics entry point), `examples/exclusive` (`maxTabs: 1`,
+  `queued` shown as a wait, the takeover) and `examples/no-bundler` (a static page loading
+  `serial-broker/min` from an import map, with a smoke test that checks the worker is really
+  served). `examples/README.md` sets the contract every example keeps; `npm run test:examples`
+  starts each example and runs its smoke test, and CI installs, type-checks and smoke-tests every
+  example in one job.
 - The built package is tested in a real browser on every CI run (`npm run test:browser`, Playwright,
   ADR-0035): three tabs of one origin sharing a port through a real `SharedWorker`, failover when
   the tab holding the port closes or its renderer is killed, recovery when that crash takes the
