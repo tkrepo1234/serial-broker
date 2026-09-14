@@ -77,11 +77,13 @@ const traffic = createTrafficPanel(
   strip,
 );
 
-const peers = createPeersPanel(
-  byId<HTMLUListElement>('peers'),
+const peers = createPeersPanel(byId<HTMLUListElement>('peers'), {
   label,
-  (status) => present(status).label,
-);
+  present: (status) => present(status).label,
+  onRelabel: (newLabel) => {
+    byId('tab-label').textContent = newLabel;
+  },
+});
 
 const diagnostics = createDiagnosticsPanel(
   {
@@ -170,8 +172,10 @@ async function run(context: string, action: () => Promise<void>): Promise<void> 
     for (const button of buttons) {
       button.disabled = false;
     }
-    // The buttons a status disables stay disabled; the status decides.
-    if (statusElement.dataset['status'] === 'released') {
+    // The buttons a status disables stay disabled; the status decides. With nothing set up
+    // ('none'), a release would have nothing to release and would only claim "Released".
+    const status = statusElement.dataset['status'];
+    if (status === 'released' || status === 'none') {
       releaseButton.disabled = true;
       forgetButton.disabled = true;
     }

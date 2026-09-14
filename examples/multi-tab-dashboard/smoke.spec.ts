@@ -181,4 +181,24 @@ test.describe('the multi-tab dashboard', () => {
     // And the second tab took the port over meanwhile.
     await expect(second.locator('#status')).toHaveAttribute('data-status', 'open');
   });
+
+  test('keeps saying "not set up" when the device cannot be set up', async ({ context }) => {
+    // No stand-in, and no Web Serial either: setup() has nothing to work with.
+    await context.addInitScript(() => {
+      delete (Navigator.prototype as { serial?: unknown }).serial;
+    });
+    const page = await context.newPage();
+    const { noise } = watchForNoise(page);
+    await page.goto(`${origin}/`);
+
+    await expect(page.locator('#status')).toHaveAttribute('data-status', 'none');
+    await expect(page.locator('#status')).toHaveText('Not set up');
+    await expect(page.locator('#error-code')).toHaveText('WEB_SERIAL_UNAVAILABLE');
+    await expect(page.locator('#retry')).toBeVisible();
+    // Nothing to release: the buttons stay disabled rather than claim "Released" afterwards.
+    await expect(page.locator('#release')).toBeDisabled();
+    await expect(page.locator('#forget-device')).toBeDisabled();
+    await expect(page.locator('#setup-again')).toBeHidden();
+    expect(noise).toEqual([]);
+  });
 });
