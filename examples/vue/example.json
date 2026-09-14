@@ -1,0 +1,7 @@
+{
+  "name": "vue",
+  "port": 8156,
+  "start": "npm start",
+  "readyPath": "/",
+  "summary": "Vue 3: a reusable useSerialBroker composable returning refs, and a script-setup application using it."
+}
