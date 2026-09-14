@@ -33,6 +33,29 @@ further down says otherwise, this section wins.
   support TypeScript 7 yet, and Node 22 is the oldest Node the toolchain supports. Check again at
   the monthly update.
 
+### Device identity: explicit or automatic (Tim, 2026-09-14)
+
+Vendor and product ID must always be optional. A configuration is set up either **explicitly**, with
+`device: { vendorId, productId }` or `{ any: true }` as today, or in **auto mode**, with `device`
+omitted or `{ auto: true }`: the library then takes the type, vendor ID and product ID from the
+device the user chooses in the browser's port picker.
+
+- In auto mode, `setup()` reports `awaiting-permission` until `requestAccess()` opens an unfiltered
+  picker. The chosen port's `getInfo()` decides the effective device: `{ vendorId, productId }` for a
+  USB device, and a port without a USB identity becomes a device of its own kind that matches only
+  ports without one.
+- The effective device is remembered with the configuration (so `restore()` and later visits
+  reconnect to that device without a prompt), reported in `getStatus()` (`vendorId`, `productId`),
+  and shared with the other tabs of the configuration through the status message, so a tab set up
+  in auto mode adopts the device another tab chose. An auto-mode configuration never conflicts with
+  a resolved one of the same name.
+- Until the user has chosen, an auto-mode configuration with exactly one granted port could use it;
+  decide this in the ADR (the safer default is to wait for the user).
+- The debugging surface's "Choose a device" action is this mode: it no longer needs a form of its
+  own for the identity, only the line settings.
+- Implement after the hardening branches are merged (they touch the same files), with an ADR,
+  docs/site/configuration.md and the examples updated.
+
 ### Debugging surface as an entry point (Tim, 2026-09-14)
 
 - Connect to a device without typing a vendor ID, product ID or type: a **Choose a device** action
