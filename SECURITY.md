@@ -229,7 +229,8 @@ under two kinds of key:
 
 - `serial-broker/configurations/v2/index`, a JSON array of the remembered names;
 - `serial-broker/configurations/v2/entry/<name>`, one per configuration, holding the options passed
-  to `setup()`: the device filter, line settings, reconnect and timeout settings, text encoding,
+  to `setup()`: the device filter — for a configuration in auto mode, the device the user chose,
+  as `{ auto: true, resolved: … }` — line settings, reconnect and timeout settings, text encoding,
   `persist` and `maxTabs`.
 
 Earlier releases stored all of them in one JSON object, under `serial-broker/configurations/v1` and,

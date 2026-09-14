@@ -240,13 +240,22 @@ configurations are restored regardless. What a release before this one stored is
 are removed on the first `restore()`, and those configurations have to be set up once more.
 
 Only the tab that holds the port can ask the user for permission, because only it can open the
-port the user chooses. `requestAccess()` in any other tab rejects with `PERMISSION_REQUIRED` unless
-the status is `open`, and returns `true` without asking once the port is open.
+port the user chooses. `requestAccess()` in a tab that knows another tab holds the port rejects
+with `PERMISSION_REQUIRED` unless the status is `open`, and returns `true` without asking once the
+port is open. A tab that has just set the configuration up, and does not yet know whether anyone
+holds the port, may ask at once — `setup()` and `requestAccess()` in one click — and the choice is
+used as soon as it holds the port.
+
+A configuration set up without a `device` is in **auto mode**: it waits with `awaiting-permission`
+until the user chooses a port, takes its identity from that port, remembers it, and shares it
+with the other tabs of the configuration — a tab in auto mode adopts the device of the tab holding
+the port. Until the user has chosen, it matches no granted port, even when only one is granted.
+See [`device`](configuration.md#device).
 
 A USB vendor and product ID name a kind of device, not a particular one. With two identical
 adapters granted, serial-broker uses the first one and says so in the log. A configuration with
-`device: { any: true }`, for ports that have no USB identity at all, cannot tell ports apart
-either.
+`device: { any: true }` or `{ nonUsb: true }`, for ports that have no USB identity at all, cannot
+tell ports apart either.
 
 ## Limiting how many tabs use a port
 

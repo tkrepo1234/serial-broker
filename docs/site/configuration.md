@@ -18,7 +18,7 @@ on the option:
 
 | Options                                                                                           | Taken from                                                                                |
 | ------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
-| `device`, `serial`                                                                                | The tab that holds the port, when it opens it.                                            |
+| `device`, `serial`                                                                                | The tab that holds the port, when it opens it. A tab in auto mode adopts the holder's.    |
 | `connection` except `writeTimeoutMs`, `encoding.decodeText`, and `encoding.encoding` for decoding | The tab that holds the port.                                                              |
 | `connection.writeTimeoutMs`                                                                       | The tab that issued the write — and the holding tab's, for each chunk.                    |
 | `encoding.encoding` for sending, `persist`                                                        | Each tab for itself.                                                                      |
@@ -32,7 +32,10 @@ settings.
 Within one tab, calling `setup()` again for a name with the same device, line settings and tab
 limit does nothing. Calling it with a different `device`, `baudRate`, `dataBits`, `stopBits`,
 `parity`, `flowControl`, `bufferSize` or `maxTabs` fails with `CONFIGURATION_CONFLICT`; release the
-configuration first. Other options passed to a second `setup()` in the same tab are ignored.
+configuration first. Other options passed to a second `setup()` in the same tab are ignored. A
+`device` in auto mode never conflicts with one in auto mode, whatever either has resolved to; while
+it has resolved to nothing it conflicts with no explicit device either — the running configuration
+keeps what it has — and once resolved it counts as the device it resolved to.
 
 ## `name`
 
@@ -45,7 +48,26 @@ storage key and every log record.
 
 ## `device`
 
-Which device the configuration connects to. Exactly one of two shapes.
+Which device the configuration connects to. Optional: left out, the device is taken from the port
+the user chooses. Given, it is exactly one of four shapes; passing two at once is
+`INVALID_ARGUMENT`.
+
+### Omitted, or `{ auto: true }` — auto mode
+
+- **What it does:** the configuration waits with `awaiting-permission` until `requestAccess()`
+  opens the picker, unfiltered, and takes its device from the port the user chooses: its USB IDs
+  when it reports both, or the fact that it has none. From then on it behaves like the explicit
+  shape it resolved to — matching, picker filter, `getStatus()` — and stays in auto mode.
+- **Remembered:** the resolved device is written into the remembered configuration as
+  `{ auto: true, resolved: { vendorId, productId } }` or `{ auto: true, resolved: { nonUsb: true } }`,
+  so `restore()` and a later visit reconnect without a prompt. Passing `resolved` yourself seeds
+  the resolution.
+- **Shared:** a tab in auto mode adopts the device of the tab holding the port, whether that tab
+  chose it in the picker or named it. Choose it once, in any tab.
+- **Keep in mind:** until the user has chosen, an auto-mode configuration matches no granted port,
+  even when only one is granted; `getStatus().deviceKind` is `'auto'` then. `setup()` and
+  `requestAccess()` may follow each other in one click.
+- The decision and its reasons are in [ADR-0036].
 
 ### `{ vendorId, productId }`
 
@@ -56,13 +78,22 @@ Which device the configuration connects to. Exactly one of two shapes.
   adapters granted, the first one is used and a warning is logged. Browsers expose no serial
   number to tell them apart.
 
+### `{ nonUsb: true }`
+
+- **What it does:** accepts only ports that report no USB identity, and shows the picker
+  unfiltered. A port that reports one of the two USB IDs counts as having none.
+- **When:** for a built-in RS-232 interface, a Bluetooth serial port, a virtual COM port, where a
+  USB adapter may be granted on the same origin and must be left alone. It is also what auto mode
+  resolves to for such a port.
+- **Cost:** with more than one such port granted, the library cannot tell them apart.
+
 ### `{ any: true }`
 
 - **What it does:** accepts whatever port the user granted, and shows the picker unfiltered.
-- **When:** for ports with no USB identity — a built-in RS-232 interface, a Bluetooth serial port,
-  a virtual COM port. `getInfo()` reports no IDs for these, so there is nothing to filter on.
-- **Cost:** with more than one such port granted, the library cannot tell them apart. Use USB IDs
-  whenever the device has them.
+- **When:** for ports with no USB identity where nothing else is granted, or when any granted port
+  will do.
+- **Cost:** with more than one port granted, the library cannot tell them apart. Use USB IDs
+  whenever the device has them, or let auto mode take them from the port.
 
 ## `serial`
 

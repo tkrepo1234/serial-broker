@@ -2,6 +2,7 @@ import type { NormalizedConfiguration } from './defaults.js';
 import type { SerialBrokerError } from './errors.js';
 import type {
   ConnectionSettings,
+  DeviceFilter,
   EncodingSettings,
   SerialSettings,
   SerialBrokerEventName,
@@ -52,21 +53,12 @@ export type ConnectionStateName = (typeof CONNECTION_STATES)[number];
 /** The settings a configuration is actually running with, every default applied. */
 export interface EffectiveSettings {
   /**
-   * USB IDs, or `{ any: true }` for a configuration that accepts any granted port.
+   * The device filter in effect: USB IDs, `{ any: true }`, `{ nonUsb: true }`, or - for a
+   * configuration in auto mode - `{ auto: true }` with what it has `resolved` to, if anything.
    *
-   * Either shape can be passed back to `setup()` unchanged.
+   * Every shape can be passed back to `setup()` unchanged (ADR-0036).
    */
-  readonly device:
-    | {
-        /** USB vendor ID, `0x0000`-`0xffff`. */
-        readonly vendorId: number;
-        /** USB product ID, `0x0000`-`0xffff`. */
-        readonly productId: number;
-      }
-    | {
-        /** Always `true`: the configuration accepts whatever port the user granted. */
-        readonly any: true;
-      };
+  readonly device: DeviceFilter;
   /** Line settings the port is opened with, including the defaults that were applied. */
   readonly serial: Required<SerialSettings>;
   /** Reconnect and timeout behaviour, including the defaults that were applied. */

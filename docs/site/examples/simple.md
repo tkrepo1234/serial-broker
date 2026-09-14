@@ -17,9 +17,10 @@ what the device sends, and sends a line. Open it in two tabs and both work.
 
 ## What it does
 
-`setup()` runs on every load. On the first visit the browser has not been told which port the
-device is, so the status becomes `awaiting-permission` and the button appears. After the user has
-chosen the port once, later visits open it with no prompt, and the button never shows.
+`setup()` runs on every load, and names no device: the configuration takes it from the port the
+user picks. On the first visit nothing has been picked, so the status becomes `awaiting-permission`
+and the button appears. After the user has chosen the port once, the configuration remembers
+which device it is, later visits open it with no prompt, and the button never shows.
 
 The script reads the status with `getStatus()` after subscribing, because the status can change
 between `setup()` and the moment the listener is registered.

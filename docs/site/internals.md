@@ -160,7 +160,7 @@ the same way: participants, ports per participant, and configurations.
 | `attach`, `detach`                          | every tab               | Start or stop participating in a configuration.                             |
 | `owner-claimed`, `owner-released`           | the owner               | A term of holding the port began; it ended, as its last message.            |
 | `status-request`                            | a tab that just set up  | Asks the owner to restate the status.                                       |
-| `status`                                    | the owner               | The connection status changed, with the owner's tab limit and term.         |
+| `status`                                    | the owner               | The connection status changed, with the owner's tab limit, device and term. |
 | `write-request`                             | a participant           | Asks the owner in one term to write.                                        |
 | `write-started`, `write-result`             | the owner               | The write began, in a term; how it ended.                                   |
 | `data-received`, `data-sent`                | the owner               | Traffic, to every participant.                                              |
@@ -291,3 +291,4 @@ real browser, with real or emulated hardware [ADR-0017], and where every hardwar
 | 0033 | One storage key per configuration, with an index of the names                       |
 | 0034 | Start the debugging surface from a chosen port, under its own policy                |
 | 0035 | Test the built package in a real browser, and against real hardware                 |
+| 0036 | Take the device identity from the port the user chooses                             |

@@ -2,7 +2,7 @@ import { BackoffState, computeBackoffDelayMs } from '../core/backoff.js';
 import { toHex } from '../core/bytes.js';
 import type { TimerHandle } from '../core/clock.js';
 import { withDeadline } from '../core/deadline.js';
-import type { NormalizedConfiguration } from '../core/defaults.js';
+import type { NormalizedConfiguration, NormalizedDeviceFilter } from '../core/defaults.js';
 import type { ConnectionDiagnostics } from '../core/diagnostics.js';
 import { SerialBrokerErrorCode } from '../core/error-codes.js';
 import { describeUnknown, SerialBrokerError } from '../core/errors.js';
@@ -14,12 +14,20 @@ import type {
   SerialBrokerEnvironment,
 } from '../environment/environment.js';
 
-import { findGrantedPort, matchesDevice, toRequestOptions } from './port-matcher.js';
-import { mapOpenError, mapRequestPortError } from './serial-errors.js';
+import { findGrantedPort } from './port-matcher.js';
+import { mapOpenError } from './serial-errors.js';
 import { WriteQueue } from './write-queue.js';
 
-/** What the supervisor reports to the context that owns it. */
+/** What the supervisor reports to the context that owns it, and what it asks of it. */
 export interface SupervisorCallbacks {
+  /**
+   * The device filter in effect, asked for on every attempt to find the port.
+   *
+   * Asked rather than given, because an auto-mode configuration resolves its device while the
+   * supervisor runs - from the port the user chooses, or from the tab holding the port before
+   * this one (ADR-0036).
+   */
+  readonly device: () => NormalizedDeviceFilter;
   /** The connection status changed. */
   readonly onStatus: (status: SerialBrokerStatus) => void;
   /** A chunk arrived from the device. `text` is present only when decoding is enabled. */
@@ -205,54 +213,14 @@ export class PortSupervisor {
   }
 
   /**
-   * Shows the browser's port picker and connects to the chosen device.
+   * Connects to a port the user has just granted in the picker.
    *
-   * Must be called synchronously from a user gesture handler: `requestPort()` consumes
-   * transient activation, and any `await` before it will have spent it.
-   *
-   * @throws A {@link SerialBrokerError} with code `PERMISSION_DENIED` if the user dismisses
-   *   the picker, `DEVICE_MISMATCH` if the chosen port is not the configured device, or
-   *   `USER_GESTURE_REQUIRED` if the call was not made during a gesture.
+   * The picker itself is the session's: which device it asks for, and what the chosen port
+   * means for the configuration, are decided there (ADR-0036). What the supervisor decides is
+   * what the grant means for the connection, since the picker stays open for as long as the user
+   * likes and the connection may have moved on meanwhile.
    */
-  async requestAccess(): Promise<void> {
-    let port: SerialPortLike;
-    try {
-      port = await this.environment.serial.requestPort(toRequestOptions(this.configuration));
-    } catch (error) {
-      throw mapRequestPortError(error, {
-        configName: this.configuration.name,
-        timestamp: this.environment.clock.now(),
-      });
-    }
-
-    if (!matchesDevice(port, this.configuration)) {
-      const info = port.getInfo();
-      throw new SerialBrokerError(
-        SerialBrokerErrorCode.DEVICE_MISMATCH,
-        'The selected port is not the configured device',
-        {
-          configName: this.configuration.name,
-          context: {
-            // Reached only for a USB filter: an `any` filter matches every port, so there is
-            // nothing it can mismatch.
-            expectedVendorId:
-              this.configuration.device.kind === 'usb'
-                ? this.configuration.device.vendorId
-                : undefined,
-            expectedProductId:
-              this.configuration.device.kind === 'usb'
-                ? this.configuration.device.productId
-                : undefined,
-            actualVendorId: info.usbVendorId,
-            actualProductId: info.usbProductId,
-          },
-          timestamp: this.environment.clock.now(),
-        },
-      );
-    }
-
-    // The picker stays open for as long as the user likes, and what happened meanwhile decides
-    // what the grant still means.
+  async useGrantedPort(): Promise<void> {
     const current = this.#state;
     if (current.kind === 'stopped') {
       // This context stopped holding the port while the picker was open.
@@ -513,7 +481,11 @@ export class PortSupervisor {
       this.#deviceConnectedWhileListing = false;
       try {
         port = await withDeadline(
-          findGrantedPort(this.environment.serial, this.configuration, this.logger),
+          findGrantedPort(
+            this.environment.serial,
+            { name: this.configuration.name, device: this.callbacks.device() },
+            this.logger,
+          ),
           this.environment.clock,
           {
             timeoutMs: this.configuration.connection.openTimeoutMs,

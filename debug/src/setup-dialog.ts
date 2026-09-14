@@ -24,6 +24,12 @@ export interface SetupRequest {
    * with the new settings; `undefined` for a new configuration.
    */
   readonly replaces: string | undefined;
+  /**
+   * Whether to open the browser's port picker right after `setup()`, in the same click: the
+   * _Choose a device…_ flow, where the configuration is in auto mode and takes its device from
+   * the port chosen (ADR-0036).
+   */
+  readonly requestsAccess: boolean;
 }
 
 /** What "More options" promises where every field it holds may be left blank. */
@@ -32,6 +38,17 @@ const BLANK_IS_DEFAULT = 'More options — leave blank for the default';
 /** What editing a running configuration does, said above the form. */
 const EDIT_NOTE =
   'Applies to this page only: it disconnects and connects again with these settings. Other tabs keep theirs.';
+
+/** What connecting to a chosen device does, said above the form. */
+const CHOOSE_NOTE =
+  "Connect opens the browser's port picker with every port it offers. The configuration takes its identity from the port you choose and remembers it, so this visit and every later one connect without asking again.";
+
+/** The entries of the device list that are not presets, by the value the form reads. */
+const DEVICE_CHOICES: readonly [value: string, label: string][] = [
+  ['custom', 'Other USB device'],
+  ['non-usb', 'Port without USB identity'],
+  ['any', 'Any port'],
+];
 
 /**
  * The dialog that creates a configuration, or edits the settings of one this page is connected to.
@@ -49,7 +66,10 @@ export class SetupDialog {
   readonly #submitButton: HTMLButtonElement;
   readonly #more: HTMLDetailsElement;
   readonly #moreSummary: HTMLElement;
+  /** The device list and the two ID fields, hidden when the device comes from the picker. */
+  readonly #deviceFields: readonly HTMLElement[];
   #replaces: string | undefined;
+  #requestsAccess = false;
   /**
    * Counts the times the dialog was opened and submitted. An answer that arrives after the dialog
    * was cancelled and opened again belongs to the earlier request: it must neither close the new
@@ -82,6 +102,7 @@ export class SetupDialog {
     this.#editNote = part('editNote');
     this.#submitButton = part('submit') as HTMLButtonElement;
     this.#moreSummary = part('moreSummary');
+    this.#deviceFields = [part('deviceField'), part('vendorIdField'), part('productIdField')];
 
     for (const [name, placeholder] of Object.entries(defaultPlaceholders())) {
       const input = form.elements.namedItem(name);
@@ -99,9 +120,9 @@ export class SetupDialog {
 
     const device = this.#field('device') as HTMLSelectElement;
     device.append(
+      new Option('Automatic (from the chosen device)', 'auto'),
       ...DEVICE_PRESETS.map((preset, index) => new Option(preset.label, String(index))),
-      new Option('Other USB device', 'custom'),
-      new Option('Any port, no USB identity', 'any'),
+      ...DEVICE_CHOICES.map(([value, label]) => new Option(label, value)),
     );
     device.addEventListener('change', () => {
       const preset = DEVICE_PRESETS[Number(device.value)];
@@ -134,6 +155,7 @@ export class SetupDialog {
         name: values.name,
         options: buildSetupOptions(values),
         replaces: this.#replaces,
+        requestsAccess: this.#requestsAccess,
       })
         .then(
           () => {
@@ -158,39 +180,43 @@ export class SetupDialog {
   /** Opens the dialog for a new configuration, with the defaults filled in. */
   open(): void {
     this.#replaces = undefined;
+    this.#requestsAccess = false;
     this.#title.textContent = 'New configuration';
     this.#submitButton.textContent = 'Create and connect';
     this.#moreSummary.textContent = BLANK_IS_DEFAULT;
     this.#editNote.hidden = true;
     (this.#field('name') as HTMLInputElement).readOnly = false;
-    this.#fill(defaultFormValues());
+    this.#fill(defaultFormValues(), { showDevice: true });
     this.#field('name').focus();
   }
 
   /**
-   * Opens the dialog on a configuration for the port just chosen in the browser's port picker.
+   * Opens the dialog for a configuration that takes its device from the browser's port picker.
    *
-   * The device and a name are filled in from the port; the baud rate is where someone who knows
-   * their device starts, so the dialog opens on it.
+   * There is nothing to say about the device: the picker opens when the form is submitted, in
+   * that click, and the configuration takes what is chosen (ADR-0036). Only the name and the line
+   * settings are asked for, and the dialog opens on the baud rate, which is where someone who
+   * knows their device starts.
    *
-   * @param values - The form as the chosen port fills it.
-   * @param note - What connecting to it does, shown above the form.
+   * @param values - The form as the page fills it: auto mode, a suggested name, the defaults.
    */
-  connectToPort(values: SetupFormValues, note: string): void {
+  chooseDevice(values: SetupFormValues): void {
     this.#replaces = undefined;
-    this.#title.textContent = 'Connect to the chosen device';
+    this.#requestsAccess = true;
+    this.#title.textContent = 'Connect to a device';
     this.#submitButton.textContent = 'Connect';
     this.#moreSummary.textContent = BLANK_IS_DEFAULT;
-    this.#editNote.textContent = note;
+    this.#editNote.textContent = CHOOSE_NOTE;
     this.#editNote.hidden = false;
     (this.#field('name') as HTMLInputElement).readOnly = false;
-    this.#fill(values);
+    this.#fill(values, { showDevice: false });
     this.#field('baudRate').focus();
   }
 
   /** Opens the dialog on the settings a configuration runs with in this page. */
   edit(name: string, settings: EffectiveSettings): void {
     this.#replaces = name;
+    this.#requestsAccess = false;
     this.#title.textContent = `Edit ${name}`;
     this.#submitButton.textContent = 'Save and reconnect';
     // Every field shows the value in use, so "blank means default" would not be true here.
@@ -199,24 +225,29 @@ export class SetupDialog {
     this.#editNote.hidden = false;
     // The name addresses the configuration everywhere; a different name is a new configuration.
     (this.#field('name') as HTMLInputElement).readOnly = true;
-    this.#fill(formValuesFor(name, settings));
+    this.#fill(formValuesFor(name, settings), { showDevice: true });
     this.#field('baudRate').focus();
   }
 
-  #fill(values: SetupFormValues): void {
+  #fill(values: SetupFormValues, options: { readonly showDevice: boolean }): void {
     this.#attempt += 1;
     writeSetupForm(this.#form, values);
     (this.#field('device') as HTMLSelectElement).value = deviceChoiceFor(values);
+    for (const field of this.#deviceFields) {
+      field.hidden = !options.showDevice;
+    }
     this.#syncDeviceInputs();
     this.#error.hidden = true;
     this.#submitButton.disabled = false;
     this.#dialog.showModal();
   }
 
+  /** The ID fields take input only for a USB device named by its IDs. */
   #syncDeviceInputs(): void {
-    const isAnyPort = (this.#field('device') as HTMLSelectElement).value === 'any';
-    (this.#field('vendorId') as HTMLInputElement).disabled = isAnyPort;
-    (this.#field('productId') as HTMLInputElement).disabled = isAnyPort;
+    const choice = (this.#field('device') as HTMLSelectElement).value;
+    const isUsb = choice !== 'auto' && choice !== 'any' && choice !== 'non-usb';
+    (this.#field('vendorId') as HTMLInputElement).disabled = !isUsb;
+    (this.#field('productId') as HTMLInputElement).disabled = !isUsb;
   }
 
   #showError(reason: unknown): void {

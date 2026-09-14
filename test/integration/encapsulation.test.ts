@@ -34,6 +34,7 @@ describe('encapsulation', () => {
     const { owner } = await twoTabs();
 
     expect(Object.keys(owner.client.getStatus('Reader')).sort()).toEqual([
+      'deviceKind',
       'lastErrorCode',
       'name',
       'observedAt',

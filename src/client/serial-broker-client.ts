@@ -236,11 +236,14 @@ export class SerialBrokerClient {
 
     this.#requireSupport();
 
-    const session = new ConfigurationSession(
+    const session: ConfigurationSession = new ConfigurationSession(
       this.environment,
       this.#ensureTransport(),
       configuration,
       this.#logger.child({ configName: configuration.name }),
+      () => {
+        this.#rememberResolution(session);
+      },
     );
 
     this.#sessions.set(configuration.name, session);
@@ -380,7 +383,8 @@ export class SerialBrokerClient {
       name,
       () => {
         if (this.#sessions.get(name) === session) {
-          this.#store.save(configuration);
+          // What the session runs by now, which may carry a device resolved meanwhile.
+          this.#store.save(session.definition);
         }
       },
       this.#logger,
@@ -395,6 +399,26 @@ export class SerialBrokerClient {
     if (this.#holds.get(name) === hold) {
       hold.start();
     }
+  }
+
+  /**
+   * Remembers the device an auto-mode configuration resolved to, so that `restore()` and a later
+   * visit reconnect to it without a prompt (ADR-0036).
+   *
+   * Written at once, like the entry itself in {@link #remember}; the hold writes it again once it
+   * is granted. Nothing is written for a configuration that is not remembered, or one that has
+   * been released while the picker was open.
+   */
+  #rememberResolution(session: ConfigurationSession): void {
+    const configuration = session.definition;
+    if (
+      !configuration.persist ||
+      this.#sessions.get(configuration.name) !== session ||
+      !this.#holds.has(configuration.name)
+    ) {
+      return;
+    }
+    this.#store.save(configuration);
   }
 
   /**

@@ -1,3 +1,4 @@
+import { assertNever } from './assert.js';
 import {
   DEFAULT_MAX_TABS,
   DEFAULT_CONNECTION_SETTINGS,
@@ -9,11 +10,18 @@ import {
   type NormalizedConnectionSettings,
   type NormalizedDeviceFilter,
   type NormalizedSerialSettings,
+  type ResolvedDevice,
 } from './defaults.js';
 import type { EffectiveSettings } from './diagnostics.js';
 import { SerialBrokerErrorCode } from './error-codes.js';
 import { SerialBrokerError } from './errors.js';
-import type { SerialBrokerGlobalOptions, SerialBrokerOptions, TransportKind } from './types.js';
+import type {
+  DeviceFilter,
+  ResolvedDeviceFilter,
+  SerialBrokerGlobalOptions,
+  SerialBrokerOptions,
+  TransportKind,
+} from './types.js';
 
 /**
  * The application-facing validation boundary.
@@ -250,42 +258,111 @@ function optionalObject(value: unknown, argumentName: string): Record<string, un
   return value === undefined ? {} : requireObject(value, argumentName);
 }
 
+/** What `options.device` may be, quoted when a mixture of shapes is rejected. */
+const DEVICE_SHAPES =
+  'one of { vendorId, productId }, { any: true }, { nonUsb: true } or { auto: true }, not a mixture';
+
 /**
  * Validates a device filter.
  *
- * Two shapes, kept apart rather than merged into one with optional IDs: a configuration
- * either identifies a USB device or accepts whatever the user granted, and code downstream
- * must not be able to read a vendor ID from the second kind. See
- * ADR-0016.
+ * Four shapes, kept apart rather than merged into one with optional IDs: a configuration
+ * identifies a USB device, accepts whatever the user granted, accepts only ports without a USB
+ * identity, or takes its device from the port the user chooses - and code downstream must not be
+ * able to read a vendor ID from a kind that has none. See ADR-0016 and ADR-0036.
  *
- * Mixing them - passing `any` *and* IDs - is rejected rather than silently resolved, because
- * either interpretation would be a guess about what the caller meant.
+ * Mixing them - passing `any` *and* IDs, say - is rejected rather than silently resolved, because
+ * either interpretation would be a guess about what the caller meant. An absent `device` is auto
+ * mode; an empty object is not, because it names the USB shape without its IDs.
+ *
+ * @param device - `options.device`, or `undefined` when it was omitted.
  */
-function normalizeDeviceFilter(device: Record<string, unknown>): NormalizedDeviceFilter {
+function normalizeDeviceFilter(device: unknown): NormalizedDeviceFilter {
+  if (device === undefined) {
+    return Object.freeze({ kind: 'auto' as const, resolved: undefined });
+  }
+  const raw = requireObject(device, 'options.device');
+
   // Each field is read once. An options object may be a proxy or carry getters, and a value that
   // passed a check must be the value that is kept.
-  const wantsAny = device['any'];
-  const vendorId = device['vendorId'];
-  const productId = device['productId'];
+  const wantsAuto = raw['auto'];
+  const wantsAny = raw['any'];
+  const wantsNonUsb = raw['nonUsb'];
+  const vendorId = raw['vendorId'];
+  const productId = raw['productId'];
+  const resolved = raw['resolved'];
 
-  if (wantsAny !== undefined) {
-    if (wantsAny !== true) {
-      throw invalidArgument('options.device.any', 'true, or absent', wantsAny);
+  for (const [flag, value] of [
+    ['auto', wantsAuto],
+    ['any', wantsAny],
+    ['nonUsb', wantsNonUsb],
+  ] as const) {
+    if (value !== undefined && value !== true) {
+      throw invalidArgument(`options.device.${flag}`, 'true, or absent', value);
+    }
+  }
+  const shapes = [
+    wantsAuto,
+    wantsAny,
+    wantsNonUsb,
+    vendorId !== undefined || productId !== undefined ? true : undefined,
+  ].filter((shape) => shape !== undefined).length;
+  if (shapes > 1 || (resolved !== undefined && wantsAuto === undefined)) {
+    throw invalidArgument('options.device', DEVICE_SHAPES, raw);
+  }
+
+  if (wantsAuto === true) {
+    return Object.freeze({
+      kind: 'auto' as const,
+      resolved: resolved === undefined ? undefined : normalizeResolvedDevice(resolved),
+    });
+  }
+  if (wantsAny === true) {
+    return Object.freeze({ kind: 'any' as const });
+  }
+  if (wantsNonUsb === true) {
+    return Object.freeze({ kind: 'non-usb' as const });
+  }
+  return normalizeUsbDevice(vendorId, productId, 'options.device');
+}
+
+/**
+ * Validates what an auto-mode filter has resolved to: a USB identity or `{ nonUsb: true }`.
+ *
+ * Neither `any` nor `auto` can be a resolution - a port the user chose has an identity or has
+ * none - so they are rejected here like any other value.
+ */
+function normalizeResolvedDevice(resolved: unknown): ResolvedDevice {
+  const argumentName = 'options.device.resolved';
+  const raw = requireObject(resolved, argumentName);
+  const wantsNonUsb = raw['nonUsb'];
+  const vendorId = raw['vendorId'];
+  const productId = raw['productId'];
+
+  if (wantsNonUsb !== undefined) {
+    if (wantsNonUsb !== true) {
+      throw invalidArgument(`${argumentName}.nonUsb`, 'true, or absent', wantsNonUsb);
     }
     if (vendorId !== undefined || productId !== undefined) {
       throw invalidArgument(
-        'options.device',
-        'either { vendorId, productId } or { any: true }, not both',
-        device,
+        argumentName,
+        'either { vendorId, productId } or { nonUsb: true }, not both',
+        raw,
       );
     }
-    return Object.freeze({ kind: 'any' as const });
+    return Object.freeze({ kind: 'non-usb' as const });
   }
+  return normalizeUsbDevice(vendorId, productId, argumentName);
+}
 
+function normalizeUsbDevice(
+  vendorId: unknown,
+  productId: unknown,
+  argumentName: string,
+): ResolvedDevice {
   return Object.freeze({
     kind: 'usb' as const,
-    vendorId: requireInteger(vendorId, 'options.device.vendorId', 0, USB_ID_MAX),
-    productId: requireInteger(productId, 'options.device.productId', 0, USB_ID_MAX),
+    vendorId: requireInteger(vendorId, `${argumentName}.vendorId`, 0, USB_ID_MAX),
+    productId: requireInteger(productId, `${argumentName}.productId`, 0, USB_ID_MAX),
   });
 }
 
@@ -384,7 +461,7 @@ export function normalizeConfiguration(name: unknown, options: unknown): Normali
   const validName = validateName(name);
   const raw = requireObject(options, 'options') as unknown as SerialBrokerOptions;
 
-  const device = requireObject(raw.device, 'options.device');
+  const device = raw.device;
   const serial = requireObject(raw.serial, 'options.serial');
   const connection = optionalObject(raw.connection, 'options.connection');
   const encoding = optionalObject(raw.encoding, 'options.encoding');
@@ -460,16 +537,33 @@ export function normalizeConfiguration(name: unknown, options: unknown): Normali
  */
 export function toSetupOptions(configuration: NormalizedConfiguration): EffectiveSettings {
   return {
-    device:
-      configuration.device.kind === 'usb'
-        ? { vendorId: configuration.device.vendorId, productId: configuration.device.productId }
-        : { any: true },
+    device: toDeviceOptions(configuration.device),
     serial: { ...configuration.serial },
     connection: { ...configuration.connection },
     encoding: { ...configuration.encoding },
     persist: configuration.persist,
     maxTabs: configuration.maxTabs,
   };
+}
+
+/** The application-facing shape of a validated device filter, resolution included. */
+function toDeviceOptions(device: NormalizedDeviceFilter): DeviceFilter {
+  switch (device.kind) {
+    case 'usb':
+      return { vendorId: device.vendorId, productId: device.productId };
+    case 'non-usb':
+      return { nonUsb: true };
+    case 'any':
+      return { any: true };
+    case 'auto':
+      // The key is left out rather than set to `undefined`, so that the stored entry and a
+      // diagnostics report say `{ auto: true }` for a configuration that has not resolved.
+      return device.resolved === undefined
+        ? { auto: true }
+        : { auto: true, resolved: toDeviceOptions(device.resolved) as ResolvedDeviceFilter };
+    default:
+      return assertNever(device, 'device filter');
+  }
 }
 
 /**
@@ -517,12 +611,36 @@ export function isDeviceCompatible(
   );
 }
 
-/** `true` if two filters name the same device. */
+/**
+ * `true` if two filters name the same device.
+ *
+ * Auto mode never conflicts with auto mode: both say "whatever the tab holding the port chose",
+ * and the session already running keeps its resolution (ADR-0036). Against an explicit filter, an
+ * auto-mode filter that has not resolved is compatible - it has committed to nothing - and one
+ * that has resolved counts as the device it resolved to.
+ */
 function isSameDevice(a: NormalizedDeviceFilter, b: NormalizedDeviceFilter): boolean {
-  if (a.kind === 'any' || b.kind === 'any') {
-    // Two "any" filters are compatible; an "any" and a USB filter are not, because one of
-    // them would open a port the other did not ask for.
-    return a.kind === b.kind;
+  if (a.kind === 'auto') {
+    return b.kind === 'auto' || a.resolved === undefined || isSameExplicitDevice(a.resolved, b);
   }
-  return a.vendorId === b.vendorId && a.productId === b.productId;
+  if (b.kind === 'auto') {
+    return b.resolved === undefined || isSameExplicitDevice(a, b.resolved);
+  }
+  return isSameExplicitDevice(a, b);
+}
+
+/** A filter that names its device outright: everything but auto mode. */
+type ExplicitDeviceFilter = Exclude<NormalizedDeviceFilter, { readonly kind: 'auto' }>;
+
+function isSameExplicitDevice(a: ExplicitDeviceFilter, b: ExplicitDeviceFilter): boolean {
+  if (a.kind !== b.kind) {
+    // Two `any` filters are compatible, as are two non-USB ones; filters of different kinds are
+    // not, because one of them would open a port the other did not ask for.
+    return false;
+  }
+  return (
+    a.kind !== 'usb' ||
+    b.kind !== 'usb' ||
+    (a.vendorId === b.vendorId && a.productId === b.productId)
+  );
 }

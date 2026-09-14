@@ -72,8 +72,58 @@ export interface AnyDeviceFilter {
   readonly any: true;
 }
 
+/**
+ * Accepts only ports that report no USB identity.
+ *
+ * Narrower than {@link AnyDeviceFilter}: a USB adapter that happens to be granted as well is
+ * left alone. A port that reports only one of the two USB IDs counts as having none, since no
+ * filter could find it by half an identity. Like `any`, it cannot tell two such ports apart.
+ * See ADR-0036.
+ */
+export interface NonUsbDeviceFilter {
+  /** Must be `true`. */
+  readonly nonUsb: true;
+}
+
+/** What auto mode resolves to: the identity of the port the user chose. */
+export type ResolvedDeviceFilter = UsbDeviceFilter | NonUsbDeviceFilter;
+
+/**
+ * Takes the device from the port the user chooses - **auto mode**, which is also what an
+ * omitted `device` means.
+ *
+ * `setup()` waits with `awaiting-permission` until `requestAccess()` opens the picker with no
+ * filter. The chosen port's `getInfo()` then decides: `{ vendorId, productId }` when it reports
+ * both USB IDs, `{ nonUsb: true }` otherwise. The result is remembered with the configuration,
+ * reported by `getStatus()`, and adopted by every other tab that set the name up in auto mode.
+ * Until the user has chosen, an auto-mode configuration matches no granted port, even when only
+ * one is granted. See ADR-0036.
+ */
+export interface AutoDeviceFilter {
+  /** Must be `true`. */
+  readonly auto: true;
+  /**
+   * The device the configuration has resolved to.
+   *
+   * Written by the library into the remembered configuration, so `restore()` reconnects without a
+   * prompt. An application may pass it to seed the resolution; it is used like the explicit
+   * filter it names, while the configuration stays in auto mode and follows the tab holding the
+   * port.
+   */
+  readonly resolved?: ResolvedDeviceFilter | undefined;
+}
+
 /** How a configuration says which device it wants. */
-export type DeviceFilter = UsbDeviceFilter | AnyDeviceFilter;
+export type DeviceFilter =
+  UsbDeviceFilter | AnyDeviceFilter | NonUsbDeviceFilter | AutoDeviceFilter;
+
+/**
+ * What a configuration's device is, as {@link SerialBrokerStatusSnapshot} reports it.
+ *
+ * `'auto'` is an auto-mode configuration that has not resolved yet: the user has not chosen a
+ * port, and no other tab has. A resolved one reports what it resolved to.
+ */
+export type DeviceKind = 'usb' | 'non-usb' | 'any' | 'auto';
 
 /**
  * Serial line settings, passed through to `SerialPort.open()`.
@@ -152,8 +202,11 @@ export interface EncodingSettings {
 
 /** Options for {@link SerialBrokerApi.setup}. */
 export interface SerialBrokerOptions {
-  /** Which device type to connect to. */
-  readonly device: DeviceFilter;
+  /**
+   * Which device to connect to. Omitted, it is taken from the port the user chooses (auto mode,
+   * {@link AutoDeviceFilter}).
+   */
+  readonly device?: DeviceFilter | undefined;
   /** Line settings for `SerialPort.open()`. */
   readonly serial: SerialSettings;
   /** Reconnect and timeout behaviour. */
@@ -204,9 +257,11 @@ export interface SerialBrokerStatusSnapshot {
   readonly name: string;
   /** The current connection status. */
   readonly status: SerialBrokerStatus;
-  /** The configured USB vendor ID, or `undefined` for a configuration that accepts any port. */
+  /** What the device is: configured, or resolved from the port the user chose (ADR-0036). */
+  readonly deviceKind: DeviceKind;
+  /** The USB vendor ID in effect, or `undefined` unless `deviceKind` is `'usb'`. */
   readonly vendorId: number | undefined;
-  /** The configured USB product ID, or `undefined` for a configuration that accepts any port. */
+  /** The USB product ID in effect, or `undefined` unless `deviceKind` is `'usb'`. */
   readonly productId: number | undefined;
   /** The effective serial settings, with defaults applied. */
   readonly serialOptions: Required<SerialSettings>;

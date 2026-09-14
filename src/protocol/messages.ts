@@ -203,6 +203,19 @@ export interface DataSentMessage extends Envelope {
   readonly timestamp: number;
 }
 
+/**
+ * The device the tab holding the port runs a configuration with, as `status` carries it.
+ *
+ * `'auto'` is an auto-mode configuration that has not resolved: the holder is waiting for the
+ * user to choose. Everything else is what the holder matches ports against - configured, or
+ * resolved from the port the user chose - and what a tab set up in auto mode adopts (ADR-0036).
+ */
+export type StatusDevice =
+  | { readonly kind: 'usb'; readonly vendorId: number; readonly productId: number }
+  | { readonly kind: 'non-usb' }
+  | { readonly kind: 'any' }
+  | { readonly kind: 'auto' };
+
 /** Broadcast by the owner when the connection status changes. */
 export interface StatusMessage extends Envelope {
   readonly type: 'status';
@@ -213,6 +226,8 @@ export interface StatusMessage extends Envelope {
    * configuration with a different limit withdraws when it hears this (ADR-0025).
    */
   readonly maxTabs: number;
+  /** The device of the tab sending the status. A tab in auto mode adopts it (ADR-0036). */
+  readonly device: StatusDevice;
   /** The term of the tab sending it. A status of a term that has ended or been succeeded is stale. */
   readonly term: TermId;
   readonly timestamp: number;

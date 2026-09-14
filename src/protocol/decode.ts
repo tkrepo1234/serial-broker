@@ -8,7 +8,14 @@ import {
 import type { LogFields } from '../core/types.js';
 
 import { isParticipantDiagnostics } from './decode-diagnostics.js';
-import { isFiniteNumber, isNonEmptyString, isRecord, isStatus, isTabLimit } from './guards.js';
+import {
+  isFiniteNumber,
+  isNonEmptyString,
+  isRecord,
+  isStatus,
+  isTabLimit,
+  isUsbId,
+} from './guards.js';
 import {
   exceedsStructureBudget,
   MAX_CONFIG_NAME_LENGTH,
@@ -25,7 +32,14 @@ import {
   MAX_TEXT_LENGTH,
   type LimitName,
 } from './limits.js';
-import type { ClientId, MessageTarget, ProtocolMessage, RequestId, TermId } from './messages.js';
+import type {
+  ClientId,
+  MessageTarget,
+  ProtocolMessage,
+  RequestId,
+  StatusDevice,
+  TermId,
+} from './messages.js';
 import { isProtocolVersion, PROTOCOL_VERSION } from './version.js';
 
 /**
@@ -223,6 +237,37 @@ class FieldReader {
   boolean(field: string): boolean {
     const value = this.raw[field];
     return typeof value === 'boolean' ? value : malformed(this.type, field);
+  }
+
+  /**
+   * The device of the tab sending a status, rebuilt from its kind and, for USB, its two IDs.
+   *
+   * A tab in auto mode adopts what this says (ADR-0036), so a kind this build does not know, or
+   * an ID outside the USB range, is rejected rather than passed on for a filter nobody could have
+   * configured.
+   */
+  device(): StatusDevice {
+    const value = this.raw['device'];
+    if (!isRecord(value)) {
+      return malformed(this.type, 'device');
+    }
+    const kind = value['kind'];
+    switch (kind) {
+      case 'usb': {
+        const vendorId = value['vendorId'];
+        const productId = value['productId'];
+        if (!isUsbId(vendorId) || !isUsbId(productId)) {
+          return malformed(this.type, 'device');
+        }
+        return { kind, vendorId, productId };
+      }
+      case 'non-usb':
+      case 'any':
+      case 'auto':
+        return { kind };
+      default:
+        return malformed(this.type, 'device');
+    }
   }
 
   error(): SerializedSerialBrokerError {
@@ -506,8 +551,20 @@ function decodeChecked(raw: unknown): ProtocolMessage {
       if (!isTabLimit(maxTabs)) {
         return malformed(type, 'maxTabs');
       }
+      const device = read.device();
       const term = read.identifier('term') as TermId;
-      return { type, v, from, to, configName, status, maxTabs, term, timestamp: read.timestamp() };
+      return {
+        type,
+        v,
+        from,
+        to,
+        configName,
+        status,
+        maxTabs,
+        device,
+        term,
+        timestamp: read.timestamp(),
+      };
     }
 
     case 'diagnostics-request':

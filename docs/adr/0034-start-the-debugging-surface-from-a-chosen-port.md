@@ -1,8 +1,15 @@
 # ADR-0034: Start the debugging surface from a chosen port, under its own policy
 
-- **Status:** Accepted
+- **Status:** Accepted, amended by [ADR-0036](./0036-take-the-device-identity-from-the-chosen-port.md)
 - **Date:** 2026-09-14
 - **Amends:** ADR-0019, which ships the debugging surface
+
+> **Amendment (ADR-0036).** The derivation moved into the library as auto mode. _Choose a
+> device…_ no longer opens the picker itself or reads the chosen port: it asks for a name and the
+> line settings, and _Connect_ sets the configuration up without a device and calls
+> `requestAccess()` in that click. The library takes the device from the port chosen, remembers it,
+> and shares it with the other tabs. `debug/src/chosen-port.ts` keeps only the name suggestion and
+> the form values for that flow. The policy decision below is unchanged.
 
 ## Context
 

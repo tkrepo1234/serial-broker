@@ -38,6 +38,11 @@ export function isTabLimit(value: unknown): value is number {
   );
 }
 
+/** `true` for a USB vendor or product ID: an integer from `0x0000` to `0xffff`. */
+export function isUsbId(value: unknown): value is number {
+  return typeof value === 'number' && Number.isInteger(value) && value >= 0 && value <= 0xffff;
+}
+
 /**
  * `true` for one of the public statuses.
  *

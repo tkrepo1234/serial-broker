@@ -115,10 +115,20 @@ function isDevice(value: unknown): boolean {
   if (!isRecord(value)) {
     return false;
   }
-  if (value['any'] === true) {
+  if (value['any'] === true || value['nonUsb'] === true) {
     return true;
   }
-  return isCount(value['vendorId']) && isCount(value['productId']);
+  if (value['auto'] === true) {
+    // Resolved or not: `resolved` is absent until the user has chosen a port (ADR-0036).
+    const resolved = value['resolved'];
+    return resolved === undefined || (isRecord(resolved) && isResolvedDevice(resolved));
+  }
+  return isResolvedDevice(value);
+}
+
+/** A USB identity, or `{ nonUsb: true }`: what a port the user chose can be. */
+function isResolvedDevice(value: Record<string, unknown>): boolean {
+  return value['nonUsb'] === true || (isCount(value['vendorId']) && isCount(value['productId']));
 }
 
 function isConnectionDiagnostics(value: unknown): boolean {

@@ -127,10 +127,31 @@ export function statusLabel(status: string | undefined): string {
   }
 }
 
-/** A configuration's device as `0x1a86:7523`, or `any port`. */
+/**
+ * A configuration's device as `0x1a86:7523`, `any port`, `port without USB identity`, or - for
+ * one in auto mode that has not resolved - `not chosen yet`.
+ *
+ * A resolved auto-mode configuration reads as the device it resolved to: that is what it opens,
+ * and what a `setup()` written from these facts may name outright.
+ */
 export function summarizeDevice(settings: EffectiveSettings): string {
   const { device } = settings;
-  return 'any' in device ? 'any port' : formatDevice(device.vendorId, device.productId);
+  if ('any' in device) {
+    return 'any port';
+  }
+  if ('nonUsb' in device) {
+    return 'port without USB identity';
+  }
+  if ('auto' in device) {
+    const resolved = device.resolved;
+    if (resolved === undefined) {
+      return 'not chosen yet';
+    }
+    return 'nonUsb' in resolved
+      ? 'port without USB identity'
+      : formatDevice(resolved.vendorId, resolved.productId);
+  }
+  return formatDevice(device.vendorId, device.productId);
 }
 
 /**
