@@ -42,8 +42,25 @@ import { ConfigurationSession } from './configuration-session.js';
 import type { BroadcastChannelLike } from './transport/broadcast-channel-transport.js';
 import type { Transport } from './transport/transport.js';
 
-/** How many errors nobody listened for are kept for the first `onError` listener: the latest. */
-const MAX_UNHEARD_ERRORS = 16;
+/**
+ * How many errors nobody listened for are kept for the first `onError` listener: the latest.
+ *
+ * Errors not tied to a configuration can arrive long before an application registers `onError` - a
+ * corrupt remembered entry on `restore()`, a bus that keeps failing in a tab that sets nothing up.
+ * The latest are the ones worth handing over. Every error is logged as `client.error` when it
+ * arrives; dropping the oldest from this record is logged once, as `client.unheard-errors-dropped`.
+ */
+export const MAX_UNHEARD_ERRORS = 16;
+
+/**
+ * How many other protocol versions a tab reports, each once, as `PROTOCOL_VERSION_MISMATCH`.
+ *
+ * A real mixed deployment has one or two (ADR-0023). The versions come from other contexts of the
+ * origin, where any script can post them, and each distinct one was remembered - and reported - for
+ * the life of the tab. The versions already reported stay recognised; reaching the limit is logged
+ * once, as `client.peer-versions-limit`.
+ */
+export const MAX_REPORTED_PEER_VERSIONS = 8;
 
 /** Every event a listener can be registered for. A record, so that a new event cannot be missed. */
 const EVENT_NAMES: Readonly<Record<SerialBrokerEventName, true>> = {
@@ -76,6 +93,10 @@ export class SerialBrokerClient {
   readonly #unheardErrors: SerialBrokerError[] = [];
   /** Peer protocol versions already reported: a mixed deployment is reported once per version. */
   readonly #reportedPeerVersions = new Set<unknown>();
+  /** {@link MAX_UNHEARD_ERRORS} was exceeded and logged. */
+  #hasDroppedUnheardErrors = false;
+  /** {@link MAX_REPORTED_PEER_VERSIONS} was reached and logged. */
+  #hasReachedPeerVersionLimit = false;
   readonly #store: ConfigurationStore;
   /**
    * The holds that tell other tabs this one still runs a remembered configuration, by name
@@ -198,6 +219,11 @@ export class SerialBrokerClient {
 
     this.#sessions.set(configuration.name, session);
     this.#remember(session);
+    if (this.#sessions.get(configuration.name) !== session) {
+      // Released by a listener while it was being remembered (see `#remember`). That release takes
+      // care of the session; starting it now would only join the bus and the election to leave them.
+      return;
+    }
     session.start();
 
     this.#logger.info('configuration registered', {
@@ -242,15 +268,21 @@ export class SerialBrokerClient {
     const validName = this.#validName(name);
     const session = this.#sessions.get(validName);
     if (session === undefined) {
+      const releasing = this.#releasing.get(validName);
       if (this.#setUpDuringRelease.has(validName)) {
         // A `setup()` called before this waits for the release in progress and then sets the name
         // up again. This call came later, so it releases what that `setup()` builds - which it has
         // built by the time this wait ends, having waited first.
-        await this.#releasing.get(validName);
+        await releasing;
         await this.release(validName, options);
+        return;
       }
       // Releasing something that is not set up is a no-op, not an error: it leaves the caller
-      // in the state it asked for.
+      // in the state it asked for. A release of the name still under way is not that state yet: this
+      // call resolves with it, once the port is closed and the lock let go, as `release()` promises -
+      // resolving at once would let the caller open the device elsewhere while this tab still holds
+      // it. The options of the release under way apply.
+      await releasing;
       return;
     }
 
@@ -311,7 +343,6 @@ export class SerialBrokerClient {
       return;
     }
 
-    this.#store.save(configuration);
     const hold = new PersistenceHold(
       this.environment.locks,
       name,
@@ -323,8 +354,15 @@ export class SerialBrokerClient {
       this.#logger,
       this.environment.clock,
     );
+    // Registered before the entry is saved. Storage that fails reports to the listeners of every
+    // configuration, and one of them may release this very configuration from there; that release
+    // lets go of the hold it finds. A hold registered only afterwards would be found by nobody, and
+    // kept for the life of the tab - keeping the entry remembered for every other tab as well.
     this.#holds.set(name, hold);
-    hold.start();
+    this.#store.save(configuration);
+    if (this.#holds.get(name) === hold) {
+      hold.start();
+    }
   }
 
   /**
@@ -354,6 +392,9 @@ export class SerialBrokerClient {
     for (const name of names) {
       await this.release(name, options);
     }
+    // A release another call started is part of "every configuration" too, and has not closed its
+    // port until it has finished.
+    await Promise.all(this.#releasing.values());
   }
 
   /** Writes to a device. */
@@ -683,6 +724,20 @@ export class SerialBrokerClient {
     if (this.#reportedPeerVersions.has(theirVersion)) {
       return;
     }
+    if (this.#reportedPeerVersions.size >= MAX_REPORTED_PEER_VERSIONS) {
+      if (!this.#hasReachedPeerVersionLimit) {
+        this.#hasReachedPeerVersionLimit = true;
+        this.#logger.warn(
+          'heard of more protocol versions than are reported; further ones are not',
+          {
+            event: 'client.peer-versions-limit',
+            limit: MAX_REPORTED_PEER_VERSIONS,
+            theirVersion: describeUnknown(theirVersion),
+          },
+        );
+      }
+      return;
+    }
     this.#reportedPeerVersions.add(theirVersion);
     this.#reportGlobal(
       new SerialBrokerError(
@@ -707,6 +762,13 @@ export class SerialBrokerClient {
       this.#unheardErrors.push(error);
       if (this.#unheardErrors.length > MAX_UNHEARD_ERRORS) {
         this.#unheardErrors.shift();
+        if (!this.#hasDroppedUnheardErrors) {
+          this.#hasDroppedUnheardErrors = true;
+          this.#logger.warn('dropped the oldest error nobody listened for', {
+            event: 'client.unheard-errors-dropped',
+            limit: MAX_UNHEARD_ERRORS,
+          });
+        }
       }
     }
   }

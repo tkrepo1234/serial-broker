@@ -78,6 +78,10 @@ What you can rely on:
   them. A serial port cannot report that.
 - **A write waits for a connection** that is not open yet, for up to `connection.writeTimeoutMs`,
   and then rejects with `WRITE_TIMEOUT`.
+- **A write that rejected with `WRITE_TIMEOUT` and `started: false` is never written afterwards.**
+  That includes a write queued behind a slow one: a write that has waited at the tab holding the
+  port for `connection.writeTimeoutMs` is taken out of the queue and not begun, so it can safely be
+  sent again.
 
 What you cannot rely on:
 
@@ -277,9 +281,130 @@ version. A tab that learns of another version reports `PROTOCOL_VERSION_MISMATCH
 once per version. After deploying a version that changes the protocol, reload every open tab. The
 changelog says when that is necessary.
 
+## Fast devices and large writes
+
+serial-broker keeps no buffer of its own between the port and your tabs. What that means at the
+extremes:
+
+**Reading.** The tab holding the port reads chunks as the browser hands them over — at most
+`serial.bufferSize` bytes each — and sends every chunk to every tab as one message. Its own
+`onReceive` listeners run before the next chunk is read, so a slow listener there slows reading
+down; the browser's read buffer then fills, and a device without flow control loses what does not
+fit. In the other tabs, messages that a busy tab cannot handle yet wait in the browser's queue for
+that tab, which grows at the device's rate for as long as the tab lags. serial-broker cannot see
+that queue or limit it. Keep `onReceive` listeners short, and hand heavy work to a later task. For a
+device that sends quickly, a larger `bufferSize` means fewer, larger chunks and fewer messages.
+
+**Text.** With `decodeText`, the tab holding the port decodes as it reads, with one decoder per
+connection: a character split across two chunks arrives whole, however the chunks fall. A
+character cut by a lost connection or a change of the tab holding the port is not.
+
+**Writing.** One `send()` is one message to the tab holding the port, and one more to every tab
+when it has been written, for `onSend`. A 50 MB payload is therefore copied into every tab of the
+application, several times over while it is in flight. The tab holding the port hands it to the
+device in chunks of `connection.maxWriteChunkBytes`, one at a time; each chunk has
+`connection.writeTimeoutMs` to be accepted.
+
+The whole `send()` has `connection.writeTimeoutMs` as well, in the tab that issued it. A write
+that is still going when that deadline passes rejects with `WRITE_TIMEOUT` and `started: true`,
+and goes on: its bytes keep reaching the device, and `onSend` reports it once it has finished. For
+a large payload to a slow device, set `writeTimeoutMs` to cover it — up to ten minutes — or send
+it as several `send()` calls where writes from other tabs may come in between.
+
+Writes that wait behind a slow one each wait at most `connection.writeTimeoutMs`, and then leave
+the queue, so the backlog at the tab holding the port never holds more than the writes issued in
+that time.
+
+## Tabs that run for a long time
+
+A tab of an operator's screen may stay open for weeks. Browsers do several things to such a tab
+that it is not told about in time, or not at all. serial-broker measures every wait with a timer,
+never by comparing clock readings, except where this section says otherwise.
+
+### Hidden tabs
+
+A browser runs the timers of a hidden tab late: Chromium aligns them to whole seconds, and after five
+minutes hidden, runs repeating timers only once a minute. Messages between tabs and device events
+are not held back. In a hidden tab, deadlines, the one-second grace period after a crash and
+reconnect delays can therefore end up to a minute late, and failover and write timeouts take that
+much longer. The message bus counts unanswered heartbeats rather than measuring silence, so a
+throttled tab is not mistaken for a dead worker.
+
+A deadline that runs a second or more late first handles the messages that arrived meanwhile. A
+write whose result is already waiting resolves instead of timing out, and a former holder's report
+that is already waiting counts before its grace period ends.
+
+### Frozen tabs
+
+Chromium freezes hidden tabs to save energy: a frozen tab runs nothing until it is shown again.
+It does not freeze a tab that uses Web Serial, or that holds a Web Lock another tab is waiting
+for — so neither the tab holding the port, nor a tab holding a place that another tab queues for
+under `maxTabs`, is frozen by that policy. Other tabs can be. A frozen tab hears nothing and sends
+nothing; its own writes wait. Its message bus falls silent too, and the worker forgets it after
+three minutes and takes it back with its next heartbeat. When it is shown again, its overdue timers
+and the messages that arrived meanwhile run in no defined order; as for a hidden tab, a deadline
+that is late handles the waiting messages first, so a write that succeeded meanwhile resolves.
+
+### What serial-broker cannot know
+
+A tab holding the port that stops running without going away — frozen by a browser whose policy
+differs, paused in a debugger, or starved by a long task — keeps its lock, and so keeps the port.
+No other tab can take over: the browser grants the lock only when that tab lets go or disappears.
+Meanwhile the other tabs receive no data and no status change, and their writes reject with
+`WRITE_TIMEOUT` and `started: false`. Nothing distinguishes such a tab from one whose device is
+quiet. Taking the port from it would break the promise that only one tab writes to the device, so
+serial-broker does not; when the tab runs again, it carries on where it stopped.
+
+A tab that has let go of the port cannot wake up later with more to say about it: it sends its
+goodbye, and reports every write it performed, before it releases the lock. What can arrive late is
+what a crashed tab sent just before it crashed. The grace period for that is timed by the tabs
+waiting for it, from when they hear of the new holder, so a waiting tab that was frozen itself does
+not lose it. A report delayed on its way by more than a second remains undecidable, as described
+under [A write that had started](#a-write-that-had-started-ends-with-owner_lost_during_write).
+
+### Leaving the page, and discarded tabs
+
+serial-broker listens for no page lifecycle events. In Chromium, a page that holds a Web Lock, uses
+Web Serial or listens on a `BroadcastChannel` is not kept in the back/forward cache, and a tab with a
+configuration set up does all three, so navigating away unloads it like closing it: the browser
+closes its port and lets its locks go. Tabs on the `SharedWorker` are forgotten by the worker only
+after three minutes. To say goodbye at once, and close the port before the lock is let go, call
+`SerialBroker.dispose()` in a `pagehide` listener. Should a browser restore such a page from the
+cache anyway — `pageshow` with `persisted` set — set its configurations up again.
+
+A tab the browser discards to save memory is gone, as if it had crashed: its locks are let go and
+another tab takes over. Chrome avoids discarding a tab connected to a device, but under memory
+pressure any tab can be discarded. When the user returns to it, the page loads again, with
+`document.wasDiscarded` set, and `restore()` brings its remembered configurations back.
+
+### Sleep, and changes to the system clock
+
+When a computer sleeps, every tab and the worker stop together, and when it wakes, their overdue
+timers run. USB adapters are often reset on wake; the tab holding the port then reconnects as for
+any unplugged device. The worker may run its check for silent tabs before their first heartbeat
+after waking and forget them; each is taken back with its next heartbeat, within 15 seconds, and a
+write that crosses the bus in between may be lost and rejects with `WRITE_TIMEOUT`.
+
+The system clock can be set, or corrected, while tabs run. Deadlines, the grace period and reconnect
+delays are timers and are not affected. Three things read the clock:
+
+- **Whether a connection was stable** (`connection.stableAfterMs`) is decided from clock readings.
+  Set back while the port is open, a long-lived connection that then drops counts as unstable: its
+  first retry is not immediate, and it counts towards `connection.maxAttempts`. Set forward, a
+  connection that drops soon after counts as stable.
+- **A write waiting at the tab holding the port** is also measured on the clock. Set forward, the
+  writes waiting at that moment are refused with `WRITE_TIMEOUT` and `started: false`, even though
+  their issuers were still waiting. Refusing too early is the safe direction: they were not written.
+- **Whether a deadline ran late** is judged from the clock: set forward, a deadline waits one task
+  longer than it needed to.
+
+Timestamps in events, errors and diagnostics are clock readings, and jump with the clock.
+
 ## What to watch out for
 
 - Treat a received chunk as an arbitrary piece of the byte stream, never as a message.
+- Keep `onReceive` listeners short, above all for a device that sends quickly.
+- For large payloads to slow devices, set `connection.writeTimeoutMs` to cover the whole write.
 - Decide, per command, whether it may be repeated after `OWNER_LOST_DURING_WRITE`.
 - Do not assume an order between writes from different tabs.
 - Assume data sent by the device during a handover may be lost.

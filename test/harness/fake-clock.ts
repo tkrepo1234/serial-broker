@@ -19,7 +19,10 @@ interface ScheduledTimer {
  * millisecond. Without that rule a test could pass or fail on `Map` iteration order.
  */
 export class FakeClock implements Clock {
+  /** Time as timers see it: it only moves forward, and only when a test advances it. */
   #now: number;
+  /** How far the wall clock has been set away from {@link #now}. See {@link jumpWallClock}. */
+  #wallOffset = 0;
   #nextId = 1;
   #sequence = 0;
   #timers = new Map<number, ScheduledTimer>();
@@ -30,7 +33,18 @@ export class FakeClock implements Clock {
 
   /** {@inheritDoc Clock.now} */
   now(): number {
-    return this.#now;
+    return this.#now + this.#wallOffset;
+  }
+
+  /**
+   * Sets the wall clock forwards or backwards, without firing or moving any timer.
+   *
+   * What the user changing the system time, a time zone correction or an NTP step does in a
+   * browser: `Date.now()` jumps, while `setTimeout` keeps counting on a monotonic clock. Code that
+   * measures a duration as the difference of two `now()` readings sees the jump; a timer does not.
+   */
+  jumpWallClock(byMs: number): void {
+    this.#wallOffset += byMs;
   }
 
   /** {@inheritDoc Clock.setTimer} */

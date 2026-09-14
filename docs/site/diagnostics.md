@@ -54,6 +54,8 @@ message.
 | `client.forget-failed`                    | warn  | The browser could not revoke a device permission.                                         |
 | `client.dispose-failed`                   | warn  | A cleanup step failed while the client was disposed; `reason` says which.                 |
 | `client.announcement-unavailable`         | warn  | The version announcement cannot be used; tabs on other protocol versions go unnoticed.    |
+| `client.peer-versions-limit`              | warn  | More protocol versions were heard of than are reported (8); further ones are not. Once.   |
+| `client.unheard-errors-dropped`           | warn  | More than 16 errors arrived with no `onError` listener; the oldest are dropped. Once.     |
 | `facade.late-configure`                   | warn  | `configure()` was called after the client was built; its options apply after `dispose()`. |
 | `election.acquired`                       | info  | This tab now holds the port.                                                              |
 | `election.released`                       | info  | This tab gave the port up.                                                                |
@@ -63,6 +65,7 @@ message.
 | `supervisor.gave-up`                      | warn  | An attempt failed with an error that is not retryable; the status becomes `failed`.       |
 | `supervisor.device-connected`             | info  | The device reappeared, and a reconnect is attempted at once.                              |
 | `supervisor.teardown-failed`              | debug | Closing a lost connection failed or timed out at `step`; the next open may find it open.  |
+| `supervisor.write-expired`                | debug | A write waited `writeTimeoutMs` behind others and was not begun; `queuedWrites` remain.   |
 | `supervisor.sent`, `.received`            | debug | Traffic, with `byteLength`; with `logPayloads`, also `hex`.                               |
 | `matcher.none`                            | debug | No granted port matches the configured device.                                            |
 | `matcher.ambiguous`                       | warn  | Several granted ports match; the first is used.                                           |

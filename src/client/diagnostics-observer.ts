@@ -306,6 +306,11 @@ export class DiagnosticsObserver {
         : [...(this.#watchers.get(configName) ?? [])];
 
     for (const listener of targets) {
+      // A watcher stopped earlier in this delivery - by another watcher, or by `close()` - has been
+      // told it hears nothing more, as a configuration's own listeners are (`core/emitter.ts`).
+      if (!this.#isWatching(configName, listener)) {
+        continue;
+      }
       try {
         listener(event);
       } catch (error) {
@@ -317,6 +322,14 @@ export class DiagnosticsObserver {
         });
       }
     }
+  }
+
+  /** `true` while `listener` watches `configName`, or any configuration when there is no name. */
+  #isWatching(configName: string | undefined, listener: (event: ObservedEvent) => void): boolean {
+    if (configName !== undefined) {
+      return this.#watchers.get(configName)?.has(listener) === true;
+    }
+    return [...this.#watchers.values()].some((listeners) => listeners.has(listener));
   }
 
   async #queryLocks(): Promise<DiagnosticsSnapshot['locks']> {
