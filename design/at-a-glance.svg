@@ -229,8 +229,8 @@
       <path d="M46 74 V86 M152 74 V86 M258 74 V86 M46 86 H258" stroke="#6ab0de" stroke-width="2"/>
     </g>
     <g class="sans body">
-      <text x="20" y="148">Every tab receives what the device sends</text>
-      <text x="20" y="166">and can write to it, at most once.</text>
+      <text x="20" y="148">Every tab receives what the device sends and</text>
+      <text x="20" y="166">can write to it; a write reaches it at most once.</text>
     </g>
   </g>
 
