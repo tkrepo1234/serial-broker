@@ -273,9 +273,19 @@ class FieldReader {
     if (typeof value !== 'object' || value === null || Array.isArray(value)) {
       return malformed(this.type, 'fields');
     }
-    const entries = Object.entries(value as Record<string, unknown>);
-    if (entries.length > MAX_LOG_RECORD_VALUES) {
-      return exceeded(this.type, 'fields', 'MAX_LOG_RECORD_VALUES');
+    const record = value as Record<string, unknown>;
+    // Collected key by key, not through `Object.entries`: a `fields` of a million keys is as easy to
+    // post as one of three, and materialising it before applying the bound would make reading the
+    // message cost what the bound exists to prevent (`limits.ts`, StructureBudget).
+    const entries: [string, unknown][] = [];
+    for (const key in record) {
+      if (!Object.hasOwn(record, key)) {
+        continue;
+      }
+      if (entries.length === MAX_LOG_RECORD_VALUES) {
+        return exceeded(this.type, 'fields', 'MAX_LOG_RECORD_VALUES');
+      }
+      entries.push([key, record[key]]);
     }
     let characters = 0;
     for (const [key, entry] of entries) {
@@ -292,7 +302,7 @@ class FieldReader {
     }
     // The three fields every logger reads by name have to be what a logger expects them to be.
     for (const named of ['event', 'clientId', 'configName']) {
-      const field = (value as Record<string, unknown>)[named];
+      const field = record[named];
       if (field !== undefined && typeof field !== 'string') {
         return malformed(this.type, 'fields');
       }

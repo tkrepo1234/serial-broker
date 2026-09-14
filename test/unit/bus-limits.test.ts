@@ -21,6 +21,7 @@ import {
   MAX_CONFIGURATIONS,
   MAX_HEARTBEAT_CONFIGURATIONS,
   MAX_IDENTIFIER_LENGTH,
+  MAX_LOG_RECORD_VALUES,
   MAX_PAYLOAD_BYTES,
   MAX_REPORT_VALUES,
   MAX_REPORTED_CONFIGURATIONS,
@@ -242,6 +243,38 @@ describe('decodeMessage within its limits', () => {
     expect(failureOf({ ...validMessages()['diagnostics-report'], report })).toEqual(
       exceeding('diagnostics-report', 'report', 'MAX_REPORT_CHARACTERS'),
     );
+  });
+
+  it('accepts a worker record of MAX_LOG_RECORD_VALUES fields, and not one more', () => {
+    const fieldsOf = (count: number): Record<string, boolean> =>
+      Object.fromEntries(Array.from({ length: count }, (_, index) => [`f${String(index)}`, true]));
+    const record = validMessages()['worker-log'];
+
+    expect(failureOf({ ...record, fields: fieldsOf(MAX_LOG_RECORD_VALUES) })).toBe('accepted');
+    expect(failureOf({ ...record, fields: fieldsOf(MAX_LOG_RECORD_VALUES + 1) })).toEqual(
+      exceeding('worker-log', 'fields', 'MAX_LOG_RECORD_VALUES'),
+    );
+  });
+
+  it('refuses the fields of a worker record without reading past the limit', () => {
+    // A proxy is the measuring instrument, not the threat: no structured clone carries one. It
+    // counts what the decoder touches while a script of the origin posts a record whose `fields`
+    // hold far more keys than one may - which every tab decodes before dropping it (ADR-0029).
+    const inspected: string[] = [];
+    const fields = new Proxy({} as Record<string, unknown>, {
+      ownKeys: () => Array.from({ length: 10_000 }, (_, index) => `f${String(index)}`),
+      getOwnPropertyDescriptor: (_target, key) => {
+        inspected.push(String(key));
+        return { value: true, enumerable: true, configurable: true, writable: true };
+      },
+      get: () => true,
+    });
+
+    expect(failureOf({ ...validMessages()['worker-log'], fields })).toEqual(
+      exceeding('worker-log', 'fields', 'MAX_LOG_RECORD_VALUES'),
+    );
+    // Two looks per key - the enumeration's and the own-property check's - and then it stops.
+    expect(inspected.length).toBeLessThanOrEqual(2 * (MAX_LOG_RECORD_VALUES + 1));
   });
 
   it('names the limit when describing why a message was dropped', () => {
