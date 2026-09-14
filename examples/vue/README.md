@@ -153,6 +153,10 @@ npm run test:examples -- examples/vue/smoke.spec.ts
 
 The third argument takes `maxLines` (default 500) and `releaseOnDispose` (default `false`).
 
+Several components may call `useSerialBroker()` with the same name. They follow one configuration:
+a `release()` in one shows `released` in all of them, and a `restart()` in one brings all of them
+back.
+
 ## What a developer needs to know
 
 **`connect()` needs a user gesture.** The browser shows its port picker only during the transient
@@ -168,8 +172,8 @@ same events and can send. Do not write UI that claims "this tab owns the device"
 
 **Lifecycle.** The composable unsubscribes when its effect scope ends - for `<script setup>`, when
 the component is unmounted. It does not release the configuration then unless `releaseOnDispose` is
-set: a closing tab releases its share anyway, and another component of the same tab may still use
-the device. Vue warns in development when the composable is called outside a component or an
+set, and even then not while another composable of the same tab still uses the name: a closing tab
+releases its share anyway. Vue warns in development when the composable is called outside a component or an
 `effectScope()`, where nothing would ever unsubscribe.
 
 ## Stable element ids
@@ -226,10 +230,27 @@ unfinished rest in `partialLine`. A rest longer than 4096 characters becomes a l
 device that never sends a line ending cannot grow memory without end. Without `decodeText`, each
 chunk is listed as hexadecimal.
 
-**Not released when the component unmounts, unless asked.** Releasing on unmount would disconnect a
-device another component of the tab still shows, and would add a release and a set-up for every
-route change. A closing tab releases its share anyway. `releaseOnDispose: true` is for a component
-that alone owns a device, such as a dialog for a one-off scan.
+**Not released when the component unmounts, unless asked.** Releasing on unmount would add a release
+and a set-up, and an interrupted port, for every route change. A closing tab releases its share
+anyway. `releaseOnDispose: true` is for a component that owns a device for a while, such as a dialog
+for a one-off scan.
+
+**Composables of one name follow one configuration.** The library keeps one configuration per name
+in a tab, so a release by one composable is a release for every composable of that name. Left to
+themselves, the others would show `released`, with _Set up again_, next to a port that another
+composable's `restart()` had just opened - on a production screen, a device that looks disconnected
+and is not. So the composables of a tab know each other, by name, in the one file: a set-up after a
+release brings every composable that followed the released configuration back, with its error
+cleared. One whose own `setup()` failed, with `CONFIGURATION_CONFLICT` say, stays `failed`: the
+configuration that exists is not the one it asked for. For the same reason `releaseOnDispose`
+releases only when the last composable of the name goes, and checks that after the current
+`setup()` has settled: a component re-created in the same tick, by a changed `:key` or hot module
+replacement, keeps the device rather than losing it under the new instance.
+
+**A composable never ends up with nothing to press.** If the configuration is released between
+`setup()` resolving and the subscriptions - by another composable of the name - `subscribe()` throws
+`UNKNOWN_CONFIGURATION`. The composable catches that like a failed set-up: the error is shown, the
+status is `failed`, and _Try again_ is there. Nothing rejects unhandled.
 
 **`restart()` releases first when the configuration still exists.** A configuration in `failed` is
 still set up, and `setup()` does nothing for a name that is set up; releasing and setting up again is

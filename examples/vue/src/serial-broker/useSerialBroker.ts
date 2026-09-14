@@ -45,11 +45,12 @@ export interface UseSerialBrokerSettings {
   readonly maxLines?: number;
   /**
    * Release the configuration when the effect scope ends - usually when the component that called
-   * the composable is unmounted.
+   * the composable is unmounted - unless another composable of this tab still uses the name then.
    *
-   * Leave it `false` when the device outlives the component: other components of this tab that
-   * set the same name up would lose the device too, and a closing tab releases everything anyway.
-   * Set it `true` for a component that alone owns the device, such as a dialog for a one-off scan.
+   * Leave it `false` when the device outlives the component: releasing and setting up again on
+   * every route change interrupts the port for nothing, and a closing tab releases everything
+   * anyway. Set it `true` for a component that owns a device for a while, such as a dialog for a
+   * one-off scan.
    * @defaultValue false
    */
   readonly releaseOnDispose?: boolean;
@@ -79,9 +80,15 @@ export interface UseSerialBroker {
   connect(): Promise<boolean>;
   /** Writes to the device, from whichever tab holds the port. Nothing is appended. */
   send(data: SendableData): Promise<boolean>;
-  /** Stops using the configuration in this tab. Other tabs keep the device. */
+  /**
+   * Stops using the configuration in this tab. Other tabs keep the device; every composable of
+   * this name in this tab shows `released`.
+   */
   release(options?: ReleaseOptions): Promise<void>;
-  /** Sets the configuration up again: after `released`, or to start over after `failed`. */
+  /**
+   * Sets the configuration up again: after `released`, or to start over after `failed`. Every
+   * composable of this name in this tab follows the new configuration.
+   */
   restart(): Promise<void>;
   /** Empties `lines` and `partialLine`. The device is not touched. */
   clearLines(): void;
@@ -93,16 +100,32 @@ const DEFAULT_MAX_LINES = 500;
 /** A device that never sends a line ending still produces lines, of at most this many characters. */
 const MAX_PARTIAL_LINE_LENGTH = 4096;
 
+/** One composable, as the others of its name see it. */
+interface ConfigurationUser {
+  /** Another composable set the name up again: follow the configuration that exists now. */
+  followNewConfiguration(): void;
+}
+
+/**
+ * The live composables of this tab, by configuration name. The library keeps one configuration per
+ * name in a tab, so a release by one composable ends it for all of them. A set-up again by one has
+ * to reach the others as well, and a composable that goes away must not release a device the
+ * others still show.
+ */
+const usersByName = new Map<string, Set<ConfigurationUser>>();
+
 /**
  * Sets up a serial-broker configuration and mirrors it into refs.
  *
  * Call it from `<script setup>` or any other effect scope. It starts setting the configuration up
  * at once and returns without waiting: the refs start at `idle` and follow the library from there.
  * When the scope ends, the composable unsubscribes, and releases the configuration only if
- * `releaseOnDispose` is set.
+ * `releaseOnDispose` is set and no other composable of this tab uses the name.
  *
- * Several components may call it with the same name and equivalent options: `setup()` is a no-op
- * the second time, and each composable receives every event.
+ * Several components may call it with the same name and equivalent options. They share one
+ * configuration: `setup()` is a no-op the second time, each composable receives every event, a
+ * `release()` in one shows `released` in all of them, and a `restart()` in one brings all of them
+ * back.
  *
  * `name` and `options` are read once. A different device is a different configuration name.
  *
@@ -143,8 +166,20 @@ export function useSerialBroker(
   let subscriptions: Unsubscribe[] = [];
   let nextLineId = 1;
   let disposed = false;
+  /**
+   * The configuration this composable followed was released - here or by another composable of
+   * the name - so a set-up by any of them is one to follow. A set-up that failed on its own, with
+   * a `CONFIGURATION_CONFLICT` say, is not: the configuration that exists is not the one it asked
+   * for.
+   */
+  let followedReleased = false;
   /** The latest start, so that dispose can release after a `setup()` still under way. */
   let starting: Promise<void> = Promise.resolve();
+
+  const user: ConfigurationUser = { followNewConfiguration };
+  const users = usersByName.get(name) ?? new Set<ConfigurationUser>();
+  users.add(user);
+  usersByName.set(name, users);
 
   function report(error: unknown): void {
     lastError.value = toSerialBrokerError(error, name);
@@ -161,6 +196,7 @@ export function useSerialBroker(
       // `released` is the configuration's last event; the subscriptions end with it.
       unsubscribe();
       isSetUp.value = false;
+      followedReleased = true;
     }
   }
 
@@ -223,6 +259,32 @@ export function useSerialBroker(
     subscriptions = [];
   }
 
+  /**
+   * Follows the configuration that is set up under `name` now. `false`, with the error shown, when
+   * there is none any more.
+   */
+  function attach(): boolean {
+    try {
+      subscribe();
+      // The status may have changed between setup() and the subscriptions.
+      const current = SerialBroker.getStatus(name).status;
+      followedReleased = false;
+      isSetUp.value = true;
+      setStatus(current);
+      return true;
+    } catch (error: unknown) {
+      // Released between setup() resolving and here - by another composable of the name, say -
+      // which throws UNKNOWN_CONFIGURATION. That is a configuration that went away: `failed`
+      // shows Try again, and a set-up by another composable brings this one back.
+      unsubscribe();
+      isSetUp.value = false;
+      followedReleased = true;
+      report(error);
+      status.value = 'failed';
+      return false;
+    }
+  }
+
   async function start(): Promise<void> {
     try {
       // Resolves once the configuration is registered, not when the port is open: opening may
@@ -236,13 +298,27 @@ export function useSerialBroker(
       }
       return;
     }
-    if (disposed) {
+    if (disposed || !attach()) {
       return;
     }
-    subscribe();
-    isSetUp.value = true;
-    // The status may have changed between setup() and the subscriptions.
-    setStatus(SerialBroker.getStatus(name).status);
+    // A configuration set up again, after a release that every composable of the name received:
+    // the others follow it too, instead of showing `released` next to an open port.
+    for (const other of usersByName.get(name) ?? []) {
+      if (other !== user) {
+        other.followNewConfiguration();
+      }
+    }
+  }
+
+  function followNewConfiguration(): void {
+    // A composable still subscribed already follows it; one whose own set-up is under way attaches
+    // when that set-up resolves, and attaching twice only renews the subscriptions.
+    if (disposed || !followedReleased) {
+      return;
+    }
+    // The error belonged to the configuration that was released, as it does after restart().
+    lastError.value = null;
+    attach();
   }
 
   function connect(): Promise<boolean> {
@@ -306,10 +382,22 @@ export function useSerialBroker(
   onScopeDispose(() => {
     disposed = true;
     unsubscribe();
+    users.delete(user);
+    if (users.size === 0 && usersByName.get(name) === users) {
+      usersByName.delete(name);
+    }
     if (settings.releaseOnDispose === true) {
       // After a setup() still under way, so the release does not come before the registration.
+      // Checked then, not now: a component re-created in the same tick - a changed `:key`, hot
+      // module replacement - has registered by then and keeps the device instead of losing it.
       // Fire and forget: nobody is left to show a failure to.
-      void starting.then(async () => SerialBroker.release(name)).catch(() => undefined);
+      void starting
+        .then(async () => {
+          if (!usersByName.has(name)) {
+            await SerialBroker.release(name);
+          }
+        })
+        .catch(() => undefined);
     }
   });
 
@@ -367,6 +455,7 @@ function toHex(data: Uint8Array): string {
 /** A write, for the traffic list: its text without the line ending, or hexadecimal. */
 function describeSent(data: Uint8Array): string {
   const text = new TextDecoder().decode(data).replace(/(\r\n|\n|\r)$/u, '');
-  // Control characters other than tab and line endings, or bytes that are not UTF-8.
+  // Control characters other than tab and line endings, or bytes that are not UTF-8 (which the
+  // decoder turns into U+FFFD). Written as escapes, so the file stays printable text.
   return /[\u0000-\u0008\u000B-\u001F\u007F\uFFFD]/u.test(text) ? toHex(data) : text;
 }
