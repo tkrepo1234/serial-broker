@@ -1,0 +1,82 @@
+<header>
+  <h1>serial-broker <small>in an Angular application</small></h1>
+  <button id="open-second-tab" type="button" (click)="onOpenSecondTab()">Open a second tab</button>
+</header>
+
+<section class="status">
+  <p>
+    <span class="label">{{ serial.name }}</span>
+    <span id="status" [attr.data-status]="serial.status()">{{ serial.status() }}</span>
+    <span id="status-hint">{{ statusHint() }}</span>
+  </p>
+  <p class="actions">
+    @if (serial.status() === 'awaiting-permission') {
+      <!-- The one status that needs the user: the browser shows its port picker during a click,
+           and nowhere else. connect() calls requestAccess() before anything is awaited. -->
+      <button id="connect" type="button" class="primary" (click)="serial.connect()">
+        Connect…
+      </button>
+    }
+    @if (stopped()) {
+      <button id="restart" type="button" (click)="serial.restart()">Start again</button>
+    } @else {
+      <button id="release" type="button" (click)="serial.release()">Release in this tab</button>
+    }
+  </p>
+</section>
+
+@if (serial.lastError(); as error) {
+  <section id="error" role="alert" [attr.data-retryable]="error.retryable">
+    <p>
+      <strong id="error-code">{{ error.code }}</strong>
+      <span id="error-message">{{ error.message }}</span>
+    </p>
+    <p id="error-remediation">{{ error.remediation }}</p>
+    @if (error.retryable) {
+      <p id="error-recovering">The library is recovering by itself; the status shows how far.</p>
+    }
+    <button id="dismiss-error" type="button" (click)="serial.clearError()">Dismiss</button>
+  </section>
+}
+
+<section class="traffic">
+  <div class="traffic-header">
+    <h2>Traffic</h2>
+    <button id="clear-lines" type="button" (click)="serial.clearLines()">Clear</button>
+  </div>
+  <ol id="received" #received aria-label="Received and sent lines">
+    @for (line of serial.lines(); track line.id) {
+      <li [attr.data-direction]="line.direction" [attr.data-local]="line.local">
+        <time>{{ line.timestamp | date: 'HH:mm:ss.SSS' }}</time>
+        <span class="direction">{{
+          line.direction === 'in' ? 'in' : line.local ? 'out' : 'out, other tab'
+        }}</span>
+        <span class="text">{{ line.text }}</span>
+      </li>
+    }
+    @if (serial.partialLine()) {
+      <li data-direction="partial">
+        <time></time>
+        <span class="direction">in, no line end yet</span>
+        <span class="text">{{ serial.partialLine() }}</span>
+      </li>
+    }
+  </ol>
+
+  <form id="send-form" (submit)="onSend($event)">
+    <input
+      #sendInput
+      id="send-input"
+      placeholder="Line to send, CR LF is appended"
+      autocomplete="off"
+      [value]="draft()"
+      (input)="draft.set(sendInput.value)"
+    />
+    <button id="send-button" type="submit" class="primary" [disabled]="!canSend()">Send</button>
+  </form>
+</section>
+
+<footer>
+  Open this application in a second tab: both show the same status, both receive, both can send. One
+  of them holds the port; close it, and the other takes over.
+</footer>
