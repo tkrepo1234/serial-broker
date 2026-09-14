@@ -1,5 +1,7 @@
-import type { Clock, TimerHandle } from '../core/clock.js';
+import type { Clock } from '../core/clock.js';
 import type { TermId } from '../protocol/messages.js';
+
+import { scheduleDeadline, type Deadline } from './late-deadline.js';
 
 /**
  * How long a term that was succeeded without saying goodbye is waited for (ADR-0026).
@@ -39,7 +41,12 @@ export class OwnerTerms {
   #current: TermId | undefined;
   readonly #ended = new Set<TermId>();
   readonly #succeeded = new Set<TermId>();
-  readonly #graceTimers = new Map<TermId, TimerHandle>();
+  /**
+   * The grace periods still running. One that runs late - this tab was frozen or asleep - first hears
+   * the messages that arrived meanwhile, so a word from the former holder that is already waiting
+   * still counts (see `late-deadline.ts`).
+   */
+  readonly #graceTimers = new Map<TermId, Deadline>();
 
   constructor(private readonly host: OwnerTermsHost) {}
 
@@ -107,17 +114,21 @@ export class OwnerTerms {
     this.#stopGrace(term);
     this.#graceTimers.set(
       term,
-      this.host.clock.setTimer(() => {
-        this.#graceTimers.delete(term);
-        this.end(term);
-      }, FORMER_OWNER_GRACE_MS),
+      scheduleDeadline(
+        this.host.clock,
+        () => {
+          this.#graceTimers.delete(term);
+          this.end(term);
+        },
+        FORMER_OWNER_GRACE_MS,
+      ),
     );
   }
 
   #stopGrace(term: TermId): void {
-    const timer = this.#graceTimers.get(term);
-    if (timer !== undefined) {
-      this.host.clock.clearTimer(timer);
+    const grace = this.#graceTimers.get(term);
+    if (grace !== undefined) {
+      grace.cancel();
       this.#graceTimers.delete(term);
     }
   }

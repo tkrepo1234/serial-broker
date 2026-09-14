@@ -1,9 +1,11 @@
-import type { Clock, TimerHandle } from '../core/clock.js';
+import type { Clock } from '../core/clock.js';
 import { createSignal, type Signal } from '../core/deadline.js';
 import type { PendingWritesDiagnostics } from '../core/diagnostics.js';
 import { SerialBrokerErrorCode } from '../core/error-codes.js';
 import { SerialBrokerError } from '../core/errors.js';
 import type { RequestId, TermId } from '../protocol/messages.js';
+
+import { scheduleDeadline, type Deadline } from './late-deadline.js';
 
 /** A write this context has issued and is still waiting on. */
 interface PendingWrite {
@@ -33,7 +35,12 @@ interface PendingWrite {
    * because it could not write it, or has ended without beginning it.
    */
   isDispatched: boolean;
-  timer: TimerHandle | undefined;
+  /**
+   * The `writeTimeoutMs` deadline. One that runs late - the tab was frozen or asleep - first hears
+   * the messages that arrived meanwhile, so a write that began or ended is not reported as one that
+   * never started (see `late-deadline.ts`).
+   */
+  deadline: Deadline | undefined;
 }
 
 /** What the tracker needs in order to do its work. */
@@ -116,29 +123,33 @@ export class PendingWrites {
       startedTerm: undefined,
       addressedTerm: undefined,
       isDispatched: false,
-      timer: undefined,
+      deadline: undefined,
     };
 
     // The deadline covers the whole journey - waiting for an owner, crossing the bus, and the
     // device accepting the bytes - because from the caller's point of view that is one wait.
-    pending.timer = this.host.clock.setTimer(() => {
-      this.settle(
-        requestId,
-        new SerialBrokerError(
-          SerialBrokerErrorCode.WRITE_TIMEOUT,
-          'The write did not complete within the configured deadline',
-          {
-            configName: this.host.configName,
-            context: {
-              requestId,
-              byteLength: payload.byteLength,
-              started: pending.startedTerm !== undefined,
+    pending.deadline = scheduleDeadline(
+      this.host.clock,
+      () => {
+        this.settle(
+          requestId,
+          new SerialBrokerError(
+            SerialBrokerErrorCode.WRITE_TIMEOUT,
+            'The write did not complete within the configured deadline',
+            {
+              configName: this.host.configName,
+              context: {
+                requestId,
+                byteLength: payload.byteLength,
+                started: pending.startedTerm !== undefined,
+              },
+              timestamp: this.host.clock.now(),
             },
-            timestamp: this.host.clock.now(),
-          },
-        ),
-      );
-    }, this.host.writeTimeoutMs);
+          ),
+        );
+      },
+      this.host.writeTimeoutMs,
+    );
 
     this.#writes.set(requestId, pending);
     this.#dispatch(pending);
@@ -253,9 +264,7 @@ export class PendingWrites {
     }
 
     this.#writes.delete(requestId);
-    if (pending.timer !== undefined) {
-      this.host.clock.clearTimer(pending.timer);
-    }
+    pending.deadline?.cancel();
 
     if (error === undefined) {
       pending.settled.resolve();
