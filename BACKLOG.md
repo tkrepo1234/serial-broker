@@ -88,6 +88,45 @@ Everything below holds, and nothing beyond it is part of this item.
 
 ---
 
+## Follow-ups from the hardening round of 2026-09-14
+
+The hardening round bounded what the bus can make a tab or the worker hold, held each worker port to
+its identity, and closed the lifecycle and re-entrancy defects it found. What it proposed but did not
+do, because it needs a decision, a protocol change or a real browser:
+
+### Needs protocol version 8
+
+- **A secret in `hello`.** Each transport sends a random value only in `hello`; the worker binds the
+  identity to it and refuses a later `hello` with another. Stops impersonation on the worker; not
+  possible on `BroadcastChannel`.
+- **One Web Lock per term** (`serial-broker/term/v8/<name>/<term>`), held by the owner for the whole
+  term. Tabs take a term for ended when its lock is free, instead of after the one-second grace
+  period, so a forged claim cannot end a live term and crash detection becomes exact.
+
+### Tighter checks on what tabs believe
+
+- `PendingWrites`: accept `write-started` and `write-result` only from a term the write was addressed
+  to; today an outcome from any term settles it.
+- Claims and statuses: refute a new term while the owner lock is not held (`locks.query()`), and a
+  finite `maxTabs` without a matching tab-slot lock - one forged status makes every tab that does
+  not hold the port withdraw.
+- `data-received` and `data-sent`: accept only from the sender of the current or awaited term.
+- Rate limits for answers to `status-request` and `diagnostics-request`, for the
+  `client.malformed-message` warning, and for remote `error` events.
+- Observer: cap reports per collection, and ignore a report whose `clientId` differs from its sender.
+- The owner's write queue: bound the writes it holds for other tabs; forged `write-request`s with
+  new request ids grow it.
+
+### Time and sleep
+
+- `Clock` has no monotonic time. `stableAfterMs` is measured on the wall clock, so a clock set back
+  keeps the attempt counter from resetting.
+- After the machine wakes, the broker's sweep can forget every tab before their heartbeats arrive;
+  write messages in between are lost. Needs a real browser to confirm.
+- The fake worker keeps every routed message, which grows test memory in long runs.
+
+---
+
 ## Open findings from the bug hunt of 2026-09-13
 
 Everything confirmed in the bug hunt is fixed. What remains is either unconfirmed or needs a real

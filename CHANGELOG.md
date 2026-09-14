@@ -101,6 +101,36 @@ coordinate with each other. See
 - The debugging surface asks before using a worker URL that only a link names, never uses one of
   another origin, and does not start when framed by another origin.
 
+### Changed while hardening (2026-09-14)
+
+- A message on the bus beyond a documented limit is dropped and logged once per tab as
+  `transport.limit-exceeded`; every limit is listed in `SECURITY.md`. Accepted messages are rebuilt
+  from their declared fields, so nothing a sender adds travels further.
+- The worker holds each port to the identity its `hello` named: it refuses messages before `hello`
+  and messages sent under another identity, and a port saying `hello` as an existing tab no longer
+  takes that tab's messages or ends its participation.
+- A version announcement whose version is not a positive safe integer is ignored.
+- `SECURITY.md` says precisely what a script of the same origin can and cannot make serial-broker do.
+- A write that rejects with `WRITE_TIMEOUT` and `started: false` is never written afterwards: the tab
+  holding the port does not begin a write that waited `writeTimeoutMs` there
+  (`supervisor.write-expired`).
+- A tab resuming from being frozen, or from sleep, no longer fails a write that succeeded or writes
+  one twice: a deadline that fires late first lets the messages that arrived meanwhile be heard.
+- A large write is handed to the device one chunk at a time, instead of preparing every chunk first.
+- A second `release()` while one is under way resolves only once the port is closed. A listener that
+  releases from `onSend` or during `setup()` no longer fails a write or keeps the configuration
+  remembered, and a diagnostics watcher removed during a delivery hears nothing more.
+- A tab keeps at most 8 reported peer versions and 16 unheard errors, logged once as
+  `client.peer-versions-limit` and `client.unheard-errors-dropped`.
+- The function `subscribe()` returns removes only its own registration: called after the listener
+  was removed and registered again, it leaves the new registration in place.
+- In a context with an opaque origin - a sandboxed iframe without `allow-same-origin` - building the
+  library raises `WEB_LOCKS_UNAVAILABLE` and `isSupported()` returns `false`, instead of the status
+  staying `idle` with nothing said.
+- `send()` rejects a payload over 16 MiB with `INVALID_ARGUMENT` in every tab, instead of the write
+  timing out when another tab holds the port.
+- Errors raised by the facade's own checks carry the time they arose.
+
 ### Notes
 
 - Wire protocol version: **7**. Version 1 was never released; 2 added the diagnostics request and
