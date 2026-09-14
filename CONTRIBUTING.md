@@ -60,6 +60,23 @@ Work through [the manual test plan](./docs/manual-test-plan.md) against real har
 record the result. The simulated browser is faithful, but a fake that is wrong in the same way
 as the code passes every test.
 
+## Releasing
+
+Every stable version gets a GitHub release, created by `.github/workflows/release.yml` when its tag
+is pushed. A version with a pre-release part, such as `1.2.0-rc.1`, gets none. Nothing is
+published to npm.
+
+1. Rename the `[Unreleased]` section of `CHANGELOG.md` to the version and date, such as
+   `## [0.2.0] - 2026-10-01`, and start a new, empty `[Unreleased]` above it. The release notes
+   are taken from that section; without it, the release fails before anything is built.
+2. Set `version` in `package.json` to the same version, and commit both.
+3. Run `npm run release:check`. It prints the notes the release will carry, or says what is
+   missing.
+4. Tag the commit and push the tag: `git tag v0.2.0 && git push origin v0.2.0`.
+
+The workflow checks that the tag matches `package.json`, runs `npm run verify`, and creates the
+release with the notes and the packed package (`serial-broker-0.2.0.tgz`) attached.
+
 ## What gets a change rejected
 
 - A test that depends on real time, real randomness, or incidental task ordering.
