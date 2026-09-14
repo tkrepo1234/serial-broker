@@ -23,29 +23,18 @@ The Simple tier also exists as a runnable application with a smoke test,
 Vite + TypeScript page that connects, prints what arrives and sends text, with every status, every
 error's code and remediation, and a README on taking it into an application of your own.
 
-## In a framework
 ## Runnable applications
 
 The examples above are plain TypeScript and fit into any framework. Complete applications live in
 the repository rather than here, because each is a project of its own with a toolchain of its own.
-[examples/multi-tab-dashboard](https://github.com/tkrepo1234/serial-broker/tree/main/examples/multi-tab-dashboard)
-is a Vite and TypeScript dashboard in plain DOM that names every status, shows every error with its
-code and remediation, asks for permission from the one click that needs it, remembers and restores
-the device, lists what the other tabs see, and shows the diagnostics entry point read-only. One
-worked-out framework integration is a project of its own too:
-## Runnable applications
+Each has a README that explains how to take its integration into an application of your own, and a
+smoke test that runs it against a stand-in for the device.
 
-The examples above are plain TypeScript and fit into any framework. Worked-out integrations live
-in the repository rather than here, because each is a project of its own:
-[examples/openui5](https://github.com/tkrepo1234/serial-broker/tree/main/examples/openui5) is a
-runnable [OpenUI5](https://openui5.org) application together with a reusable module - a `JSONModel`
-that mirrors one configuration and is bindable in XML views - and a README that explains how to
-take it into an application of your own.
-
-[examples/exclusive](https://github.com/tkrepo1234/serial-broker/tree/main/examples/exclusive) is
-a Vite page without a framework that uses a device with `maxTabs: 1`: it shows `queued` as a wait,
-the takeover when the tab in front releases the device or closes, and a release button.
-[examples/no-bundler](https://github.com/tkrepo1234/serial-broker/tree/main/examples/no-bundler)
-is a static page with no build step - `serial-broker/min` from an import map, the worker script
-served next to it, `configure({ workerUrl })` spelled out - for a front end that a site's existing
-web server delivers.
+| Application                                                                                               | What it shows                                                                                                                                                                                            |
+| --------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [minimal](https://github.com/tkrepo1234/serial-broker/tree/main/examples/minimal)                         | One Vite + TypeScript page that connects, prints what arrives and sends text, with every status and every error's code and remediation.                                                                  |
+| [multi-tab-dashboard](https://github.com/tkrepo1234/serial-broker/tree/main/examples/multi-tab-dashboard) | A plain-DOM dashboard: every status, every error, permission from the one click that needs it, remembering and restoring the device, what the other tabs see, and the diagnostics entry point read-only. |
+| [exclusive](https://github.com/tkrepo1234/serial-broker/tree/main/examples/exclusive)                     | A device with `maxTabs: 1`: `queued` shown as a wait, the takeover when the tab in front releases the device or closes, and a release button.                                                            |
+| [no-bundler](https://github.com/tkrepo1234/serial-broker/tree/main/examples/no-bundler)                   | A static page with no build step: `serial-broker/min` from an import map, the worker script served next to it, `configure({ workerUrl })` spelled out.                                                   |
+| [openui5](https://github.com/tkrepo1234/serial-broker/tree/main/examples/openui5)                         | An [OpenUI5](https://openui5.org) application and a reusable module: a `JSONModel` that mirrors one configuration and is bindable in XML views.                                                          |
+| [vue](https://github.com/tkrepo1234/serial-broker/tree/main/examples/vue)                                 | A Vue 3 application and a reusable composable, `useSerialBroker(name, options)`, that returns refs for the status, the last error and the received lines, with `connect`, `send` and `release`.          |
