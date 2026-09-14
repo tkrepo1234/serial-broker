@@ -156,11 +156,17 @@ it. How tabs talk to each other is a separate matter.
 
 ### What is stored
 
-`localStorage`, under `serial-broker/configurations/v1`, holds one JSON object with an entry per
-remembered configuration — one set up with `persist: true`, the default. Each entry is the options
-passed to `setup()`: the device filter, line settings, reconnect and timeout settings, text
-encoding, `persist` and `maxTabs`. Older releases used `serial-broker/v1/configurations` to
-`serial-broker/v4/configurations`; those are moved to the current key once and removed.
+`localStorage` holds every remembered configuration — one set up with `persist: true`, the default —
+under two kinds of key:
+
+- `serial-broker/configurations/v2/index`, a JSON array of the remembered names;
+- `serial-broker/configurations/v2/entry/<name>`, one per configuration, holding the options passed
+  to `setup()`: the device filter, line settings, reconnect and timeout settings, text encoding,
+  `persist` and `maxTabs`.
+
+Earlier releases stored all of them in one JSON object, under `serial-broker/configurations/v1` and,
+before that, `serial-broker/v1/configurations` to `serial-broker/v4/configurations`. Those keys are
+not read; the first restore of this version removes them.
 
 - **Any same-origin script can read it, change it and delete it**, and it survives until the site
   data is cleared — also across a user logging out of the application. It holds no payload data,
@@ -168,10 +174,10 @@ encoding, `persist` and `maxTabs`. Older releases used `serial-broker/v1/configu
 - **An entry written by another script is validated like the application's own options** when
   `restore()` reads it. The most it can do is set up a configuration for a device the user has
   already granted.
-- **Configuration names are visible in more places than storage**: in Web Lock names, which any
-  same-origin context can list with `navigator.locks.query()`, in every log record and in
-  diagnostics reports. Name configurations after the device's role, never after a person, an
-  account or anything secret.
+- **Configuration names are visible in more places than storage**: in the storage keys themselves,
+  in Web Lock names, which any same-origin context can list with `navigator.locks.query()`, in every
+  log record and in diagnostics reports. Name configurations after the device's role, never after a
+  person, an account or anything secret.
 
 The debugging surface stores its own settings under `serial-broker/debug/library-settings`: a
 worker URL, a transport and whether to log payloads.

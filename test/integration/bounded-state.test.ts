@@ -6,10 +6,10 @@ import {
 } from '../../src/client/serial-broker-client.js';
 import { SerialBrokerErrorCode } from '../../src/core/error-codes.js';
 import { ANNOUNCEMENT_CHANNEL_NAME, versionAnnouncement } from '../../src/protocol/announcement.js';
-import { storageKey } from '../../src/storage/configuration-store.js';
 import { BrowserHarness } from '../harness/browser-harness.js';
 import { READER, READER_OPTIONS } from '../harness/devices.js';
 import { fieldsOfEvent, recordingLogger } from '../harness/recording-logger.js';
+import { remember } from '../harness/stored-configurations.js';
 
 /**
  * What a tab keeps about things other contexts told it has a limit, so that a tab running for weeks
@@ -44,11 +44,11 @@ describe('state a tab keeps about what it heard', () => {
     const { logger, records } = recordingLogger();
     const harness = new BrowserHarness({ logger });
     harness.serial.grant(harness.serial.addDevice(READER.vendorId, READER.productId));
-    const broken = Array.from({ length: MAX_UNHEARD_ERRORS + 4 }, (_, index) => [
-      `broken${String(index)}`,
-      { device: 'not a device' },
-    ]);
-    harness.storage.poison(storageKey(), JSON.stringify(Object.fromEntries(broken)));
+    const broken: Record<string, unknown> = {};
+    for (let index = 0; index < MAX_UNHEARD_ERRORS + 4; index += 1) {
+      broken[`broken${String(index)}`] = { device: 'not a device' };
+    }
+    remember(harness.storage, broken);
     const tab = harness.openTab();
 
     // Nothing is set up yet, so nobody hears the corrupt entries being discarded.

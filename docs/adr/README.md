@@ -17,7 +17,7 @@ because of a decision references it in a comment (`// See ADR-0005.`).
 | [0006](./0006-sharedworker-as-message-broker.md)                      | Use a SharedWorker as the message broker                                            | Accepted                    |
 | [0007](./0007-broadcastchannel-fallback-transport.md)                 | Fall back to BroadcastChannel when SharedWorker is unavailable                      | Amended by 0024             |
 | [0008](./0008-wire-protocol-and-versioning.md)                        | Version the wire protocol independently                                             | Amended by 0023, 0024       |
-| [0009](./0009-device-identity-and-permission-persistence.md)          | Identify devices by USB IDs, persist configuration, rely on browser permission      | Amended by 0016, 0022, 0027 |
+| [0009](./0009-device-identity-and-permission-persistence.md)          | Identify devices by USB IDs, persist configuration, rely on browser permission      | Amended by 0016, 0022, 0033 |
 | [0010](./0010-reconnect-supervision-and-backoff.md)                   | Supervise the connection with bounded exponential backoff                           | Accepted                    |
 | [0011](./0011-encapsulation-boundary.md)                              | Expose nothing about the coordination mechanism                                     | Amended by 0018, 0025       |
 | [0012](./0012-error-model.md)                                         | One error type, stable codes, mandatory remediation                                 | Accepted                    |
@@ -30,10 +30,11 @@ because of a decision references it in a comment (`// See ADR-0005.`).
 | [0019](./0019-ship-the-debugging-surface.md)                          | Ship the debugging surface in the package, as static content                        | Accepted                    |
 | [0020](./0020-documentation-toolchain.md)                             | Build the developer documentation with Sphinx, MyST and a TSDoc-generated reference | Accepted                    |
 | [0021](./0021-forget-silent-participants.md)                          | Forget tabs that stop sending heartbeats                                            | Accepted                    |
-| [0022](./0022-version-stored-configurations-separately.md)            | Version stored configurations separately from the protocol                          | Amended by 0027             |
+| [0022](./0022-version-stored-configurations-separately.md)            | Version stored configurations separately from the protocol                          | Amended by 0027, 0033       |
 | [0023](./0023-announce-the-protocol-version.md)                       | Announce the protocol version on an unversioned channel                             | Accepted                    |
 | [0024](./0024-keep-the-worker-handshake-version-independent.md)       | Keep the handshake with the worker readable by every protocol version               | Accepted                    |
 | [0025](./0025-limit-the-tabs-using-a-configuration.md)                | Limit how many tabs use a configuration at once                                     | Accepted                    |
 | [0026](./0026-attribute-messages-to-a-term-of-holding-the-port.md)    | Attribute ownership, write and status messages to a term of holding the port        | Accepted                    |
-| [0027](./0027-keep-a-remembered-configuration-while-a-tab-runs-it.md) | Keep a remembered configuration while any tab runs it                               | Accepted                    |
+| [0027](./0027-keep-a-remembered-configuration-while-a-tab-runs-it.md) | Keep a remembered configuration while any tab runs it                               | Amended by 0033             |
 | [0032](./0032-measure-durations-on-a-monotonic-clock.md)              | Measure durations on a monotonic clock, timestamp events on the wall clock          | Accepted                    |
+| [0033](./0033-one-storage-key-per-configuration.md)                   | One storage key per configuration, with an index of the names                       | Accepted                    |

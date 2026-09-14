@@ -1,8 +1,12 @@
 # ADR-0027: Keep a remembered configuration while any tab runs it
 
-- **Status:** Accepted
+- **Status:** Accepted, amended by [ADR-0033](./0033-one-storage-key-per-configuration.md)
 - **Date:** 2026-09-14
 - **Amends:** ADR-0009, ADR-0022
+
+> **Amendment (ADR-0033).** The stored format is version 2, so the lock is
+> `serial-broker/persisted/v2/<name>`. The save a tab makes once its hold is granted also repairs a
+> name lost from the index of remembered configurations.
 
 ## Context
 

@@ -199,6 +199,15 @@ application has to encode the bytes itself.
   `persist: true`, and a tab that is closed or reloaded forgets nothing. A tab setting the name up
   with `persist: false` forgets an entry left behind by an earlier setup, under the same condition.
   The tab that saved last decides the remembered options.
+- **Where it is kept:** one `localStorage` key per configuration,
+  `serial-broker/configurations/v2/entry/<name>`, listed in `serial-broker/configurations/v2/index`.
+  Two tabs remembering different configurations in the same moment therefore write different keys
+  and cannot overwrite each other. An entry that cannot be read — hand-edited, truncated, written by
+  a version whose options no longer validate — is discarded on its own, with `STORAGE_CORRUPT`
+  reported, and the other configurations are restored as usual.
+- **Nothing is carried over from an older format.** This version does not read what releases before
+  it stored; those keys are removed the first time `restore()` runs, and the configurations are set
+  up again from the application or by the user.
 
 The browser remembers the device permission independently of this option.
 

@@ -137,7 +137,8 @@ never exchange messages or contend for the same lock, and both will try to open 
 they can still detect each other, every tab also announces its protocol version on
 `serial-broker/announcements`, a channel whose name and single message never change [ADR-0023].
 Remembered configurations carry a storage version of their own, so they survive a protocol change
-[ADR-0022].
+[ADR-0022]. Each lives under a key of its own, listed in an index, so that two tabs saving at the
+same moment cannot overwrite each other's [ADR-0033].
 
 ## The connection
 
@@ -236,3 +237,4 @@ in a real browser, with real or emulated hardware [ADR-0017].
 | 0026 | Attribute ownership, write and status messages to a term of holding the port        |
 | 0027 | Keep a remembered configuration while any tab runs it                               |
 | 0032 | Measure durations on a monotonic clock, timestamp events on the wall clock          |
+| 0033 | One storage key per configuration, with an index of the names                       |

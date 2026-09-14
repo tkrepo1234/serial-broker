@@ -4,10 +4,10 @@ import { SerialBrokerErrorCode } from '../../src/core/error-codes.js';
 import { SerialBrokerStatus } from '../../src/core/types.js';
 import { normalizeConfiguration } from '../../src/core/validation.js';
 import { brokerChannelName, PROTOCOL_VERSION } from '../../src/protocol/version.js';
-import { storageKey } from '../../src/storage/configuration-store.js';
 import { BrowserHarness } from '../harness/browser-harness.js';
 import { READER, READER_OPTIONS } from '../harness/devices.js';
 import { fieldsOfEvent, recordingLogger } from '../harness/recording-logger.js';
+import { rememberedNames } from '../harness/stored-configurations.js';
 
 /**
  * Defects found in the review of 2026-09-13, each pinned by the behaviour it broke.
@@ -43,7 +43,7 @@ describe('releasing a configuration', () => {
     await releasing;
     await harness.settle();
 
-    expect(harness.storage.getItem(storageKey())).toContain('"Reader"');
+    expect(rememberedNames(harness.storage)).toEqual(['Reader']);
   });
 });
 

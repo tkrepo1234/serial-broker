@@ -217,8 +217,15 @@ reload of those tabs would lose it. The same holds for `releaseAll()`, for
 `release(name, { forgetDevice: true })` — which still revokes the permission for every tab — and
 for a tab that sets the name up with `persist: false`. A tab that is closed, reloaded or crashes
 forgets nothing, so the configuration is there on the next visit. Every tab running a remembered
-configuration holds a shared Web Lock, `serial-broker/persisted/v1/<name>`, and the browser lets it
+configuration holds a shared Web Lock, `serial-broker/persisted/v2/<name>`, and the browser lets it
 go when the tab goes away, however it goes.
+
+Each configuration is stored under a key of its own,
+`serial-broker/configurations/v2/entry/<name>`, listed in `serial-broker/configurations/v2/index`,
+so two tabs remembering different configurations at the same moment cannot overwrite each other's.
+An entry that cannot be read is discarded on its own and reported as `STORAGE_CORRUPT`; the other
+configurations are restored regardless. What a release before this one stored is not read: its keys
+are removed on the first `restore()`, and those configurations have to be set up once more.
 
 Only the tab that holds the port can ask the user for permission, because only it can open the
 port the user chooses. `requestAccess()` in any other tab rejects with `PERMISSION_REQUIRED` unless

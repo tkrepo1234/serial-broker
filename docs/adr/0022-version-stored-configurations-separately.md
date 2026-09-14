@@ -1,12 +1,17 @@
 # ADR-0022: Version stored configurations separately from the protocol
 
-- **Status:** Accepted, amended by [ADR-0027](./0027-keep-a-remembered-configuration-while-a-tab-runs-it.md)
+- **Status:** Accepted, amended by [ADR-0027](./0027-keep-a-remembered-configuration-while-a-tab-runs-it.md) and [ADR-0033](./0033-one-storage-key-per-configuration.md)
 - **Date:** 2026-09-13
 - **Amends:** ADR-0009
 
 > **Amendment (ADR-0027).** Tabs running a remembered configuration hold a shared Web Lock, and an
 > entry is removed only when none does. The lock carries `STORAGE_SCHEMA_VERSION`, not the protocol
 > version, for the reason this record gives for the key.
+
+> **Amendment (ADR-0033).** `STORAGE_SCHEMA_VERSION` is 2, and configurations no longer share one
+> key: each has its own, `serial-broker/configurations/v2/entry/<name>`, listed in
+> `serial-broker/configurations/v2/index`. The key of version 1, and the protocol-versioned keys
+> this record moved to it, are removed unread instead of migrated.
 
 ## Context
 
