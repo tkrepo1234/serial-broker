@@ -19,13 +19,25 @@
           <span id="busStatus"></span>
         </p>
       </div>
-      <button id="settingsToggle" type="button" class="secondary" aria-expanded="false">
-        Settings
-      </button>
-      <button id="newButton" type="button">New configuration</button>
+      <div class="header-actions">
+        <button id="settingsToggle" type="button" class="secondary" aria-expanded="false">
+          Settings
+        </button>
+        <button id="newButton" type="button" class="secondary">New configuration</button>
+        <button id="chooseButton" type="button">Choose a device…</button>
+        <button
+          type="button"
+          class="help"
+          popovertarget="help-choose-device"
+          aria-label="About choosing a device"
+        >
+          ?
+        </button>
+      </div>
     </header>
 
     <div id="banner" class="banner" hidden></div>
+    <p id="chooseMessage" class="message notice" role="status" hidden></p>
 
     <fieldset id="settingsPanel" hidden>
       <legend>Settings</legend>
@@ -91,14 +103,16 @@
 
     <div id="empty" class="empty" hidden>
       <p>
-        No configurations yet. One set up in any tab of this origin, or remembered from an earlier
-        visit, appears here.
+        No configurations yet. <b>Choose a device</b> picks one from the ports this browser offers
+        and connects to it; you need no vendor ID and no product ID for that. A configuration set up
+        in any tab of this origin, or remembered from an earlier visit, appears here too.
       </p>
       <p>
         If your application's tabs have configurations and none appear, this page uses another
         worker URL or transport than they do: check <b>Settings</b>.
       </p>
-      <button id="emptyNewButton" type="button">New configuration</button>
+      <button id="emptyChooseButton" type="button">Choose a device…</button>
+      <button id="emptyNewButton" type="button" class="secondary">New configuration</button>
     </div>
 
     <div id="overview" hidden>
@@ -137,6 +151,21 @@
       <div id="log" class="log tall" role="log" data-empty="No records yet."></div>
     </details>
 
+    <div id="help-choose-device" class="help-text" popover>
+      <h3>Choose a device</h3>
+      <p>
+        Opens the browser's port picker with no filter, so every port this browser offers is in it,
+        USB adapters and built-in ports alike. Pick the one your device is on.
+      </p>
+      <p>
+        This page then proposes a configuration for it: a name, the device's USB vendor and product
+        IDs — or <b>any port</b>, where the port reports none — and the line settings, starting at
+        9600 baud. Change what your device needs and press <b>Connect</b>. The browser has the
+        permission from the picker by then, so connecting asks for nothing more, this visit and
+        every later one.
+      </p>
+      <p>Closing the picker without choosing changes nothing.</p>
+    </div>
     <div id="help-worker-url" class="help-text" popover>
       <h3>Worker URL</h3>
       <p>
@@ -493,10 +522,8 @@
     <dialog id="setupDialog">
       <form autocomplete="off">
         <h2 data-part="title">New configuration</h2>
-        <p data-part="editNote" class="hint edit-note" hidden>
-          Applies to this page only: it disconnects and connects again with these settings. Other
-          tabs keep theirs.
-        </p>
+        <!-- Filled in by the dialog: what editing changes, or what connecting to a chosen port does. -->
+        <p data-part="editNote" class="hint edit-note" hidden></p>
         <div class="grid">
           <div>
             <label for="name">Name</label>
@@ -530,11 +557,17 @@
             </div>
             <input id="baudRate" name="baudRate" list="baudRates" />
             <datalist id="baudRates">
+              <option value="1200"></option>
+              <option value="2400"></option>
+              <option value="4800"></option>
               <option value="9600"></option>
               <option value="19200"></option>
               <option value="38400"></option>
               <option value="57600"></option>
               <option value="115200"></option>
+              <option value="230400"></option>
+              <option value="460800"></option>
+              <option value="921600"></option>
             </datalist>
           </div>
           <div>

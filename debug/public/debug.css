@@ -663,6 +663,7 @@ button.help:focus-visible {
 .send button.help {
   margin: 0 0 0.65rem;
 }
+
 /* Spacing a few rows need beyond the shared one, so no element carries a style attribute:
    the page's content security policy allows no inline styles (ADR-0034). */
 .row.spaced {
@@ -676,4 +677,15 @@ button.help:focus-visible {
 }
 .log-controls {
   margin-bottom: 0.5rem;
+}
+/* The header's actions stay together, with the "?" beside the main one. */
+.header-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+/* Two actions in the empty state: the main one, and setting a configuration up by hand. */
+.empty button + button {
+  margin-left: 0.5rem;
 }

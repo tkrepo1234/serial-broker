@@ -22,6 +22,12 @@ import type { SerialBrokerEnvironment } from '../../src/environment/environment.
 import { PROTOCOL_VERSION } from '../../src/protocol/version.js';
 import { ConfigurationStore } from '../../src/storage/configuration-store.js';
 
+import {
+  formValuesForPort,
+  isPickerDismissed,
+  noteForChosenPort,
+  type ChosenPortInfo,
+} from './chosen-port.js';
 import { ConfigurationDetail, type DetailHost } from './detail.js';
 import { byId, element } from './dom.js';
 import { EventLog } from './event-log.js';
@@ -102,7 +108,7 @@ if (isFramedElsewhere) {
   banner.textContent =
     'serial-broker does not start inside a page of another origin. Open this page on its own.';
   banner.hidden = false;
-  byId('newButton').hidden = true;
+  hideSetupActions();
 } else {
   try {
     environment = createBrowserEnvironment({
@@ -123,7 +129,14 @@ if (isFramedElsewhere) {
     // Not always the browser: a transport forced under Settings that this browser lacks fails too.
     banner.textContent = `serial-broker could not start on this page: ${describeError(error).text}`;
     banner.hidden = false;
-    byId('newButton').hidden = true;
+    hideSetupActions();
+  }
+}
+
+/** Hides everything that would set a configuration up, where this page cannot run one. */
+function hideSetupActions(): void {
+  for (const id of ['newButton', 'chooseButton']) {
+    byId(id).hidden = true;
   }
 }
 
@@ -231,6 +244,9 @@ for (const id of ['newButton', 'emptyNewButton']) {
     dialog.open();
   });
 }
+for (const id of ['chooseButton', 'emptyChooseButton']) {
+  byId(id).addEventListener('click', chooseADevice);
+}
 
 void refreshLoop();
 
@@ -296,6 +312,85 @@ window.addEventListener('pagehide', (event) => {
     diagnostics?.close();
   }
 });
+
+// --- Choosing a device ------------------------------------------------------------------------
+
+/**
+ * Opens the browser's port picker with no filter, and offers a configuration for what was chosen.
+ *
+ * This is where someone who has not used serial-broker before starts: no vendor ID, no product
+ * ID, no device type - choose the port, confirm the settings, and the page is connected to it
+ * (ADR-0034). `requestPort()` is called inside the click, because the browser shows the picker
+ * only for a fresh user gesture.
+ */
+function chooseADevice(): void {
+  showChooseMessage('');
+  let chosen: Promise<SerialPort>;
+  try {
+    // Reported before the picker opens: a page that cannot run a configuration must not ask for
+    // a device permission it would then have no use for.
+    requireClient();
+    chosen = navigator.serial.requestPort();
+  } catch (error) {
+    showChooseMessage(describeError(error).text, 'error');
+    return;
+  }
+  void chosen.then(
+    async (port) => {
+      await offerConfigurationFor(port);
+    },
+    (error: unknown) => {
+      if (isPickerDismissed(error)) {
+        // Closing the picker is an answer, not a failure: nothing was granted, nothing changed.
+        showChooseMessage('The picker was dismissed; nothing changed.', 'notice');
+        return;
+      }
+      showChooseMessage(describeError(error).text, 'error');
+      logFailure('choose a device', error);
+    },
+  );
+}
+
+/** Opens the setup dialog on the chosen port, filled in from what the port reports. */
+async function offerConfigurationFor(port: SerialPort): Promise<void> {
+  const info = port.getInfo();
+  try {
+    dialog.connectToPort(
+      formValuesForPort(info, knownNames()),
+      noteForChosenPort(info, await grantedPortInfos()),
+    );
+  } catch (error) {
+    showChooseMessage(describeError(error).text, 'error');
+    logFailure('read the chosen device', error);
+  }
+}
+
+/** What every port this browser allows this site to use reports, for the ambiguity warning. */
+async function grantedPortInfos(): Promise<ChosenPortInfo[]> {
+  try {
+    return (await navigator.serial.getPorts()).map((port) => port.getInfo());
+  } catch (error) {
+    // Only the warning about several matching ports is lost, so the flow carries on without it.
+    logFailure('list the granted ports', error);
+    return [];
+  }
+}
+
+/** Every configuration name this origin knows, so a suggested name is not one of them. */
+function knownNames(): string[] {
+  return buildConfigurationViews({
+    thisTab: client?.diagnostics(),
+    snapshot,
+    remembered: remembered(),
+  }).map((view) => view.name);
+}
+
+function showChooseMessage(text: string, kind: 'error' | 'notice' = 'notice'): void {
+  const message = byId('chooseMessage');
+  message.textContent = text;
+  message.className = `message ${kind}`;
+  message.hidden = text === '';
+}
 
 // --- Helpers ----------------------------------------------------------------------------------
 
