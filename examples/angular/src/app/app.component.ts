@@ -22,7 +22,8 @@ const STATUS_HINT: Readonly<Record<SerialBrokerStatus, string>> = {
   connecting: 'Opening the port…',
   open: 'Connected. Everything the device sends appears below, in every tab.',
   reconnecting: 'The connection was lost. Reconnecting by itself - nothing to do.',
-  failed: 'Stopped. The error below says why; Start again sets the device up anew.',
+  failed:
+    'Gave up for now. The error below says why; plugging the device in again resumes by itself, and Start again tries sooner.',
   released: 'This tab no longer uses the device. The other tabs keep it.',
 };
 

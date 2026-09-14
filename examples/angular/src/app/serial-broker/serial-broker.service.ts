@@ -18,7 +18,12 @@ export interface SerialLine {
   readonly id: number;
   /** `'in'` for what the device sent, `'out'` for what any tab sent to it. */
   readonly direction: 'in' | 'out';
-  /** The line without its line ending. Bytes that are not text are shown as hexadecimal. */
+  /**
+   * The line without its line ending, or hexadecimal (`1A 2B`) for bytes that are not text.
+   *
+   * Without `encoding.decodeText`, the service cannot tell where a line ends: every received chunk
+   * is one line of hexadecimal. A received text line longer than `maxLineLength` is split.
+   */
   readonly text: string;
   /** For `'out'`: `true` when this tab sent it, `false` when another tab did. */
   readonly local: boolean;
@@ -42,6 +47,19 @@ export interface SerialErrorInfo {
 }
 
 const DEFAULT_MAX_LINES = 200;
+const DEFAULT_MAX_LINE_LENGTH = 1024;
+
+/**
+ * Errors that belong to one `send()`: the command they concern may or may not have reached the
+ * device, so they stay in `lastError` when the port opens again - the connection being back says
+ * nothing about the command. The codes of "Writing" in the library's error reference.
+ */
+const WRITE_ERROR_CODES: ReadonlySet<SerialBrokerErrorCode> = new Set([
+  SerialBrokerErrorCode.WRITE_TIMEOUT,
+  SerialBrokerErrorCode.WRITE_FAILED,
+  SerialBrokerErrorCode.WRITE_QUEUE_FULL,
+  SerialBrokerErrorCode.OWNER_LOST_DURING_WRITE,
+]);
 
 /**
  * One serial-broker configuration as an Angular service: signals to read, methods to act.
@@ -64,6 +82,7 @@ export class SerialBrokerService {
 
   readonly #configuration = inject(SERIAL_BROKER_CONFIGURATION);
   readonly #maxLines = this.#configuration.maxLines ?? DEFAULT_MAX_LINES;
+  readonly #maxLineLength = this.#configuration.maxLineLength ?? DEFAULT_MAX_LINE_LENGTH;
 
   readonly #status = signal<SerialBrokerStatus>('idle');
   readonly #lastError = signal<SerialErrorInfo | null>(null);
@@ -79,7 +98,10 @@ export class SerialBrokerService {
   /**
    * The most recent error, from an event or from a call of this service, or `null`.
    *
-   * Cleared when the port opens: whatever went wrong before, the connection is there now.
+   * Cleared when the port opens: whatever went wrong with the connection before, it is there now.
+   * An error of a `send()` - `OWNER_LOST_DURING_WRITE`, `WRITE_FAILED`, `WRITE_TIMEOUT`,
+   * `WRITE_QUEUE_FULL` - stays until it is dismissed, replaced or the service starts again: the
+   * connection being back does not say whether the command reached the device.
    */
   readonly lastError = this.#lastError.asReadonly();
 
@@ -88,7 +110,8 @@ export class SerialBrokerService {
 
   /**
    * What the device sent after its last line ending: a prompt, or a line still on its way. A
-   * chunk is an arbitrary piece of the byte stream, not a line.
+   * chunk is an arbitrary piece of the byte stream, not a line. Never longer than
+   * `maxLineLength`, and always empty without `encoding.decodeText`.
    */
   readonly partialLine = this.#partialLine.asReadonly();
 
@@ -153,6 +176,9 @@ export class SerialBrokerService {
    * Stops using the configuration in this tab. The other tabs keep the device, and one of them
    * takes the port over if this tab held it. The status ends at `released`.
    *
+   * It acts on the name for the whole tab: another service in this tab that provides the same name
+   * loses the device too, without being told.
+   *
    * @param options - `{ forgetDevice: true }` revokes the browser's permission as well, for every
    *   tab of the origin.
    */
@@ -167,9 +193,12 @@ export class SerialBrokerService {
    * Starts over: releases the configuration in this tab if it is still set up, and sets it up
    * again. The way back after `released`, and after `failed`.
    *
-   * A configuration that shows `failed` is still set up, and `setup()` does nothing for a name that
-   * is already set up with the same options - so it is released first. That is the library's own
-   * remediation for `CONFIGURATION_CONFLICT` and `RECONNECT_EXHAUSTED`.
+   * A configuration that shows `failed` is usually still set up, and `setup()` does nothing for a
+   * name that is already set up with the same options - so it is released first. After
+   * `RECONNECT_EXHAUSTED` that is only a way to try sooner: the configuration comes back by itself
+   * when the device is plugged in again. After `CONFIGURATION_CONFLICT` it is the way back.
+   *
+   * Like {@link SerialBrokerService.release}, it acts on the name for the whole tab.
    */
   restart(): Promise<void> {
     return this.#enqueue(async () => {
@@ -199,6 +228,10 @@ export class SerialBrokerService {
   }
 
   async #setUp(): Promise<void> {
+    if (this.#destroyed) {
+      // Destroyed while this waited in the queue: set up, it would hold the device for nobody.
+      return;
+    }
     try {
       // Resolves once the configuration is registered, not once the port is open: opening may
       // need the user. Rejects where there is no Web Serial - outside Chromium, or outside
@@ -234,7 +267,14 @@ export class SerialBrokerService {
         this.#applyStatus(event.status);
       }),
       SerialBroker.subscribe(this.name, 'onReceive', (event) => {
-        this.#receive(event.text ?? toHex(event.data), event.timestamp);
+        if (event.text === undefined) {
+          // No text decoding: nothing says where a line ends, so every chunk is a line of its own.
+          this.#appendLines([
+            { direction: 'in', text: toHex(event.data), local: false, timestamp: event.timestamp },
+          ]);
+        } else {
+          this.#receive(event.text, event.timestamp);
+        }
       }),
       SerialBroker.subscribe(this.name, 'onSend', (event) => {
         // Every write that reached the device, from any tab: 'local' when this tab issued it.
@@ -263,7 +303,8 @@ export class SerialBrokerService {
 
   #applyStatus(status: SerialBrokerStatus): void {
     this.#status.set(status);
-    if (status === 'open') {
+    const error = this.#lastError();
+    if (status === 'open' && error !== null && !WRITE_ERROR_CODES.has(error.code)) {
       this.#lastError.set(null);
     }
   }
@@ -275,7 +316,13 @@ export class SerialBrokerService {
     const combined = this.#pending + chunk;
     const heldBack = combined.endsWith('\r') ? '\r' : '';
     const parts = combined.slice(0, combined.length - heldBack.length).split(/\r\n|\n|\r/u);
-    const partial = parts.pop() ?? '';
+    let partial = parts.pop() ?? '';
+    // A device that never sends a line ending - a scanner with no suffix, STX/ETX frames - would
+    // otherwise grow the tail for as long as the screen stays open. Full lengths become lines.
+    while (partial.length > this.#maxLineLength) {
+      parts.push(partial.slice(0, this.#maxLineLength));
+      partial = partial.slice(this.#maxLineLength);
+    }
     this.#pending = partial + heldBack;
     this.#partialLine.set(partial);
     if (parts.length > 0) {
@@ -298,8 +345,10 @@ export class SerialBrokerService {
     this.#destroyed = true;
     this.#unsubscribe();
     if (this.#configuration.releaseOnDestroy === true) {
-      // Nobody is left to tell about a failure here.
-      SerialBroker.release(this.name).catch(() => undefined);
+      // Through the queue: a setup() or restart() under way finishes first, and is then released,
+      // rather than setting the configuration up after this release. Nobody is left to tell about
+      // a failure here.
+      void this.#enqueue(() => SerialBroker.release(this.name).catch(() => undefined));
     }
   }
 }
@@ -312,8 +361,9 @@ function toHex(data: Uint8Array): string {
 /** Sent bytes for the list: the text without its line ending, or hexadecimal if it is not text. */
 function toDisplayText(data: Uint8Array): string {
   const text = new TextDecoder().decode(data).replace(/(\r\n|\n|\r)$/u, '');
-  // Control characters other than tab and line feed, or bytes that did not decode: not text.
-  return /[ --�]/u.test(text) ? toHex(data) : text;
+  // Control characters other than tab and line feed - a carriage return left inside the text
+  // included - or bytes that did not decode (U+FFFD): not text.
+  return /[\u0000-\u0008\u000B-\u001F\u007F\uFFFD]/u.test(text) ? toHex(data) : text;
 }
 
 /**

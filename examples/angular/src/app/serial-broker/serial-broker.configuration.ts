@@ -20,12 +20,24 @@ export interface SerialBrokerConfiguration {
    */
   readonly maxLines?: number;
   /**
+   * The longest received line, in characters. A longer one is split, so that a device that never
+   * sends a line ending - a scanner with no suffix, a scale sending STX/ETX frames - does not grow
+   * {@link SerialBrokerService.partialLine} for as long as the screen stays open. Framing is the
+   * device's: where its messages end is for the application to know.
+   *
+   * @defaultValue 1024
+   */
+  readonly maxLineLength?: number;
+  /**
    * Release the configuration when the injector that created the service is destroyed.
    *
    * Leave it `false` for a service provided with the application: closing or reloading the tab
    * releases everything anyway. Set it `true` for a service provided by a component that really
    * owns the device - a dialog for one scan, say - so that closing the component lets the device
    * go in this tab.
+   *
+   * Releasing acts on the name for the whole tab. With `true`, no other service in the tab may
+   * provide the same name: closing this component would cut that one off as well.
    *
    * @defaultValue false
    */

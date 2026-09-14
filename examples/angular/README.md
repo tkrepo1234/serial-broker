@@ -68,7 +68,8 @@ them holds the port; close it, and the other takes over. Nothing in the service 
   remembers the choice.
 - **Errors with code, message and remediation**, from events and from the service's own calls.
   A retryable error - one the library is already recovering from - is shown as a note, not as a
-  problem, and the error is cleared when the port opens again.
+  problem, and a connection error is cleared when the port opens again. A `send()` error stays
+  until it is dismissed: the port being open again says nothing about the command.
 - **Traffic as lines.** Every line the device sent, and every line any tab sent to it, marked
   _out, other tab_ when another tab sent it. What arrived after the last line ending - a prompt,
   or a line still on its way - is shown as it is. The last 200 lines are kept, because a screen on
@@ -80,6 +81,10 @@ them holds the port; close it, and the other takes over. Nothing in the service 
   does not either; the smoke test fails on any console warning or error, and on any failed request.
 
 ## Running it
+
+Angular 22 needs Node.js `^22.22.3`, `^24.15.0` or `>=26`, a narrower range than the repository
+root's; the Angular CLI refuses to start on any other version. `package.json` declares it in
+`engines`.
 
 The application uses the library from the repository it lives in, so build that once:
 
@@ -161,7 +166,8 @@ note gone, releases, starts again and sends once more.
 
 A second device is a second configuration: provide `provideSerialBrokerConfiguration()` in the
 `providers` of the component that shows it, and that component and its children get a service of
-their own.
+their own. Give it a name of its own, too: `release()`, `restart()` and `releaseOnDestroy` act on
+the name for the whole tab, so another service providing the same name loses the device with it.
 
 ### What the service offers
 
@@ -179,7 +185,8 @@ their own.
 | `clearLines()`      | Empties `lines` and `partialLine`. The device is not touched.                                      |
 | `clearError()`      | Clears `lastError`.                                                                                |
 
-`provideSerialBrokerConfiguration()` also takes `maxLines` (200) and `releaseOnDestroy` (`false`).
+`provideSerialBrokerConfiguration()` also takes `maxLines` (200), `maxLineLength` (1024) and
+`releaseOnDestroy` (`false`).
 
 ## What a developer needs to know
 
@@ -205,9 +212,16 @@ were handed to the device, and a loopback or a fast device may answer before tha
 With the stand-in, `STATUS?` sent shows up as `in` first and `out` second, in the same millisecond.
 Read `lines` as what each side reported, not as a strict transcript of the wire.
 
-**`failed` is still set up.** `setup()` does nothing for a name that is already set up with the
-same options, so `restart()` releases first. That is the library's own remediation for
-`CONFIGURATION_CONFLICT` and `RECONNECT_EXHAUSTED`.
+**`failed` is not the end.** After `RECONNECT_EXHAUSTED` the configuration comes back by itself
+when the device is plugged in again; _Start again_ only tries sooner. After
+`CONFIGURATION_CONFLICT` a tab stays `failed` until it is released and set up again, which is what
+_Start again_ does. A failed configuration is usually still set up, and `setup()` does nothing for
+a name that is already set up with the same options, so `restart()` releases first.
+
+**Framing is the device's.** The library delivers chunks, not messages. The service ends a line at
+CR, LF or CR LF, splits a line longer than `maxLineLength`, and without `encoding.decodeText` lists
+every chunk as a line of hexadecimal. A device with STX/ETX frames or length-prefixed messages
+needs its own assembly in place of `#receive()`.
 
 ## Stable element ids
 
@@ -273,9 +287,13 @@ rejected promise, so every failure - from an event, from `connect()`, from `rele
 screen does not, above all for `OWNER_LOST_DURING_WRITE`. `connect()` resolves `false` instead,
 because the only thing a click handler does with it is nothing.
 
-**`lastError` is cleared when the port opens.** The minimal example clears its error box on `open`;
-doing it in the service means every screen agrees on it. A dismiss button calls `clearError()` for
-the rest.
+**`lastError` is cleared when the port opens, except for a `send()` error.** The minimal example
+clears its error box on `open`; doing it in the service means every screen agrees on it. The codes
+of a write - `OWNER_LOST_DURING_WRITE`, `WRITE_FAILED`, `WRITE_TIMEOUT`, `WRITE_QUEUE_FULL` - are
+kept: when the tab holding the port closes during a write, another tab takes over within moments,
+and clearing on `open` would hide the one error that needs a decision before the command is sent
+again. The set is chosen by code rather than by where the error came from, so an `onError` event
+for the same write cannot clear it. A dismiss button calls `clearError()` for the rest.
 
 **Lines are assembled in the service.** A chunk is an arbitrary piece of the byte stream, and every
 screen wants lines. A `\r` at the end of a chunk is held back, so a `\r\n` split across two chunks
@@ -283,9 +301,19 @@ is one line ending and not two; the unterminated tail is offered as `partialLine
 without a line ending is not invisible. Each line has an increasing `id` for `track`, because the
 list slides once it is full and an index would re-render every row.
 
-**Operations run one after another.** `release()` and `restart()` go through one queue inside the
-service, so that a second click on _Start again_ cannot release the configuration the first one is
-setting up.
+**Long lines are split, binary chunks are lines of their own.** A barcode scanner with no suffix
+never sends a line ending, and a screen stays open for weeks: without a limit the tail would grow
+for as long, and re-render in full with every chunk. At `maxLineLength` (1024 characters, well
+above a text line and small enough to render) the tail becomes a line. Without text decoding there
+is no line ending to look for at all - hexadecimal contains none - so each chunk is listed as it
+arrived.
+
+**Operations run one after another, destroying included.** `release()` and `restart()` go through
+one queue inside the service, so that a second click on _Start again_ cannot release the
+configuration the first one is setting up. The release of `releaseOnDestroy` goes through the same
+queue, and a setup still waiting in it is skipped once the service is destroyed: a component closed
+while _Start again_ or its first setup is under way would otherwise set the configuration up after
+its own release, and hold the device with no screen.
 
 **Send is disabled unless the port is open; Release and Start again replace each other.** The
 library accepts a write in any status and waits up to `connection.writeTimeoutMs`; next to a status
