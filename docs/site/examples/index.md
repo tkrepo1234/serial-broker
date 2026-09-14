@@ -18,11 +18,15 @@ advanced
 | [Full-featured](full-featured.md) | A realistic application that uses them together.                                            |
 | [Advanced](advanced.md)           | The hard cases: failover-safe commands, a protocol layer on top, several devices at once.   |
 
-## In a framework
+## Runnable applications
 
-The examples above are plain TypeScript and fit into any framework. One worked-out integration
-lives in the repository rather than here, because it is a project of its own:
+The examples above are plain TypeScript and fit into any framework. Worked-out integrations live
+in the repository rather than here, because each is a project of its own:
 [examples/openui5](https://github.com/tkrepo1234/serial-broker/tree/main/examples/openui5) is a
 runnable [OpenUI5](https://openui5.org) application together with a reusable module - a `JSONModel`
 that mirrors one configuration and is bindable in XML views - and a README that explains how to
 take it into an application of your own.
+[examples/no-bundler](https://github.com/tkrepo1234/serial-broker/tree/main/examples/no-bundler)
+is a static page with no build step - `serial-broker/min` from an import map, the worker script
+served next to it, `configure({ workerUrl })` spelled out - for a front end that a site's existing
+web server delivers.
