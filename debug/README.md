@@ -60,6 +60,12 @@ those settings:
 
 A page on a different worker URL is on a different bus and shows nothing running.
 
+A worker URL is a script the page runs with the rights of the application's origin, and anyone can
+send a link. So when a link names a worker URL other than the one the page would use anyway, the
+page asks before it starts, and declining keeps the page on its saved or default worker. A URL of
+another origin, or a `data:` or `blob:` URL, is never used: no `SharedWorker` could reach the
+application's bus from it.
+
 ## Whether to expose it
 
 That is the operator's decision, and it is a real one. The page can **send bytes to devices** and
@@ -68,6 +74,18 @@ application's origin can do what the application can do.
 
 Nothing in the library serves it, links to it or loads it. If it should not be reachable in
 production, do not serve `dist/debug/` there.
+
+If it is served, serve it behind the same authentication as the application's own administration,
+and send headers the page cannot set for itself:
+
+```text
+Content-Security-Policy: default-src 'self'; style-src 'self' 'unsafe-inline'; object-src 'none'; base-uri 'none'; frame-ancestors 'self'
+Referrer-Policy: no-referrer
+```
+
+`frame-ancestors` keeps other sites from framing the page and laying their own content over its
+buttons. The page also refuses to start inside a page of another origin, for servers that send no
+such header.
 
 ## Developing it
 

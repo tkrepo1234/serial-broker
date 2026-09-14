@@ -185,12 +185,22 @@ If the application loads the worker from a different URL, set it under _Settings
 pass it in the address: `/debug/?workerUrl=/assets/serial-broker.worker.js`. _Copy link_ produces
 such an address.
 
+The page runs the worker script with the rights of the application's origin, so it asks before it
+uses a worker URL that only the address names. Declined, the page stays on its saved or default
+worker. A worker URL of another origin, or a `data:` or `blob:` URL, is never used.
+
 ### Whether to serve it
 
 That is your decision, and a real one: the page can send bytes to devices and revoke device
 permissions, and it shows traffic in full. Anyone who can open it on the application's origin can
 do what the application can do. Nothing in serial-broker serves it or links to it; if it should not
 be reachable in production, do not deploy `dist/debug/` there.
+
+If you serve it, put it behind the application's own authentication for operators, and send a
+`Content-Security-Policy` with `frame-ancestors 'self'`, which a static page cannot set for itself;
+[debug/README.md](https://github.com/tkrepo1234/serial-broker/blob/main/debug/README.md) has a
+complete policy. Without that header, the page still refuses to start inside a page of another
+origin, where that page could lay its own content over the page's buttons.
 
 ## Troubleshooting
 

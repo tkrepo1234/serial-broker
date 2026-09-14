@@ -34,12 +34,14 @@ import {
 } from './format.js';
 import {
   LIBRARY_SETTINGS_KEY,
+  linkedWorkerUrlToConfirm,
   linkWithSettings,
   resolveLibrarySettings,
   type LibrarySettings,
 } from './library-settings.js';
 import { ConfigurationList } from './list.js';
 import { buildConfigurationViews, type RememberedConfiguration } from './model.js';
+import { isFramedByAnotherOrigin } from './page-guard.js';
 import { SetupDialog } from './setup-dialog.js';
 
 /** How often every tab is asked for a report. */
@@ -48,11 +50,22 @@ const REFRESH_INTERVAL_MS = 2_000;
 const COLLECT_WINDOW_MS = 300;
 const LOG_LEVELS: readonly LogLevel[] = ['debug', 'info', 'warn', 'error'];
 
-const settings = resolveLibrarySettings(
-  new URLSearchParams(location.search),
-  readStorage(LIBRARY_SETTINGS_KEY),
-  new URL('../serial-broker.worker.js', import.meta.url).href,
-);
+const query = new URLSearchParams(location.search);
+const savedSettings = readStorage(LIBRARY_SETTINGS_KEY);
+const defaultWorkerUrl = new URL('../serial-broker.worker.js', import.meta.url).href;
+const linkedWorkerUrl = linkedWorkerUrlToConfirm(query, savedSettings, defaultWorkerUrl);
+if (
+  linkedWorkerUrl !== undefined &&
+  // Synchronous on purpose: nothing starts before the operator has answered. A browser that
+  // suppresses the dialog, as Chromium does in a frame of another origin, answers no.
+  !window.confirm(
+    `This link sets the worker script to\n\n${linkedWorkerUrl}\n\nThe page runs that script with the rights of this site. Use it only if you trust whoever sent the link. Use this worker?`,
+  )
+) {
+  query.delete('workerUrl');
+}
+const settings = resolveLibrarySettings(query, savedSettings, defaultWorkerUrl);
+const isFramedElsewhere = isFramedByAnotherOrigin(window);
 
 // Every help text closes the same way, so its Close button is added here rather than written out
 // once per help text in the page.
@@ -82,26 +95,36 @@ let environment: SerialBrokerEnvironment | undefined;
 let client: SerialBrokerClient | undefined;
 let diagnostics: SerialBrokerDiagnostics | undefined;
 
-try {
-  environment = createBrowserEnvironment({
-    workerUrl: settings.workerUrl,
-    transport: settings.transport,
-    logger: pageLogger,
-    logPayloads: settings.logPayloads,
-  });
-  client = new SerialBrokerClient(environment);
-  // With the page's logger, so what the observer drops or fails at shows up in the page's log.
-  diagnostics = openDiagnostics({
-    workerUrl: settings.workerUrl,
-    transport: settings.transport,
-    logger: pageLogger,
-  });
-} catch (error) {
+if (isFramedElsewhere) {
+  // A page of another origin could lay its own content over the buttons that send to devices and
+  // forget them. The page starts nothing there, so nothing can be clicked into acting.
   const banner = byId('banner');
-  // Not always the browser: a transport forced under Settings that this browser lacks fails too.
-  banner.textContent = `serial-broker could not start on this page: ${describeError(error).text}`;
+  banner.textContent =
+    'serial-broker does not start inside a page of another origin. Open this page on its own.';
   banner.hidden = false;
   byId('newButton').hidden = true;
+} else {
+  try {
+    environment = createBrowserEnvironment({
+      workerUrl: settings.workerUrl,
+      transport: settings.transport,
+      logger: pageLogger,
+      logPayloads: settings.logPayloads,
+    });
+    client = new SerialBrokerClient(environment);
+    // With the page's logger, so what the observer drops or fails at shows up in the page's log.
+    diagnostics = openDiagnostics({
+      workerUrl: settings.workerUrl,
+      transport: settings.transport,
+      logger: pageLogger,
+    });
+  } catch (error) {
+    const banner = byId('banner');
+    // Not always the browser: a transport forced under Settings that this browser lacks fails too.
+    banner.textContent = `serial-broker could not start on this page: ${describeError(error).text}`;
+    banner.hidden = false;
+    byId('newButton').hidden = true;
+  }
 }
 
 // --- Configurations ---------------------------------------------------------------------------
