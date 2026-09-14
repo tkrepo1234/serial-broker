@@ -110,6 +110,6 @@ names listed, an unreadable index, an index that is partly rubbish, a listed nam
 gone, the keys of older formats removed unread, and two tabs setting up different configurations at
 the same moment. `test/unit/configuration-store.test.ts`: the index written only when the name is
 missing, entries of other configurations left alone by a removal, an entry written by another tab
-surviving this tab's save, a listed name kept when storage itself refuses, and `clear()` removing
-every entry. `test/integration/hardening-regressions.test.ts`: an invalid entry reported once, and
+surviving this tab's save, a listed name kept when storage itself refuses, and nothing but an empty
+index left once every configuration is removed. `test/integration/hardening-regressions.test.ts`: an invalid entry reported once, and
 a name never listed when its entry could not be written.

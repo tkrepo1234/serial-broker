@@ -162,18 +162,6 @@ export class ConfigurationStore {
     this.#removeEntry(name);
   }
 
-  /** Removes everything this library stored. */
-  clear(): void {
-    for (const name of this.#readIndex(false).names) {
-      this.#removeEntry(name);
-    }
-    try {
-      this.storage.removeItem(storageIndexKey());
-    } catch (error) {
-      this.#reportUnavailable('clear', error);
-    }
-  }
-
   /** Reads one entry, discarding it if it is there and cannot be used. */
   #restore(name: string): EntryOutcome {
     let raw: string | null;

@@ -135,14 +135,17 @@ describe('ConfigurationStore', () => {
     expect(store.load().map((configuration) => configuration.name)).toEqual(['Scale', 'Reader']);
   });
 
-  it('removes every entry it stored when it is cleared', () => {
+  it('leaves storage as it found it when every configuration is removed', () => {
     const { store, entries } = createStore();
     store.save(normalizeConfiguration('Reader', OPTIONS));
     store.save(normalizeConfiguration('Scale', OPTIONS));
 
-    store.clear();
+    store.remove('Reader');
+    store.remove('Scale');
 
-    expect(entries.size).toBe(0);
+    // Only the index is left, and it is empty: nothing this library wrote holds a configuration.
+    expect([...entries.keys()]).toEqual([storageIndexKey()]);
+    expect(entries.get(storageIndexKey())).toBe('[]');
   });
 
   it('reports an index that is not an array and starts over', () => {
