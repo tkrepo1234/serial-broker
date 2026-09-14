@@ -20,7 +20,10 @@ No test may depend on wall-clock time, real timers, real randomness or real task
 
 - **Time** is injected (`Clock`) and driven by the harness's `FakeClock`, which moves only when a
   test advances it. `harness.settle()` lets pending promise chains run without moving time. A test
-  that calls `await sleep(100)` to "let things settle" is rejected in review.
+  that calls `await sleep(100)` to "let things settle" is rejected in review. The fake keeps the two
+  readings apart, as a browser does (ADR-0032): `jumpWallClock()` sets the system time without
+  touching a timer, and `stall()` lets monotonic time pass without running one, which is how a
+  frozen or throttled tab's late timers are tested.
 - **Randomness** is injected. The harness draws the top of the jitter range every time, so backoff
   schedules are asserted exactly.
 - **IDs** come from an injected generator, so they are predictable within a test.

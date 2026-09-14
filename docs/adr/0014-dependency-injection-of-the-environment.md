@@ -1,7 +1,10 @@
 # ADR-0014: Inject the browser environment for testability
 
-- **Status:** Accepted
+- **Status:** Accepted, amended by [ADR-0032](./0032-measure-durations-on-a-monotonic-clock.md)
 - **Date:** 2026-09-12
+
+> **Amendment (ADR-0032).** `Clock` has a second reading, `monotonicNow()` (`performance.now()`),
+> and every duration is measured with it; `now()` remains the wall clock, for timestamps.
 
 ## Context
 
@@ -21,7 +24,7 @@ All platform access goes through a single injected `SerialBrokerEnvironment`:
       readonly locks: LockManagerLike;    // navigator.locks
       readonly storage: KeyValueStorage;  // localStorage
       readonly createTransport: TransportFactory;
-      readonly clock: Clock;              // now(), setTimeout, clearTimeout
+      readonly clock: Clock;              // now(), monotonicNow(), setTimeout, clearTimeout
       readonly random: () => number;      // for backoff jitter
       readonly newId: IdGenerator;        // client and request identifiers
       readonly logger: Logger;

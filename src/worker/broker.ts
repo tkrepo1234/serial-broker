@@ -8,7 +8,13 @@ export interface BrokerHost {
   /** Delivers a message to exactly one participant. Must not throw. */
   deliver(clientId: ClientId, message: ProtocolMessage): void;
   readonly logger: ScopedLogger;
-  /** The current time in milliseconds, to tell when a participant was last heard from. */
+  /**
+   * A reading of a monotonic clock in milliseconds, to tell how long ago a participant was last
+   * heard from.
+   *
+   * Only the difference of two readings is ever used, never a reading on its own: no participant
+   * may fall silent because the system clock was set forward (ADR-0032).
+   */
   now(): number;
 }
 

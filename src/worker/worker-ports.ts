@@ -16,7 +16,7 @@ export interface WorkerPort {
 /** What the ports need from the worker hosting them. */
 export interface WorkerPortsHost {
   readonly logger: ScopedLogger;
-  /** The current time in milliseconds. */
+  /** A reading of a monotonic clock in milliseconds, as `BrokerHost.now()` takes (ADR-0032). */
   now(): number;
 }
 

@@ -9,12 +9,17 @@ import { FakeClock } from '../harness/fake-clock.js';
  * before a timer scheduled later still.
  */
 describe('scheduleDeadline', () => {
-  function race(clock: FakeClock, wallClockJumpMs: number): Promise<string[]> {
+  /**
+   * Runs a deadline due in 100 ms `lateMs` late: the clock stalls past the due time, as a frozen or
+   * throttled tab does, and the timers run when it comes back.
+   */
+  async function race(clock: FakeClock, lateMs: number): Promise<string[]> {
     const order: string[] = [];
     scheduleDeadline(clock, () => order.push('deadline'), 100);
     clock.setTimer(() => order.push('queued task'), 100);
-    clock.jumpWallClock(wallClockJumpMs);
-    return clock.advance(100).then(() => order);
+    await clock.stall(100 + lateMs);
+    await clock.advance(0);
+    return order;
   }
 
   it('decides at once when it runs on time', async () => {
@@ -29,13 +34,27 @@ describe('scheduleDeadline', () => {
     expect(await race(new FakeClock(), LATE_DEADLINE_MS)).toEqual(['queued task', 'deadline']);
   });
 
+  it('is unmoved by the system clock being set forward, which makes no timer late', async () => {
+    const clock = new FakeClock();
+    const order: string[] = [];
+    scheduleDeadline(clock, () => order.push('deadline'), 100);
+    clock.setTimer(() => order.push('queued task'), 100);
+    clock.jumpWallClock(10 * LATE_DEADLINE_MS);
+
+    await clock.advance(100);
+
+    // Lateness is measured on the monotonic clock (ADR-0032): a punctual deadline stays punctual.
+    expect(order).toEqual(['deadline', 'queued task']);
+    expect(clock.pendingTimerCount).toBe(0);
+  });
+
   it('yields only once, however late it is', async () => {
     const clock = new FakeClock();
     let expired = 0;
     scheduleDeadline(clock, () => (expired += 1), 100);
-    clock.jumpWallClock(10 * LATE_DEADLINE_MS);
 
-    await clock.advance(100);
+    await clock.stall(100 + 10 * LATE_DEADLINE_MS);
+    await clock.advance(0);
 
     expect(expired).toBe(1);
     expect(clock.pendingTimerCount).toBe(0);
@@ -48,9 +67,9 @@ describe('scheduleDeadline', () => {
     clock.setTimer(() => {
       deadline.cancel();
     }, 100);
-    clock.jumpWallClock(LATE_DEADLINE_MS);
 
-    await clock.advance(100);
+    await clock.stall(100 + LATE_DEADLINE_MS);
+    await clock.advance(0);
 
     expect(expired).toBe(false);
     expect(clock.pendingTimerCount).toBe(0);

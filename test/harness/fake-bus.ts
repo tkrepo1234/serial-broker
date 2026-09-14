@@ -101,7 +101,8 @@ export class FakeWorkerHost {
   ) {
     this.#ports = new WorkerPorts({
       logger: new ScopedLogger(logger, {}),
-      now: () => clock.now(),
+      // Monotonic, as the worker script's own reading is: the silence sweep measures a duration.
+      now: () => clock.monotonicNow(),
     });
     this.#scheduleSweep();
   }
@@ -378,6 +379,7 @@ export class FakeBus {
   #clockFor(contextId: string): Clock {
     return {
       now: () => this.clock.now(),
+      monotonicNow: () => this.clock.monotonicNow(),
       setTimer: (callback, delayMs) =>
         this.clock.setTimer(() => {
           if (!this.#killed.has(contextId)) {

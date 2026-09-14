@@ -66,6 +66,7 @@ class WorkerPort extends FakeMessagePort {
 function throttled(clock: FakeClock, minimumDelayMs: number): Clock {
   return {
     now: () => clock.now(),
+    monotonicNow: () => clock.monotonicNow(),
     setTimer: (callback, delayMs) => clock.setTimer(callback, Math.max(delayMs, minimumDelayMs)),
     clearTimer: (handle) => {
       clock.clearTimer(handle);

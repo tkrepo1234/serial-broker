@@ -235,3 +235,4 @@ in a real browser, with real or emulated hardware [ADR-0017].
 | 0025 | Limit how many tabs use a configuration at once                                     |
 | 0026 | Attribute ownership, write and status messages to a term of holding the port        |
 | 0027 | Keep a remembered configuration while any tab runs it                               |
+| 0032 | Measure durations on a monotonic clock, timestamp events on the wall clock          |

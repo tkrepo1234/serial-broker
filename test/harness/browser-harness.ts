@@ -535,6 +535,7 @@ export class BrowserHarness {
       // drops them with the tab. A frozen tab's timers fire when it resumes.
       clock: {
         now: () => this.clock.now(),
+        monotonicNow: () => this.clock.monotonicNow(),
         setTimer: (callback, delayMs) => {
           const handle: TimerHandle = this.clock.setTimer(() => {
             if (!this.#killedContexts.has(contextId)) {

@@ -19,7 +19,10 @@ interface ScheduledTimer {
  * millisecond. Without that rule a test could pass or fail on `Map` iteration order.
  */
 export class FakeClock implements Clock {
-  /** Time as timers see it: it only moves forward, and only when a test advances it. */
+  /**
+   * The monotonic time: it only moves forward, and only when a test advances or stalls it. Timers
+   * are due on this clock, as they are in a browser, and every duration is measured on it.
+   */
   #now: number;
   /** How far the wall clock has been set away from {@link #now}. See {@link jumpWallClock}. */
   #wallOffset = 0;
@@ -36,15 +39,33 @@ export class FakeClock implements Clock {
     return this.#now + this.#wallOffset;
   }
 
+  /** {@inheritDoc Clock.monotonicNow} */
+  monotonicNow(): number {
+    return this.#now;
+  }
+
   /**
    * Sets the wall clock forwards or backwards, without firing or moving any timer.
    *
    * What the user changing the system time, a time zone correction or an NTP step does in a
-   * browser: `Date.now()` jumps, while `setTimeout` keeps counting on a monotonic clock. Code that
-   * measures a duration as the difference of two `now()` readings sees the jump; a timer does not.
+   * browser: `Date.now()` jumps, while `setTimeout` and `performance.now()` keep counting on a
+   * monotonic clock. Code that reads {@link now} sees the jump; a timer and {@link monotonicNow}
+   * do not.
    */
   jumpWallClock(byMs: number): void {
     this.#wallOffset += byMs;
+  }
+
+  /**
+   * Lets `byMs` pass without running a single timer, leaving those that fell due overdue.
+   *
+   * What a busy main thread, a throttled or frozen tab and a sleeping machine do: time goes on,
+   * the timers do not run, and they run late when the context comes back - which is the condition
+   * `scheduleDeadline` exists for. The next {@link advance} runs them, however small its step.
+   */
+  async stall(byMs: number): Promise<void> {
+    this.#now += Math.max(0, byMs);
+    await flushMicrotasks();
   }
 
   /** {@inheritDoc Clock.setTimer} */
@@ -89,7 +110,8 @@ export class FakeClock implements Clock {
    * a timer that reschedules itself with a zero delay fails the test rather than hanging it.
    */
   async advance(byMs: number): Promise<void> {
-    const target = this.#now + byMs;
+    // Never backwards, and never back over a stall: time that has passed has passed.
+    const target = this.#now + Math.max(0, byMs);
     let iterations = 0;
 
     for (;;) {
@@ -107,7 +129,8 @@ export class FakeClock implements Clock {
         throw new Error('FakeClock.advance: timer storm - a timer is rescheduling itself');
       }
 
-      this.#now = next.dueAt;
+      // A timer left overdue by a stall runs where time already is, not back at its due time.
+      this.#now = Math.max(this.#now, next.dueAt);
       this.#timers.delete(next.id);
       next.callback();
 

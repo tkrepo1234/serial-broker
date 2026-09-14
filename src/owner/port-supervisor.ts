@@ -291,7 +291,7 @@ export class PortSupervisor {
   async write(payload: Uint8Array, onStarted: () => void): Promise<void> {
     const clock = this.environment.clock;
     const { writeTimeoutMs, maxWriteChunkBytes } = this.configuration.connection;
-    const queuedAt = clock.now();
+    const queuedAt = clock.monotonicNow();
     let expiry: TimerHandle | undefined;
 
     const queued = this.#writes.enqueueWithdrawable(async () => {
@@ -299,10 +299,11 @@ export class PortSupervisor {
         clock.clearTimer(expiry);
         expiry = undefined;
       }
-      // Measured on the wall clock as well as by the timer: a timer can run late, in a tab the
-      // browser throttles, and a write begun in that moment is one its issuer has given up on. A wall
-      // clock set forward refuses a write too early instead, which is the safe direction.
-      if (clock.now() - queuedAt >= writeTimeoutMs) {
+      // Measured as well as timed: a timer can run late, in a tab the browser throttles, and a write
+      // begun in that moment is one its issuer has given up on. On the monotonic clock, the one the
+      // expiry timer runs on, so that the system clock being set forward or back neither refuses a
+      // write that is still in time nor lets a lapsed one through (ADR-0032).
+      if (clock.monotonicNow() - queuedAt >= writeTimeoutMs) {
         throw this.#waitedTooLong(payload.byteLength, queuedAt);
       }
 
@@ -375,9 +376,14 @@ export class PortSupervisor {
     }
   }
 
-  /** The error for a write that waited at the port for `writeTimeoutMs` without being begun. */
+  /**
+   * The error for a write that waited at the port for `writeTimeoutMs` without being begun.
+   *
+   * @param queuedAt - A {@link Clock.monotonicNow} reading, so that `waitedMs` is how long the write
+   *   really waited rather than how far the system clock moved meanwhile.
+   */
   #waitedTooLong(byteLength: number, queuedAt: number): SerialBrokerError {
-    const now = this.environment.clock.now();
+    const waitedMs = this.environment.clock.monotonicNow() - queuedAt;
     this.logger.debug('a write waited too long at the port and was not begun', {
       configName: this.configuration.name,
       event: 'supervisor.write-expired',
@@ -389,8 +395,8 @@ export class PortSupervisor {
       'The write waited at the port for longer than writeTimeoutMs and was not begun',
       {
         configName: this.configuration.name,
-        context: { started: false, byteLength, waitedMs: now - queuedAt },
-        timestamp: now,
+        context: { started: false, byteLength, waitedMs },
+        timestamp: this.environment.clock.now(),
       },
     );
   }
@@ -646,7 +652,9 @@ export class PortSupervisor {
         : undefined,
     };
 
-    this.#backoff.recordConnected(this.environment.clock.now());
+    // The stability window is a duration, so it is measured on the monotonic clock (ADR-0032);
+    // `openedAt` is a moment an operator reads, so it is the wall clock.
+    this.#backoff.recordConnected(this.environment.clock.monotonicNow());
     this.#openedAt = this.environment.clock.now();
     this.#setStatus(SerialBrokerStatus.Open);
     this.logger.info('port opened', {
@@ -838,7 +846,7 @@ export class PortSupervisor {
    */
   #recordFailedAttempt(reason: string, cause: SerialBrokerError): void {
     this.#backoff.recordDisconnected(
-      this.environment.clock.now(),
+      this.environment.clock.monotonicNow(),
       this.configuration.connection.stableAfterMs,
     );
 

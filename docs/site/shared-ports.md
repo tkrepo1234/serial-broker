@@ -385,20 +385,16 @@ any unplugged device. The worker may run its check for silent tabs before their 
 after waking and forget them; each is taken back with its next heartbeat, within 15 seconds, and a
 write that crosses the bus in between may be lost and rejects with `WRITE_TIMEOUT`.
 
-The system clock can be set, or corrected, while tabs run. Deadlines, the grace period and reconnect
-delays are timers and are not affected. Three things read the clock:
+The system clock can be set, or corrected, while tabs run — by the user, by a time zone change or by
+an NTP step. Nothing this library times is affected. Every duration it measures — whether a
+connection was stable (`connection.stableAfterMs`), how long a write has waited at the tab holding
+the port, how late a deadline ran, how long a tab has been silent — is read from
+`performance.now()`, the clock the timers themselves run on, which counts on regardless of the
+system clock.
 
-- **Whether a connection was stable** (`connection.stableAfterMs`) is decided from clock readings.
-  Set back while the port is open, a long-lived connection that then drops counts as unstable: its
-  first retry is not immediate, and it counts towards `connection.maxAttempts`. Set forward, a
-  connection that drops soon after counts as stable.
-- **A write waiting at the tab holding the port** is also measured on the clock. Set forward, the
-  writes waiting at that moment are refused with `WRITE_TIMEOUT` and `started: false`, even though
-  their issuers were still waiting. Refusing too early is the safe direction: they were not written.
-- **Whether a deadline ran late** is judged from the clock: set forward, a deadline waits one task
-  longer than it needed to.
-
-Timestamps in events, errors and diagnostics are clock readings, and jump with the clock.
+Timestamps are the other half: the `timestamp` of an error, the time of an event and the moments in
+a diagnostics report are system-clock readings, so that they agree with the application's own logs.
+They jump with the clock, and two tabs whose clocks differ stamp the same moment differently.
 
 ## What to watch out for
 

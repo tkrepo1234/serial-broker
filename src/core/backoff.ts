@@ -92,7 +92,13 @@ export class BackoffState {
     this.#attempt += 1;
   }
 
-  /** Records a successful connection at `now`, starting the stability window. */
+  /**
+   * Records a successful connection at `now`, starting the stability window.
+   *
+   * @param now - A monotonic reading, `Clock.monotonicNow()`: the window is a duration, and a
+   *   system clock the user or an NTP step moves must neither end it early nor hold it open
+   *   (ADR-0032).
+   */
   recordConnected(now: number): void {
     this.#connectedAt = now;
   }
@@ -102,6 +108,8 @@ export class BackoffState {
    *
    * Called when a connection is lost, with the time of the loss: the question is not "is it
    * stable now" but "was it stable for long enough before it broke".
+   *
+   * @param now - A monotonic reading, as {@link BackoffState.recordConnected} takes.
    */
   recordDisconnected(now: number, stableAfterMs: number): void {
     const connectedAt = this.#connectedAt;

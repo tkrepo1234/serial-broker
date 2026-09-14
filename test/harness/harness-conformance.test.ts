@@ -359,6 +359,34 @@ describe('FakeClock', () => {
     expect(fired).toBe(true);
     expect(clock.now()).toBe(startedAt - 3_600_000 + 1_000);
   });
+
+  it('keeps the monotonic reading out of the wall clock`s jumps', async () => {
+    const clock = new FakeClock();
+    const startedAt = clock.monotonicNow();
+
+    clock.jumpWallClock(-3_600_000);
+    await clock.advance(1_000);
+    clock.jumpWallClock(7_200_000);
+
+    // What `performance.now()` does while `Date.now()` is moved: a duration measured on it is the
+    // time that really passed (ADR-0032).
+    expect(clock.monotonicNow() - startedAt).toBe(1_000);
+  });
+
+  it('lets time pass without running a timer, and runs it late afterwards', async () => {
+    const clock = new FakeClock();
+    let lateness: number | undefined;
+    const dueAt = clock.monotonicNow() + 100;
+    clock.setTimer(() => (lateness = clock.monotonicNow() - dueAt), 100);
+
+    // A frozen tab, a throttled one, a sleeping machine: time goes on and no timer runs.
+    await clock.stall(5_000);
+    expect(lateness).toBeUndefined();
+    await clock.advance(0);
+
+    expect(lateness).toBe(4_900);
+    expect(clock.pendingTimerCount).toBe(0);
+  });
 });
 
 /**

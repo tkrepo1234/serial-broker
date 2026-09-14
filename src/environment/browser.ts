@@ -93,6 +93,11 @@ export function createBrowserEnvironment(
  */
 export const BROWSER_CLOCK: Clock = {
   now: () => Date.now(),
+  // `performance.now()` rather than `Date.now()`: it counts on regardless of the system clock, so a
+  // duration measured with it cannot be turned into a negative or an hour-long one by a time zone
+  // change or an NTP step (ADR-0032). It exists in every context this library runs in - a window, a
+  // worker - and needs no permission.
+  monotonicNow: () => performance.now(),
   setTimer: (callback, delayMs) => setTimeout(callback, delayMs),
   clearTimer: (handle) => {
     clearTimeout(handle as unknown as ReturnType<typeof setTimeout>);
