@@ -90,6 +90,16 @@ coordinate with each other. See
 - A tab that meets a worker script of another protocol version and cannot fall back reports it
   once and stops starting new workers, instead of restarting one every 45 seconds.
 - `isSupported()` needs a `SharedWorker` or a `BroadcastChannel`, no longer both.
+- The published type definitions no longer need `@types/w3c-web-serial` installed; the build
+  checks them in a project without it.
+- `configure()`, `release()` and `releaseAll()` reject invalid options with `INVALID_ARGUMENT` and
+  read them once, when called.
+- `release()`, `releaseAll()` and `dispose()` called while a `dispose()` is under way resolve only
+  once its ports are closed.
+- Clearer remediation for `PROTOCOL_VERSION_MISMATCH`, `BROKER_UNAVAILABLE`, `NOT_CONNECTED` and
+  `OWNER_LOST_DURING_WRITE`.
+- The debugging surface asks before using a worker URL that only a link names, never uses one of
+  another origin, and does not start when framed by another origin.
 
 ### Notes
 
