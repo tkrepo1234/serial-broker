@@ -170,12 +170,89 @@ describe('FakeLockManager', () => {
     expect(locks.holderOf(LOCK)).toBeUndefined();
   });
 
-  it('refuses shared mode rather than granting it as exclusive', async () => {
+  it('grants a shared lock to several contexts at once', async () => {
     const locks = new FakeLockManager();
+    const hold = (contextId: string): void => {
+      void locks.forContext(contextId).request(LOCK, { mode: 'shared' }, async () => {
+        await new Promise(() => undefined);
+      });
+    };
 
-    await expect(
-      locks.forContext('a').request(LOCK, { mode: 'shared' }, async () => undefined),
-    ).rejects.toThrow(/shared/);
+    hold('a');
+    hold('b');
+    await flushMicrotasks();
+
+    expect(locks.holdersOf(LOCK)).toEqual(['a', 'b']);
+  });
+
+  it('answers null to an exclusive ifAvailable request while a shared lock is held', async () => {
+    const locks = new FakeLockManager();
+    let observed: unknown = 'not called';
+    void locks.forContext('a').request(LOCK, { mode: 'shared' }, async () => {
+      await new Promise(() => undefined);
+    });
+    await flushMicrotasks();
+
+    await locks.forContext('b').request(LOCK, { ifAvailable: true }, async (lock) => {
+      observed = lock;
+    });
+
+    expect(observed).toBeNull();
+  });
+
+  it('queues a shared request behind an exclusive holder, and grants it on release', async () => {
+    const locks = new FakeLockManager();
+    let release: () => void = () => undefined;
+    void locks.forContext('a').request(LOCK, {}, async () => {
+      await new Promise<void>((resolve) => {
+        release = resolve;
+      });
+    });
+    await flushMicrotasks();
+    void locks.forContext('b').request(LOCK, { mode: 'shared' }, async () => {
+      await new Promise(() => undefined);
+    });
+    await flushMicrotasks();
+    expect(locks.holdersOf(LOCK)).toEqual(['a']);
+
+    release();
+    await flushMicrotasks();
+
+    expect(locks.holdersOf(LOCK)).toEqual(['b']);
+  });
+
+  it('keeps a shared request queued behind an earlier exclusive request, in order', async () => {
+    const locks = new FakeLockManager();
+    let releaseShared: () => void = () => undefined;
+    void locks.forContext('a').request(LOCK, { mode: 'shared' }, async () => {
+      await new Promise<void>((resolve) => {
+        releaseShared = resolve;
+      });
+    });
+    await flushMicrotasks();
+    void locks.forContext('b').request(LOCK, {}, async () => undefined);
+    void locks.forContext('c').request(LOCK, { mode: 'shared' }, async () => {
+      await new Promise(() => undefined);
+    });
+    await flushMicrotasks();
+
+    // Granting `c` alongside `a` would starve `b`, which asked first.
+    expect(locks.holdersOf(LOCK)).toEqual(['a']);
+    releaseShared();
+    await flushMicrotasks();
+    expect(locks.holdersOf(LOCK)).toEqual(['c']);
+  });
+
+  it('releases the shared locks of a context that is destroyed', async () => {
+    const locks = new FakeLockManager();
+    void locks.forContext('a').request(LOCK, { mode: 'shared' }, async () => {
+      await new Promise(() => undefined);
+    });
+    await flushMicrotasks();
+
+    locks.killContext('a');
+
+    expect(locks.holdersOf(LOCK)).toEqual([]);
   });
 
   it('passes null to an ifAvailable request when the lock is taken', async () => {

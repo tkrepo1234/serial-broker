@@ -17,6 +17,17 @@ export type ClientId = string & { readonly __brand: 'ClientId' };
 export type RequestId = string & { readonly __brand: 'RequestId' };
 
 /**
+ * Opaque identifier of one term of holding a configuration's port: from the moment a tab is granted
+ * the ownership lock until it lets it go (ADR-0026).
+ *
+ * A tab that holds the port twice has two terms. Messages about ownership, writes and the status
+ * carry the term they belong to, because messages from two senders have no order between them: a
+ * tab can hear a new holder's claim before the last words of the former one, and only the term
+ * tells it whose words those are.
+ */
+export type TermId = string & { readonly __brand: 'TermId' };
+
+/**
  * Where a message is to be delivered.
  *
  * `'owner'` is resolved at delivery time, not by the sender: ownership can move between a
@@ -87,19 +98,25 @@ export interface DetachMessage extends Envelope {
 export interface OwnerClaimedMessage extends Envelope {
   readonly type: 'owner-claimed';
   readonly configName: string;
+  /** The term that begins. */
+  readonly term: TermId;
 }
 
 /**
  * Announces that this context has given up ownership.
  *
- * Sent on a graceful release only, and purely as an optimisation so peers do not have to wait
- * for the successor's `owner-claimed`. Ownership itself is never derived from these messages -
- * only from the Web Lock (ADR-0005), which is also what covers the abrupt-death case: the
- * browser releases the lock, the successor is granted it, and it announces itself.
+ * Sent on a graceful release only, after the port is closed and every write of the term has been
+ * answered, and before the lock is let go. It is the term's last message: a sender's messages keep
+ * their order, so a tab that hears it has heard everything the term said about its writes
+ * (ADR-0026). Ownership itself is never derived from these messages - only from the Web Lock
+ * (ADR-0005), which is also what covers the abrupt-death case: the browser releases the lock, the
+ * successor is granted it, and it announces itself.
  */
 export interface OwnerReleasedMessage extends Envelope {
   readonly type: 'owner-released';
   readonly configName: string;
+  /** The term that ended. */
+  readonly term: TermId;
 }
 
 /** Asks the owner to write `payload` to the device. */
@@ -108,6 +125,12 @@ export interface WriteRequestMessage extends Envelope {
   readonly configName: string;
   readonly requestId: RequestId;
   readonly payload: Uint8Array;
+  /**
+   * The term the request is addressed to. Only a tab holding the port in that term writes it; any
+   * other answers `NOT_CONNECTED`. So a request is only ever written by the term its sender chose,
+   * and the sender hands it to another term only once this one has ended (ADR-0026).
+   */
+  readonly term: TermId;
 }
 
 /**
@@ -120,6 +143,8 @@ export interface WriteStartedMessage extends Envelope {
   readonly type: 'write-started';
   readonly configName: string;
   readonly requestId: RequestId;
+  /** The term writing it. */
+  readonly term: TermId;
 }
 
 /** Reports the outcome of a write request to its originator. */
@@ -130,6 +155,11 @@ export interface WriteResultMessage extends Envelope {
   readonly ok: boolean;
   /** Present when `ok` is false. */
   readonly error: SerializedSerialBrokerError | undefined;
+  /**
+   * The term of the tab answering: the one the write was performed in, or, for `NOT_CONNECTED`, the
+   * one the tab holds or last held the port in. `undefined` from a tab that never held it.
+   */
+  readonly term: TermId | undefined;
 }
 
 /** Broadcast by the owner when a chunk arrives from the device. */
@@ -162,6 +192,8 @@ export interface StatusMessage extends Envelope {
    * configuration with a different limit withdraws when it hears this (ADR-0025).
    */
   readonly maxTabs: number;
+  /** The term of the tab sending it. A status of a term that has ended or been succeeded is stale. */
+  readonly term: TermId;
   readonly timestamp: number;
 }
 

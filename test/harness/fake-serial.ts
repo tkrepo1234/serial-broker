@@ -52,6 +52,30 @@ export class FakeDevice {
 
   readonly faults: DeviceFaults = {};
 
+  /** Settles when paused writes may go on; `undefined` while writes are not paused. */
+  writeGate: Promise<void> | undefined;
+  #resumeWrites: (() => void) | undefined;
+
+  /**
+   * Holds every write from now on until {@link resumeWrites}, as a device applying flow control
+   * does. Unlike `faults.hangOnWrite`, the writes then complete, so a test can choose the moment.
+   */
+  pauseWrites(): void {
+    if (this.writeGate !== undefined) {
+      return;
+    }
+    this.writeGate = new Promise<void>((resolve) => {
+      this.#resumeWrites = resolve;
+    });
+  }
+
+  /** Lets the writes held by {@link pauseWrites} complete, and later ones pass at once. */
+  resumeWrites(): void {
+    this.#resumeWrites?.();
+    this.#resumeWrites = undefined;
+    this.writeGate = undefined;
+  }
+
   #push: ((chunk: Uint8Array) => void) | undefined;
   #errorStream: ((reason: unknown) => void) | undefined;
   #endStream: (() => void) | undefined;
@@ -209,6 +233,9 @@ export class FakeSerialPort {
 
     this.#writable = new WritableStream<Uint8Array>({
       write: async (chunk) => {
+        if (this.device.writeGate !== undefined) {
+          await this.device.writeGate;
+        }
         if (this.device.faults.hangOnWrite === true) {
           await new Promise<never>(() => {
             /* intentionally never settles */

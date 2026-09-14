@@ -19,8 +19,8 @@ const VALID: Record<ProtocolMessageType, Record<string, unknown>> = {
   heartbeat: { ...BASE, type: 'heartbeat', configNames: ['Reader'], ownedConfigNames: [] },
   attach: { ...BASE, type: 'attach', configName: 'Reader' },
   detach: { ...BASE, type: 'detach', configName: 'Reader' },
-  'owner-claimed': { ...BASE, type: 'owner-claimed', configName: 'Reader' },
-  'owner-released': { ...BASE, type: 'owner-released', configName: 'Reader' },
+  'owner-claimed': { ...BASE, type: 'owner-claimed', configName: 'Reader', term: 't-1' },
+  'owner-released': { ...BASE, type: 'owner-released', configName: 'Reader', term: 't-1' },
   'status-request': { ...BASE, type: 'status-request', configName: 'Reader' },
   'write-request': {
     ...BASE,
@@ -28,8 +28,15 @@ const VALID: Record<ProtocolMessageType, Record<string, unknown>> = {
     configName: 'Reader',
     requestId: 'w-1',
     payload: new Uint8Array([1]),
+    term: 't-1',
   },
-  'write-started': { ...BASE, type: 'write-started', configName: 'Reader', requestId: 'w-1' },
+  'write-started': {
+    ...BASE,
+    type: 'write-started',
+    configName: 'Reader',
+    requestId: 'w-1',
+    term: 't-1',
+  },
   'write-result': {
     ...BASE,
     type: 'write-result',
@@ -37,6 +44,7 @@ const VALID: Record<ProtocolMessageType, Record<string, unknown>> = {
     requestId: 'w-1',
     ok: true,
     error: undefined,
+    term: 't-1',
   },
   'data-received': {
     ...BASE,
@@ -60,6 +68,7 @@ const VALID: Record<ProtocolMessageType, Record<string, unknown>> = {
     configName: 'Reader',
     status: 'open',
     maxTabs: Number.POSITIVE_INFINITY,
+    term: 't-1',
     timestamp: 1,
   },
   error: { ...BASE, type: 'error', configName: 'Reader', error: ERROR_PAYLOAD, timestamp: 1 },

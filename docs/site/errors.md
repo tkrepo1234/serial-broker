@@ -102,6 +102,11 @@ Each one ends a connection attempt or a connection, and the tab holding the port
 next attempt as described in [Reconnecting](configuration.md#reconnecting). Only when the attempts
 are used up does a non-retryable error follow: `RECONNECT_EXHAUSTED`.
 
+An attempt to connect that fails with a code that is not retryable — `WEB_SERIAL_UNAVAILABLE`, when
+the browser refuses to open the port or to list the granted ports — is not repeated. The status
+becomes `failed` at once, as after the last attempt, and no `RECONNECT_EXHAUSTED` follows: the
+reported error is the reason. A lost connection is always retried, whatever error it was lost with.
+
 A retryable code that repeats for a long time still says something: `OPEN_FAILED` over and over
 usually means another program has the device open, or the adapter rejects the line settings.
 
@@ -154,8 +159,9 @@ a secure context, or disabled by policy. Each of these builds serial-broker's in
 there is none yet, and that is where the check happens. `exists()`, `names()`, `unsubscribe()`,
 `release()` and `releaseAll()` build nothing while nothing is set up, and raise nothing. Also
 delivered through `onError` when the browser refuses to open a port because of a permissions
-policy, and when the granted ports cannot be listed during an attempt to connect; the status then
-becomes `awaiting-permission`.
+policy, and when the granted ports cannot be listed during an attempt to connect. The status then
+becomes `failed` at once, and no further attempt is made until the browser reports the device
+plugged in again, `requestAccess()` succeeds, or the configuration is released and set up again.
 **Do:** check `isSupported()` before `setup()`, and tell the user which browsers work. Nothing
 can be done from the page itself.
 
@@ -286,7 +292,9 @@ appears in logs and in diagnostics only.
 `OWNER_LOST_DURING_WRITE`
 : **Arises** when the tab holding the port went away while the write was being written. Whether the
 device received the bytes, some of them, or none, cannot be known. serial-broker never repeats
-such a write.
+such a write. It is decided once that tab has provably said its last word: at once when it closed
+and its goodbye arrived without a result for the write, and one second after another tab took the
+port over when it crashed.
 **Context:** `byteLength`.
 **Do:** repeat the command only if doing so is harmless for the device, or after checking its
 state. See

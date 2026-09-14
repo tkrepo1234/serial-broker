@@ -133,7 +133,9 @@ describe('serial-broker.worker', () => {
     connect({ ports: [alice] });
     connect({ ports: [bob] });
     alice.deliver(envelope('alice', 'all', { type: 'attach', configName: 'Reader' }));
-    alice.deliver(envelope('alice', 'all', { type: 'owner-claimed', configName: 'Reader' }));
+    alice.deliver(
+      envelope('alice', 'all', { type: 'owner-claimed', configName: 'Reader', term: 't-1' }),
+    );
     bob.deliver(envelope('bob', 'all', { type: 'attach', configName: 'Reader' }));
     alice.posted.length = 0;
 
@@ -146,6 +148,7 @@ describe('serial-broker.worker', () => {
         configName: 'Reader',
         requestId: 'w-1',
         payload: new Uint8Array([1]),
+        term: 't-1',
       }),
     );
 
@@ -264,7 +267,9 @@ describe('serial-broker.worker', () => {
 
     alice.deliver(envelope('alice', 'all', { type: 'attach', configName: 'Reader' }));
     bob.deliver(envelope('bob', 'all', { type: 'attach', configName: 'Reader' }));
-    alice.deliver(envelope('alice', 'all', { type: 'owner-claimed', configName: 'Reader' }));
+    alice.deliver(
+      envelope('alice', 'all', { type: 'owner-claimed', configName: 'Reader', term: 't-1' }),
+    );
     alice.posted.length = 0;
 
     bob.deliver(
@@ -273,6 +278,7 @@ describe('serial-broker.worker', () => {
         configName: 'Reader',
         requestId: 'w-1',
         payload: new Uint8Array([1]),
+        term: 't-1',
       }),
     );
 

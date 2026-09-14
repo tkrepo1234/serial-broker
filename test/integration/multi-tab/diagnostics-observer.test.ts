@@ -9,6 +9,7 @@ import type {
 import { SerialBrokerErrorCode } from '../../../src/core/error-codes.js';
 import { SerialBrokerStatus } from '../../../src/core/types.js';
 import { ownerLockName } from '../../../src/protocol/version.js';
+import { persistenceLockName } from '../../../src/storage/persistence-hold.js';
 import { BrowserHarness, TRANSPORT_MODES } from '../../harness/browser-harness.js';
 import { READER, READER_OPTIONS } from '../../harness/devices.js';
 
@@ -187,12 +188,21 @@ describe.each(TRANSPORT_MODES)('diagnostics observer (%s)', (transport) => {
 
     const snapshot = await collect(harness, observer);
 
-    expect(snapshot.locks?.held).toEqual([
+    const ownership = (lock: { readonly name: string }): boolean =>
+      lock.name === ownerLockName('Reader');
+    expect(snapshot.locks?.held.filter(ownership)).toEqual([
       { name: ownerLockName('Reader'), mode: 'exclusive', browserClientId: owner.id },
     ]);
     expect(snapshot.locks?.pending).toEqual([
       { name: ownerLockName('Reader'), mode: 'exclusive', browserClientId: peer.id },
     ]);
+    // Both tabs run the configuration remembered, and each holds it for the other (ADR-0027).
+    expect(snapshot.locks?.held.filter((lock) => !ownership(lock))).toEqual(
+      expect.arrayContaining([
+        { name: persistenceLockName('Reader'), mode: 'shared', browserClientId: owner.id },
+        { name: persistenceLockName('Reader'), mode: 'shared', browserClientId: peer.id },
+      ]),
+    );
   });
 
   it('never joins the election, so a port nobody else wants stays with nobody', async () => {

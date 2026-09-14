@@ -104,13 +104,23 @@ device sends unsolicited data that must not be missed, have your protocol acknow
 ### A write that had not started yet is sent again
 
 A participant's write that was still waiting — queued at the owner, or on its way to it — never
-reached the device. serial-broker hands it to the new owner, and it is written exactly once.
+reached the device. serial-broker hands it to the new owner, and it is written exactly once. When
+the tab holding the port closed, that happens as soon as its goodbye arrives; when it crashed, after
+a grace period of one second, because what it sent just before crashing may still be on its way.
 
 ### A write that had started ends with `OWNER_LOST_DURING_WRITE`
 
 A write that the old owner had already begun handing to the device is different. Some, all or none
 of its bytes may have reached the device, and nothing can tell which. serial-broker rejects the
 promise with `OWNER_LOST_DURING_WRITE` and **does not send it again**.
+
+A tab that closes finishes the writes it began and reports their results before it lets go, so a
+write it completed resolves, even when another tab hears of the new owner first. A tab that crashes
+reports nothing more: the write is rejected once a second has passed without word from it. Two
+cases remain that no library can decide. A tab that crashes after handing the bytes to the device
+but before its report that it began reaches the issuing tab looks exactly like one that never
+received the write, and so does a report delayed by more than that second; such a write is handed
+to the new owner and may reach the device twice.
 
 | When the owner went away, the write had… | Outcome                                                  |
 | ---------------------------------------- | -------------------------------------------------------- |
@@ -164,6 +174,11 @@ way: the status becomes `reconnecting` in every tab, and the owner tries again.
 - **After `connection.maxAttempts`** (unlimited by default) the status becomes `failed`, and the
   error `RECONNECT_EXHAUSTED` is reported once. A failed configuration comes back by itself when the
   device is plugged in again.
+- **An attempt the browser refuses is not repeated.** When opening the port, or listing the granted
+  ports, fails with `WEB_SERIAL_UNAVAILABLE` — serial access blocked by a permissions policy — every
+  further attempt would meet the same refusal. The status becomes `failed` at once, with no
+  `RECONNECT_EXHAUSTED`. As after `connection.maxAttempts`, the device being plugged in again tries
+  once more, and so does releasing the configuration and setting it up again.
 - **Only the port the tab holds counts.** Unplugging another port leaves the connection alone,
   even when the configuration matches that port too — with `device: { any: true }`, or with two
   identical adapters.
@@ -191,6 +206,15 @@ Two things are remembered between visits, by two different parties:
   forge this permission. `release(name, { forgetDevice: true })` revokes it.
 - **serial-broker remembers the configuration**, in `localStorage`, unless you set
   `persist: false`. `SerialBroker.restore()` sets up every remembered configuration.
+
+What is remembered belongs to the origin, not to one tab. `release()` in one tab therefore forgets
+a configuration only when no other tab still runs it with `persist: true`; otherwise the next
+reload of those tabs would lose it. The same holds for `releaseAll()`, for
+`release(name, { forgetDevice: true })` — which still revokes the permission for every tab — and
+for a tab that sets the name up with `persist: false`. A tab that is closed, reloaded or crashes
+forgets nothing, so the configuration is there on the next visit. Every tab running a remembered
+configuration holds a shared Web Lock, `serial-broker/persisted/v1/<name>`, and the browser lets it
+go when the tab goes away, however it goes.
 
 Only the tab that holds the port can ask the user for permission, because only it can open the
 port the user chooses. `requestAccess()` in any other tab rejects with `PERMISSION_REQUIRED` unless

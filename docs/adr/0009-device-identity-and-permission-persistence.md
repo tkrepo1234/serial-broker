@@ -1,7 +1,12 @@
 # ADR-0009: Identify devices by USB IDs, persist configuration, rely on browser permission
 
 - **Status:** Accepted, amended by [ADR-0022](./0022-version-stored-configurations-separately.md)
+  and [ADR-0027](./0027-keep-a-remembered-configuration-while-a-tab-runs-it.md)
 - **Date:** 2026-09-12
+
+> **Amendment (ADR-0027).** `release(name)` removes the stored configuration only when no other tab
+> still runs it with `persist: true`. The stored entry belongs to the origin, and removing it from
+> one tab cost every other tab running the configuration its next restore.
 
 ## Context
 

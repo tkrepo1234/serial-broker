@@ -60,6 +60,7 @@ message.
 | `election.failed`                         | warn  | Requesting the ownership lock failed; the tab requests it again.                          |
 | `supervisor.open`                         | info  | The port opened.                                                                          |
 | `supervisor.reconnect`                    | warn  | The connection was lost; the reason, attempt and delay are in the fields.                 |
+| `supervisor.gave-up`                      | warn  | An attempt failed with an error that is not retryable; the status becomes `failed`.       |
 | `supervisor.device-connected`             | info  | The device reappeared, and a reconnect is attempted at once.                              |
 | `supervisor.teardown-failed`              | debug | Closing a lost connection failed or timed out at `step`; the next open may find it open.  |
 | `supervisor.sent`, `.received`            | debug | Traffic, with `byteLength`; with `logPayloads`, also `hex`.                               |
@@ -76,6 +77,7 @@ message.
 | `storage.invalid-entry`                   | warn  | A remembered configuration was invalid and discarded.                                     |
 | `storage.corrupt`                         | warn  | The stored configurations could not be read and were discarded.                           |
 | `storage.migrated`                        | info  | Remembered configurations were moved from the key an earlier build used.                  |
+| `storage.hold-failed`                     | warn  | The lock that keeps a remembered configuration for other tabs could not be requested.     |
 | `slot.acquired`                           | info  | This tab took one of the `maxTabs` places and joins the configuration.                    |
 | `slot.released`                           | info  | This tab gave its place up.                                                               |
 | `slot.failed`                             | warn  | Requesting a place failed; the tab queues again.                                          |

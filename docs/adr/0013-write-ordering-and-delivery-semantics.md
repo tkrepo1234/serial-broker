@@ -1,7 +1,12 @@
 # ADR-0013: Per-participant write ordering with at-most-once delivery
 
-- **Status:** Accepted
+- **Status:** Accepted, amended by [ADR-0026](./0026-attribute-messages-to-a-term-of-holding-the-port.md)
 - **Date:** 2026-09-12
+
+> **Amendment (ADR-0026).** A new owner announcing itself proves that the previous one let go of
+> the lock, not that its last messages have arrived. Writes are addressed to a term of holding the
+> port, and the fate of a write is decided when the term it was handed to has ended: its
+> `owner-released` arrived, or it was succeeded and stayed silent for a grace period.
 
 ## Context
 

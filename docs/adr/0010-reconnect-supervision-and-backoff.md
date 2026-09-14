@@ -113,3 +113,20 @@ points make it precise.
   in the supervisor, so a listing that times out is a failed attempt followed by another, and never
   mistaken for an attempt already scheduled. Diagnostics report it as `opening`, keeping the set of
   states that peers on the same protocol version accept.
+
+## Amendment (2026-09-14)
+
+- **Only a retryable failure leads to another attempt.** An attempt to connect that fails with a code
+  that is not retryable ends in `failed` at once, as `maxAttempts` does, and is left the same ways:
+  a `connect` event, a successful `requestAccess()`, or `setup()` again. No `RECONNECT_EXHAUSTED`
+  follows; the reported error is the reason. Two attempts fail that way today, both with
+  `WEB_SERIAL_UNAVAILABLE`: an `open()` rejected with `SecurityError`, and a `getPorts()` that
+  rejects for any reason other than its deadline. The first was retried with backoff, forever under
+  the default `maxAttempts`, although docs/site/errors.md promises further attempts only for
+  retryable codes; the second stopped in `awaiting-permission`, offering a permission prompt that
+  cannot help. A connection that was open and is lost is still retried whatever its error: a failed
+  write says nothing about whether the port opens again.
+
+  _Alternative rejected:_ keep retrying, with backoff. A permissions policy does not change while the
+  page runs, so every attempt reports the same error to every tab, and `failed` is what the
+  application should show.
