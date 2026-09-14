@@ -4,6 +4,90 @@ Work that is agreed but not yet started. Ordered by when it becomes relevant, no
 
 ---
 
+## Performance tests, example apps and a usability review
+
+**Requested by Tim, 2026-09-14. Scheduled after the hardening round.** Test the software the way
+its users meet it: how fast it is, how it holds up in realistic applications, how much it takes to
+do simple things, and whether the documentation explains everything clearly and without ambiguity.
+
+### Performance
+
+Measured in two places: in the simulated browser (`test/harness/`), where the library's own cost is
+isolated and repeatable, and in a real Chromium, with a page-level Web Serial stand-in or the
+emulator (`emulator/`), where the platform's cost is included.
+
+| Scenario        | Measures                                                              |
+| --------------- | --------------------------------------------------------------------- |
+| Device to tabs  | Bytes per second and p50/p95 latency to `onReceive`, 1/5/10 tabs      |
+| Tabs to device  | p50/p95 write latency at 1, 10, 100 writes per second; one 1 MB write |
+| Handover        | Time from the owner's crash or release to the next `open`             |
+| Start           | `setup()` to `open` with a granted device                             |
+| Steady state    | Heap and pending timers after one simulated hour of traffic           |
+| Both transports | Every scenario over `SharedWorker` and `BroadcastChannel`             |
+
+Before measuring, write down the expected value for each scenario. The expectation is what a
+result is judged against, so it cannot be adjusted afterwards.
+
+### Example apps
+
+Runnable applications under `examples/`, each with its own README and one command to start it,
+using only the published entry points:
+
+1. **Minimal:** one page that connects, prints received lines and sends text.
+2. **Multi-tab dashboard:** several tabs on one device, status, errors, the permission flow,
+   remembering and restoring.
+3. **Exclusive operation:** `maxTabs: 1`, with the `queued` state shown to the user.
+4. **Without a bundler:** `serial-broker/min` with an import map.
+5. **Framework integration:** one component framework (React), as a hook.
+
+Each app runs against the Web Serial stand-in without hardware, and against a real device.
+
+### Usability review
+
+- **Steps:** for connecting and printing received text, sending a command and awaiting it,
+  showing the status, asking for permission, releasing, and exclusive use, count the calls, options
+  and concepts needed. Put them next to the same task done with Web Serial alone.
+- **Cold read:** a reviewer with no knowledge of the code builds each example app from the
+  documentation alone and logs every question they had to ask and every guess they had to make.
+
+### Definition of done
+
+Everything below holds, and nothing beyond it is part of this item.
+
+**Performance**
+
+- [ ] `npm run bench` runs the harness scenarios in under two minutes and writes their results,
+      with the expectations next to them, to a Performance chapter of the documentation site.
+- [ ] The real-browser numbers for the scenarios above are recorded once in the same chapter, with
+      browser, operating system and device or stand-in named.
+- [ ] Size budgets are enforced by `scripts/check-dist.mjs`, so CI fails when a build exceeds them:
+      `index.min.js` at most 25 KB gzipped, `serial-broker.worker.js` at most 12 KB gzipped.
+- [ ] Every result more than ten times worse than its expectation has become a fix or a
+      documented limit.
+
+**Example apps**
+
+- [ ] The five apps exist. Each starts with one documented command, type-checks in CI, and has a
+      README that says what it shows.
+- [ ] A smoke test per app runs in CI against the stand-in: the page loads, connects, receives and
+      sends.
+
+**Usability**
+
+- [ ] The step count for each task above is a table in the documentation, with the code for each
+      task, and the Web Serial comparison.
+- [ ] No task needs a concept beyond `setup`, `subscribe`, `requestAccess`, `send` and `release`,
+      or the task has a written design proposal that removes the extra step.
+- [ ] The cold read is done for every app. Every logged question or guess is resolved, by a
+      documentation fix or a recorded reason for leaving it, and the list is committed.
+
+**Stop rule**
+
+- [ ] Each area gets exactly one round of review, fix and re-review. What the re-review finds that
+      is not a defect goes to this backlog as a new item, not into another round.
+
+---
+
 ## Open findings from the bug hunt of 2026-09-13
 
 Everything confirmed in the bug hunt is fixed. What remains is either unconfirmed or needs a real
