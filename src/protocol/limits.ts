@@ -151,6 +151,17 @@ export const MAX_WAITING_WRITE_BYTES = 4 * MAX_PAYLOAD_BYTES;
 export const MAX_REPORTS_PER_COLLECTION = MAX_PARTICIPANTS;
 
 /**
+ * The most characters and bytes one diagnostics collection keeps in its reports: 16 MiB.
+ *
+ * The count alone bounds no memory, as it does not for the writes waiting at a port: one report may
+ * hold {@link MAX_REPORT_CHARACTERS}, so {@link MAX_REPORTS_PER_COLLECTION} of the largest ones
+ * would be a gigabyte - and a request id is broadcast, so anything on the bus can answer one under
+ * as many invented identities as it likes (ADR-0031). A report of a real tab is kilobytes; this
+ * holds thousands of them.
+ */
+export const MAX_REPORT_CHARACTERS_PER_COLLECTION = 16 * MAX_REPORT_CHARACTERS;
+
+/**
  * How often the tab holding the port answers `status-request` (ADR-0031).
  *
  * One answer is a broadcast that reaches every tab, so a burst of requests needs one answer, not
@@ -203,6 +214,7 @@ export const LIMITS = {
   MAX_PORTS_PER_PARTICIPANT,
   MAX_CONFIGURATIONS,
   MAX_REPORTS_PER_COLLECTION,
+  MAX_REPORT_CHARACTERS_PER_COLLECTION,
   MAX_WAITING_WRITES,
   MAX_WAITING_WRITE_BYTES,
 } as const;
@@ -273,6 +285,26 @@ export function exceedsStructureBudget(
   root: unknown,
   budget: StructureBudget,
 ): 'values' | 'characters' | undefined {
+  return measureStructure(root, budget).excess;
+}
+
+/**
+ * How many characters and bytes a structure holds, counted within `budget`.
+ *
+ * For what a structure costs to keep, where the count of such structures is bounded separately -
+ * the reports of a diagnostics collection (ADR-0031). A structure that exceeds `budget` is counted
+ * as the whole of it: the walk stops there, and nothing holds a structure it has refused.
+ */
+export function structureCharacters(root: unknown, budget: StructureBudget): number {
+  const measured = measureStructure(root, budget);
+  return measured.excess === undefined ? measured.characters : budget.characters;
+}
+
+/** The walk both of the above are: what it spent, and which part of the budget it ran out of. */
+function measureStructure(
+  root: unknown,
+  budget: StructureBudget,
+): { readonly excess: 'values' | 'characters' | undefined; readonly characters: number } {
   let values = 0;
   let characters = 0;
   const seen = new WeakSet();
@@ -282,14 +314,14 @@ export function exceedsStructureBudget(
     const value = pending.pop();
     values += 1;
     if (values > budget.values || typeof value === 'function' || typeof value === 'symbol') {
-      return 'values';
+      return { excess: 'values', characters };
     }
 
     if (typeof value === 'string') {
       characters += value.length;
     } else if (typeof value === 'object' && value !== null) {
       if (seen.has(value)) {
-        return 'values';
+        return { excess: 'values', characters };
       }
       seen.add(value);
       const width = widthOf(value);
@@ -297,17 +329,17 @@ export function exceedsStructureBudget(
         characters += width.bytes;
       } else if (values + pending.length + width.children > budget.values) {
         // Refused before its children are listed: an array of a billion holes is refused at once.
-        return 'values';
+        return { excess: 'values', characters };
       } else {
         pushChildren(value, pending);
       }
     }
 
     if (characters > budget.characters) {
-      return 'characters';
+      return { excess: 'characters', characters };
     }
   }
-  return undefined;
+  return { excess: undefined, characters };
 }
 
 /** How many children a structured value has, or how many bytes a binary one holds. */

@@ -17,7 +17,14 @@ import type { Unsubscribe } from '../core/types.js';
 import { invalidArgument, validateName } from '../core/validation.js';
 import type { LockInfoLike, SerialBrokerEnvironment } from '../environment/environment.js';
 import { describeDecodeFailure } from '../protocol/decode.js';
-import { LimitWarnings, MAX_REPORTS_PER_COLLECTION } from '../protocol/limits.js';
+import {
+  LimitWarnings,
+  MAX_REPORT_CHARACTERS,
+  MAX_REPORT_CHARACTERS_PER_COLLECTION,
+  MAX_REPORT_VALUES,
+  MAX_REPORTS_PER_COLLECTION,
+  structureCharacters,
+} from '../protocol/limits.js';
 import type { ClientId, ProtocolMessage, RequestId } from '../protocol/messages.js';
 import { PROTOCOL_VERSION } from '../protocol/version.js';
 
@@ -39,6 +46,8 @@ const LOCK_NAME_PREFIX = 'serial-broker/';
 /** A collection that is still listening. */
 interface Collection {
   readonly reports: ParticipantDiagnostics[];
+  /** How many characters and bytes those reports hold, so the collection is bounded in both. */
+  characters: number;
   readonly timer: TimerHandle;
   readonly finish: () => void;
 }
@@ -134,7 +143,7 @@ export class DiagnosticsObserver {
       const timer = this.#environment.clock.setTimer(() => {
         this.#finishCollection(requestId);
       }, windowMs);
-      this.#collections.set(requestId, { reports, timer, finish: resolve });
+      this.#collections.set(requestId, { reports, characters: 0, timer, finish: resolve });
     });
 
     this.#transport.send({
@@ -249,6 +258,19 @@ export class DiagnosticsObserver {
           });
           return;
         }
+        // Bounded in what the reports hold as well as in how many there are: the count alone would
+        // leave a collection a gigabyte of invented reports (ADR-0031).
+        const characters = structureCharacters(message.report, {
+          values: MAX_REPORT_VALUES,
+          characters: MAX_REPORT_CHARACTERS,
+        });
+        if (collection.characters + characters > MAX_REPORT_CHARACTERS_PER_COLLECTION) {
+          this.#reportsDropped.exceeded('MAX_REPORT_CHARACTERS_PER_COLLECTION', {
+            requestId: message.requestId,
+          });
+          return;
+        }
+        collection.characters += characters;
         collection.reports.push(message.report);
         return;
       }

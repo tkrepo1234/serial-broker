@@ -8,7 +8,11 @@ import type {
 } from '../../../src/core/diagnostics.js';
 import { SerialBrokerErrorCode } from '../../../src/core/error-codes.js';
 import { SerialBrokerStatus } from '../../../src/core/types.js';
-import { MAX_REPORTS_PER_COLLECTION } from '../../../src/protocol/limits.js';
+import {
+  MAX_REPORT_CHARACTERS,
+  MAX_REPORT_CHARACTERS_PER_COLLECTION,
+  MAX_REPORTS_PER_COLLECTION,
+} from '../../../src/protocol/limits.js';
 import {
   brokerChannelName,
   ownerLockName,
@@ -388,6 +392,52 @@ describe('an observer collecting while a script of the origin answers', () => {
     const snapshot = await pending;
 
     expect(snapshot.participants).toHaveLength(MAX_REPORTS_PER_COLLECTION);
+    expect(fieldsOfEvent(records, 'diagnostics.limit-exceeded')).toHaveLength(1);
+  });
+
+  it('keeps a bounded number of characters in them, and logs the ones it drops once', async () => {
+    const { logger, records } = recordingLogger();
+    const harness = new BrowserHarness({ transport: 'broadcastchannel', logger });
+    harness.serial.grant(harness.serial.addDevice(READER.vendorId, READER.productId));
+    const tab = harness.openTab();
+    await tab.setup('Reader', READER_OPTIONS);
+    const observer = harness.openObserver();
+
+    const channel = harness.bus.broadcastHub.create(brokerChannelName(), 'mallory');
+    let requestId: unknown;
+    channel.addEventListener('message', (event: { data: unknown }) => {
+      const message = event.data as Record<string, unknown>;
+      if (message['type'] === 'diagnostics-request') {
+        requestId = message['requestId'];
+      }
+    });
+
+    // Each answer is a well-formed report with as much text attached as the decoder lets one
+    // carry: the count of reports alone would leave the observer holding a gigabyte (ADR-0031).
+    const filler = 'x'.repeat(MAX_REPORT_CHARACTERS / 4);
+    const answers = 4 * Math.ceil(MAX_REPORT_CHARACTERS_PER_COLLECTION / filler.length);
+    const pending = observer.collect(100);
+    await harness.settle();
+    for (let index = 0; index < answers; index += 1) {
+      channel.postMessage({
+        v: PROTOCOL_VERSION,
+        from: 'mallory',
+        to: observer.clientId,
+        type: 'diagnostics-report',
+        requestId,
+        report: { ...sampleReport(), clientId: `c-invented-${String(index)}`, filler },
+      });
+    }
+    await harness.settle();
+    await harness.advance(100);
+    const snapshot = await pending;
+
+    expect(snapshot.participants.length).toBeLessThan(answers);
+    expect(snapshot.participants.length * filler.length).toBeLessThanOrEqual(
+      MAX_REPORT_CHARACTERS_PER_COLLECTION,
+    );
+    // Far fewer than the count allows, and enough that a real collection is unaffected.
+    expect(snapshot.participants.length).toBeGreaterThanOrEqual(8);
     expect(fieldsOfEvent(records, 'diagnostics.limit-exceeded')).toHaveLength(1);
   });
 });

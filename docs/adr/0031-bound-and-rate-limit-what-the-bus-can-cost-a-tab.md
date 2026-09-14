@@ -39,14 +39,14 @@ A token bucket (`core/rate-limit.ts`) expresses the rates: `burst` allowed at on
 coming back. A burst is what legitimate use looks like - every tab of an origin asking for the
 status as it joins - and what follows it is not.
 
-| What                             | Limit                                                                |
-| -------------------------------- | -------------------------------------------------------------------- |
-| Answers to `status-request`      | `STATUS_ANSWER_RATE`: 32 at once, 32 per second                      |
-| Answers to `diagnostics-request` | `DIAGNOSTICS_ANSWER_RATE`: 8 at once, 4 per second                   |
-| Records of malformed messages    | `MALFORMED_MESSAGE_WARNING_RATE`: 16 at once, 2 per second           |
-| Errors from other tabs           | `REMOTE_ERROR_RATE`: 32 at once, 8 per second                        |
-| Reports kept per collection      | `MAX_REPORTS_PER_COLLECTION`: 1024, as many as the broker keeps tabs |
-| Writes waiting at a port         | `MAX_WAITING_WRITES`: 4096, and `MAX_WAITING_WRITE_BYTES`: 64 MiB    |
+| What                             | Limit                                                                                                                    |
+| -------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| Answers to `status-request`      | `STATUS_ANSWER_RATE`: 32 at once, 32 per second                                                                          |
+| Answers to `diagnostics-request` | `DIAGNOSTICS_ANSWER_RATE`: 8 at once, 4 per second                                                                       |
+| Records of malformed messages    | `MALFORMED_MESSAGE_WARNING_RATE`: 16 at once, 2 per second                                                               |
+| Errors from other tabs           | `REMOTE_ERROR_RATE`: 32 at once, 8 per second                                                                            |
+| Reports kept per collection      | `MAX_REPORTS_PER_COLLECTION`: 1024, as many as the broker keeps tabs, and `MAX_REPORT_CHARACTERS_PER_COLLECTION`: 16 MiB |
+| Writes waiting at a port         | `MAX_WAITING_WRITES`: 4096, and `MAX_WAITING_WRITE_BYTES`: 64 MiB                                                        |
 
 Two of them are more than a bucket:
 
@@ -74,7 +74,8 @@ Two of them are more than a bucket:
   stale by the time it was read, and it would put a number about the port's insides into a message
   every tab reads (ADR-0011).
 - **Count bytes only.** A flood of empty writes is free in bytes and not free in bookkeeping; a
-  count alone lets 4096 payloads of 16 MiB in. Both bounds, or neither.
+  count alone lets 4096 payloads of 16 MiB in. Both bounds, or neither - which is why the reports a
+  collection keeps are bounded in both as well: 1024 reports of a megabyte each are a gigabyte.
 
 ## Consequences
 
@@ -113,4 +114,5 @@ still reaches `open`.
 beyond it are refused with `WRITE_QUEUE_FULL` while the ones within it still wait, and that a
 request the port has accepted is never refused.
 `test/integration/multi-tab/diagnostics-observer.test.ts` answers a collection from a script of the
-origin, under invented identities, and holds what it keeps to `MAX_REPORTS_PER_COLLECTION`.
+origin, under invented identities, and holds what it keeps to `MAX_REPORTS_PER_COLLECTION` - and,
+with a report as large as the decoder allows, to `MAX_REPORT_CHARACTERS_PER_COLLECTION`.

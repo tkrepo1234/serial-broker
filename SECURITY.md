@@ -167,6 +167,7 @@ each value, in `src/protocol/limits.ts`.
 | `MAX_PORTS_PER_PARTICIPANT`            | 8                | The ports the broker keeps for one identity.                                 |
 | `MAX_CONFIGURATIONS`                   | 4096             | The configurations the broker keeps bookkeeping for.                         |
 | `MAX_REPORTS_PER_COLLECTION`           | 1024             | The reports one diagnostics collection keeps.                                |
+| `MAX_REPORT_CHARACTERS_PER_COLLECTION` | 16 MiB           | All strings of the reports one collection keeps, together.                   |
 | `MAX_WAITING_WRITES`                   | 4096             | The writes waiting at one tab's port.                                        |
 | `MAX_WAITING_WRITE_BYTES`              | 64 MiB           | The payload bytes waiting at one tab's port.                                 |
 
