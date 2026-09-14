@@ -64,32 +64,28 @@ device the user chooses in the browser's port picker.
 - Implement after the hardening branches are merged (they touch the same files), with an ADR,
   docs/site/configuration.md and the examples updated.
 
-### Debugging surface as an entry point (Tim, 2026-09-14)
+### Debugging surface as an entry point (Tim, 2026-09-14) - done
 
 - Connect to a device without typing a vendor ID, product ID or type: a **Choose a device** action
   opens the browser's port picker with no filter, takes the vendor and product ID from the chosen
   port - or `device: { any: true }` for a port without a USB identity - suggests a name and a baud
   rate the user can change, and sets the configuration up. It is the first thing a developer trying
-  the library should find.
+  the library should find. Done the same day (ADR-0034); once the library has an automatic device
+  mode (above), the action becomes that mode.
 
-### Hardening (protocol version 8)
+### Hardening (protocol version 8) - done 2026-09-14
 
-- A secret in `hello`, bound to the identity by the worker.
-- One Web Lock per term, replacing the one-second grace period.
-- All four session checks: a write's outcome only from the term it was addressed to; claims and
-  statuses checked against the locks; `data-received` and `data-sent` only from the current or
-  awaited sender; a bound on the owner's queue of other tabs' write requests.
-- Rate limits for answers to `status-request` and `diagnostics-request`, for malformed-message
-  warnings and remote `error` events, and for observer reports per collection.
+Done, see the CHANGELOG and ADR-0028 to ADR-0031: a secret in `hello`; one Web Lock per term; the
+four session checks; rate limits for status and diagnostics answers, malformed-message warnings,
+remote errors and observer reports. What the implementers left open is under "Follow-ups from the
+hardening round" below.
 
-### Robustness
+### Robustness - done 2026-09-14
 
-- Stored configurations: **one key per configuration plus an index** (storage version 2). Before
-  1.0 nothing needs migrating.
-- `Clock` gains monotonic time for durations; event timestamps stay wall-clock time.
-- The worker forwards its `warn` records, throttled, to the tabs, which log them as `worker.*`.
-- The internal declaration files use structural types, and `scripts/check-dist.mjs` checks every
-  declaration file without `@types/w3c-web-serial`.
+Done, see the CHANGELOG and ADR-0032, ADR-0033: one storage key per configuration plus an index
+(storage version 2, no migration); a monotonic clock for durations; the worker's `warn` records
+forwarded to the tabs (ADR-0029); structural Web Serial types, every emitted declaration checked
+without `@types/w3c-web-serial`.
 
 ### Tests, hardware and examples
 
@@ -97,20 +93,24 @@ device the user chooses in the browser's port picker.
   Installed on 2026-09-14; the machine restarts once the current work is done, and the emulator test
   follows the restart.
 - **Real hardware is available (Tim, 2026-09-14):** an Arduino on COM3 (USB `2341:0078`) runs an
-  echo sketch at 9600 baud with default settings: it sends back what it receives. The library is
-  tested against it in a real browser.
+  echo sketch at 9600 baud with default settings: it sends back what it receives. Done the same
+  day: `test/browser/hardware/arduino.spec.ts` runs against it (opt-in, ADR-0035), and the run is
+  recorded in `docs/manual-test-plan.md`.
 - **Long-running and extreme-usage tests (Tim, 2026-09-14):** many tabs, large amounts of data, long
   running times, for the edge cases of an extreme power user. They measure what the library
   consumes - memory, timers, listeners, locks, messages - and whether it stays stable, in the
   simulated browser and in a real browser.
-- Real-browser tests with **Playwright**, locally and in CI.
+- Real-browser tests with **Playwright**, locally and in CI. Done 2026-09-14 (`npm run
+test:browser`, ADR-0035); the Web Serial stand-in in `test/browser/stand-in/` is for the example
+  apps too.
 - **No size budget**: sizes are reported, not enforced.
 - Framework integrations for React, Vue, Svelte and Angular, and above all **SAP OpenUI5**: a runnable
   example app plus a reusable integration module (model binding and events), on the current OpenUI5
   long-term maintenance version, with UI5 Tooling and TypeScript, running without an SAP system.
 - Dev dependencies are updated now, `npm audit fix` included, and checked monthly after that.
 - The at-a-glance illustration is reworked in the documentation's style and then **shown to Tim for
-  his assessment** before it goes into the documentation.
+  his assessment** before it goes into the documentation. Reworked on 2026-09-14
+  (`design/at-a-glance.svg`, `design/README.md`); Tim's assessment is pending.
 
 ### Working mode
 
@@ -213,48 +213,52 @@ Everything below holds, and nothing beyond it is part of this item.
 
 ## Follow-ups from the hardening round of 2026-09-14
 
-The hardening round bounded what the bus can make a tab or the worker hold, held each worker port to
-its identity, and closed the lifecycle and re-entrancy defects it found. What it proposed but did not
-do, because it needs a decision, a protocol change or a real browser:
+Protocol version 8 (ADR-0028 to ADR-0031), storage version 2 (ADR-0033), the monotonic clock
+(ADR-0032), the worker's records in the tabs (ADR-0029) and the structural declarations are done.
+What the implementers left open:
 
-### Needs protocol version 8
+### Worker and bus
 
-- **A secret in `hello`.** Each transport sends a random value only in `hello`; the worker binds the
-  identity to it and refuses a later `hello` with another. Stops impersonation on the worker; not
-  possible on `BroadcastChannel`.
-- **One Web Lock per term** (`serial-broker/term/v8/<name>/<term>`), held by the owner for the whole
-  term. Tabs take a term for ended when its lock is free, instead of after the one-second grace
-  period, so a forged claim cannot end a live term and crash detection becomes exact.
+- A tab that connects after a worker record was written is never told about it: the worker keeps
+  no buffer to replay. A small bounded replay to a newly registered tab would help an operator who
+  opens a tab after the fact. The worker's records are not in the diagnostics observer's `collect()`
+  either, and the debugging surface shows them like any other log line.
+- `MAX_BOUND_IDENTITIES` eviction is the residual weakness of ADR-0028: a script that binds 4096
+  identities and waits for a tab to be silent for three minutes can claim that tab's identity.
+  Bounding per port or ageing bindings by time was not attempted.
+- The broker itself has no rate limit: it still routes and clones every well-formed message. Rate
+  limits are per context, not per sender, so a flood can crowd legitimate answers out of the
+  allowance (ADR-0031 says why per-sender rates were rejected).
+- The remaining crash residual of ADR-0030 - a word a crashed holder sent that had not arrived when
+  the browser freed its lock is too late - could be narrowed by draining the bus through the worker
+  before a crashed term is decided; the `BroadcastChannel` has no equivalent hop.
 
-### Tighter checks on what tabs believe
+### Storage
 
-- `PendingWrites`: accept `write-started` and `write-result` only from a term the write was addressed
-  to; today an outcome from any term settles it.
-- Claims and statuses: refute a new term while the owner lock is not held (`locks.query()`), and a
-  finite `maxTabs` without a matching tab-slot lock - one forged status makes every tab that does
-  not hold the port withdraw.
-- `data-received` and `data-sent`: accept only from the sender of the current or awaited term.
-- Rate limits for answers to `status-request` and `diagnostics-request`, for the
-  `client.malformed-message` warning, and for remote `error` events.
-- Observer: cap reports per collection, and ignore a report whose `clientId` differs from its sender.
-- The owner's write queue: bound the writes it holds for other tabs; forged `write-request`s with
-  new request ids grow it.
+- The index is still one key every tab writes: a name added by two tabs within the propagation
+  window can be lost and is only put back by that tab's next save. Entries left behind by an index
+  that could not be read are never cleaned up. Both would need key enumeration
+  (`Storage.length`/`key(n)`), which ADR-0033 rejected for now.
 
 ### Time and sleep
 
-- `Clock` has no monotonic time. `stableAfterMs` is measured on the wall clock, so a clock set back
-  keeps the attempt counter from resetting.
 - After the machine wakes, the broker's sweep can forget every tab before their heartbeats arrive;
   write messages in between are lost. Needs a real browser to confirm.
-- The fake worker keeps every routed message, which grows test memory in long runs.
+- The debugging surface renders "in 1.4 s" / "320 ms ago" from wall-clock timestamps; a system clock
+  jump skews those displays until the next report.
+- `BrokerHost.now()` / `WorkerPortsHost.now()` are monotonic but still called `now`.
 
-### Declarations
+### Browser and hardware tests
 
-- The internal declaration files (`dist/owner/port-supervisor.d.ts`, `dist/environment/environment.d.ts`
-  and a few more) still name the ambient Web Serial types, so they need `@types/w3c-web-serial` to
-  type-check. No export path reaches them, and `scripts/check-dist.mjs` checks that the published
-  entry points do not; structural types in `src/environment/environment.ts` would make them clean
-  too.
+- The seeded serial permission is Windows-only (device instance ID); macOS and Linux store vendor,
+  product and serial number. CI exercises Chromium only.
+- The 64 KiB hardware round trip takes a quarter of an hour on the Arduino (about 80 bytes a second
+  of echo); a bridged USB-serial adapter would echo at line rate.
+- No browser test for `USER_GESTURE_REQUIRED`: every script an automation evaluates carries
+  transient activation. The stand-in has no fault injection yet (open/write failing or hanging, a
+  non-USB port). The browser suite does not drive the USB/IP emulator.
+- `docs/manual-test-plan.md` still quotes lock names of protocol versions 1 and 2 in two places, and
+  step 1 still says "click Set up" where the button is "Create and connect".
 
 ---
 
@@ -361,6 +365,11 @@ facing the serial-broker problem recognise this as the solution, whichever featu
 
 A first draft is in `design/at-a-glance.svg`. It was taken out of the documentation until it has
 been reworked; the rework has to match the documentation's colours and style.
+
+**Reworked on 2026-09-14** in the documentation's palette and typography, with `design/README.md`
+describing what it shows and how to embed it. It stays out of the documentation and the README until
+Tim has assessed it. If accepted: embed it in `docs/site/introduction.md` (copy to `_static/`) and
+the README, with alternative text.
 
 ---
 
