@@ -134,6 +134,11 @@ they are left unticked because the checklist is about a run **with** hardware.
 - [ ] **3.** Send `HELLO`. With TX/RX bridged, both a `sent` and a `received` line appear.
 - [ ] **4.** Reload the page. It reconnects **with no prompt** — the browser remembered the
       permission and the library remembered the configuration.
+- [ ] **4a.** The same connection the other way round, on a browser that has not been given the
+      device: click _Choose a device…_, dismiss the picker once (nothing changes, no error), then
+      press it again and pick the port. The dialog opens filled in — the device's IDs, or _any
+      port_ for a port without USB IDs, a free name, 9600 baud. _Connect_ reaches `open`
+      **without a second prompt**.
 
 ### Several tabs
 
