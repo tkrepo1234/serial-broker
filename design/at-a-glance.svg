@@ -156,7 +156,7 @@
 
       <rect x="501" width="155" height="88" rx="3" fill="#ffffff" stroke="#9b59b6" stroke-dasharray="5 4"/>
       <text class="sans b" x="515" y="24" font-size="13.5">Debugging surface</text>
-      <text class="sans small" x="515" y="42" fill="#7d3c98">optional, watches only</text>
+      <text class="sans small" x="515" y="42" fill="#7d3c98">optional · can also act</text>
       <rect x="515" y="52" width="110" height="22" rx="3" fill="#f4ecf7"/>
       <text class="mono small" x="523" y="67" fill="#7d3c98">diagnostics</text>
     </g>
@@ -334,7 +334,7 @@
     <g transform="translate(388,66)">
       <text class="sans b" y="28" font-size="13.5" fill="#7d3c98">Debugging surface</text>
       <text class="sans small" y="48">The same state as a page, with the traffic and the</text>
-      <text class="sans small" y="65">locks. Watching never moves a port.</text>
+      <text class="sans small" y="65">locks. Opening it never moves a port.</text>
     </g>
   </g>
 
