@@ -174,7 +174,8 @@ status is `open` again.
 | Configuration name                | `configuration-name`                               |
 | Protocol version                  | `protocol-version`                                 |
 
-`smoke.spec.ts` uses `status`, `connect`, `error`, `send-input`, `send`, `received` and `sent`.
+`smoke.spec.ts` uses `status`, `connect`, `error`, `send-input`, `send`, `received`, `sent` and
+`log-section`.
 
 ## Design decisions
 
@@ -223,6 +224,13 @@ open for a shift, and a `<pre>` that grows without bound is a memory leak with a
 and the stand-in is a TypeScript module; serving it from a page whose point is "no build step"
 would have needed a transpiling route in the server. Run the example by hand with an adapter, or
 with the loopback the manual test plan describes.
+
+**The smoke test checks the worker, not only the echo.** Under `transport: 'auto'` a worker script
+that fails to load is replaced by a `BroadcastChannel`, and the page connects, sends and receives
+as before - so a test that stops at the echo passes with the worker not served at all. The test
+therefore asks Chromium for its shared workers, the way `chrome://inspect/#workers` does, and
+expects exactly one, from the configured URL; and it expects the _Library log_ section to stay
+hidden, which the fallback's warning would have opened.
 
 **The root ESLint configuration ignores this folder.** `app.js` reads `window` globals and uses
 JSDoc types, which the root's type-aware rules for TypeScript sources have nothing to say about;
