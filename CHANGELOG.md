@@ -76,7 +76,8 @@ coordinate with each other. See
 - Connection attempts are numbered from one alike in errors, log records and diagnostics.
 - New log records: `supervisor.teardown-failed`, `client.dispose-failed`,
   `transport.dispose-failed`, and the `transport.*` records of a worker that stopped answering.
-- The package requires Node 22.13 or later to build and test, as the toolchain does.
+- Building and testing need Node 22.13 or later, as the toolchain does. This is declared in
+  `devEngines`, so installing the package in an application is not restricted.
 - A clean handover no longer fails a write that succeeded, or writes one twice: messages carry the
   term of holding the port, and a started write is failed with `OWNER_LOST_DURING_WRITE` only once
   that term has provably ended (ADR-0026). After a crash this takes up to one second. Other tabs
