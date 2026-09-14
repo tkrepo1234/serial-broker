@@ -52,7 +52,7 @@ const PRESENTATIONS: Readonly<Record<SerialBrokerStatus, StatusPresentation>> = 
   failed: {
     label: 'Failed',
     tone: 'problem',
-    hint: 'serial-broker stopped trying; the error says why. A device plugged in again revives it by itself, and Use the device again starts over.',
+    hint: 'serial-broker stopped trying; the error says why and what to do. Once the cause is fixed, Use the device again starts over. After RECONNECT_EXHAUSTED, plugging the device in again also revives it by itself.',
   },
   released: {
     label: 'Released',
