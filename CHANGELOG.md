@@ -11,13 +11,26 @@ coordinate with each other. See
 
 ## [Unreleased]
 
-**Wire protocol version 8.** Tabs of this build and tabs of an earlier one do not share a worker,
+**Wire protocol version 9.** Tabs of this build and tabs of an earlier one do not share a worker,
 a lock or a bus; they detect each other and report `PROTOCOL_VERSION_MISMATCH`. Reload every tab
 of an application after deploying it. Configurations remembered by an earlier build are not
 migrated (see below).
 
 ### Added
 
+- **Automatic device mode** (ADR-0036): `device` is optional in `setup()`. Without it, or with
+  `{ auto: true }`, the configuration waits in `awaiting-permission` until `requestAccess()` opens
+  an unfiltered port picker, and takes its device from the port the user picks: its vendor and
+  product ID when the port reports both, otherwise a port without a USB identity. The resolved
+  device is remembered, so `restore()` reconnects without a prompt, and shared with the other tabs:
+  a tab in auto mode adopts the device of the tab holding the port. `requestAccess()` may be called
+  right after `setup()` in the same click. An auto-mode configuration waits for the user even when
+  exactly one port is granted, because that port may belong to another configuration.
+- A new device filter, `{ nonUsb: true }`, accepts only ports without a USB identity.
+- `getStatus()` reports `deviceKind`: `'usb'`, `'non-usb'`, `'any'` or `'auto'`.
+- The debugging surface's **Choose a device…** uses the automatic mode: it asks only for a name and
+  the line settings, sets the configuration up and opens the picker in the same click; a dismissed
+  picker releases the configuration again. **New configuration** defaults to automatic.
 - `examples/openui5`: a runnable OpenUI5 application and a reusable integration module that
   exposes serial-broker as a bindable `JSONModel` - status, errors with remediation, traffic, send,
   connect and release - on OpenUI5 1.148 (long-term maintenance) with UI5 Tooling and TypeScript,
@@ -54,8 +67,8 @@ migrated (see below).
   permission. No vendor ID, product ID or device type is needed to get started (ADR-0034). The baud
   rate list offers 1200 to 921600; a dismissed picker changes nothing; the dialog warns before
   connecting when several granted ports match.
-- The debugging surface ships a strict `Content-Security-Policy` in its markup (`default-src
-'none'`, nothing but same-origin script, worker, style and fetch). `frame-ancestors` still has to
+- The debugging surface ships a strict `Content-Security-Policy` in its markup: nothing but
+  same-origin script, worker, style and fetch. `frame-ancestors` still has to
   come from the server as a header. Its styles now live in `dist/debug/debug.css`, which must be
   served next to `dist/debug/index.html`; serving `dist/` as a whole is unaffected.
 - The SharedWorker's own diagnostics reach applications: it sends its `warn` records to the
@@ -73,6 +86,11 @@ migrated (see below).
 
 ### Changed
 
+- **Breaking:** the `status` message carries the device of the tab holding the port (protocol
+  version 9). `SerialBrokerStatusSnapshot` has the extra key `deviceKind`,
+  `EffectiveSettings.device` in diagnostics is the full `DeviceFilter` union, and the context of
+  `DEVICE_MISMATCH` gains `expectedDevice`. A `setup()` without `device`, which used to fail with
+  `INVALID_ARGUMENT`, now waits for the user.
 - A tab proves its identity to the SharedWorker with a random secret sent only in its `hello`
   (ADR-0028). Another script of the origin can no longer connect to the worker under a tab's
   identity, so it no longer receives what is addressed to that tab alone. A tab that replaces a

@@ -41,7 +41,20 @@ design decision, example and documentation chapter is judged against that audien
 package and one worker script to install, no native helpers, behaviour that is predictable on a
 production line, and errors that say what to do.
 
-### Device identity: explicit or automatic (Tim, 2026-09-14)
+### Device identity: explicit or automatic (Tim, 2026-09-14) - done
+
+Done on 2026-09-14 (ADR-0036, protocol version 9): `device` omitted or `{ auto: true }` takes the
+device from the chosen port, `{ nonUsb: true }` is the new kind for ports without a USB identity,
+`getStatus()` reports `deviceKind`, and the debugging surface's **Choose a device…** uses the mode.
+An auto-mode configuration waits for the user even when exactly one port is granted. Left open:
+
+- The real-browser suite and the Arduino hardware tests do not exercise auto mode yet, and
+  `docs/manual-test-plan.md` has no auto-mode scenario.
+- The example applications still pass `device` explicitly (mostly `{ any: true }`); several could
+  drop it and show the automatic mode instead.
+- The debugging surface's empty-state sentence still describes the old flow.
+
+The original request, for the record:
 
 Vendor and product ID must always be optional. A configuration is set up either **explicitly**, with
 `device: { vendorId, productId }` or `{ any: true }` as today, or in **auto mode**, with `device`
