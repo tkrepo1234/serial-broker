@@ -301,6 +301,10 @@ origin through the diagnostics observer — which tab owns each port, reconnect 
 writes, settings, locks, and live traffic. It sets nothing up on its own, so opening it never
 moves a port.
 
+It is also the quickest first connection: **Choose a device…** opens the browser's port picker with
+no filter, and the port you pick becomes a configuration — its USB IDs, or _any port_ where it has
+none, with the line settings to confirm. One click connects, with no second prompt.
+
 It is static content. Nothing serves it unless you do, and whether to is your decision: it can send
 bytes to devices and revoke device permissions. Serve it on the application's origin, next to the
 worker or pointed at the application's worker URL. See [debug/README.md](./debug/README.md).

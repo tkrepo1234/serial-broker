@@ -26,6 +26,11 @@ await SerialBroker.setup('Adapter', {
 `vendorId` and `productId` identify the kind of USB device. On Windows they are in Device Manager
 under the device's _Hardware Ids_ (`VID_1A86&PID_7523`); on Linux, `lsusb` prints them.
 
+If you would rather not look them up, the [debugging surface](diagnostics.md) reads them off the
+device: serve `dist/`, open `/debug/`, press **Choose a device…**, and pick your port. It connects
+to it there and then, and its _Settings_ panel shows the values for the call above — including the
+ones for a port that has no USB IDs at all.
+
 `setup()` resolves as soon as the configuration is registered. It does not wait for the port to
 open, because that may need the user — see step 3.
 

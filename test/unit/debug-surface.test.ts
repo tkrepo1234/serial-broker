@@ -1,6 +1,14 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  deviceForPort,
+  formValuesForPort,
+  isPickerDismissed,
+  noteForChosenPort,
+  suggestPortName,
+  type ChosenPortInfo,
+} from '../../debug/src/chosen-port.js';
+import {
   describeError,
   describeOwnershipLocks,
   describePayload,
@@ -29,7 +37,7 @@ import {
   tabRole,
   thisPageState,
 } from '../../debug/src/model.js';
-import { isFramedByAnotherOrigin } from '../../debug/src/page-guard.js';
+import { isFramedByAnotherOrigin, SETUP_ACTION_IDS } from '../../debug/src/page-guard.js';
 import {
   buildSetupOptions,
   defaultFormValues,
@@ -53,6 +61,7 @@ import { describeSettings } from '../../src/core/diagnostics.js';
 import { SerialBrokerErrorCode } from '../../src/core/error-codes.js';
 import { SerialBrokerError } from '../../src/core/errors.js';
 import { normalizeConfiguration } from '../../src/core/validation.js';
+import { matchesDevice } from '../../src/owner/port-matcher.js';
 import { ownerLockName, PROTOCOL_VERSION, tabSlotLockName } from '../../src/protocol/version.js';
 
 import { sampleReport } from './fixtures/diagnostics-report.js';
@@ -378,6 +387,97 @@ describe('debugging surface: new and edited configurations', () => {
   });
 });
 
+describe('debugging surface: a device chosen in the picker', () => {
+  /** A granted port, as the library sees it when it looks for the configured device. */
+  function port(info: ChosenPortInfo): SerialPort {
+    return { getInfo: () => info } as unknown as SerialPort;
+  }
+
+  it('turns a chosen USB port into a configuration that finds it again without a prompt', () => {
+    const info = { usbVendorId: 0x1a86, usbProductId: 0x7523 };
+
+    const values = formValuesForPort(info, []);
+    const configuration = normalizeConfiguration(values.name, buildSetupOptions(values));
+
+    expect(values.name).toBe('USB 0x1a86:7523');
+    expect(values.baudRate).toBe('9600');
+    expect(configuration.device).toEqual({ kind: 'usb', vendorId: 0x1a86, productId: 0x7523 });
+    expect(configuration.serial).toEqual({ ...DEFAULT_SERIAL_SETTINGS, baudRate: 9600 });
+    // The port the picker granted is the one the configuration opens, so nothing asks again.
+    expect(matchesDevice(port(info), configuration)).toBe(true);
+    // And the device list shows it as the adapter it is, rather than as an unknown one.
+    expect(deviceChoiceFor(values)).toBe('0');
+  });
+
+  it('accepts any port for one with no USB identity, and names it for what it is', () => {
+    const builtIn = formValuesForPort({}, []);
+    const bluetooth = formValuesForPort({ bluetoothServiceClassId: '1101' }, []);
+
+    for (const values of [builtIn, bluetooth]) {
+      const configuration = normalizeConfiguration(values.name, buildSetupOptions(values));
+      expect(configuration.device).toEqual({ kind: 'any' });
+      expect(matchesDevice(port({}), configuration)).toBe(true);
+      expect(deviceChoiceFor(values)).toBe('any');
+    }
+    expect(builtIn.name).toBe('Serial port');
+    expect(bluetooth.name).toBe('Bluetooth port');
+  });
+
+  it('accepts any port where only one of the two USB IDs is reported', () => {
+    // A filter needs both IDs, so half an identity is no identity: it must not become a filter
+    // that matches nothing, which would leave the configuration waiting for a device forever.
+    const values = formValuesForPort({ usbVendorId: 0x1a86 }, []);
+
+    expect(deviceForPort({ usbVendorId: 0x1a86 })).toEqual({ any: true });
+    expect(normalizeConfiguration(values.name, buildSetupOptions(values)).device).toEqual({
+      kind: 'any',
+    });
+  });
+
+  it('suggests a name no configuration on this origin uses yet', () => {
+    const info = { usbVendorId: 0x1a86, usbProductId: 0x7523 };
+
+    expect(suggestPortName(info, [])).toBe('USB 0x1a86:7523');
+    expect(suggestPortName(info, ['USB 0x1a86:7523'])).toBe('USB 0x1a86:7523 2');
+    expect(suggestPortName(info, ['USB 0x1a86:7523', 'USB 0x1a86:7523 2'])).toBe(
+      'USB 0x1a86:7523 3',
+    );
+    expect(suggestPortName({}, ['Serial port'])).toBe('Serial port 2');
+    expect(formValuesForPort(info, ['USB 0x1a86:7523']).name).toBe('USB 0x1a86:7523 2');
+  });
+
+  it('says that connecting needs no second prompt, and warns where several ports match', () => {
+    const usb = { usbVendorId: 0x1a86, usbProductId: 0x7523 };
+    const other = { usbVendorId: 0x0403, usbProductId: 0x6001 };
+
+    const alone = noteForChosenPort(usb, [usb, other]);
+    const twins = noteForChosenPort(usb, [usb, usb, other]);
+    const anyPort = noteForChosenPort({}, [usb, other]);
+
+    expect(alone).toContain('USB device 0x1a86:7523');
+    expect(alone).toContain('asks for nothing more');
+    expect(alone).not.toContain('first');
+    // Identical devices cannot be told apart, and an `any` filter tells nothing apart at all.
+    expect(twins).toContain('2 of the ports');
+    expect(twins).toContain('first');
+    expect(anyPort).toContain('port with no USB identity');
+    expect(anyPort).toContain('2 of the ports');
+  });
+
+  it('treats a dismissed picker as an answer, not as a failure', () => {
+    const dismissed = Object.assign(new Error('No port selected by the user.'), {
+      name: 'NotFoundError',
+    });
+    const refused = Object.assign(new Error('Permissions policy blocked the request.'), {
+      name: 'SecurityError',
+    });
+
+    expect(isPickerDismissed(dismissed)).toBe(true);
+    expect(isPickerDismissed(refused)).toBe(false);
+    expect(isPickerDismissed('NotFoundError')).toBe(false);
+  });
+});
+
 describe('debugging surface: library settings', () => {
   const DEFAULT_WORKER = 'http://localhost/dist/serial-broker.worker.js';
 
@@ -516,6 +616,24 @@ describe('debugging surface: framing', () => {
     expect(isFramedByAnotherOrigin({ self, top: { location: origin }, location: origin })).toBe(
       false,
     );
+  });
+
+  it('names every header control that sets a configuration up, the help beside them included', async () => {
+    // A page that cannot start hides `SETUP_ACTION_IDS` (ADR-0034). A control the list misses -
+    // the `?` that explains an action the page has just removed, for instance - stays behind, so
+    // the markup is checked against the list rather than trusted to agree with it.
+    const html = await import('node:fs/promises').then(
+      async (fs) => await fs.readFile('debug/public/index.html', 'utf8'),
+    );
+
+    const actions = /<div class="header-actions">([\s\S]*?)<\/div>/.exec(html)?.[1] ?? '';
+    const ids = [...actions.matchAll(/<button\b([^>]*)>/g)].map(
+      (button) => /\bid="([^"]*)"/.exec(button[1] ?? '')?.[1],
+    );
+
+    // Settings stays: it is what explains why the page cannot start. Every other header control
+    // sets a configuration up and needs an id, because nothing can hide a control without one.
+    expect(ids.filter((id) => id !== 'settingsToggle')).toEqual([...SETUP_ACTION_IDS]);
   });
 });
 

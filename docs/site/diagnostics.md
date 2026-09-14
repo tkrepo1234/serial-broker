@@ -178,6 +178,27 @@ device, send to it, edit its settings or disconnect. _New configuration_ sets on
 option available.
 The page sets nothing up by itself, so opening it to look never makes it take a port.
 
+### Starting from it
+
+It is also the shortest way to your first connection, before you write any code. Serve `dist/`,
+open `/debug/`, and press **Choose a device…**: the browser's port picker opens with no filter, and
+the port you pick becomes a configuration — its USB IDs, or _any port_ where it reports none, a
+name that is free on this origin, and 9600 baud to change. One **Connect** opens the port, without
+a second prompt, because the picker granted the permission. Send a line on the _Traffic_ panel to
+see the device answer, and copy the settings from the _Settings_ panel into your own `setup()`
+call:
+
+```ts
+await SerialBroker.setup('USB 0x1a86:7523', {
+  device: { vendorId: 0x1a86, productId: 0x7523 },
+  serial: { baudRate: 9600 },
+});
+```
+
+Closing the picker without choosing changes nothing. If several ports the browser allows match the
+same settings, the dialog says so before you connect: identical devices report identical IDs, and
+the configuration opens the first of them.
+
 ### Serving it
 
 The page is plain static files. It has to be served on **the application's origin**, over HTTPS or
@@ -188,6 +209,7 @@ dist/
 ├── serial-broker.worker.js
 └── debug/
     ├── index.html
+    ├── debug.css
     └── debug.js
 ```
 
@@ -206,11 +228,13 @@ permissions, and it shows traffic in full. Anyone who can open it on the applica
 do what the application can do. Nothing in serial-broker serves it or links to it; if it should not
 be reachable in production, do not deploy `dist/debug/` there.
 
-If you serve it, put it behind the application's own authentication for operators, and send a
-`Content-Security-Policy` with `frame-ancestors 'self'`, which a static page cannot set for itself;
-[debug/README.md](https://github.com/tkrepo1234/serial-broker/blob/main/debug/README.md) has a
-complete policy. Without that header, the page still refuses to start inside a page of another
-origin, where that page could lay its own content over the page's buttons.
+If you serve it, put it behind the application's own authentication for operators. The page brings
+a strict `Content-Security-Policy` of its own — no inline script, no inline style, nothing loaded
+from anywhere but its own origin — so it holds however you serve it. Add a header with
+`frame-ancestors 'self'`, which a page cannot set for itself;
+[debug/README.md](https://github.com/tkrepo1234/serial-broker/blob/main/debug/README.md) has both
+policies. Without that header, the page still refuses to start inside a page of another origin,
+where that page could lay its own content over the page's buttons.
 
 ## Troubleshooting
 

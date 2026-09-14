@@ -26,6 +26,13 @@ export interface SetupRequest {
   readonly replaces: string | undefined;
 }
 
+/** What "More options" promises where every field it holds may be left blank. */
+const BLANK_IS_DEFAULT = 'More options — leave blank for the default';
+
+/** What editing a running configuration does, said above the form. */
+const EDIT_NOTE =
+  'Applies to this page only: it disconnects and connects again with these settings. Other tabs keep theirs.';
+
 /**
  * The dialog that creates a configuration, or edits the settings of one this page is connected to.
  *
@@ -153,11 +160,32 @@ export class SetupDialog {
     this.#replaces = undefined;
     this.#title.textContent = 'New configuration';
     this.#submitButton.textContent = 'Create and connect';
-    this.#moreSummary.textContent = 'More options — leave blank for the default';
+    this.#moreSummary.textContent = BLANK_IS_DEFAULT;
     this.#editNote.hidden = true;
     (this.#field('name') as HTMLInputElement).readOnly = false;
     this.#fill(defaultFormValues());
     this.#field('name').focus();
+  }
+
+  /**
+   * Opens the dialog on a configuration for the port just chosen in the browser's port picker.
+   *
+   * The device and a name are filled in from the port; the baud rate is where someone who knows
+   * their device starts, so the dialog opens on it.
+   *
+   * @param values - The form as the chosen port fills it.
+   * @param note - What connecting to it does, shown above the form.
+   */
+  connectToPort(values: SetupFormValues, note: string): void {
+    this.#replaces = undefined;
+    this.#title.textContent = 'Connect to the chosen device';
+    this.#submitButton.textContent = 'Connect';
+    this.#moreSummary.textContent = BLANK_IS_DEFAULT;
+    this.#editNote.textContent = note;
+    this.#editNote.hidden = false;
+    (this.#field('name') as HTMLInputElement).readOnly = false;
+    this.#fill(values);
+    this.#field('baudRate').focus();
   }
 
   /** Opens the dialog on the settings a configuration runs with in this page. */
@@ -167,6 +195,7 @@ export class SetupDialog {
     this.#submitButton.textContent = 'Save and reconnect';
     // Every field shows the value in use, so "blank means default" would not be true here.
     this.#moreSummary.textContent = 'More options';
+    this.#editNote.textContent = EDIT_NOTE;
     this.#editNote.hidden = false;
     // The name addresses the configuration everywhere; a different name is a new configuration.
     (this.#field('name') as HTMLInputElement).readOnly = true;
