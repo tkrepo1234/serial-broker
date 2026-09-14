@@ -39,6 +39,29 @@ function createStore(initial: Record<string, string> = {}): {
   return { store, entries, writes, reported };
 }
 
+/**
+ * Storage as a second tab's renderer holds it: reads answer from a copy taken now.
+ *
+ * This is what makes a lost update possible in a browser and impossible in a plain `Map`. Each
+ * renderer caches the storage area, so a tab reads what it saw last while another tab's write has
+ * already landed; the specification's storage mutex is implemented by no engine (ADR-0033). Writes
+ * go through to the shared entries, and into the copy, as a browser's do.
+ */
+function withStaleReads(entries: Map<string, string>): KeyValueStorage {
+  const cached = new Map(entries);
+  return {
+    getItem: (key) => cached.get(key) ?? null,
+    setItem: (key, value) => {
+      entries.set(key, value);
+      cached.set(key, value);
+    },
+    removeItem: (key) => {
+      entries.delete(key);
+      cached.delete(key);
+    },
+  };
+}
+
 /** Storage as an earlier visit would have left it. */
 function stored(...names: string[]): Record<string, string> {
   return {
@@ -121,13 +144,37 @@ describe('ConfigurationStore', () => {
     expect(store.load().map((configuration) => configuration.name)).toEqual(['Scale']);
   });
 
+  it('does not write another tab’s entry back from a stale copy of storage', () => {
+    const { store, entries, reported } = createStore(stored('Scale'));
+    // The second tab's renderer caches storage as it is now: Scale at 9600, listed on its own.
+    const staleTab = new ConfigurationStore(
+      withStaleReads(entries),
+      new ScopedLogger(NOOP_LOGGER, {}),
+      (error) => reported.push(error),
+    );
+
+    // This tab changes Scale...
+    store.save(normalizeConfiguration('Scale', { ...OPTIONS, serial: { baudRate: 19_200 } }));
+    // ...and the other one, which never saw that write, saves a configuration of its own.
+    staleTab.save(normalizeConfiguration('Reader', OPTIONS));
+
+    // The lost update ADR-0033 exists to remove: a save writes the keys it changed and no others,
+    // so the newer Scale survives a tab that still holds the older one.
+    expect(JSON.parse(entries.get(storageEntryKey('Scale')) ?? 'null')).toMatchObject({
+      serial: { baudRate: 19_200 },
+    });
+    expect(store.load().map((configuration) => configuration.name)).toEqual(['Scale', 'Reader']);
+    expect(reported).toEqual([]);
+  });
+
   it('does not lose an entry another tab wrote while this one was saving', () => {
     const { store, entries } = createStore();
     store.save(normalizeConfiguration('Reader', OPTIONS));
 
-    // Another tab, with a stale copy of the index, lists only its own configuration. The entry
-    // this tab wrote is untouched - which is the point of a key per configuration - and saving
-    // again, as a tab does once its persistence hold is granted (ADR-0027), lists it once more.
+    // Another tab, with a stale copy of the index, has listed only its own configuration, so this
+    // tab's name is gone from the index. Its entry is untouched - which is the point of a key per
+    // configuration - and saving again, as a tab does once its persistence hold is granted
+    // (ADR-0027), lists the name once more.
     entries.set(storageIndexKey(), JSON.stringify(['Scale']));
     entries.set(storageEntryKey('Scale'), JSON.stringify(OPTIONS));
     store.save(normalizeConfiguration('Reader', OPTIONS));

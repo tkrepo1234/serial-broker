@@ -117,13 +117,14 @@ describe('the layout of remembered configurations', () => {
     expect(rememberedNames(harness.storage)).toEqual(['Reader']);
   });
 
-  it('leaves the other entries alone when one tab saves while another one does', async () => {
+  it('keeps both configurations when one tab saves while another one does', async () => {
     const harness = harnessWithDevice();
     const first = harness.openTab();
     const second = harness.openTab();
 
-    // Neither call sees the other's entry: with one key for all of them, whichever wrote last
-    // would have carried its own stale copy of the other over the newer one.
+    // Each tab writes the key of its own configuration and adds its name to the index. What one
+    // tab may cost the other is a name, never an entry - see the unit tests for the stale read
+    // that used to cost the entry (ADR-0033).
     await Promise.all([
       first.client.setup('Reader', READER_OPTIONS),
       second.client.setup('Scale', { ...READER_OPTIONS, serial: { baudRate: 19_200 } }),
