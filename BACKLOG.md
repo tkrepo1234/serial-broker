@@ -195,11 +195,30 @@ after this many iterations is what hardens the product now.
 its users meet it: how fast it is, how it holds up in realistic applications, how much it takes to
 do simple things, and whether the documentation explains everything clearly and without ambiguity.
 
-**Status, 2026-09-14:** the benchmarks (`npm run bench`, `bench:browser`, the Performance chapter,
-ADR-0037) and the extreme-usage suites (`npm run test:extreme`, the 20-page browser run) are done;
-they found one limit, the crash of the tab that started the worker (under "Follow-ups from the
-hardening round"). The examples minimal, multi-tab-dashboard, exclusive, no-bundler and openui5
-are done with smoke tests; React, Vue, Svelte and Angular and the usability review are in progress.
+**Status, 2026-09-15:** done. The benchmarks (`npm run bench`, `bench:browser`, the Performance
+chapter, ADR-0037) and the extreme-usage suites (`npm run test:extreme`, the 20-page browser run)
+found one limit, the crash of the tab that started the worker (under "Follow-ups from the hardening
+round"). All nine example applications exist with smoke tests. The usability review is
+`docs/site/tasks.md` and `docs/usability-review-2026-09-14.md`. What it and the examples left open:
+
+- **P1, a defect in auto mode:** a later visit that calls only `setup()` asks for the device again
+  and overwrites the remembered resolution. Being fixed on 2026-09-15; until then the documentation
+  calls `restore()` first.
+- **P2:** `setup()` with equal options starts a `failed` configuration again, so a "try again"
+  button needs no release first.
+- **P3:** a new `onStatusChange` listener receives the current status once, so no example needs
+  `getStatus()` right after `subscribe()`.
+- **P4:** `requestAccess()` works from any tab, not only the one holding the port: the permission is
+  the origin's, and the holding tab looks for granted ports again when told.
+- P2 to P4 change the API's behaviour; weigh them in the complexity reduction, where each removes
+  a step every example now takes.
+- Examples: `examples/openui5`'s `SerialBrokerModel.ts` holds raw control bytes in a regular
+  expression (grep treats it as binary), as the Vue and Angular examples did before their review;
+  its Reader configuration (`any: true`) can take the Printer's port when both are granted. The
+  minimal and multi-tab-dashboard READMEs contradict each other on whether Vite rewrites the
+  library's `new URL(..., import.meta.url)`. The Angular example's `npm install` warns that install
+  scripts of esbuild, lmdb, msgpackr-extract and @parcel/watcher are not approved. The Svelte
+  example's `$state.snapshot(options)` is unnecessary. No example exercises auto mode yet.
 
 ### Performance
 

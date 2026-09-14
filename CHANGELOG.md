@@ -18,6 +18,20 @@ migrated (see below).
 
 ### Added
 
+- Framework integrations as runnable examples, each with a reusable module, a README on taking it
+  into an application of your own and a smoke test: `examples/react` (a `useSerialBroker` hook on
+  `useSyncExternalStore`, safe under StrictMode and hot updates and shared by several components),
+  `examples/vue` (a `useSerialBroker` composable returning refs; composables of one name follow one
+  configuration), `examples/svelte` (`createSerialBroker()` with rune-based state; a connection
+  releases only what it set up) and `examples/angular` (an injectable `SerialBrokerService` with
+  signals in a zoneless Angular 22 application). The examples table and the documentation's
+  examples page list all nine applications.
+- A documentation chapter, **Tasks, counted**, shows the code for seven common tasks with
+  serial-broker and with the Web Serial API alone, and counts their calls, options and concepts.
+  The usability review behind it (`docs/usability-review-2026-09-14.md`) answered the questions a
+  cold read of the examples raised in the documentation: Installing names the `serial-broker/worker`
+  export and recommends naming the worker URL, and the TSDoc of `setup()`, `release()`, the `queued`
+  and `released` statuses and `ErrorEvent.name` now say what they left open.
 - **Automatic device mode** (ADR-0036): `device` is optional in `setup()`. Without it, or with
   `{ auto: true }`, the configuration waits in `awaiting-permission` until `requestAccess()` opens
   an unfiltered port picker, and takes its device from the port the user picks: its vendor and
