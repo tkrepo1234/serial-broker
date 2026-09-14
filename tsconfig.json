@@ -31,6 +31,12 @@
     "sourceMap": true,
     "noEmit": true
   },
-  "include": ["src/**/*.ts", "test/**/*.ts", "debug/**/*.ts", "*.config.ts"],
+  "include": [
+    "src/**/*.ts",
+    "test/**/*.ts",
+    "debug/**/*.ts",
+    "*.config.ts",
+    "examples/*/smoke.spec.ts"
+  ],
   "exclude": ["node_modules", "dist"]
 }

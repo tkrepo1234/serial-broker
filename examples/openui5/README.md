@@ -76,6 +76,10 @@ first:
 npm run test:examples -- examples/openui5/smoke.spec.ts
 ```
 
+The test itself is checked by the root, not by this folder: it is in the root's TypeScript program
+and ESLint run (`npm run typecheck`, `npm run lint` at the repository root), as
+[examples/README.md](../README.md) describes.
+
 ## Taking the integration module into your own application
 
 1. **Install the library** in your application: `npm install serial-broker`.
@@ -241,11 +245,15 @@ moves the class body into an object literal, where `#private` members are a synt
 everything internal is `private _name` instead. The integration module deliberately has no
 `@namespace`, so it stays an ordinary class and can be copied into any application.
 
-**The root ESLint configuration ignores this folder.** UI5 answers to other conventions than the
-library does: every module is a default export, an application reads `window` itself, handlers are
-passed as unbound methods, and the type-aware rules would need this example's dependencies
-installed to say anything true. `npm run typecheck` here is the gate instead, and it runs in CI as
-a job of its own. Prettier still formats the folder.
+**The root ESLint configuration ignores this folder - except the smoke test.** UI5 answers to
+other conventions than the library does: every module is a default export, an application reads
+`window` itself, handlers are passed as unbound methods, and the type-aware rules would need this
+example's dependencies installed to say anything true. `npm run typecheck` here is the gate for
+`webapp/` instead, and it runs in CI as a job of its own. Prettier still formats the folder.
+`smoke.spec.ts` is the exception: it is a test of the root's kind, written against the root's
+Playwright and the stand-in under `test/browser/`, and this folder's `tsconfig.json` does not
+include it - so the root's TypeScript program and ESLint run do, with the relaxations the root's
+own tests get. Without that, nothing would check it: Playwright strips types and checks none.
 
 **Stable control ids.** `index.html` fixes the id of both the component container (`container`) and
 the component (`serialbroker`), and the root view is `app`, so every DOM id is
@@ -280,14 +288,6 @@ the stand-in's as much as the browser's, needs the transient activation of a rea
 sends with _Append CR LF_ on, as a user would, and takes the counters (`6 bytes received, 6 bytes
 sent`) as the proof that the same bytes went out and came back.
 
-**`"type": "module"` in `package.json`.** Playwright decides how to read `smoke.spec.ts` from the
-nearest `package.json`, and without the field it treats the file as CommonJS, where the
-`import.meta.url` that finds `example.json` is a syntax error. Nothing in the example itself is
-CommonJS - the sources are ES modules and the copy script is `.mjs` - so the field costs nothing
-and the spec reads like the root's own tests.
-
-**The German bundle is UTF-8, with real umlauts.** UI5 Tooling reads `.properties` files as UTF-8
-by default since specification version 2.0 (`propertiesFileSourceEncoding`) and turns every
 **The smoke test fixes the language in the URL.** UI5 takes its language from the browser, and the
 browser reports the machine's - on a German Windows, Edge under Playwright loads
 `i18n_de.properties`, and a test that expects _Waiting for permission_ reads _Wartet auf die
@@ -297,6 +297,14 @@ Freigabe_ and times out for a reason that has nothing to do with serial-broker. 
 than in the root's Playwright configuration, where a `locale` would fix `navigator.language` for
 every example but leave the reason a directory away from the assertion.
 
+**`"type": "module"` in `package.json`.** Playwright decides how to read `smoke.spec.ts` from the
+nearest `package.json`, and without the field it treats the file as CommonJS, where the
+`import.meta.url` that finds `example.json` is a syntax error. Nothing in the example itself is
+CommonJS - the sources are ES modules and the copy script is `.mjs` - so the field costs nothing
+and the spec reads like the root's own tests.
+
+**The German bundle is UTF-8, with real umlauts.** UI5 Tooling reads `.properties` files as UTF-8
+by default since specification version 2.0 (`propertiesFileSourceEncoding`) and turns every
 non-ASCII character into a `\uXXXX` escape while serving and building, which is what the UI5
 loader expects. `i18n_de.properties` therefore says _Gerät_, not _Geraet_ - visible at
 `index.html?sap-ui-language=de`.

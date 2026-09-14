@@ -20,7 +20,14 @@ export default defineConfig(
       // would need each example's own dependencies installed to say anything true about it. Every
       // example is gated by its own `npm run typecheck` and its smoke test in CI instead, and
       // Prettier still formats it.
-      'examples/**',
+      //
+      // The one exception is each example's `smoke.spec.ts`: a Playwright test of the root's
+      // kind, written against the root's dependencies and part of the root's TypeScript program
+      // (tsconfig.json), so it is linted like the root's own tests. Un-ignoring a file needs its
+      // directory left traversable, hence the two patterns instead of `examples/**`.
+      'examples/*/*/**',
+      'examples/*/*',
+      '!examples/*/smoke.spec.ts',
       // The documentation site's Python environment and build output (ADR-0020).
       'docs/.venv/**',
       'docs/site/_build/**',
@@ -131,7 +138,7 @@ export default defineConfig(
   //
   // None of these relaxations apply to `src/`, where every one of these rules is on.
   {
-    files: ['test/**/*.ts', 'emulator/test/**/*.ts'],
+    files: ['test/**/*.ts', 'emulator/test/**/*.ts', 'examples/*/smoke.spec.ts'],
     rules: {
       '@typescript-eslint/no-non-null-assertion': 'off',
       '@typescript-eslint/no-unnecessary-condition': 'off',
