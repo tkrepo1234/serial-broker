@@ -54,9 +54,10 @@ default-src 'none'; script-src 'self'; worker-src 'self'; style-src 'self'; conn
 img-src 'self'; font-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'
 ```
 
-To make `style-src 'self'` possible, the stylesheet moved from the page into `debug/debug.css` and
-no element carries a `style` attribute. `frame-ancestors` stays the operator's header, and
-`debug/README.md` keeps the complete policy to send.
+To make `style-src 'self'` possible, the stylesheet moved from the page into
+`debug/public/debug.css`, shipped as `dist/debug/debug.css`, and no element carries a `style`
+attribute. `frame-ancestors` stays the operator's header, and `debug/README.md` keeps the complete
+policy to send.
 
 ## Alternatives considered
 
@@ -98,7 +99,7 @@ no element carries a `style` attribute. `frame-ancestors` stays the operator's h
 
 ### Negative
 
-- The page has one more file, `debug/debug.css`, which has to be served with `index.html`.
+- The page has one more file, `dist/debug/debug.css`, which has to be served with `index.html`.
 - A copy of the page served through something that rewrites HTML, or that injects a script, breaks
   under its own policy instead of silently running the injection. That is the point, but it is a
   change for anyone who did the injecting on purpose.
@@ -110,14 +111,17 @@ no element carries a `style` attribute. `frame-ancestors` stays the operator's h
 - **A port granted for one configuration is opened by another with an `any` filter.** The dialog
   says how many granted ports match before anything is set up, and the device stays editable.
 - **A browser without Web Serial.** The page already reports that it cannot start and hides
-  everything that would set a configuration up, the new action included.
+  everything that would set a configuration up, the new action and the `?` beside it included.
+  The controls are named in one place, `SETUP_ACTION_IDS`, and the markup is checked against it.
 
 ## Verification
 
 `test/unit/debug-surface.test.ts` pins the derivation: a USB port becomes a configuration whose
 filter `matchesDevice()` accepts that same port, a port with no identity — or half an identity —
 becomes `{ any: true }`, suggested names avoid the names in use, the note warns where several
-granted ports match, and a dismissed picker is recognised as an answer.
+granted ports match, and a dismissed picker is recognised as an answer. It also reads the page's
+markup and holds every header control that sets a configuration up against `SETUP_ACTION_IDS`, so
+a control that a page which cannot start would leave behind fails the suite.
 
 The policy was checked in Chromium against a build served from `dist/`: the page loads styled, the
 `SharedWorker` starts, a configuration can be created, and no `securitypolicyviolation` is raised

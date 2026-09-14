@@ -37,7 +37,7 @@ import {
   tabRole,
   thisPageState,
 } from '../../debug/src/model.js';
-import { isFramedByAnotherOrigin } from '../../debug/src/page-guard.js';
+import { isFramedByAnotherOrigin, SETUP_ACTION_IDS } from '../../debug/src/page-guard.js';
 import {
   buildSetupOptions,
   defaultFormValues,
@@ -616,6 +616,24 @@ describe('debugging surface: framing', () => {
     expect(isFramedByAnotherOrigin({ self, top: { location: origin }, location: origin })).toBe(
       false,
     );
+  });
+
+  it('names every header control that sets a configuration up, the help beside them included', async () => {
+    // A page that cannot start hides `SETUP_ACTION_IDS` (ADR-0034). A control the list misses -
+    // the `?` that explains an action the page has just removed, for instance - stays behind, so
+    // the markup is checked against the list rather than trusted to agree with it.
+    const html = await import('node:fs/promises').then(
+      async (fs) => await fs.readFile('debug/public/index.html', 'utf8'),
+    );
+
+    const actions = /<div class="header-actions">([\s\S]*?)<\/div>/.exec(html)?.[1] ?? '';
+    const ids = [...actions.matchAll(/<button\b([^>]*)>/g)].map(
+      (button) => /\bid="([^"]*)"/.exec(button[1] ?? '')?.[1],
+    );
+
+    // Settings stays: it is what explains why the page cannot start. Every other header control
+    // sets a configuration up and needs an id, because nothing can hide a control without one.
+    expect(ids.filter((id) => id !== 'settingsToggle')).toEqual([...SETUP_ACTION_IDS]);
   });
 });
 

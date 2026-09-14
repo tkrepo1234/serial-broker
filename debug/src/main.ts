@@ -47,7 +47,7 @@ import {
 } from './library-settings.js';
 import { ConfigurationList } from './list.js';
 import { buildConfigurationViews, type RememberedConfiguration } from './model.js';
-import { isFramedByAnotherOrigin } from './page-guard.js';
+import { isFramedByAnotherOrigin, SETUP_ACTION_IDS } from './page-guard.js';
 import { SetupDialog } from './setup-dialog.js';
 
 /** How often every tab is asked for a report. */
@@ -135,7 +135,7 @@ if (isFramedElsewhere) {
 
 /** Hides everything that would set a configuration up, where this page cannot run one. */
 function hideSetupActions(): void {
-  for (const id of ['newButton', 'chooseButton']) {
+  for (const id of SETUP_ACTION_IDS) {
     byId(id).hidden = true;
   }
 }

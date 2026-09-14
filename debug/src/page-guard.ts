@@ -8,6 +8,15 @@
  * decide for itself.
  */
 
+/**
+ * The controls that set a configuration up, hidden together where the page cannot run one
+ * (ADR-0034).
+ *
+ * The `?` beside _Choose a device…_ belongs to that action and goes with it: a help text about an
+ * action the page has just removed explains nothing and invites a click on nothing.
+ */
+export const SETUP_ACTION_IDS = ['newButton', 'chooseButton', 'chooseHelp'] as const;
+
 /** The part of `window` the framing check reads. */
 export interface FramedView {
   readonly self: unknown;
