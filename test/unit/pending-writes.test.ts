@@ -4,7 +4,7 @@ import { PendingWrites, type PendingWriteHost } from '../../src/client/pending-w
 import { SerialBrokerErrorCode } from '../../src/core/error-codes.js';
 import { SerialBrokerError } from '../../src/core/errors.js';
 import type { RequestId, TermId } from '../../src/protocol/messages.js';
-import { FakeClock } from '../harness/fake-clock.js';
+import { FakeClock, flushMicrotasks } from '../harness/fake-clock.js';
 
 const PAYLOAD = new Uint8Array([1, 2, 3]);
 
@@ -192,6 +192,36 @@ describe('PendingWrites', () => {
     await Promise.resolve();
 
     expect(outcome).toBe('pending');
+  });
+
+  it('takes a write for started only from the term it was addressed to', async () => {
+    const harness = createHarness();
+    let outcome: unknown = 'pending';
+    void outcomeOf(harness.writes.add(id('w1'), PAYLOAD)).then((value) => (outcome = value));
+
+    // Said by a tab that was never asked to write it. Taking it would tie the write to a term that
+    // is not writing it, and lose it when that term ends (ADR-0030).
+    harness.writes.markStarted(id('w1'), SECOND);
+    harness.endTerm(SECOND);
+    await flushMicrotasks();
+
+    expect(outcome).toBe('pending');
+    expect(harness.dispatched).toEqual(['w1@t1']);
+  });
+
+  it('ignores an outcome from a term the write was not addressed to', async () => {
+    const harness = createHarness();
+    let outcome: unknown = 'pending';
+    void outcomeOf(harness.writes.add(id('w1'), PAYLOAD)).then((value) => (outcome = value));
+
+    // Only the term that was asked to write it can say how it went; anyone else read the request
+    // id off the bus (ADR-0030).
+    harness.writes.handleResult(id('w1'), SECOND, undefined);
+    harness.writes.handleResult(id('w1'), undefined, undefined);
+    await flushMicrotasks();
+
+    expect(outcome).toBe('pending');
+    expect(harness.writes.size).toBe(1);
   });
 
   it('tells the caller that repeating a lost write is their decision', async () => {

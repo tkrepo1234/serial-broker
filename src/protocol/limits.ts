@@ -1,5 +1,6 @@
 import { MAX_CONFIG_NAME_LENGTH } from '../core/defaults.js';
 import type { ScopedLogger } from '../core/logger.js';
+import type { RateLimit } from '../core/rate-limit.js';
 
 /**
  * How much the bus may make a context hold, however hostile the sender.
@@ -148,6 +149,82 @@ export const MAX_LOG_RECORD_VALUES = 32;
  */
 export const MAX_LOG_RECORD_CHARACTERS = 4 * 1024;
 
+/**
+ * The most writes waiting at one tab's port at once: queued there, and the one being written.
+ *
+ * Every write a tab performs - its own and every other tab's - waits here until the device has
+ * taken it or its deadline passes. Four times as many as the finished ones a tab remembers
+ * (`client/accepted-writes.ts`), and far more than an application produces: a device that takes a
+ * command in a millisecond drains this in four seconds, and a write that waits longer than
+ * `writeTimeoutMs` leaves the queue unwritten anyway. Beyond it a write is refused with
+ * `WRITE_QUEUE_FULL` rather than held (ADR-0031).
+ */
+export const MAX_WAITING_WRITES = 4096;
+
+/**
+ * The most payload bytes waiting at one tab's port at once: 64 MiB.
+ *
+ * The count alone bounds no memory: one message may carry {@link MAX_PAYLOAD_BYTES}. Four of the
+ * largest writes the bus accepts fit here, which no device drains quickly and no application sends.
+ */
+export const MAX_WAITING_WRITE_BYTES = 4 * MAX_PAYLOAD_BYTES;
+
+/**
+ * The most reports one diagnostics collection keeps (ADR-0018).
+ *
+ * As many as the broker keeps participants: every context that exists can answer once, and each
+ * answer is held until the collection's window closes. Reports beyond it are dropped.
+ */
+export const MAX_REPORTS_PER_COLLECTION = MAX_PARTICIPANTS;
+
+/**
+ * The most characters and bytes one diagnostics collection keeps in its reports: 16 MiB.
+ *
+ * The count alone bounds no memory, as it does not for the writes waiting at a port: one report may
+ * hold {@link MAX_REPORT_CHARACTERS}, so {@link MAX_REPORTS_PER_COLLECTION} of the largest ones
+ * would be a gigabyte - and a request id is broadcast, so anything on the bus can answer one under
+ * as many invented identities as it likes (ADR-0031). A report of a real tab is kilobytes; this
+ * holds thousands of them.
+ */
+export const MAX_REPORT_CHARACTERS_PER_COLLECTION = 16 * MAX_REPORT_CHARACTERS;
+
+/**
+ * How often the tab holding the port answers `status-request` (ADR-0031).
+ *
+ * One answer is a broadcast that reaches every tab, so a burst of requests needs one answer, not
+ * one each. The burst covers every tab of an origin joining at once; requests beyond the rate are
+ * answered together, by the one answer the rate allows next, so a tab that asked is never left
+ * without a status.
+ */
+export const STATUS_ANSWER_RATE: RateLimit = { burst: 32, perSecond: 32 };
+
+/**
+ * How often a tab answers `diagnostics-request` (ADR-0018, ADR-0031).
+ *
+ * An answer is a report of everything the tab runs, up to {@link MAX_REPORT_CHARACTERS}. An
+ * operator refreshes a diagnostics view by hand, a few times a minute; the burst covers a page that
+ * asks as it opens. Requests beyond the rate go unanswered, and the observer sees fewer
+ * participants.
+ */
+export const DIAGNOSTICS_ANSWER_RATE: RateLimit = { burst: 8, perSecond: 4 };
+
+/**
+ * How often a malformed message is logged (ADR-0031).
+ *
+ * One record per dropped message turns a flood of nonsense into a flood in the application's log,
+ * which is where an operator has to find the real fault. The burst is enough to recognise a broken
+ * sender; beyond it the messages are still dropped, silently.
+ */
+export const MALFORMED_MESSAGE_WARNING_RATE: RateLimit = { burst: 16, perSecond: 2 };
+
+/**
+ * How often errors from other tabs are delivered to an application's `onError` (ADR-0031).
+ *
+ * Errors of a connection reach every tab (ADR-0012), and a reconnecting device produces one every
+ * few seconds at most. The burst covers every tab of an origin reporting a conflict at once.
+ */
+export const REMOTE_ERROR_RATE: RateLimit = { burst: 32, perSecond: 8 };
+
 /** The value of every limit, by name, as it appears in a log record. */
 export const LIMITS = {
   MAX_IDENTIFIER_LENGTH,
@@ -166,6 +243,10 @@ export const LIMITS = {
   MAX_BOUND_IDENTITIES,
   MAX_LOG_RECORD_VALUES,
   MAX_LOG_RECORD_CHARACTERS,
+  MAX_REPORTS_PER_COLLECTION,
+  MAX_REPORT_CHARACTERS_PER_COLLECTION,
+  MAX_WAITING_WRITES,
+  MAX_WAITING_WRITE_BYTES,
 } as const;
 
 /** The name of one limit. */
@@ -234,6 +315,26 @@ export function exceedsStructureBudget(
   root: unknown,
   budget: StructureBudget,
 ): 'values' | 'characters' | undefined {
+  return measureStructure(root, budget).excess;
+}
+
+/**
+ * How many characters and bytes a structure holds, counted within `budget`.
+ *
+ * For what a structure costs to keep, where the count of such structures is bounded separately -
+ * the reports of a diagnostics collection (ADR-0031). A structure that exceeds `budget` is counted
+ * as the whole of it: the walk stops there, and nothing holds a structure it has refused.
+ */
+export function structureCharacters(root: unknown, budget: StructureBudget): number {
+  const measured = measureStructure(root, budget);
+  return measured.excess === undefined ? measured.characters : budget.characters;
+}
+
+/** The walk both of the above are: what it spent, and which part of the budget it ran out of. */
+function measureStructure(
+  root: unknown,
+  budget: StructureBudget,
+): { readonly excess: 'values' | 'characters' | undefined; readonly characters: number } {
   let values = 0;
   let characters = 0;
   const seen = new WeakSet();
@@ -243,14 +344,14 @@ export function exceedsStructureBudget(
     const value = pending.pop();
     values += 1;
     if (values > budget.values || typeof value === 'function' || typeof value === 'symbol') {
-      return 'values';
+      return { excess: 'values', characters };
     }
 
     if (typeof value === 'string') {
       characters += value.length;
     } else if (typeof value === 'object' && value !== null) {
       if (seen.has(value)) {
-        return 'values';
+        return { excess: 'values', characters };
       }
       seen.add(value);
       const width = widthOf(value);
@@ -258,17 +359,17 @@ export function exceedsStructureBudget(
         characters += width.bytes;
       } else if (values + pending.length + width.children > budget.values) {
         // Refused before its children are listed: an array of a billion holes is refused at once.
-        return 'values';
+        return { excess: 'values', characters };
       } else {
         pushChildren(value, pending);
       }
     }
 
     if (characters > budget.characters) {
-      return 'characters';
+      return { excess: 'characters', characters };
     }
   }
-  return undefined;
+  return { excess: undefined, characters };
 }
 
 /** How many children a structured value has, or how many bytes a binary one holds. */

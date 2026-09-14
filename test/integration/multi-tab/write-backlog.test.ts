@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { SerialBrokerErrorCode } from '../../../src/core/error-codes.js';
+import { MAX_WAITING_WRITES } from '../../../src/protocol/limits.js';
 import { BrowserHarness, TRANSPORT_MODES, type VirtualTab } from '../../harness/browser-harness.js';
 import { READER, READER_OPTIONS } from '../../harness/devices.js';
 import type { FakeDevice } from '../../harness/fake-serial.js';
@@ -80,6 +81,58 @@ describe.each(TRANSPORT_MODES)(
     }
   },
 );
+
+/**
+ * What waits at the port is bounded, in writes and in bytes (ADR-0031). Every tab of the origin can
+ * ask the tab holding the port to write, and a script of the origin can ask as fast as it likes; a
+ * queue that grew with the asking would be the one part of the library a message can make unbounded.
+ */
+describe('more writes at the port than it keeps', () => {
+  it('refuses the writes beyond the bound, saying that nothing of them was written', async () => {
+    const harness = new BrowserHarness();
+    const device = harness.serial.addDevice(READER.vendorId, READER.productId);
+    harness.serial.grant(device);
+    const owner = harness.openTab();
+    await owner.setup('Reader', READER_OPTIONS);
+
+    device.faults.hangOnWrite = true;
+    const outcomes: Promise<unknown>[] = [];
+    for (let index = 0; index < MAX_WAITING_WRITES + 2; index += 1) {
+      outcomes.push(outcomeOf(owner.client.send('Reader', 'X')));
+    }
+    await harness.settle();
+
+    const refused = await Promise.all(outcomes.slice(MAX_WAITING_WRITES));
+    expect(refused).toEqual([
+      expect.objectContaining({ code: SerialBrokerErrorCode.WRITE_QUEUE_FULL }),
+      expect.objectContaining({ code: SerialBrokerErrorCode.WRITE_QUEUE_FULL }),
+    ]);
+    // The writes within the bound are untouched: they wait at the port for their own deadline.
+    expect(queuedWritesAt(owner)).toBe(MAX_WAITING_WRITES);
+  });
+
+  it('keeps the promise that a refused write was not written, for a request it has accepted', async () => {
+    const harness = new BrowserHarness();
+    const device = harness.serial.addDevice(READER.vendorId, READER.productId);
+    harness.serial.grant(device);
+    const owner = harness.openTab();
+    await owner.setup('Reader', READER_OPTIONS);
+    const participant = harness.openTab();
+    await participant.setup('Reader', READER_OPTIONS);
+
+    device.pauseWrites();
+    const outcome = outcomeOf(participant.client.send('Reader', 'PING'));
+    await harness.settle();
+    // The participant hands the same request over again, as it does after reaching a new broker.
+    const joining = harness.openTab();
+    await joining.setup('Reader', READER_OPTIONS);
+    device.resumeWrites();
+    await harness.settle();
+
+    expect(await outcome).toBe('resolved');
+    expect(device.writtenText()).toBe('PING');
+  });
+});
 
 describe('handing a write to the device in chunks', () => {
   async function chunkSizesFor(byteLength: number, maxWriteChunkBytes: number): Promise<number[]> {

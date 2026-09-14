@@ -22,6 +22,7 @@ client        src/client/                 one tab's view of every configuration
   ├ writes    pending-writes.ts           the delivery guarantee for writes this tab issued
   ├ accepted  accepted-writes.ts          the owner's record of the writes it accepted
   ├ places    tab-slot.ts                 the tab limit: one Web Lock per place
+  ├ terms     owner-terms.ts              the terms of holding the port: one Web Lock per term
   ├ observer  diagnostics-observer.ts     the read-only diagnostics participant
   └ transport transport/                  the message bus: SharedWorker or BroadcastChannel
   │
@@ -67,6 +68,22 @@ successor's `owner-claimed` proves to every other tab that the previous owner le
 but not that the previous owner's last messages have arrived, which come from another sender. Each
 time of holding the port is therefore a **term** with an identifier of its own, and messages about
 ownership, writes and the status name their term [ADR-0026].
+
+A term is a Web Lock as well, `serial-broker/term/v<protocol>/<maxTabs>/<term>/<clientId>/<name>`,
+held by the tab holding the port from before its first word in the term until after its last
+[ADR-0030]. The name carries what a tab must check before believing a message about the term: the
+term, the tab speaking for it, and the tab limit that tab runs. Every other tab checks the lock with
+`ifAvailable` when it first hears of a term and queues for it in `shared` mode, so:
+
+- a claim or a status is believed only while that lock is held - a message cannot invent a term, or
+  a tab limit for it;
+- a term ends exactly when the browser frees the lock, which it does as it tears a crashed tab
+  down - no grace period, no timer;
+- a tab letting go cleanly queues a second request of its own on the term's lock before it says
+  goodbye, and the tabs watching the term - which look the moment the lock is free, where a crash
+  leaves nothing queued - see that request and wait for the `owner-released` the term still owes
+  them. A goodbye that arrived earlier is remembered until then. A message alone therefore never
+  ends a term, whatever else is queued on its lock.
 
 ## The message bus
 
@@ -191,11 +208,17 @@ same on both transports and does not depend on the broker.
 
 A write request is addressed to the owner's term, and only that term writes it [ADR-0026]. A new
 claim does not decide anything by itself: the former term's result may still be on its way. A term
-ends when its `owner-released` arrives, or, if it was succeeded without one, once it has been silent
-for `FORMER_OWNER_GRACE_MS` (one second). Only then is a write that term began and did not answer
-rejected with `OWNER_LOST_DURING_WRITE`, and a write addressed to it that it never began handed to
-the owner now. An owner that crashed after writing but before its `write-started` arrived, or whose
-messages arrive later than the grace period, cannot be told from one that never received the write.
+ends when the browser frees its lock, or - for a holder that is letting go cleanly - at its
+`owner-released` [ADR-0030]. Only then is a write that term began and did not answer rejected with
+`OWNER_LOST_DURING_WRITE`, and a write addressed to it that it never began handed to the owner now.
+`write-started` and `write-result` count only from the term the write was addressed to, and only
+from the context that speaks for it. An owner that crashed after writing but before its
+`write-started` arrived cannot be told from one that never received the write.
+
+What the bus can cost a tab is bounded as well as validated [ADR-0031]: a port keeps a bounded
+number of waiting writes and payload bytes, and refuses the rest with `WRITE_QUEUE_FULL`; answers
+to status and diagnostics requests, records of malformed messages, errors from other tabs and the
+reports one diagnostics collection keeps are rate-limited, with the drops logged once.
 
 ## Errors
 

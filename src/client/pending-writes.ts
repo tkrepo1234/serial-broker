@@ -157,39 +157,48 @@ export class PendingWrites {
     await pending.settled.promise;
   }
 
-  /** Records that `term` has begun writing a request, making it non-replayable. */
+  /**
+   * Records that `term` has begun writing a request, making it non-replayable.
+   *
+   * Only the term the request was addressed to can have begun it: no other tab was asked to write
+   * it, and a tab in another term answers `NOT_CONNECTED` rather than writing (ADR-0026). A report
+   * from anywhere else concerns a copy that reached the wrong tab, or is forged, and taking it
+   * would strand a write nobody is writing (ADR-0030).
+   */
   markStarted(requestId: RequestId, term: TermId): void {
     const pending = this.#writes.get(requestId);
-    if (pending !== undefined) {
+    if (pending?.addressedTerm === term) {
       pending.startedTerm ??= term;
     }
   }
 
   /**
-   * Takes the answer to a request from the tab holding, or last holding, the port in `term`.
+   * Takes the answer to a request from the term it was addressed to.
    *
-   * An outcome settles the write, whichever term reports it: a term that wrote it knows how that
-   * went. `NOT_CONNECTED` means that term did not write it and will not - but only from the term the
-   * request was addressed to. The same answer from another term concerns a copy that reached the
-   * wrong tab, and says nothing about the term that may still be writing it.
+   * Only that term writes the request (ADR-0026), so only that term knows how it went, and an
+   * answer from anywhere else is a copy that reached the wrong tab or a message from a script of
+   * the origin that read the request id off the bus (ADR-0030). Such an answer is ignored: taken,
+   * it would settle - resolve, even - a write that is still on its way to the device.
+   *
+   * `NOT_CONNECTED` is the one outcome that does not settle the write: that term did not write it
+   * and will not, so the request goes back to be handed to whoever holds the port next.
    */
   handleResult(
     requestId: RequestId,
     term: TermId | undefined,
     error: SerialBrokerError | undefined,
   ): void {
+    const pending = this.#writes.get(requestId);
+    if (pending === undefined || term === undefined || term !== pending.addressedTerm) {
+      return;
+    }
+
     if (error?.code !== SerialBrokerErrorCode.NOT_CONNECTED) {
       this.settle(requestId, error);
       return;
     }
 
-    const pending = this.#writes.get(requestId);
-    if (
-      pending === undefined ||
-      pending.startedTerm !== undefined ||
-      term === undefined ||
-      term !== pending.addressedTerm
-    ) {
+    if (pending.startedTerm !== undefined) {
       return;
     }
     pending.isDispatched = false;

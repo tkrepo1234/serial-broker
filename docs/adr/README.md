@@ -21,23 +21,25 @@ because of a decision references it in a comment (`// See ADR-0005.`).
 | [0010](./0010-reconnect-supervision-and-backoff.md)                   | Supervise the connection with bounded exponential backoff                           | Accepted                          |
 | [0011](./0011-encapsulation-boundary.md)                              | Expose nothing about the coordination mechanism                                     | Amended by 0018, 0025             |
 | [0012](./0012-error-model.md)                                         | One error type, stable codes, mandatory remediation                                 | Accepted                          |
-| [0013](./0013-write-ordering-and-delivery-semantics.md)               | Per-participant write ordering with at-most-once delivery                           | Amended by 0026                   |
+| [0013](./0013-write-ordering-and-delivery-semantics.md)               | Per-participant write ordering with at-most-once delivery                           | Amended by 0026, 0030, 0031       |
 | [0014](./0014-dependency-injection-of-the-environment.md)             | Inject the browser environment for testability                                      | Amended by 0032                   |
 | [0015](./0015-text-and-binary-payloads.md)                            | Deliver bytes, offer text as a configured convenience                               | Accepted                          |
 | [0016](./0016-non-usb-devices.md)                                     | Support ports that are not USB devices                                              | Accepted                          |
 | [0017](./0017-usbip-device-emulator.md)                               | Emulate a USB serial device over USB/IP for testing without hardware                | Accepted                          |
-| [0018](./0018-diagnostics-observer.md)                                | Expose coordination internals to operators through a diagnostics observer           | Accepted                          |
+| [0018](./0018-diagnostics-observer.md)                                | Expose coordination internals to operators through a diagnostics observer           | Amended by 0031                   |
 | [0019](./0019-ship-the-debugging-surface.md)                          | Ship the debugging surface in the package, as static content                        | Accepted                          |
 | [0020](./0020-documentation-toolchain.md)                             | Build the developer documentation with Sphinx, MyST and a TSDoc-generated reference | Accepted                          |
 | [0021](./0021-forget-silent-participants.md)                          | Forget tabs that stop sending heartbeats                                            | Accepted                          |
 | [0022](./0022-version-stored-configurations-separately.md)            | Version stored configurations separately from the protocol                          | Amended by 0027, 0033             |
 | [0023](./0023-announce-the-protocol-version.md)                       | Announce the protocol version on an unversioned channel                             | Accepted                          |
 | [0024](./0024-keep-the-worker-handshake-version-independent.md)       | Keep the handshake with the worker readable by every protocol version               | Accepted                          |
-| [0025](./0025-limit-the-tabs-using-a-configuration.md)                | Limit how many tabs use a configuration at once                                     | Accepted                          |
-| [0026](./0026-attribute-messages-to-a-term-of-holding-the-port.md)    | Attribute ownership, write and status messages to a term of holding the port        | Accepted                          |
+| [0025](./0025-limit-the-tabs-using-a-configuration.md)                | Limit how many tabs use a configuration at once                                     | Amended by 0030                   |
+| [0026](./0026-attribute-messages-to-a-term-of-holding-the-port.md)    | Attribute ownership, write and status messages to a term of holding the port        | Amended by 0030                   |
 | [0027](./0027-keep-a-remembered-configuration-while-a-tab-runs-it.md) | Keep a remembered configuration while any tab runs it                               | Amended by 0033                   |
 | [0028](./0028-bind-an-identity-on-the-worker-to-a-secret.md)          | Bind an identity on the worker to a secret sent in `hello`                          | Accepted                          |
 | [0029](./0029-forward-the-workers-records-to-the-tabs.md)             | Forward the worker's warnings to the tabs that are connected to it                  | Accepted                          |
+| [0030](./0030-hold-a-web-lock-for-every-term-of-holding-the-port.md)  | Hold a Web Lock for every term of holding the port                                  | Accepted                          |
+| [0031](./0031-bound-and-rate-limit-what-the-bus-can-cost-a-tab.md)    | Bound and rate-limit what the bus can cost a tab                                    | Accepted                          |
 | [0032](./0032-measure-durations-on-a-monotonic-clock.md)              | Measure durations on a monotonic clock, timestamp events on the wall clock          | Accepted                          |
 | [0033](./0033-one-storage-key-per-configuration.md)                   | One storage key per configuration, with an index of the names                       | Accepted                          |
 | [0034](./0034-start-the-debugging-surface-from-a-chosen-port.md)      | Start the debugging surface from a chosen port, under its own policy                | Accepted                          |

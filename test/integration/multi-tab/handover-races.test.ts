@@ -79,7 +79,7 @@ describe.each(TRANSPORT_MODES)('a handover heard out of order (%s)', (transport)
     expect(device.written).toHaveLength(1);
   });
 
-  it('writes once a write a crashed holder performed, when its words arrive after the new claim', async () => {
+  it('writes once a write a crashed holder performed, when its words arrive before its lock is freed', async () => {
     const { harness, device, first, busy } = await threeTabs();
 
     busy.hold(first.client.clientId);
@@ -87,13 +87,34 @@ describe.each(TRANSPORT_MODES)('a handover heard out of order (%s)', (transport)
     await harness.settle();
     expect(device.writtenText()).toBe('PING');
 
+    // The tab crashes, and its words arrive while the browser is still tearing it down - before
+    // the busy tab is granted the lock of its term, which is what ends the term (ADR-0030).
+    const crashing = first.kill();
+    busy.deliverHeld();
+    await crashing;
+
+    expect(await outcome).toBe('resolved');
+    expect(device.written).toHaveLength(1);
+  });
+
+  it('hands on a write whose only word arrives after the browser has freed a crashed holder`s lock', async () => {
+    const { harness, device, first, busy } = await threeTabs();
+
+    busy.hold(first.client.clientId);
+    const outcome = outcomeOf(busy.client.send('Reader', 'PING'));
+    await harness.settle();
+    expect(device.writtenText()).toBe('PING');
+
+    // What no library can decide, and what the lock cannot decide either: the crashed tab wrote
+    // this and said so, but nothing of that had arrived when the browser freed its lock. The write
+    // looks like one that never reached it, and is handed to the next tab - which writes it again.
+    // The tab that crashes has to be writing at that very moment for this to happen (ADR-0030).
     await first.kill();
-    await harness.advance(0);
     busy.deliverHeld();
     await harness.settle();
 
     expect(await outcome).toBe('resolved');
-    expect(device.written).toHaveLength(1);
+    expect(device.written).toHaveLength(2);
   });
 
   it('keeps the new holder`s status when the former holder`s owner-released arrives late', async () => {

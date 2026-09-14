@@ -8,10 +8,21 @@ import type {
 } from '../../../src/core/diagnostics.js';
 import { SerialBrokerErrorCode } from '../../../src/core/error-codes.js';
 import { SerialBrokerStatus } from '../../../src/core/types.js';
-import { ownerLockName } from '../../../src/protocol/version.js';
+import {
+  MAX_REPORT_CHARACTERS,
+  MAX_REPORT_CHARACTERS_PER_COLLECTION,
+  MAX_REPORTS_PER_COLLECTION,
+} from '../../../src/protocol/limits.js';
+import {
+  brokerChannelName,
+  ownerLockName,
+  PROTOCOL_VERSION,
+} from '../../../src/protocol/version.js';
 import { persistenceLockName } from '../../../src/storage/persistence-hold.js';
 import { BrowserHarness, TRANSPORT_MODES } from '../../harness/browser-harness.js';
 import { READER, READER_OPTIONS } from '../../harness/devices.js';
+import { fieldsOfEvent, recordingLogger } from '../../harness/recording-logger.js';
+import { sampleReport } from '../../unit/fixtures/diagnostics-report.js';
 
 const WINDOW_MS = 100;
 
@@ -193,8 +204,13 @@ describe.each(TRANSPORT_MODES)('diagnostics observer (%s)', (transport) => {
     expect(snapshot.locks?.held.filter(ownership)).toEqual([
       { name: ownerLockName('Reader'), mode: 'exclusive', browserClientId: owner.id },
     ]);
-    expect(snapshot.locks?.pending).toEqual([
+    expect(snapshot.locks?.pending.filter(ownership)).toEqual([
       { name: ownerLockName('Reader'), mode: 'exclusive', browserClientId: peer.id },
+    ]);
+    // The peer also waits on the lock of the owner's term, which is how it learns that the term is
+    // over the moment the owner lets go of it (ADR-0030).
+    expect(snapshot.locks?.pending.filter((lock) => !ownership(lock))).toEqual([
+      expect.objectContaining({ mode: 'shared', browserClientId: peer.id }),
     ]);
     // Both tabs run the configuration remembered, and each holds it for the other (ADR-0027).
     expect(snapshot.locks?.held.filter((lock) => !ownership(lock))).toEqual(
@@ -333,5 +349,95 @@ describe.each(TRANSPORT_MODES)('diagnostics observer (%s)', (transport) => {
     expect(snapshot.participants.map((participant) => participant.clientId)).not.toContain(
       observer.clientId,
     );
+  });
+});
+
+/**
+ * A diagnostics request names its own id on the bus, so anything of the origin can answer it - as
+ * often as it invents identities to answer with, and with a report of up to a megabyte each
+ * (ADR-0031). What one collection keeps is therefore bounded.
+ */
+describe('an observer collecting while a script of the origin answers', () => {
+  it('keeps a bounded number of reports, and logs the ones it drops once', async () => {
+    const { logger, records } = recordingLogger();
+    const harness = new BrowserHarness({ transport: 'broadcastchannel', logger });
+    harness.serial.grant(harness.serial.addDevice(READER.vendorId, READER.productId));
+    const tab = harness.openTab();
+    await tab.setup('Reader', READER_OPTIONS);
+    const observer = harness.openObserver();
+
+    const channel = harness.bus.broadcastHub.create(brokerChannelName(), 'mallory');
+    let requestId: unknown;
+    channel.addEventListener('message', (event: { data: unknown }) => {
+      const message = event.data as Record<string, unknown>;
+      if (message['type'] === 'diagnostics-request') {
+        requestId = message['requestId'];
+      }
+    });
+
+    const pending = observer.collect(100);
+    await harness.settle();
+    for (let index = 0; index < MAX_REPORTS_PER_COLLECTION + 4; index += 1) {
+      channel.postMessage({
+        v: PROTOCOL_VERSION,
+        from: 'mallory',
+        to: observer.clientId,
+        type: 'diagnostics-report',
+        requestId,
+        report: { ...sampleReport(), clientId: `c-invented-${String(index)}` },
+      });
+    }
+    await harness.settle();
+    await harness.advance(100);
+    const snapshot = await pending;
+
+    expect(snapshot.participants).toHaveLength(MAX_REPORTS_PER_COLLECTION);
+    expect(fieldsOfEvent(records, 'diagnostics.limit-exceeded')).toHaveLength(1);
+  });
+
+  it('keeps a bounded number of characters in them, and logs the ones it drops once', async () => {
+    const { logger, records } = recordingLogger();
+    const harness = new BrowserHarness({ transport: 'broadcastchannel', logger });
+    harness.serial.grant(harness.serial.addDevice(READER.vendorId, READER.productId));
+    const tab = harness.openTab();
+    await tab.setup('Reader', READER_OPTIONS);
+    const observer = harness.openObserver();
+
+    const channel = harness.bus.broadcastHub.create(brokerChannelName(), 'mallory');
+    let requestId: unknown;
+    channel.addEventListener('message', (event: { data: unknown }) => {
+      const message = event.data as Record<string, unknown>;
+      if (message['type'] === 'diagnostics-request') {
+        requestId = message['requestId'];
+      }
+    });
+
+    // Each answer is a well-formed report with as much text attached as the decoder lets one
+    // carry: the count of reports alone would leave the observer holding a gigabyte (ADR-0031).
+    const filler = 'x'.repeat(MAX_REPORT_CHARACTERS / 4);
+    const answers = 4 * Math.ceil(MAX_REPORT_CHARACTERS_PER_COLLECTION / filler.length);
+    const pending = observer.collect(100);
+    await harness.settle();
+    for (let index = 0; index < answers; index += 1) {
+      channel.postMessage({
+        v: PROTOCOL_VERSION,
+        from: 'mallory',
+        to: observer.clientId,
+        type: 'diagnostics-report',
+        requestId,
+        report: { ...sampleReport(), clientId: `c-invented-${String(index)}`, filler },
+      });
+    }
+    await harness.settle();
+    await harness.advance(100);
+    const snapshot = await pending;
+
+    expect(snapshot.participants.length).toBeLessThan(answers);
+    expect(snapshot.participants.length * filler.length).toBeLessThanOrEqual(
+      MAX_REPORT_CHARACTERS_PER_COLLECTION,
+    );
+    // Far fewer than the count allows, and enough that a real collection is unaffected.
+    expect(snapshot.participants.length).toBeGreaterThanOrEqual(8);
+    expect(fieldsOfEvent(records, 'diagnostics.limit-exceeded')).toHaveLength(1);
   });
 });

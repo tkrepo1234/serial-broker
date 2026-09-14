@@ -17,6 +17,14 @@ import type { Unsubscribe } from '../core/types.js';
 import { invalidArgument, validateName } from '../core/validation.js';
 import type { LockInfoLike, SerialBrokerEnvironment } from '../environment/environment.js';
 import { describeDecodeFailure } from '../protocol/decode.js';
+import {
+  LimitWarnings,
+  MAX_REPORT_CHARACTERS,
+  MAX_REPORT_CHARACTERS_PER_COLLECTION,
+  MAX_REPORT_VALUES,
+  MAX_REPORTS_PER_COLLECTION,
+  structureCharacters,
+} from '../protocol/limits.js';
 import type { ClientId, ProtocolMessage, RequestId } from '../protocol/messages.js';
 import { PROTOCOL_VERSION } from '../protocol/version.js';
 
@@ -38,6 +46,8 @@ const LOCK_NAME_PREFIX = 'serial-broker/';
 /** A collection that is still listening. */
 interface Collection {
   readonly reports: ParticipantDiagnostics[];
+  /** How many characters and bytes those reports hold, so the collection is bounded in both. */
+  characters: number;
   readonly timer: TimerHandle;
   readonly finish: () => void;
 }
@@ -61,6 +71,8 @@ export class DiagnosticsObserver {
   readonly #logger: ScopedLogger;
   readonly #transport: Transport;
   readonly #collections = new Map<RequestId, Collection>();
+  /** Reports beyond what one collection keeps, logged once (ADR-0031). */
+  readonly #reportsDropped: LimitWarnings;
   readonly #watchers = new Map<string, Set<(event: ObservedEvent) => void>>();
   #isClosed = false;
 
@@ -74,6 +86,7 @@ export class DiagnosticsObserver {
     this.#environment = environment;
     this.#clientId = environment.newId('d') as ClientId;
     this.#logger = environment.logger.child({ clientId: this.#clientId, role: 'observer' });
+    this.#reportsDropped = new LimitWarnings(this.#logger, 'diagnostics.limit-exceeded');
     this.#transport = environment.createTransport({
       clientId: this.#clientId,
       onMessage: (message) => {
@@ -131,7 +144,7 @@ export class DiagnosticsObserver {
       const timer = this.#environment.clock.setTimer(() => {
         this.#finishCollection(requestId);
       }, windowMs);
-      this.#collections.set(requestId, { reports, timer, finish: resolve });
+      this.#collections.set(requestId, { reports, characters: 0, timer, finish: resolve });
     });
 
     this.#transport.send({
@@ -232,11 +245,34 @@ export class DiagnosticsObserver {
         // A context answers once, but a bus is not obliged to deliver once; and an answer that
         // arrives after its window has closed belongs to nothing.
         if (
-          collection !== undefined &&
-          !collection.reports.some((report) => report.clientId === message.report.clientId)
+          collection === undefined ||
+          collection.reports.some((report) => report.clientId === message.report.clientId)
         ) {
-          collection.reports.push(message.report);
+          return;
         }
+        if (collection.reports.length >= MAX_REPORTS_PER_COLLECTION) {
+          // Every report is kept until the window closes, and each may be a megabyte
+          // (`MAX_REPORT_CHARACTERS`). A request id is broadcast, so anything on the bus can
+          // answer one - as many times as it invents client ids (ADR-0031).
+          this.#reportsDropped.exceeded('MAX_REPORTS_PER_COLLECTION', {
+            requestId: message.requestId,
+          });
+          return;
+        }
+        // Bounded in what the reports hold as well as in how many there are: the count alone would
+        // leave a collection a gigabyte of invented reports (ADR-0031).
+        const characters = structureCharacters(message.report, {
+          values: MAX_REPORT_VALUES,
+          characters: MAX_REPORT_CHARACTERS,
+        });
+        if (collection.characters + characters > MAX_REPORT_CHARACTERS_PER_COLLECTION) {
+          this.#reportsDropped.exceeded('MAX_REPORT_CHARACTERS_PER_COLLECTION', {
+            requestId: message.requestId,
+          });
+          return;
+        }
+        collection.characters += characters;
+        collection.reports.push(message.report);
         return;
       }
 

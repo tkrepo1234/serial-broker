@@ -416,7 +416,16 @@ function decodeChecked(raw: unknown): ProtocolMessage {
     case 'status-request':
       return { type, v, from, to, configName: read.configName() };
 
-    case 'owner-claimed':
+    case 'owner-claimed': {
+      const configName = read.configName();
+      const term = read.identifier('term') as TermId;
+      const maxTabs = raw['maxTabs'];
+      if (!isTabLimit(maxTabs)) {
+        return malformed(type, 'maxTabs');
+      }
+      return { type, v, from, to, configName, term, maxTabs };
+    }
+
     case 'owner-released':
       return {
         type,

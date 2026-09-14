@@ -1,8 +1,12 @@
 # ADR-0018: Expose coordination internals to operators through a diagnostics observer
 
-- **Status:** Accepted
+- **Status:** Accepted, amended by [ADR-0031](./0031-bound-and-rate-limit-what-the-bus-can-cost-a-tab.md)
 - **Date:** 2026-09-13
 - **Amends:** [ADR-0011](./0011-encapsulation-boundary.md)
+
+> **Amendment (ADR-0031).** A context answers `diagnostics-request` only within a rate, and one
+> collection keeps at most `MAX_REPORTS_PER_COLLECTION` reports: a request id is broadcast, so
+> anything on the bus can answer it under as many identities as it invents.
 
 ## Context
 

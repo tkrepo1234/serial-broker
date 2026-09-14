@@ -290,6 +290,15 @@ These reject the `send()` call they belong to, in the tab that issued it.
 holding the port reconnects.
 **Do:** decide, for the command, whether a partial write can be repeated.
 
+`WRITE_QUEUE_FULL`
+: **Arises** when the tab holding the port already has as many writes waiting as it keeps — 4096 of
+them, or 64 MiB of payload, from every tab together. Nothing of this write was written, so it is
+safe to send again once earlier writes have settled.
+**Context:** `requestId` and `byteLength` of the refused write, and `waiting` and `waitingBytes` at
+the port.
+**Do:** send fewer writes at once, or wait for earlier ones to settle. An application that sends a
+few commands never reaches this; a loop, or another script of the origin flooding the port, does.
+
 `NOT_CONNECTED`
 : **Not delivered to the application.** It is how the tab holding the port hands a write back when
 its connection was lost between accepting the write and handing it to the device: nothing was
@@ -300,9 +309,10 @@ appears in logs and in diagnostics only.
 `OWNER_LOST_DURING_WRITE`
 : **Arises** when the tab holding the port went away while the write was being written. Whether the
 device received the bytes, some of them, or none, cannot be known. serial-broker never repeats
-such a write. It is decided once that tab has provably said its last word: at once when it closed
-and its goodbye arrived without a result for the write, and one second after another tab took the
-port over when it crashed.
+such a write. It is decided once that tab has provably said its last word, and the browser says
+when that is: at its goodbye when it closed and let the port go cleanly, and the moment the browser
+frees the Web Lock of its time of holding the port when it crashed. There is no grace period and no
+timer either way.
 **Context:** `byteLength`.
 **Do:** repeat the command only if doing so is harmless for the device, or after checking its
 state. See

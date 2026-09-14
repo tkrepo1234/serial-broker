@@ -5,6 +5,7 @@ import { DisposalStack } from '../core/disposable.js';
 import { SerialBrokerErrorCode } from '../core/error-codes.js';
 import { describeUnknown, SerialBrokerError, withTimestamp } from '../core/errors.js';
 import type { ScopedLogger } from '../core/logger.js';
+import { RateLimiter } from '../core/rate-limit.js';
 import type {
   ReleaseOptions,
   SendableData,
@@ -29,7 +30,11 @@ import {
   versionAnnouncement,
 } from '../protocol/announcement.js';
 import { describeDecodeFailure, type DecodeFailure } from '../protocol/decode.js';
-import { MAX_PAYLOAD_BYTES } from '../protocol/limits.js';
+import {
+  DIAGNOSTICS_ANSWER_RATE,
+  MALFORMED_MESSAGE_WARNING_RATE,
+  MAX_PAYLOAD_BYTES,
+} from '../protocol/limits.js';
 import {
   configNameOf,
   type ClientId,
@@ -108,6 +113,10 @@ export class SerialBrokerClient {
   readonly #disposal = new DisposalStack();
   readonly #clientId: ClientId;
   readonly #logger: ScopedLogger;
+  /** How often this context answers `diagnostics-request` (ADR-0031). */
+  readonly #diagnosticsAnswers: RateLimiter;
+  /** How often a malformed message is logged (ADR-0031). */
+  readonly #malformedWarnings: RateLimiter;
 
   #transport: Transport | undefined;
   #isDisposed = false;
@@ -115,6 +124,21 @@ export class SerialBrokerClient {
   constructor(private readonly environment: SerialBrokerEnvironment) {
     this.#clientId = environment.newId('c') as ClientId;
     this.#logger = environment.logger.child({ clientId: this.#clientId });
+
+    this.#diagnosticsAnswers = new RateLimiter(
+      DIAGNOSTICS_ANSWER_RATE,
+      environment.clock,
+      this.#logger,
+      'client.diagnostics-answers-dropped',
+      'diagnostics requests',
+    );
+    this.#malformedWarnings = new RateLimiter(
+      MALFORMED_MESSAGE_WARNING_RATE,
+      environment.clock,
+      this.#logger,
+      'client.malformed-messages-unlogged',
+      'records of malformed messages',
+    );
 
     this.#store = new ConfigurationStore(
       environment.storage,
@@ -700,10 +724,16 @@ export class SerialBrokerClient {
     this.#sessions.get(configName)?.handleMessage(message);
   }
 
-  /** Answers an observer. Reached only through the bus, so a transport exists. */
+  /**
+   * Answers an observer, within the rate this context answers requests at (ADR-0031).
+   *
+   * Reached only through the bus, so a transport exists. An answer describes everything this
+   * context runs, so answering every request that arrives is work any script of the origin could
+   * ask for without limit.
+   */
   #answerDiagnostics(observer: ClientId, requestId: RequestId): void {
     const report = this.diagnostics();
-    if (report === undefined) {
+    if (report === undefined || !this.#diagnosticsAnswers.take()) {
       return;
     }
     this.#transport?.send({
@@ -724,6 +754,11 @@ export class SerialBrokerClient {
       return;
     }
 
+    if (!this.#malformedWarnings.take()) {
+      // Dropped either way; only the record is rationed, so that a flood of nonsense does not
+      // become a flood in the application's log (ADR-0031).
+      return;
+    }
     this.#logger.warn('dropped a malformed message', {
       event: 'client.malformed-message',
       reason: description,

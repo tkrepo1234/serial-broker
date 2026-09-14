@@ -48,6 +48,29 @@ export function tabSlotLockName(configName: string, maxTabs: number, place: numb
   return `${NAMESPACE}/tab-slot/v${String(PROTOCOL_VERSION)}/${String(maxTabs)}/${String(place)}/${configName}`;
 }
 
+/**
+ * Name of the Web Lock that is held for one term of holding a configuration's port (ADR-0030).
+ *
+ * The tab that is granted ownership takes this lock before it says anything in the term, and lets
+ * it go after its `owner-released`; the browser lets it go when the tab dies. So the lock, not a
+ * message, says whether a term is live: a message naming a term nobody holds proves nothing, and a
+ * message cannot end a term that is still being held.
+ *
+ * The name carries everything a tab must be able to check about a term before believing what is
+ * said in its name: the term, the tab speaking for it, and the tab limit that tab runs the
+ * configuration with (ADR-0025). A message whose term, sender or limit differs from a held lock
+ * names no term of this configuration. The configuration name comes last, so that a name containing
+ * `/` cannot be mistaken for any of them - the other three never contain one.
+ */
+export function termLockName(
+  configName: string,
+  term: string,
+  clientId: string,
+  maxTabs: number,
+): string {
+  return `${NAMESPACE}/term/v${String(PROTOCOL_VERSION)}/${String(maxTabs)}/${term}/${clientId}/${configName}`;
+}
+
 /** Name of the Web Lock tabs queue at before competing for one of the places (ADR-0025). */
 export function tabSlotGateLockName(configName: string, maxTabs: number): string {
   return `${NAMESPACE}/tab-slot-gate/v${String(PROTOCOL_VERSION)}/${String(maxTabs)}/${configName}`;
