@@ -135,16 +135,16 @@ page says nothing that claims otherwise.
 
 **Statuses, and what the page does for each:**
 
-| Status                | What it means                                | What the page does                                    |
-| --------------------- | -------------------------------------------- | ----------------------------------------------------- |
-| `idle`                | Registered, not connecting yet.              | Shows it; it lasts milliseconds.                      |
-| `queued`              | `maxTabs` other tabs hold the configuration. | Explains the wait; it resolves by itself.             |
-| `awaiting-permission` | No granted port matches the device.          | Shows _Choose device…_ - the one gesture.             |
-| `connecting`          | Opening the port.                            | Enables sending; a write waits for the connection.    |
-| `open`                | Connected.                                   | Enables sending; clears a retryable error.            |
-| `reconnecting`        | Lost, coming back on its own.                | Says so; sending stays enabled; no error is shown.    |
-| `failed`              | Gave up, or a `maxTabs` conflict.            | Shows the error's remediation and _Set up again_.     |
-| `released`            | Given up in this tab.                        | Offers _Set up again_; the other tabs are unaffected. |
+| Status                | What it means                                | What the page does                                                              |
+| --------------------- | -------------------------------------------- | ------------------------------------------------------------------------------- |
+| `idle`                | Registered, not connecting yet.              | Shows it; it lasts milliseconds.                                                |
+| `queued`              | `maxTabs` other tabs hold the configuration. | Explains the wait; it resolves by itself.                                       |
+| `awaiting-permission` | No granted port matches the device.          | Shows _Choose device…_ - the one gesture.                                       |
+| `connecting`          | Opening the port.                            | Enables sending; a write waits for the connection.                              |
+| `open`                | Connected.                                   | Enables sending; clears a retryable error.                                      |
+| `reconnecting`        | Lost, coming back on its own.                | Says so; sending stays enabled; the loss is shown as _Recovering_ until `open`. |
+| `failed`              | Gave up, or a `maxTabs` conflict.            | Shows the error's remediation and _Set up again_.                               |
+| `released`            | Given up in this tab.                        | Offers _Set up again_; the other tabs are unaffected.                           |
 
 **Errors carry their own remediation.** `remediation` is written for the developer and specific to
 the code; the page shows it next to the code. `isRetryable` means the library is already
