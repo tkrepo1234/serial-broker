@@ -47,6 +47,17 @@ export interface BenchPage {
    */
   release(name: string): Promise<number>;
   /**
+   * Takes a plain Web Lock - not one of the library's - and holds it until the page goes away.
+   *
+   * The reference a crash is timed against: the browser frees it as it frees the library's locks,
+   * so a page waiting for it is granted it at the moment the platform lets the library go on.
+   */
+  holdReferenceLock(lockName: string): Promise<void>;
+  /** Queues for that lock, and remembers when it was granted, on the shared clock. */
+  queueForReferenceLock(lockName: string): void;
+  /** When the reference lock was granted in this page; `undefined` before. */
+  referenceLockGrantedAt(): number | undefined;
+  /**
    * Makes the device push `count` stamped chunks, `gapMs` apart; `0` is one burst.
    *
    * Works only in the page holding the port open (the stand-in's read stream is here).
@@ -162,6 +173,9 @@ export function installBenchHarness(api: SerialBrokerApi, standIn?: WebSerialSta
     return performance.now() - startedAt;
   }
 
+  /** When the reference lock was granted in this page, on the shared clock. */
+  let referenceGrantedAt: number | undefined;
+
   const bench: BenchPage = {
     setup: async (name, options) => {
       const entry = collect(name);
@@ -196,6 +210,21 @@ export function installBenchHarness(api: SerialBrokerApi, standIn?: WebSerialSta
       await api.release(name);
       return calledAt;
     },
+    holdReferenceLock: (lockName) =>
+      new Promise<void>((held) => {
+        void navigator.locks.request(lockName, () => {
+          held();
+          // Held until the page goes away, which is the point.
+          return new Promise<never>(() => undefined);
+        });
+      }),
+    queueForReferenceLock: (lockName) => {
+      void navigator.locks.request(lockName, () => {
+        referenceGrantedAt = sharedNow();
+        return new Promise<never>(() => undefined);
+      });
+    },
+    referenceLockGrantedAt: () => referenceGrantedAt,
     emitStamped: async (count, gapMs) => {
       if (standIn === undefined) {
         throw new Error('The benchmark page has no Web Serial stand-in');

@@ -23,8 +23,9 @@ export default defineConfig({
   fullyParallel: false,
   retries: 0,
   reporter: [['list']],
-  // Each transport's run is one test, and the write scenarios are paced in real time.
-  timeout: 15 * 60_000,
+  // Each transport's run is one test, and the write scenarios are paced in real time; on the
+  // SharedWorker transport, each handover after a crash waits about a minute for the last page.
+  timeout: 30 * 60_000,
   expect: { timeout: 30_000 },
 
   use: {

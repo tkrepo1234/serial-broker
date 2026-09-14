@@ -147,8 +147,29 @@ export const BROWSER_EXPECTATIONS: Expectations = {
   // by the stand-in, which is the expensive part: four thousand chunks fanned out to every tab.
   'tabs-to-device/1-mb-write': { wallP50: lowerMs(2_000) },
   // Chromium has to notice that the renderer is gone before it frees the lock.
-  'handover/crash': { wallP50: lowerMs(250), wallP95: lowerMs(500) },
-  'handover/release': { wallP50: lowerMs(50), wallP95: lowerMs(100) },
+  //
+  // `wallP50`/`wallP95` time the first surviving page to report `open`, which is the page that
+  // takes the port over. The other metrics were added on 2026-09-14, after the first run, because
+  // that first page hides the rest of them: `everyTab` times the last surviving page to report
+  // `open`, and `library` the first one against a plain Web Lock the crashed page held, granted
+  // to a waiting page in the same crash - the platform's part taken out. Their values were not
+  // taken from a result: `everyTab` is the bound written above for the same handover, since a page
+  // that does not hold the port hears of the new holder one hop later; `library` is the bound
+  // written for a release below, which reasoned from the same steps from a free lock to `open`.
+  'handover/crash': {
+    wallP50: lowerMs(250),
+    wallP95: lowerMs(500),
+    everyTabP50: lowerMs(250),
+    everyTabP95: lowerMs(500),
+    libraryP50: lowerMs(50),
+    libraryP95: lowerMs(100),
+  },
+  'handover/release': {
+    wallP50: lowerMs(50),
+    wallP95: lowerMs(100),
+    everyTabP50: lowerMs(50),
+    everyTabP95: lowerMs(100),
+  },
   'start/first-tab': { wallP50: lowerMs(50), wallP95: lowerMs(100) },
   'start/joining-tab': { wallP50: lowerMs(50), wallP95: lowerMs(100) },
   // An hour's worth of traffic, compressed into as many seconds as it takes, with the garbage

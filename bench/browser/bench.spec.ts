@@ -149,7 +149,9 @@ class BenchTab {
     await this.page.waitForFunction(
       (name) => (window as unknown as BenchWindow).bench.openedAt(name) !== undefined,
       NAME,
-      { timeout: 60_000 },
+      // A page that lost the worker with the crashed page reconnects only when its heartbeats give
+      // up on it, about a minute later (ADR-0021).
+      { timeout: 180_000 },
     );
     const openedAt = await this.page.evaluate(
       (name) => (window as unknown as BenchWindow).bench.openedAt(name),
@@ -166,6 +168,25 @@ class BenchTab {
     return await this.page.evaluate(
       (name) => (window as unknown as BenchWindow).bench.release(name),
       NAME,
+    );
+  }
+
+  async holdReferenceLock(lockName: string): Promise<void> {
+    await this.page.evaluate(
+      (lock) => (window as unknown as BenchWindow).bench.holdReferenceLock(lock),
+      lockName,
+    );
+  }
+
+  async queueForReferenceLock(lockName: string): Promise<void> {
+    await this.page.evaluate((lock) => {
+      (window as unknown as BenchWindow).bench.queueForReferenceLock(lock);
+    }, lockName);
+  }
+
+  async referenceLockGrantedAt(): Promise<number | undefined> {
+    return await this.page.evaluate(() =>
+      (window as unknown as BenchWindow).bench.referenceLockGrantedAt(),
     );
   }
 
@@ -349,38 +370,71 @@ async function handover(
   transport: Transport,
   kind: 'crash' | 'release',
 ): Promise<void> {
-  const walls: number[] = [];
+  const first: number[] = [];
+  const every: number[] = [];
+  const library: number[] = [];
   for (let repeat = 0; repeat < REPEATS; repeat += 1) {
     const { context, tabs } = await openConnected(browser, transport, 3);
+    // The first page opened holds the port, and on the SharedWorker transport it is also the page
+    // that started the worker - as in an application whose first tab is the one opened first.
     const holderIndex = await holderOf(tabs);
     const holder = tabs[holderIndex];
     const survivors = tabs.filter((_, index) => index !== holderIndex);
-    if (holder === undefined) {
+    const reference = survivors[survivors.length - 1];
+    if (holder === undefined || reference === undefined) {
       throw new Error('No tab holds the port');
     }
     for (const tab of survivors) {
       await tab.resetOpenedAt();
     }
+    const referenceLock = `bench-reference-${String(repeat)}`;
+    if (kind === 'crash') {
+      await holder.holdReferenceLock(referenceLock);
+      await reference.queueForReferenceLock(referenceLock);
+    }
 
     const from = kind === 'crash' ? await holder.crash() : await holder.release();
-    let openedAt = Number.POSITIVE_INFINITY;
+    // Each page stamps its own moment, so waiting for them one after the other biases nothing.
+    const openedAt: number[] = [];
     for (const tab of survivors) {
-      openedAt = Math.min(openedAt, await tab.waitForOpenedAt());
+      openedAt.push(await tab.waitForOpenedAt());
     }
     await holderOf(survivors);
     await assertNoErrors(survivors);
+    first.push(Math.min(...openedAt) - from);
+    every.push(Math.max(...openedAt) - from);
+    if (kind === 'crash') {
+      const grantedAt = await reference.referenceLockGrantedAt();
+      if (grantedAt === undefined) {
+        throw new Error('The reference lock was not granted after the crash');
+      }
+      library.push(Math.min(...openedAt) - grantedAt);
+    }
     await context.close();
-    walls.push(openedAt - from);
   }
-  record(
-    `handover/${kind}`,
-    transport,
-    REPEATS,
-    { wallP50: percentile(walls, 50), wallP95: percentile(walls, 95) },
-    kind === 'crash'
-      ? 'Three pages; the renderer of the one holding the port is crashed through the DevTools protocol, and the first surviving page to report `open` is timed from the moment the crash was ordered.'
-      : 'Three pages; the one holding the port releases the configuration, and the first surviving page to report `open` is timed from the call.',
-  );
+  const timed = {
+    wallP50: percentile(first, 50),
+    wallP95: percentile(first, 95),
+    everyTabP50: percentile(every, 50),
+    everyTabP95: percentile(every, 95),
+  };
+  if (kind === 'crash') {
+    record(
+      'handover/crash',
+      transport,
+      REPEATS,
+      { ...timed, libraryP50: percentile(library, 50), libraryP95: percentile(library, 95) },
+      'Three pages; the renderer of the one holding the port - the first page opened, which on the SharedWorker transport also started the worker - is crashed through the DevTools protocol. `wall` times the first surviving page to report `open`, `everyTab` the last, both from the moment the crash was ordered; `library` times the first against a plain Web Lock the crashed page held, granted to a surviving page in the same crash.',
+    );
+  } else {
+    record(
+      'handover/release',
+      transport,
+      REPEATS,
+      timed,
+      'Three pages; the one holding the port releases the configuration. `wall` times the first surviving page to report `open`, `everyTab` the last, both from the call.',
+    );
+  }
 }
 
 async function start(
