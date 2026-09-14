@@ -1,0 +1,136 @@
+body {
+  margin: 0 auto;
+  max-width: 52rem;
+  padding: 1.5rem 1rem;
+  font:
+    15px/1.5 system-ui,
+    sans-serif;
+  color: #1f2933;
+  background: #fff;
+}
+
+header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+h1 {
+  font-size: 1.25rem;
+  margin: 0;
+}
+
+h1 small {
+  font-weight: normal;
+  color: #5e6b78;
+}
+
+h2 {
+  font-size: 1.05rem;
+  margin: 0 0 0.5rem;
+}
+
+.badge {
+  display: inline-block;
+  padding: 0.1rem 0.6rem;
+  border-radius: 1rem;
+  background: #dfe4ea;
+}
+
+.badge[data-tone='ok'] {
+  background: #c6f0d2;
+}
+
+.badge[data-tone='busy'] {
+  background: #ffe8b3;
+}
+
+.badge[data-tone='attention'] {
+  background: #cfe3ff;
+}
+
+.badge[data-tone='problem'] {
+  background: #f8c9c9;
+}
+
+code.badge {
+  font-family: ui-monospace, monospace;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.actions:empty {
+  display: none;
+}
+
+#error {
+  margin: 0.75rem 0;
+  padding: 0.6rem 0.8rem;
+  border-left: 4px solid #c62828;
+  background: #fdecea;
+}
+
+#error[data-retryable='true'] {
+  border-left-color: #b98a00;
+  background: #fff6db;
+}
+
+#error p {
+  margin: 0 0 0.35rem;
+}
+
+#error-code {
+  font-family: ui-monospace, monospace;
+}
+
+#error time {
+  color: #5e6b78;
+}
+
+#error-remediation {
+  font-style: italic;
+}
+
+#received {
+  min-height: 12rem;
+  max-height: 24rem;
+  overflow: auto;
+  margin: 0.75rem 0;
+  padding: 0.6rem 0.8rem;
+  list-style: none;
+  border: 1px solid #cfd6de;
+  background: #f6f8fa;
+  font-family: ui-monospace, monospace;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+#received li[data-complete='false'] {
+  color: #5e6b78;
+}
+
+form {
+  display: flex;
+  gap: 0.5rem;
+}
+
+input {
+  flex: 1;
+  font: inherit;
+  padding: 0.35rem 0.5rem;
+}
+
+button {
+  font: inherit;
+  padding: 0.35rem 0.9rem;
+}
+
+.note {
+  color: #5e6b78;
+}

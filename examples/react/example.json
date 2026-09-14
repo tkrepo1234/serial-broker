@@ -1,0 +1,7 @@
+{
+  "name": "react",
+  "port": 8155,
+  "start": "npm start",
+  "readyPath": "/",
+  "summary": "React 19: a reusable useSerialBroker hook, and an application whose components share one device through it."
+}

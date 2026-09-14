@@ -1,0 +1,27 @@
+{
+  "name": "serial-broker-react-example",
+  "version": "0.0.0",
+  "private": true,
+  "description": "React 19 with Vite and TypeScript: a reusable useSerialBroker hook for serial-broker, and an application using it.",
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "start": "vite --port 8155 --strictPort",
+    "typecheck": "tsc --noEmit",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview --port 8155 --strictPort"
+  },
+  "dependencies": {
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
+    "serial-broker": "file:../.."
+  },
+  "devDependencies": {
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@types/w3c-web-serial": "^1.0.8",
+    "@vitejs/plugin-react": "^6.1.1",
+    "typescript": "^6.0.3",
+    "vite": "^8.3.0"
+  }
+}
