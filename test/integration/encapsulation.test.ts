@@ -164,6 +164,31 @@ describe('argument handling at the public surface', () => {
     await expect(tab.client.release('Nonexistent')).resolves.toBeUndefined();
   });
 
+  it('checks release options in the client itself, and keeps the configuration running', async () => {
+    const harness = new BrowserHarness();
+    const device = harness.serial.addDevice(READER.vendorId, READER.productId);
+    harness.serial.grant(device);
+    const tab = harness.openTab();
+    await tab.client.setup('Reader', READER_OPTIONS);
+    await harness.settle();
+    const invalid = expect.objectContaining({
+      code: SerialBrokerErrorCode.INVALID_ARGUMENT,
+      context: expect.objectContaining({ argumentName: 'options.forgetDevice' }) as unknown,
+    }) as unknown;
+
+    // The debugging surface calls the client directly, past the facade's checks.
+    await expect(tab.client.release('Reader', { forgetDevice: 'yes' } as never)).rejects.toThrow(
+      invalid,
+    );
+    await expect(tab.client.releaseAll({ forgetDevice: 1 } as never)).rejects.toThrow(invalid);
+    await expect(
+      tab.client.release('Nonexistent', { forgetDevice: 'yes' } as never),
+    ).rejects.toThrow(invalid);
+
+    expect(tab.client.exists('Reader')).toBe(true);
+    expect(device.isOpen).toBe(true);
+  });
+
   it('treats a repeated setup with equal options as a no-op', async () => {
     const harness = new BrowserHarness();
     const device = harness.serial.addDevice(READER.vendorId, READER.productId);

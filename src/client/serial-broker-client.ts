@@ -16,6 +16,7 @@ import type {
 import {
   isDeviceCompatible,
   normalizeConfiguration,
+  normalizeReleaseOptions,
   toSetupOptions,
   validateName,
   invalidArgument,
@@ -263,9 +264,15 @@ export class SerialBrokerClient {
     return restored;
   }
 
-  /** Stops using a configuration in this context. */
+  /**
+   * Stops using a configuration in this context.
+   *
+   * The options are checked, and read once, before anything is released, as the facade does: the
+   * debugging surface and tests call the client directly.
+   */
   async release(name: unknown, options: ReleaseOptions = {}): Promise<void> {
     const validName = this.#validName(name);
+    const releaseOptions = this.#stamped(() => normalizeReleaseOptions(options));
     const session = this.#sessions.get(validName);
     if (session === undefined) {
       const releasing = this.#releasing.get(validName);
@@ -274,7 +281,7 @@ export class SerialBrokerClient {
         // up again. This call came later, so it releases what that `setup()` builds - which it has
         // built by the time this wait ends, having waited first.
         await releasing;
-        await this.release(validName, options);
+        await this.release(validName, releaseOptions);
         return;
       }
       // Releasing something that is not set up is a no-op, not an error: it leaves the caller
@@ -288,7 +295,7 @@ export class SerialBrokerClient {
 
     this.#sessions.delete(validName);
 
-    const releasing = this.#finishRelease(validName, session, options);
+    const releasing = this.#finishRelease(validName, session, releaseOptions);
     this.#releasing.set(validName, releasing);
     try {
       await releasing;
@@ -388,9 +395,10 @@ export class SerialBrokerClient {
 
   /** Stops using every configuration in this context. */
   async releaseAll(options: ReleaseOptions = {}): Promise<void> {
+    const releaseOptions = this.#stamped(() => normalizeReleaseOptions(options));
     const names = [...this.#sessions.keys()];
     for (const name of names) {
-      await this.release(name, options);
+      await this.release(name, releaseOptions);
     }
     // A release another call started is part of "every configuration" too, and has not closed its
     // port until it has finished.
