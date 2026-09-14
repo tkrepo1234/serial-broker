@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
+import { NOOP_LOGGER, ScopedLogger } from '../../src/core/logger.js';
+import type { ClientId, ProtocolMessage, TermId } from '../../src/protocol/messages.js';
+import { PROTOCOL_VERSION } from '../../src/protocol/version.js';
+
+import { BrowserHarness } from './browser-harness.js';
+import { READER, READER_OPTIONS } from './devices.js';
 import { FakeClock, flushMicrotasks } from './fake-clock.js';
 import { FakeLockManager } from './fake-locks.js';
 import { FakeSerialRegistry } from './fake-serial.js';
@@ -334,6 +340,162 @@ describe('FakeClock', () => {
     expect(clock.nextTimerInMs).toBeUndefined();
     clock.setTimer(() => undefined, 250);
     expect(clock.nextTimerInMs).toBe(250);
+  });
+
+  it('moves the wall clock without moving a timer, as a change of the system time does', async () => {
+    const clock = new FakeClock();
+    const startedAt = clock.now();
+    let fired = false;
+    clock.setTimer(() => {
+      fired = true;
+    }, 1_000);
+
+    clock.jumpWallClock(-3_600_000);
+    await clock.advance(999);
+    const beforeDue = fired;
+    await clock.advance(1);
+
+    expect(beforeDue).toBe(false);
+    expect(fired).toBe(true);
+    expect(clock.now()).toBe(startedAt - 3_600_000 + 1_000);
+  });
+});
+
+/**
+ * A frozen context, as the Page Lifecycle API defines it: its task queues are not run, while time
+ * and every other context go on.
+ */
+describe('BrowserHarness frozen contexts', () => {
+  const CONFIG = 'Reader';
+
+  function releasedBy(from: string, term = `term-of-${from}`): ProtocolMessage {
+    return {
+      type: 'owner-released',
+      v: PROTOCOL_VERSION,
+      from: from as ClientId,
+      to: 'all',
+      configName: CONFIG,
+      term: term as TermId,
+    };
+  }
+
+  function listeningTransport(harness: BrowserHarness, contextId: string, heard: string[]) {
+    return harness.createEnvironment(contextId).createTransport({
+      clientId: contextId as ClientId,
+      onMessage: (message) => heard.push(`${message.type} from ${message.from}`),
+      onDecodeFailure: () => undefined,
+      onTransportError: () => undefined,
+      logger: new ScopedLogger(NOOP_LOGGER, {}),
+      clock: harness.busClock,
+    });
+  }
+
+  it('holds the timers that fall due while frozen, and fires them on resume', async () => {
+    const harness = new BrowserHarness();
+    const clock = harness.createEnvironment('frozen').clock;
+    let fired = 0;
+    clock.setTimer(() => (fired += 1), 100);
+
+    harness.freezeContext('frozen');
+    await harness.advance(60_000);
+    const whileFrozen = fired;
+    await harness.resumeContext('frozen');
+
+    expect(whileFrozen).toBe(0);
+    expect(fired).toBe(1);
+  });
+
+  it('holds the messages that arrive while frozen, and hands them over in order on resume', async () => {
+    const harness = new BrowserHarness({ transport: 'broadcastchannel' });
+    const heard: string[] = [];
+    const frozen = listeningTransport(harness, 'frozen', heard);
+    frozen.attach(CONFIG);
+    const sender = listeningTransport(harness, 'sender', []);
+    await harness.settle();
+    heard.splice(0);
+
+    harness.freezeContext('frozen');
+    sender.send(releasedBy('sender'));
+    sender.send(releasedBy('sender', 'second'));
+    await harness.settle();
+    const whileFrozen = heard.length;
+    await harness.resumeContext('frozen');
+
+    expect(whileFrozen).toBe(0);
+    expect(heard).toEqual(['owner-released from sender', 'owner-released from sender']);
+  });
+
+  it('runs held timers before held messages, or after them, as the test chooses', async () => {
+    const harness = new BrowserHarness({ transport: 'broadcastchannel' });
+    const heard: string[] = [];
+    const frozen = listeningTransport(harness, 'frozen', heard);
+    frozen.attach(CONFIG);
+    const sender = listeningTransport(harness, 'sender', []);
+    await harness.settle();
+    heard.splice(0);
+    harness.createEnvironment('frozen').clock.setTimer(() => heard.push('timer'), 10);
+
+    harness.freezeContext('frozen');
+    sender.send(releasedBy('sender'));
+    await harness.advance(10);
+    await harness.resumeContext('frozen', 'timers-first');
+
+    expect(heard).toEqual(['timer', 'owner-released from sender']);
+  });
+
+  it('runs the microtasks a held task queued before the next held task', async () => {
+    const harness = new BrowserHarness();
+    const clock = harness.createEnvironment('frozen').clock;
+    const order: string[] = [];
+    clock.setTimer(() => {
+      order.push('first task');
+      void Promise.resolve().then(() => order.push('its microtask'));
+    }, 10);
+    clock.setTimer(() => order.push('second task'), 20);
+
+    harness.freezeContext('frozen');
+    await harness.advance(20);
+    await harness.resumeContext('frozen');
+
+    expect(order).toEqual(['first task', 'its microtask', 'second task']);
+  });
+
+  it('grants a lock to a frozen context and runs its callback only when it resumes', async () => {
+    const harness = new BrowserHarness();
+    const locks = harness.createEnvironment('frozen').locks;
+    let ran = false;
+
+    harness.freezeContext('frozen');
+    void locks.request('test-lock', { mode: 'exclusive' }, async () => {
+      ran = true;
+      await new Promise(() => {
+        /* holds forever */
+      });
+    });
+    await harness.settle();
+    const holderWhileFrozen = harness.locks.holderOf('test-lock');
+    const ranWhileFrozen = ran;
+    await harness.resumeContext('frozen');
+
+    expect(holderWhileFrozen).toBe('frozen');
+    expect(ranWhileFrozen).toBe(false);
+    expect(ran).toBe(true);
+  });
+
+  it('never runs what a frozen tab held once the tab is discarded', async () => {
+    const harness = new BrowserHarness();
+    harness.serial.grant(harness.serial.addDevice(READER.vendorId, READER.productId));
+    const tab = harness.openTab();
+    await tab.setup(CONFIG, READER_OPTIONS);
+    let fired = false;
+    harness.createEnvironment(tab.id).clock.setTimer(() => (fired = true), 10);
+
+    tab.freeze();
+    await tab.kill();
+    await harness.advance(10);
+    await harness.resumeContext(tab.id);
+
+    expect(fired).toBe(false);
   });
 });
 

@@ -372,6 +372,15 @@ export class FakeSerialRegistry {
     this.#dispatch('connect', device);
   }
 
+  /** How many `connect` and `disconnect` listeners are registered, in every context. Assertions only. */
+  get listenerCount(): number {
+    let count = 0;
+    for (const listeners of this.#listeners.values()) {
+      count += listeners.size;
+    }
+    return count;
+  }
+
   /** A view onto this registry scoped to one simulated context. */
   forContext(contextId: string): SerialLike {
     return {

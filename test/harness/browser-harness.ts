@@ -11,6 +11,7 @@ import type {
 } from '../../src/core/types.js';
 import type {
   KeyValueStorage,
+  SerialLike,
   SerialBrokerEnvironment,
 } from '../../src/environment/environment.js';
 import type { ProtocolMessage } from '../../src/protocol/messages.js';
@@ -124,6 +125,21 @@ export class VirtualTab {
   }
 
   /**
+   * Freezes this tab, as the browser freezes a hidden tab, or suspends every tab with the machine.
+   *
+   * See {@link BrowserHarness.freezeContext} for what stops and what goes on.
+   */
+  freeze(): void {
+    this.harness.freezeContext(this.id);
+  }
+
+  /** Resumes a frozen tab. See {@link BrowserHarness.resumeContext}. */
+  async resume(order: ResumeOrder = 'tasks-first'): Promise<void> {
+    await this.harness.resumeContext(this.id, order);
+    await this.harness.settle();
+  }
+
+  /**
    * Destroys this tab with no chance to clean up.
    *
    * A crashed renderer, an out-of-memory kill, a hard power-off. No disposer runs, no
@@ -139,6 +155,21 @@ export class VirtualTab {
     this.harness.destroyTab(this.id, this.client.clientId);
     await this.harness.settle();
   }
+}
+
+/**
+ * Which of a frozen tab's held work runs first when it resumes.
+ *
+ * The browser keeps timers and messages in separate task queues and promises no order between them
+ * on resume, so a test chooses one - as it chooses an interleaving anywhere else. Within each kind
+ * the order they were queued in is kept.
+ */
+export type ResumeOrder = 'timers-first' | 'tasks-first';
+
+/** Work a frozen context could not run: a timer that fell due, or a task - a message, an event. */
+interface HeldWork {
+  readonly kind: 'timer' | 'task';
+  readonly run: () => void;
 }
 
 /** Options for {@link BrowserHarness}. */
@@ -181,6 +212,13 @@ export class BrowserHarness {
   readonly #tabs = new Map<string, VirtualTab>();
   /** Contexts that were killed. Their timers are dropped instead of fired. */
   readonly #killedContexts = new Set<string>();
+  /**
+   * Contexts that are frozen, or resuming, with the work they were handed meanwhile, in order.
+   *
+   * A resuming context stays here until what it held has run, so that work arriving meanwhile queues
+   * behind it, as it does in the browser's task queues.
+   */
+  readonly #frozenContexts = new Map<string, HeldWork[]>();
   #nextTabNumber = 0;
   #nextIdNumber = 0;
 
@@ -230,6 +268,8 @@ export class BrowserHarness {
     readonly client: SerialBrokerClient;
     readonly hold: (from?: string) => void;
     readonly deliverHeld: () => void;
+    readonly freeze: () => void;
+    readonly resume: (order?: ResumeOrder) => Promise<void>;
   } {
     const held: ProtocolMessage[] = [];
     let isHolding = false;
@@ -265,7 +305,67 @@ export class BrowserHarness {
           deliver(message);
         }
       },
+      freeze: () => {
+        this.freezeContext(id);
+      },
+      resume: async (order = 'tasks-first') => {
+        await this.resumeContext(id, order);
+        await this.settle();
+      },
     };
+  }
+
+  /**
+   * Freezes a context: the page lifecycle's `frozen` state, or a machine that went to sleep.
+   *
+   * What the browser stops is held, in order: timers that fall due, messages from the bus, device
+   * `connect` and `disconnect` events, and the callback of a lock granted meanwhile - the lock
+   * itself is granted and held, as the lock manager lives outside the page. Time goes on, and what
+   * other contexts do goes on.
+   *
+   * Not held: the context's heartbeats to the worker, which run on the bus clock in `fake-bus.ts`,
+   * and the port's streams. Chromium does not freeze a page that uses Web Serial or holds a lock
+   * another page waits for, so a frozen tab holding an open port is not a state to test against.
+   */
+  freezeContext(id: string): void {
+    if (!this.#frozenContexts.has(id)) {
+      this.#frozenContexts.set(id, []);
+    }
+  }
+
+  /**
+   * Resumes a frozen context, running what it held one task at a time, with the microtasks each
+   * task queued running before the next task, as after any task in a browser.
+   *
+   * @param order - Whether the timers that fell due run before the tasks that arrived, or after.
+   */
+  async resumeContext(id: string, order: ResumeOrder = 'tasks-first'): Promise<void> {
+    const held = this.#frozenContexts.get(id);
+    if (held === undefined) {
+      return;
+    }
+    const first = order === 'timers-first' ? 'timer' : 'task';
+    const ordered = [
+      ...held.filter((work) => work.kind === first),
+      ...held.filter((work) => work.kind !== first),
+    ];
+    held.splice(0, held.length, ...ordered);
+
+    for (let work = held.shift(); work !== undefined; work = held.shift()) {
+      work.run();
+      await drainMicrotasks();
+    }
+    this.#frozenContexts.delete(id);
+  }
+
+  /** Runs `work` now, or holds it while the context is frozen or still resuming. */
+  #runOrHold(contextId: string, kind: HeldWork['kind'], run: () => void): void {
+    const held = this.#frozenContexts.get(contextId);
+    if (held === undefined) {
+      run();
+    } else {
+      held.push({ kind, run });
+    }
   }
 
   /** Every tab still open. */
@@ -299,6 +399,8 @@ export class BrowserHarness {
   /** @internal Used by {@link VirtualTab.kill}. */
   destroyTab(id: string, clientId: string): void {
     this.#killedContexts.add(id);
+    // A frozen tab that is discarded never runs what it held.
+    this.#frozenContexts.delete(id);
     this.#tabs.delete(id);
     this.serial.removeContext(id);
     this.locks.killContext(id);
@@ -313,22 +415,67 @@ export class BrowserHarness {
    */
   createEnvironment(contextId: string): SerialBrokerEnvironment {
     const logger = new ScopedLogger(this.options.logger ?? NOOP_LOGGER, { context: contextId });
+    const serial = this.serial.forContext(contextId);
+    const locks = this.locks.forContext(contextId);
+    type DeviceListener = Parameters<SerialLike['addEventListener']>[1];
+    /** The held versions of the device listeners, so that removing one removes its wrapper. */
+    const deviceListeners = new Map<DeviceListener, DeviceListener>();
 
     return {
-      serial: this.serial.forContext(contextId),
-      locks: this.locks.forContext(contextId),
+      serial: {
+        getPorts: () => serial.getPorts(),
+        requestPort: (options) => serial.requestPort(options),
+        addEventListener: (type, listener) => {
+          const held: DeviceListener = (event) => {
+            this.#runOrHold(contextId, 'task', () => {
+              listener(event);
+            });
+          };
+          deviceListeners.set(listener, held);
+          serial.addEventListener(type, held);
+        },
+        removeEventListener: (type, listener) => {
+          const held = deviceListeners.get(listener);
+          if (held !== undefined) {
+            serial.removeEventListener(type, held);
+            deviceListeners.delete(listener);
+          }
+        },
+      },
+      locks: {
+        // A lock granted to a frozen context is held, and its callback runs when the context
+        // resumes. The callback's own promise is returned unchanged otherwise, so that an unfrozen
+        // context sees exactly the timing of the lock manager.
+        request: (name, options, callback) =>
+          locks.request(name, options, (lock) =>
+            this.#frozenContexts.has(contextId)
+              ? new Promise<void>((resume) => {
+                  this.#runOrHold(contextId, 'task', resume);
+                }).then(() => callback(lock))
+              : callback(lock),
+          ),
+        ...(locks.query === undefined ? {} : { query: locks.query }),
+      },
       storage: this.storage,
-      createTransport: (request) => this.bus.createTransport(contextId, request),
+      createTransport: (request) =>
+        this.bus.createTransport(contextId, {
+          ...request,
+          onMessage: (message) => {
+            this.#runOrHold(contextId, 'task', () => {
+              request.onMessage(message);
+            });
+          },
+        }),
       createBroadcastChannel: (name) => this.bus.broadcastHub.create(name, contextId),
       logPayloads: this.options.logPayloads ?? false,
       // A killed tab runs no code: its timers are dropped rather than fired, as the browser
-      // drops them with the tab.
+      // drops them with the tab. A frozen tab's timers fire when it resumes.
       clock: {
         now: () => this.clock.now(),
         setTimer: (callback, delayMs) =>
           this.clock.setTimer(() => {
             if (!this.#killedContexts.has(contextId)) {
-              callback();
+              this.#runOrHold(contextId, 'timer', callback);
             }
           }, delayMs),
         clearTimer: (handle) => {
@@ -382,6 +529,16 @@ export class FakeStorage implements KeyValueStorage {
     if (this.isUnavailable) {
       throw new Error('Access to storage is denied in this context');
     }
+  }
+}
+
+/**
+ * Lets the microtasks already queued run, and those they queue in turn, without letting a macrotask
+ * run: what a browser's microtask checkpoint after a task does.
+ */
+async function drainMicrotasks(): Promise<void> {
+  for (let tick = 0; tick < 64; tick += 1) {
+    await Promise.resolve();
   }
 }
 
