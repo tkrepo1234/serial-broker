@@ -144,6 +144,14 @@ describe('isSupported', () => {
     expect(isSupported()).toBe(false);
   });
 
+  it('is false in a context with an opaque origin, where Web Locks refuse every request', () => {
+    stubBrowser();
+    // A sandboxed iframe without `allow-same-origin`.
+    vi.stubGlobal('origin', 'null');
+
+    expect(isSupported()).toBe(false);
+  });
+
   it('is true with a SharedWorker and no BroadcastChannel', () => {
     stubBrowser({ broadcastChannel: false });
 
@@ -204,6 +212,25 @@ describe('createBrowserEnvironment', () => {
     expect(() => createBrowserEnvironment()).toThrow(
       expect.objectContaining({ code: SerialBrokerErrorCode.WEB_LOCKS_UNAVAILABLE }),
     );
+  });
+
+  it('refuses to build in a context with an opaque origin, instead of staying idle in silence', () => {
+    stubBrowser();
+    vi.stubGlobal('origin', 'null');
+
+    expect(() => createBrowserEnvironment()).toThrow(
+      expect.objectContaining({
+        code: SerialBrokerErrorCode.WEB_LOCKS_UNAVAILABLE,
+        context: { opaqueOrigin: true },
+      }),
+    );
+  });
+
+  it('builds in a context with an ordinary origin', () => {
+    stubBrowser();
+    vi.stubGlobal('origin', 'https://example.test');
+
+    expect(() => createBrowserEnvironment()).not.toThrow();
   });
 
   it('prefers the SharedWorker transport', () => {

@@ -47,8 +47,18 @@ export function isSupported(): boolean {
     typeof navigator !== 'undefined' &&
     'serial' in navigator &&
     'locks' in navigator &&
+    !hasOpaqueOrigin() &&
     (typeof SharedWorker !== 'undefined' || typeof BroadcastChannel !== 'undefined')
   );
+}
+
+/**
+ * `true` in a context whose origin is opaque: a sandboxed iframe without `allow-same-origin`, for
+ * one. `navigator.locks` exists there, but rejects every request with a `SecurityError`, so no tab
+ * could ever hold the port, and the status would stay `idle` with nothing said.
+ */
+function hasOpaqueOrigin(): boolean {
+  return (globalThis as { readonly origin?: unknown }).origin === 'null';
 }
 
 /**
@@ -106,6 +116,13 @@ function requireLocks(): LockManagerLike {
       SerialBrokerErrorCode.WEB_LOCKS_UNAVAILABLE,
       'This context does not expose navigator.locks',
       { timestamp: Date.now() },
+    );
+  }
+  if (hasOpaqueOrigin()) {
+    throw new SerialBrokerError(
+      SerialBrokerErrorCode.WEB_LOCKS_UNAVAILABLE,
+      'This context has an opaque origin, such as a sandboxed iframe without allow-same-origin, where navigator.locks refuses every request',
+      { context: { opaqueOrigin: true }, timestamp: Date.now() },
     );
   }
   return navigator.locks;

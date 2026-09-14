@@ -167,8 +167,12 @@ can be done from the page itself.
 
 `WEB_LOCKS_UNAVAILABLE`
 : **Raised by** the same calls when the Web Locks API is missing. Every browser with Web Serial has
-it, so this means a restricted context.
-**Do:** as above.
+it, so this means a restricted context. Also raised in a context with an opaque origin — a sandboxed
+iframe without `allow-same-origin` — where the API exists but refuses every request, so no tab
+could ever hold the port; `context.opaqueOrigin` is `true` then, and `isSupported()` returns
+`false`.
+**Do:** as above; for a sandboxed iframe, add `allow-same-origin` to its `sandbox` attribute or
+run the application outside it.
 
 `TRANSPORT_UNAVAILABLE`
 : **Raised by** `setup()` when neither `SharedWorker` nor `BroadcastChannel` can be used — in some
