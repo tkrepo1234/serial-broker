@@ -490,7 +490,9 @@ export class ConfigurationSession {
       case 'goodbye':
       case 'attach':
       case 'detach':
-        // Presence bookkeeping, handled by the broker or the transport. Nothing to do here.
+      case 'worker-log':
+        // Presence bookkeeping and the worker's own records, handled by the broker or the
+        // transport, which logs a forwarded record itself (ADR-0029). Nothing to do here.
         return;
 
       case 'diagnostics-request':

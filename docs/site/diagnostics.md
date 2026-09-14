@@ -88,6 +88,12 @@ message.
 | `slot.released`                           | info  | This tab gave its place up.                                                               |
 | `slot.failed`                             | warn  | Requesting a place failed; the tab queues again.                                          |
 | `session.tab-limit-conflict`              | warn  | The tab holding the port runs a different `maxTabs`; this tab withdrew.                   |
+| `worker.message-refused`                  | warn  | A port on the worker said something it may not; `reason` says what. Once per reason.      |
+| `worker.limit-exceeded`                   | warn  | The worker dropped or forgot what exceeds a limit; once per `limit`, with `limitValue`.   |
+| `broker.limit-exceeded`                   | warn  | The broker keeps as many configurations as it may; further ones are not routed. Once.     |
+| `worker.other-protocol-version`           | warn  | A tab of another build reached this worker script and was answered; it takes no part.     |
+| `worker.message-error`                    | warn  | A message could not be cloned into the worker and was lost; the port stays open.          |
+| `worker.records-dropped`                  | warn  | The worker wrote more records in one interval than it forwards; `droppedRecords` counts.  |
 
 Payload bytes never appear above `debug`, and at `debug` only with `logPayloads: true`.
 
@@ -95,11 +101,21 @@ A diagnostics observer, described below, takes a logger of its own and logs unde
 at `warn`: a message it could not read, a failure of the message bus, a `watch` listener that
 threw, and a browser that cannot list Web Locks.
 
-The broker in the `SharedWorker` keeps its own records under `broker.*` and `worker.*`, among them
-`worker.message-refused` for a message a port may not send, and `worker.limit-exceeded` and
-`broker.limit-exceeded` for what exceeds a limit, each once per reason or limit. A worker has no way
-to hand them to a tab's logger, so they are not seen; what they would say reaches the tabs as the
-`transport.*` records above.
+The `worker.*` and `broker.*` records are written in the `SharedWorker`, which can reach no logger of
+its own. It sends them to the tabs connected to it, and each tab writes them to its own logger, with
+the fields the worker recorded. Two of those fields differ from every other record:
+
+`clientId`
+: The context the worker's record concerns — another tab, or a script of the origin — and absent
+where the record concerns none. It is never the tab that wrote the record.
+
+`reportedBy`
+: The tab that wrote this copy. Every connected tab writes one, so a log collected from several tabs
+holds the same record once per tab.
+
+The worker forwards at most eight records a minute; if it writes more, the surplus is counted and
+reported as `worker.records-dropped`. Records below `warn` stay in the worker, and a tab that
+connects later is not told what was recorded before it arrived.
 
 `transport.limit-exceeded` means that something on the bus sent a message no tab of this version
 sends: a tab of another build, a bug, or a script of the origin that is not serial-broker. What such a

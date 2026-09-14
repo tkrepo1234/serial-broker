@@ -17,7 +17,8 @@ import type { ScopedLogger } from '../core/logger.js';
  */
 
 /**
- * The longest identifier accepted: a client id, a request id, a term, a diagnostics request id.
+ * The longest identifier accepted: a client id, a request id, a term, a diagnostics request id, the
+ * secret of a `hello`.
  *
  * This library creates identifiers as a prefix, a counter and a UUID, about 50 characters. An
  * identifier appears in every message and is kept as a map key in the broker and the sessions, so
@@ -121,6 +122,32 @@ export const MAX_PORTS_PER_PARTICIPANT = 8;
  */
 export const MAX_CONFIGURATIONS = 4 * MAX_HEARTBEAT_CONFIGURATIONS;
 
+/**
+ * The most identities the worker remembers a `hello` secret for (ADR-0028).
+ *
+ * A binding outlives the participant, so that a tab forgotten for its silence is still served when
+ * it comes back. Any script of the origin can say `hello` under any number of identities, so the
+ * bindings are bounded: past this many, the oldest binding of an identity with no port left is
+ * forgotten, and that identity can be claimed again. Four times as many identities as the broker
+ * keeps participants, so an origin's tabs never reach it.
+ */
+export const MAX_BOUND_IDENTITIES = 4 * MAX_PARTICIPANTS;
+
+/**
+ * The most fields, counting their values, one forwarded worker record may carry (ADR-0029).
+ *
+ * The worker's own records carry six fields at most. The limit bounds what a tab holds while it
+ * hands a record to the application's logger.
+ */
+export const MAX_LOG_RECORD_VALUES = 32;
+
+/**
+ * The most characters a forwarded worker record may hold, in its message and its fields together.
+ *
+ * Its strings are a sentence, an event name, an identifier and a reason.
+ */
+export const MAX_LOG_RECORD_CHARACTERS = 4 * 1024;
+
 /** The value of every limit, by name, as it appears in a log record. */
 export const LIMITS = {
   MAX_IDENTIFIER_LENGTH,
@@ -136,6 +163,9 @@ export const LIMITS = {
   MAX_PARTICIPANTS,
   MAX_PORTS_PER_PARTICIPANT,
   MAX_CONFIGURATIONS,
+  MAX_BOUND_IDENTITIES,
+  MAX_LOG_RECORD_VALUES,
+  MAX_LOG_RECORD_CHARACTERS,
 } as const;
 
 /** The name of one limit. */

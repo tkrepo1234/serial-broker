@@ -41,6 +41,15 @@ export interface SerialBrokerEnvironment {
   readonly random: () => number;
   /** Produces opaque identifiers for contexts and requests. */
   readonly newId: IdGenerator;
+  /**
+   * Produces an unguessable secret, from the platform's cryptographic random source.
+   *
+   * A `SharedWorker` transport shows one to the worker in its `hello` and nowhere else, so that no
+   * other script of the origin can speak on the worker under this context's identity (ADR-0028).
+   * Unlike {@link SerialBrokerEnvironment.newId}, the value must not be predictable: a counter or
+   * `Math.random()` would let a script guess it.
+   */
+  readonly newSecret: () => string;
   /** Receives diagnostics. */
   readonly logger: ScopedLogger;
   /**

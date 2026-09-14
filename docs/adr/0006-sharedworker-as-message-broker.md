@@ -1,6 +1,7 @@
 # ADR-0006: Use a SharedWorker as the message broker
 
-- **Status:** Accepted
+- **Status:** Accepted, amended by [ADR-0028](./0028-bind-an-identity-on-the-worker-to-a-secret.md) and
+  [ADR-0029](./0029-forward-the-workers-records-to-the-tabs.md)
 - **Date:** 2026-09-12
 
 ## Context

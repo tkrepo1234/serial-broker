@@ -4,7 +4,7 @@ import { describeUnknown } from '../../core/errors.js';
 import { decodeMessage } from '../../protocol/decode.js';
 import { HEARTBEAT_INTERVAL_MS, MAX_UNANSWERED_HEARTBEATS } from '../../protocol/heartbeat.js';
 import { LimitWarnings } from '../../protocol/limits.js';
-import type { ProtocolMessage } from '../../protocol/messages.js';
+import { BROKER_ID, type ProtocolMessage, type WorkerLogMessage } from '../../protocol/messages.js';
 import { brokerChannelName, PROTOCOL_VERSION } from '../../protocol/version.js';
 
 import { MessageSender } from './message-sender.js';
@@ -102,6 +102,13 @@ export class SharedWorkerTransport implements Transport {
   #isOtherVersion = false;
   #heartbeat: TimerHandle | undefined;
   readonly #limits: LimitWarnings;
+  /**
+   * What this transport proves its identity to the worker with, in every `hello` it sends.
+   *
+   * Generated once, so that the `hello` to a worker started in place of one that hung shows the
+   * same secret as the first, and an identity this transport bound stays its own (ADR-0028).
+   */
+  readonly #secret: string;
 
   /**
    * @param startup - When given, a script that fails to load before the broker answers is
@@ -118,6 +125,7 @@ export class SharedWorkerTransport implements Transport {
     this.#createWorker = createWorker;
     this.#url = url;
     this.#startup = startup;
+    this.#secret = request.newSecret();
     this.#limits = new LimitWarnings(request.logger, 'transport.limit-exceeded');
     this.#sender = new MessageSender(
       request,
@@ -132,7 +140,7 @@ export class SharedWorkerTransport implements Transport {
       this.#port.close();
     });
 
-    this.#sender.sendHello();
+    this.#sender.sendHello(this.#secret);
 
     this.#scheduleHeartbeat();
     this.#disposal.add(() => {
@@ -345,7 +353,7 @@ export class SharedWorkerTransport implements Transport {
     this.#request.logger.info('started a new SharedWorker', {
       event: 'transport.worker-restarted',
     });
-    this.#sender.sendHello();
+    this.#sender.sendHello(this.#secret);
     this.#sendHeartbeat();
   }
 
@@ -406,6 +414,15 @@ export class SharedWorkerTransport implements Transport {
       return;
     }
 
+    if (result.message.type === 'worker-log') {
+      // Meant for this tab's logger, not for the client. Only the worker sends one: the broker
+      // passes none on, and no port may speak as the broker (ADR-0029).
+      if (result.message.from === BROKER_ID) {
+        this.#logWorkerRecord(result.message);
+      }
+      return;
+    }
+
     // The broker has already resolved addressing, so anything arriving here is for us. The
     // one thing still worth checking is that it is not our own message coming back, which
     // would double-deliver every local event.
@@ -414,6 +431,27 @@ export class SharedWorkerTransport implements Transport {
     }
 
     this.#request.onMessage(result.message);
+  }
+
+  /**
+   * Writes one of the worker's records to this tab's logger (ADR-0029).
+   *
+   * The record is logged as the worker wrote it: its own `event`, its own message, its own fields.
+   * `clientId` is the identity the worker's record concerns - often another tab's, and absent where
+   * the record concerns none - so it replaces this transport's own rather than being merged with
+   * it, and `reportedBy` names the tab that wrote this copy. Every connected tab logs a copy.
+   */
+  #logWorkerRecord(record: WorkerLogMessage): void {
+    const fields = {
+      ...record.fields,
+      clientId: record.fields.clientId,
+      reportedBy: this.clientId,
+    };
+    if (record.level === 'error') {
+      this.#request.logger.error(record.message, fields);
+      return;
+    }
+    this.#request.logger.warn(record.message, fields);
   }
 
   /**

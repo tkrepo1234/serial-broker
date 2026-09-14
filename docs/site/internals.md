@@ -85,16 +85,28 @@ The bus is an interface, `Transport`, with two implementations [ADR-0006, ADR-00
   own identifier.
 
 Because routing depends only on the addressed envelope, and ownership only on the Web Lock, the two
-behave identically. Messages meant only for a broker - `hello`, `welcome`, `heartbeat`, `goodbye`,
-`attach`, `detach` - reach nobody above either transport.
+behave identically. Messages meant only for a broker, or written by one - `hello`, `welcome`,
+`heartbeat`, `goodbye`, `attach`, `detach`, `worker-log` - reach nobody above either transport.
 
 Every script of the origin can reach the bus as well, so the worker trusts a port with no more than
 it said about itself (`WorkerPorts`). A port's first message must be `hello`, and names the identity
-the port speaks as from then on; a message before it, or in another sender's name, is dropped. An
+the port speaks as from then on; a message before it, or in another sender's name, is dropped. That
+`hello` also carries a secret the transport generated and sends nowhere else: the worker binds the
+identity to the first secret it sees and refuses a later `hello` naming that identity with another
+one, so a script that heard the identity on the bus cannot connect as that tab [ADR-0028]. An
 identity may have several ports - a tab that gave up on a worker that hung connects to it again on a
-new one - so a later port never takes an identity's messages from its earlier ports: each of them
-receives them, until the sweep finds a port silent. A `goodbye` ends only the port it arrived on. The
-test harness routes through the same class. `SECURITY.md` lists what this does and does not protect.
+new one, showing the same secret - so a later port never takes an identity's messages from its
+earlier ports: each of them receives them, until the sweep finds a port silent. A `goodbye` ends only
+the port it arrived on, and lets the identity be bound again. On `BroadcastChannel` no secret is sent
+and none would help: every context of the origin receives every message. The test harness routes
+through the same class. `SECURITY.md` lists what this does and does not protect.
+
+The worker can reach no logger: it is a context of its own, and the logger an application configured
+belongs to a tab. It therefore sends its `warn` and `error` records to the contexts connected to it,
+as `worker-log` messages, and each tab writes them to its own logger under the worker's own events -
+`worker.message-refused`, `worker.limit-exceeded`, `broker.limit-exceeded` and the rest. At most
+eight records a minute are forwarded; the surplus is counted and reported as `worker.records-dropped`
+[ADR-0029].
 
 In the default mode the worker transport is wrapped in a `FallbackTransport`. A `SharedWorker`
 whose script answers 404 is still created; the browser reports the failure afterwards. So until
@@ -124,8 +136,9 @@ the same way: participants, ports per participant, and configurations.
 
 | Message                                     | Sent by                 | Purpose                                                                     |
 | ------------------------------------------- | ----------------------- | --------------------------------------------------------------------------- |
-| `hello`, `goodbye`                          | every tab               | Announce a tab to the broker; leave cleanly.                                |
+| `hello`, `goodbye`                          | every tab               | Announce a tab to the broker, with its secret on a worker; leave cleanly.   |
 | `welcome`                                   | the broker              | Answers `hello` and every `heartbeat`: the worker script runs and is alive. |
+| `worker-log`                                | the broker              | One of the worker's own records, for the tab's logger [ADR-0029].           |
 | `heartbeat`                                 | every tab on the worker | Keeps a tab known to the broker, and restores what it takes part in.        |
 | `attach`, `detach`                          | every tab               | Start or stop participating in a configuration.                             |
 | `owner-claimed`, `owner-released`           | the owner               | A term of holding the port began; it ended, as its last message.            |
@@ -249,6 +262,8 @@ real browser, with real or emulated hardware [ADR-0017], and where every hardwar
 | 0025 | Limit how many tabs use a configuration at once                                     |
 | 0026 | Attribute ownership, write and status messages to a term of holding the port        |
 | 0027 | Keep a remembered configuration while any tab runs it                               |
+| 0028 | Bind an identity on the worker to a secret sent in `hello`                          |
+| 0029 | Forward the worker's warnings to the tabs that are connected to it                  |
 | 0032 | Measure durations on a monotonic clock, timestamp events on the wall clock          |
 | 0033 | One storage key per configuration, with an index of the names                       |
 | 0034 | Start the debugging surface from a chosen port, under its own policy                |

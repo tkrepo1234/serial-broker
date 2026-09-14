@@ -20,7 +20,7 @@ export const ERROR_PAYLOAD = new SerialBrokerError(
  */
 export function validMessages(): Record<ProtocolMessageType, Record<string, unknown>> {
   return {
-    hello: { ...BASE, type: 'hello' },
+    hello: { ...BASE, type: 'hello', secret: 's-1' },
     goodbye: { ...BASE, type: 'goodbye' },
     welcome: { ...BASE, to: 'c-2', type: 'welcome' },
     heartbeat: { ...BASE, type: 'heartbeat', configNames: ['Reader'], ownedConfigNames: [] },
@@ -80,6 +80,14 @@ export function validMessages(): Record<ProtocolMessageType, Record<string, unkn
     },
     error: { ...BASE, type: 'error', configName: 'Reader', error: ERROR_PAYLOAD, timestamp: 1 },
     'diagnostics-request': { ...BASE, type: 'diagnostics-request', requestId: 'd-1' },
+    'worker-log': {
+      ...BASE,
+      to: 'c-2',
+      type: 'worker-log',
+      level: 'warn',
+      message: 'refused a message from a port that has not said hello',
+      fields: { event: 'worker.message-refused', reason: 'before-hello', limitValue: 8 },
+    },
     'diagnostics-report': {
       ...BASE,
       to: 'c-2',

@@ -119,7 +119,9 @@ export class Broker {
         return;
 
       case 'welcome':
-        // Only the broker sends this. One arriving here came from something else on the bus.
+      case 'worker-log':
+        // Only the broker sends these. One arriving here came from something else on the bus, and
+        // is never passed on: a tab takes a forwarded record for the worker's own (ADR-0029).
         return;
 
       case 'goodbye':

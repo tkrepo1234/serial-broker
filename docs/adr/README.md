@@ -14,7 +14,7 @@ because of a decision references it in a comment (`// See ADR-0005.`).
 | [0003](./0003-typescript-and-toolchain.md)                            | TypeScript, Vitest, tsup, ESLint and Prettier                                       | Accepted                          |
 | [0004](./0004-port-ownership-lives-in-a-window.md)                    | The physical port is owned by a window, not by the worker                           | Accepted                          |
 | [0005](./0005-owner-election-via-web-locks.md)                        | Elect the port owner with the Web Locks API                                         | Accepted                          |
-| [0006](./0006-sharedworker-as-message-broker.md)                      | Use a SharedWorker as the message broker                                            | Accepted                          |
+| [0006](./0006-sharedworker-as-message-broker.md)                      | Use a SharedWorker as the message broker                                            | Amended by 0028, 0029             |
 | [0007](./0007-broadcastchannel-fallback-transport.md)                 | Fall back to BroadcastChannel when SharedWorker is unavailable                      | Amended by 0024                   |
 | [0008](./0008-wire-protocol-and-versioning.md)                        | Version the wire protocol independently                                             | Amended by 0023, 0024             |
 | [0009](./0009-device-identity-and-permission-persistence.md)          | Identify devices by USB IDs, persist configuration, rely on browser permission      | Amended by 0016, 0022, 0027, 0033 |
@@ -36,6 +36,8 @@ because of a decision references it in a comment (`// See ADR-0005.`).
 | [0025](./0025-limit-the-tabs-using-a-configuration.md)                | Limit how many tabs use a configuration at once                                     | Accepted                          |
 | [0026](./0026-attribute-messages-to-a-term-of-holding-the-port.md)    | Attribute ownership, write and status messages to a term of holding the port        | Accepted                          |
 | [0027](./0027-keep-a-remembered-configuration-while-a-tab-runs-it.md) | Keep a remembered configuration while any tab runs it                               | Amended by 0033                   |
+| [0028](./0028-bind-an-identity-on-the-worker-to-a-secret.md)          | Bind an identity on the worker to a secret sent in `hello`                          | Accepted                          |
+| [0029](./0029-forward-the-workers-records-to-the-tabs.md)             | Forward the worker's warnings to the tabs that are connected to it                  | Accepted                          |
 | [0032](./0032-measure-durations-on-a-monotonic-clock.md)              | Measure durations on a monotonic clock, timestamp events on the wall clock          | Accepted                          |
 | [0033](./0033-one-storage-key-per-configuration.md)                   | One storage key per configuration, with an index of the names                       | Accepted                          |
 | [0034](./0034-start-the-debugging-surface-from-a-chosen-port.md)      | Start the debugging surface from a chosen port, under its own policy                | Accepted                          |

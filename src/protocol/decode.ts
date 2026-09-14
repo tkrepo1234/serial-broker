@@ -5,6 +5,7 @@ import {
   isSerializedError,
   type SerializedSerialBrokerError,
 } from '../core/errors.js';
+import type { LogFields } from '../core/types.js';
 
 import { isParticipantDiagnostics } from './decode-diagnostics.js';
 import { isFiniteNumber, isNonEmptyString, isRecord, isStatus, isTabLimit } from './guards.js';
@@ -15,6 +16,8 @@ import {
   MAX_ERROR_VALUES,
   MAX_HEARTBEAT_CONFIGURATIONS,
   MAX_IDENTIFIER_LENGTH,
+  MAX_LOG_RECORD_CHARACTERS,
+  MAX_LOG_RECORD_VALUES,
   MAX_PAYLOAD_BYTES,
   MAX_REPORT_CHARACTERS,
   MAX_REPORT_VALUES,
@@ -238,6 +241,78 @@ class FieldReader {
     return isSerializedError(value) ? value : malformed(this.type, 'error');
   }
 
+  /**
+   * The level of a forwarded worker record. Only the two levels the worker forwards are accepted.
+   */
+  logLevel(): 'warn' | 'error' {
+    const value = this.raw['level'];
+    return value === 'warn' || value === 'error' ? value : malformed(this.type, 'level');
+  }
+
+  /** The text of a forwarded worker record: a sentence the worker wrote, bounded like its fields. */
+  logMessage(): string {
+    const value = this.raw['message'];
+    if (typeof value !== 'string' || value.length === 0) {
+      return malformed(this.type, 'message');
+    }
+    return value.length > MAX_LOG_RECORD_CHARACTERS
+      ? exceeded(this.type, 'message', 'MAX_LOG_RECORD_CHARACTERS')
+      : value;
+  }
+
+  /**
+   * The fields of a forwarded worker record: a flat object of strings, finite numbers and booleans.
+   *
+   * A record is written to a logger and read by nobody else, so nothing in it has to be structure.
+   * Rejecting everything else - objects, arrays, cycles, functions - keeps what an application's
+   * logger is handed as small and as plain as the fields the library writes itself. The object is
+   * rebuilt, so a `__proto__` key is an own property here and changes nothing.
+   *
+   * @param messageCharacters - What the record's message already spends of the budget the two share,
+   *   so that `MAX_LOG_RECORD_CHARACTERS` bounds the record and not each of its halves.
+   */
+  logFields(messageCharacters: number): LogFields {
+    const value = this.raw['fields'];
+    if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+      return malformed(this.type, 'fields');
+    }
+    const record = value as Record<string, unknown>;
+    // Collected key by key, not through `Object.entries`: a `fields` of a million keys is as easy to
+    // post as one of three, and materialising it before applying the bound would make reading the
+    // message cost what the bound exists to prevent (`limits.ts`, StructureBudget).
+    const entries: [string, unknown][] = [];
+    for (const key in record) {
+      if (!Object.hasOwn(record, key)) {
+        continue;
+      }
+      if (entries.length === MAX_LOG_RECORD_VALUES) {
+        return exceeded(this.type, 'fields', 'MAX_LOG_RECORD_VALUES');
+      }
+      entries.push([key, record[key]]);
+    }
+    let characters = messageCharacters;
+    for (const [key, entry] of entries) {
+      if (typeof entry === 'string') {
+        characters += key.length + entry.length;
+      } else if (typeof entry === 'boolean' || isFiniteNumber(entry)) {
+        characters += key.length;
+      } else {
+        return malformed(this.type, 'fields');
+      }
+      if (characters > MAX_LOG_RECORD_CHARACTERS) {
+        return exceeded(this.type, 'fields', 'MAX_LOG_RECORD_CHARACTERS');
+      }
+    }
+    // The three fields every logger reads by name have to be what a logger expects them to be.
+    for (const named of ['event', 'clientId', 'configName']) {
+      const field = record[named];
+      if (field !== undefined && typeof field !== 'string') {
+        return malformed(this.type, 'fields');
+      }
+    }
+    return Object.fromEntries(entries);
+  }
+
   report(): ParticipantDiagnostics {
     const value = this.raw['report'];
     if (typeof value === 'object' && value !== null) {
@@ -310,9 +385,21 @@ function decodeChecked(raw: unknown): ProtocolMessage {
 
   switch (type) {
     case 'hello':
+      // Optional: a `hello` on `BroadcastChannel` carries none, because every context would hear it
+      // (ADR-0028). The worker refuses such a `hello` on a port; nothing else reads it.
+      return { type, v, from, to, secret: read.optionalIdentifier('secret') };
+
     case 'welcome':
     case 'goodbye':
       return { type, v, from, to };
+
+    case 'worker-log': {
+      // One character budget for the record, so what the message spends of it the fields no longer
+      // have: read the message first and carry its length into them.
+      const level = read.logLevel();
+      const message = read.logMessage();
+      return { type, v, from, to, level, message, fields: read.logFields(message.length) };
+    }
 
     case 'heartbeat':
       return {

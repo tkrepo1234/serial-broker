@@ -51,9 +51,20 @@ export class MessageSender {
     }
   }
 
-  /** Announces this context. Always the first message a transport sends. */
-  sendHello(): void {
-    this.send({ type: 'hello', v: PROTOCOL_VERSION, from: this.#request.clientId, to: 'all' });
+  /**
+   * Announces this context. Always the first message a transport sends.
+   *
+   * @param secret - What the worker holds this context's identity to (ADR-0028). Omitted on
+   *   `BroadcastChannel`, where every context of the origin would receive it.
+   */
+  sendHello(secret?: string): void {
+    this.send({
+      type: 'hello',
+      v: PROTOCOL_VERSION,
+      from: this.#request.clientId,
+      to: 'all',
+      secret,
+    });
   }
 
   /** Says this context is leaving. The last message, sent while the transport can still send. */

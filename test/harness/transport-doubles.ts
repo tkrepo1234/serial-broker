@@ -81,6 +81,16 @@ export function envelope(from: string, to: string, body: Record<string, unknown>
   return { v: PROTOCOL_VERSION, from, to, ...body };
 }
 
+/**
+ * A `hello` as a tab's `SharedWorker` transport sends it (ADR-0028).
+ *
+ * The secret is derived from the identity by default, so a tab connecting again shows the same one;
+ * a test speaking for another script passes one of its own.
+ */
+export function hello(from: string, secret = `secret-${from}`): unknown {
+  return envelope(from, 'all', { type: 'hello', secret });
+}
+
 /** A {@link TransportRequest} together with what its callbacks have recorded so far. */
 export interface TransportRequestRecorder {
   readonly request: TransportRequest;
@@ -108,6 +118,7 @@ export function recordTransportRequest(
   const decodeFailures: unknown[] = [];
   const transportErrors: unknown[] = [];
   const clock = new FakeClock();
+  let secrets = 0;
 
   return {
     clock,
@@ -121,6 +132,9 @@ export function recordTransportRequest(
       onTransportError: (error) => transportErrors.push(error),
       logger: new ScopedLogger(logger, {}),
       clock,
+      // A new value on every call, as the platform's source gives: a transport that drew its secret
+      // again instead of keeping it would bind a new identity on every worker (ADR-0028).
+      newSecret: () => `secret-${clientId}-${String((secrets += 1))}`,
     },
   };
 }

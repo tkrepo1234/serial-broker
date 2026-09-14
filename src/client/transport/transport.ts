@@ -77,4 +77,12 @@ export interface TransportRequest {
   readonly logger: ScopedLogger;
   /** Time, for the heartbeats a `SharedWorker` participant sends (ADR-0021). */
   readonly clock: Clock;
+  /**
+   * Produces the secret a `SharedWorker` transport proves its identity to the worker with.
+   *
+   * Called once per transport that uses a worker, at construction. Nothing else uses it: a
+   * `BroadcastChannel` reaches every context of the origin, where a secret would be none
+   * (ADR-0028).
+   */
+  readonly newSecret: () => string;
 }

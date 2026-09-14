@@ -82,6 +82,7 @@ export function createBrowserEnvironment(
     clock: BROWSER_CLOCK,
     random: () => Math.random(),
     newId: createIdGenerator(),
+    newSecret,
     logger,
     logPayloads: options.logPayloads ?? false,
   };
@@ -250,6 +251,23 @@ function createTransport(request: TransportRequest, options: BrowserEnvironmentO
  */
 function defaultWorkerUrl(): URL {
   return new URL('./serial-broker.worker.js', import.meta.url);
+}
+
+/** How many random bytes a bus secret is made of: as many as a UUID, and all of them random. */
+const SECRET_BYTES = 16;
+
+/**
+ * Produces a secret for the worker handshake (ADR-0028).
+ *
+ * `crypto.getRandomValues` is the only source used: a predictable secret would protect nothing, and
+ * every context that has `navigator.serial` has `crypto`. Where it is missing, this throws rather
+ * than handing out a secret a script of the origin could guess: the tab then falls back to
+ * `BroadcastChannel`, which uses no secret, and `transport: 'sharedworker'` reports
+ * `BROKER_UNAVAILABLE`.
+ */
+function newSecret(): string {
+  const bytes = crypto.getRandomValues(new Uint8Array(SECRET_BYTES));
+  return [...bytes].map((byte) => byte.toString(16).padStart(2, '0')).join('');
 }
 
 /**

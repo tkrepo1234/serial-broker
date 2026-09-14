@@ -9,9 +9,11 @@ import {
   type SharedWorkerLike,
   type WorkerLoadFailure,
 } from '../../src/client/transport/shared-worker-transport.js';
+import type { Logger } from '../../src/core/types.js';
 import { HEARTBEAT_INTERVAL_MS } from '../../src/protocol/heartbeat.js';
-import type { ClientId, ProtocolMessage } from '../../src/protocol/messages.js';
+import { BROKER_ID, type ClientId, type ProtocolMessage } from '../../src/protocol/messages.js';
 import { PROTOCOL_VERSION } from '../../src/protocol/version.js';
+import { recordingLogger } from '../harness/recording-logger.js';
 import {
   envelope,
   FakeMessagePort,
@@ -26,11 +28,11 @@ const PEER = 'peer' as ClientId;
 const STATUS_REQUEST = { type: 'status-request', configName: 'Reader' };
 
 describe('SharedWorkerTransport', () => {
-  function create(): TransportRequestRecorder & {
+  function create(logger?: Logger): TransportRequestRecorder & {
     port: FakeMessagePort;
     transport: SharedWorkerTransport;
   } {
-    const rec = recordTransportRequest(SELF);
+    const rec = recordTransportRequest(SELF, logger);
     const port = new FakeMessagePort();
     const worker: SharedWorkerLike = { port, addEventListener: () => undefined };
     const transport = new SharedWorkerTransport(rec.request, () => worker, 'fake://worker');
@@ -59,6 +61,73 @@ describe('SharedWorkerTransport', () => {
     port.deliver(envelope(PEER, SELF, STATUS_REQUEST));
 
     expect(messages).toHaveLength(1);
+  });
+
+  it('shows the worker a secret in its hello, and sends it in no other message', () => {
+    const { transport, port } = create();
+
+    transport.attach('Reader');
+    transport.send(envelope(SELF, 'all', STATUS_REQUEST) as ProtocolMessage);
+
+    const hello = port.posted[0] as { type: string; secret: string };
+    expect(hello.type).toBe('hello');
+    expect(hello.secret.length).toBeGreaterThan(0);
+    // The secret is what holds this tab's identity on the worker (ADR-0028): a message any other
+    // script of the origin can hear must never carry it.
+    expect(JSON.stringify(port.posted.slice(1))).not.toContain(hello.secret);
+  });
+
+  it('logs a record the worker forwarded, as the worker recorded it', () => {
+    const { logger, records } = recordingLogger();
+    const { port, messages } = create(logger);
+
+    port.deliver(
+      envelope(BROKER_ID, SELF, {
+        type: 'worker-log',
+        level: 'warn',
+        message: 'refused a hello that names an identity bound to another secret',
+        fields: {
+          event: 'worker.message-refused',
+          reason: 'secret-mismatch',
+          clientId: 'mallory',
+        },
+      }),
+    );
+
+    // The worker cannot reach an application's logger; a tab writes its records for it (ADR-0029).
+    // `clientId` stays the identity the worker's record concerns, not this tab's.
+    expect(records).toEqual([
+      [
+        'warn',
+        'refused a hello that names an identity bound to another secret',
+        {
+          event: 'worker.message-refused',
+          reason: 'secret-mismatch',
+          clientId: 'mallory',
+          reportedBy: SELF,
+        },
+      ],
+    ]);
+    expect(messages).toHaveLength(0);
+  });
+
+  it('ignores a forwarded record that did not come from the broker', () => {
+    const { logger, records } = recordingLogger();
+    const { port, messages } = create(logger);
+
+    // Any script of the origin can say anything on a port of its own; only the broker's own records
+    // are logged as the worker's, and the broker passes none of these on.
+    port.deliver(
+      envelope(PEER, SELF, {
+        type: 'worker-log',
+        level: 'error',
+        message: 'the device caught fire',
+        fields: { event: 'worker.message-refused' },
+      }),
+    );
+
+    expect(records).toEqual([]);
+    expect(messages).toHaveLength(0);
   });
 
   it('reports a message it cannot parse instead of delivering it', () => {
@@ -227,6 +296,7 @@ describe('BroadcastChannelTransport', () => {
     ['heartbeat', { configNames: ['Reader'], ownedConfigNames: ['Reader'] }],
     ['attach', { configName: 'Reader' }],
     ['detach', { configName: 'Reader' }],
+    ['worker-log', { level: 'warn', message: 'x', fields: { event: 'worker.message-refused' } }],
   ])('passes on no %s, which is meant for a broker and read by nobody above it', (type, body) => {
     const { transport, deliver, messages } = create();
     transport.attach('Reader');
