@@ -93,9 +93,15 @@ This is the single most important property of the design; see
 The new owner announces itself with `owner-claimed`. The lock cannot be granted while it is held,
 so a new owner existing is proof that the old one is not writing any more - but not that the old
 one's last messages have arrived, since they come from another sender. So every time of holding
-the port is a term with an identifier, named in the messages about ownership, writes and status,
-and the old term ends when its `owner-released` arrives or, after a crash, when it has been silent
-for a grace period ([ADR-0026](./adr/0026-attribute-messages-to-a-term-of-holding-the-port.md)).
+the port is a term with an identifier, named in the messages about ownership, writes and status
+([ADR-0026](./adr/0026-attribute-messages-to-a-term-of-holding-the-port.md)).
+
+A term is a Web Lock of its own, held for the whole term
+([ADR-0030](./adr/0030-hold-a-web-lock-for-every-term-of-holding-the-port.md)). A tab believes a
+claim or a status only while that lock is held, and takes the term for over when the browser frees
+it - which it does as it tears a crashed tab down, so failover waits for no timeout. A tab that
+lets go cleanly leaves a request of its own queued on the lock, and the other tabs wait for its
+`owner-released`, the last message of the term. No message can end a term, or invent one.
 
 ### 2. A write belongs to the context that issued it
 

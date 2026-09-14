@@ -78,6 +78,10 @@ What you can rely on:
   them. A serial port cannot report that.
 - **A write waits for a connection** that is not open yet, for up to `connection.writeTimeoutMs`,
   and then rejects with `WRITE_TIMEOUT`.
+- **A write is refused rather than queued without end.** The tab holding the port keeps at most
+  4096 writes, and 64 MiB of payload, waiting at once — from every tab together. Beyond that a write
+  rejects with `WRITE_QUEUE_FULL`, which says that nothing of it was written, so it can be sent
+  again later. No application reaches this by sending; a loop does.
 - **A write that rejected with `WRITE_TIMEOUT` and `started: false` is never written afterwards.**
   That includes a write queued behind a slow one: a write that has waited at the tab holding the
   port for `connection.writeTimeoutMs` is taken out of the queue and not begun, so it can safely be
@@ -109,8 +113,9 @@ device sends unsolicited data that must not be missed, have your protocol acknow
 
 A participant's write that was still waiting — queued at the owner, or on its way to it — never
 reached the device. serial-broker hands it to the new owner, and it is written exactly once. When
-the tab holding the port closed, that happens as soon as its goodbye arrives; when it crashed, after
-a grace period of one second, because what it sent just before crashing may still be on its way.
+the tab holding the port closed, that happens as soon as its goodbye arrives; when it crashed, the
+moment the browser frees the Web Lock of its time of holding the port, which it does as it tears the
+tab down. Nothing waits for a timeout.
 
 ### A write that had started ends with `OWNER_LOST_DURING_WRITE`
 
@@ -120,11 +125,10 @@ promise with `OWNER_LOST_DURING_WRITE` and **does not send it again**.
 
 A tab that closes finishes the writes it began and reports their results before it lets go, so a
 write it completed resolves, even when another tab hears of the new owner first. A tab that crashes
-reports nothing more: the write is rejected once a second has passed without word from it. Two
-cases remain that no library can decide. A tab that crashes after handing the bytes to the device
-but before its report that it began reaches the issuing tab looks exactly like one that never
-received the write, and so does a report delayed by more than that second; such a write is handed
-to the new owner and may reach the device twice.
+reports nothing more: its write is rejected as soon as the browser frees its lock. One case remains
+that no library can decide. A tab that crashes in the moment between handing the bytes to the device
+and its report that it began reaching the issuing tab looks exactly like one that never received the
+write; such a write is handed to the new owner and may reach the device twice.
 
 | When the owner went away, the write had… | Outcome                                                  |
 | ---------------------------------------- | -------------------------------------------------------- |
@@ -325,14 +329,14 @@ never by comparing clock readings, except where this section says otherwise.
 
 A browser runs the timers of a hidden tab late: Chromium aligns them to whole seconds, and after five
 minutes hidden, runs repeating timers only once a minute. Messages between tabs and device events
-are not held back. In a hidden tab, deadlines, the one-second grace period after a crash and
-reconnect delays can therefore end up to a minute late, and failover and write timeouts take that
-much longer. The message bus counts unanswered heartbeats rather than measuring silence, so a
-throttled tab is not mistaken for a dead worker.
+are not held back. In a hidden tab, deadlines and reconnect delays can therefore end up to a minute
+late, and write timeouts take that much longer. Learning that the tab holding the port has gone does
+not: it is a Web Lock being freed, not a timer, and the browser grants a waiting tab that lock as
+promptly in a hidden tab as in a visible one. The message bus counts unanswered heartbeats rather
+than measuring silence, so a throttled tab is not mistaken for a dead worker.
 
-A deadline that runs a second or more late first handles the messages that arrived meanwhile. A
-write whose result is already waiting resolves instead of timing out, and a former holder's report
-that is already waiting counts before its grace period ends.
+A deadline that runs a second or more late first handles the messages that arrived meanwhile, so a
+write whose result is already waiting resolves instead of timing out.
 
 ### Frozen tabs
 
@@ -356,11 +360,13 @@ quiet. Taking the port from it would break the promise that only one tab writes 
 serial-broker does not; when the tab runs again, it carries on where it stopped.
 
 A tab that has let go of the port cannot wake up later with more to say about it: it sends its
-goodbye, and reports every write it performed, before it releases the lock. What can arrive late is
-what a crashed tab sent just before it crashed. The grace period for that is timed by the tabs
-waiting for it, from when they hear of the new holder, so a waiting tab that was frozen itself does
-not lose it. A report delayed on its way by more than a second remains undecidable, as described
-under [A write that had started](#a-write-that-had-started-ends-with-owner_lost_during_write).
+goodbye, and reports every write it performed, before it releases its locks. What can arrive late is
+what a crashed tab sent just before it crashed. A tab that let go cleanly is told apart from one
+that died by a Web Lock request it leaves behind, so the other tabs wait for its goodbye rather than
+deciding the moment its lock is free — and a tab that was frozen itself makes that decision when it
+runs again, with the messages that arrived meanwhile already in hand. A word from a crashed tab that
+was still on its way when the browser freed its lock remains undecidable, as described under
+[A write that had started](#a-write-that-had-started-ends-with-owner_lost_during_write).
 
 ### Leaving the page, and discarded tabs
 
@@ -385,8 +391,9 @@ any unplugged device. The worker may run its check for silent tabs before their 
 after waking and forget them; each is taken back with its next heartbeat, within 15 seconds, and a
 write that crosses the bus in between may be lost and rejects with `WRITE_TIMEOUT`.
 
-The system clock can be set, or corrected, while tabs run. Deadlines, the grace period and reconnect
-delays are timers and are not affected. Three things read the clock:
+The system clock can be set, or corrected, while tabs run. Deadlines and reconnect delays are timers
+and are not affected, and who holds the port is a Web Lock and not a time at all. Four things read
+the clock:
 
 - **Whether a connection was stable** (`connection.stableAfterMs`) is decided from clock readings.
   Set back while the port is open, a long-lived connection that then drops counts as unstable: its
@@ -397,6 +404,10 @@ delays are timers and are not affected. Three things read the clock:
   their issuers were still waiting. Refusing too early is the safe direction: they were not written.
 - **Whether a deadline ran late** is judged from the clock: set forward, a deadline waits one task
   longer than it needed to.
+- **How much work the messages of other tabs may cost** — answers to status and diagnostics
+  requests, log records for malformed messages, errors delivered to `onError` — is rationed on the
+  clock. Set forward, a full allowance comes back at once; set back, none comes back until the clock
+  has caught up. Neither affects the port, the data or the writes.
 
 Timestamps in events, errors and diagnostics are clock readings, and jump with the clock.
 

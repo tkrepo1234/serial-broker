@@ -290,6 +290,15 @@ These reject the `send()` call they belong to, in the tab that issued it.
 holding the port reconnects.
 **Do:** decide, for the command, whether a partial write can be repeated.
 
+`WRITE_QUEUE_FULL`
+: **Arises** when the tab holding the port already has as many writes waiting as it keeps — 4096 of
+them, or 64 MiB of payload, from every tab together. Nothing of this write was written, so it is
+safe to send again once earlier writes have settled.
+**Context:** `requestId` and `byteLength` of the refused write, and `waiting` and `waitingBytes` at
+the port.
+**Do:** send fewer writes at once, or wait for earlier ones to settle. An application that sends a
+few commands never reaches this; a loop, or another script of the origin flooding the port, does.
+
 `NOT_CONNECTED`
 : **Not delivered to the application.** It is how the tab holding the port hands a write back when
 its connection was lost between accepting the write and handing it to the device: nothing was

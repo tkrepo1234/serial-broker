@@ -41,6 +41,13 @@ using the same channel name. It is not a defence against a hostile same-origin s
 the first assumption above is already inside the boundary. The next section says precisely what
 such a script can and cannot do.
 
+**What a message says about the port is checked against the browser.** Which tab holds the port,
+and for how long, is a Web Lock rather than an announcement (ADR-0005, ADR-0030): a tab believes a
+claim or a status only while the lock named after that term of holding the port is held, and takes
+the term for over only when the browser frees that lock. So a message can neither invent a term nor
+end one. Messages are still not authenticated — a script that also takes Web Locks is a different
+matter, and is listed below.
+
 ## The bus is open to every script of the origin
 
 Tabs talk over a `SharedWorker` port, a `BroadcastChannel` named `serial-broker/broker/v<protocol>`,
@@ -74,6 +81,29 @@ sends, and in its diagnostics report.
   thing, and the worker cannot tell the two apart; see below.)
 - **Grow the broker without bound.** It keeps a bounded number of participants, ports per
   participant, and configurations.
+- **End, or invent, a term of holding the port.** A term is a Web Lock held by the tab that holds
+  the port, from before its first word in that term until after its last (ADR-0030). A claim, a
+  status or a goodbye naming a term nobody holds changes nothing, and no message ends a term whose
+  lock is still held — so a forged goodbye cannot fail a write that a tab is still performing, and
+  a forged claim cannot make the other tabs address their writes into the void.
+- **Make a tab withdraw over a tab limit.** The limit of the tab holding the port is part of that
+  term's lock name, so a status naming another limit names no term of the configuration
+  (ADR-0025).
+- **Settle or strand another tab's write.** A write is reported started, or answered, only by the
+  term it was addressed to and only by the context that holds that term's lock. A `write-result`
+  from anywhere else — with a request id read off the channel — is ignored, so no script can tell an
+  application that bytes reached the device.
+- **Pass off data as the device's** to a tab that knows who holds the port: `data-received` and
+  `data-sent` are delivered only from a context that speaks for a term this tab knows of. A script
+  that speaks under the identity of the tab holding the port still can; see below.
+- **Make a tab answer, log or report without limit.** Answers to `status-request` and
+  `diagnostics-request`, records of malformed messages, errors delivered to `onError` and the
+  reports one diagnostics collection keeps are rate-limited, each by a named limit (see
+  [Rates](#rates)), and what is dropped is logged once per context rather than per message. A tab
+  that asks for the status during a flood is still answered: one answer covers every request.
+- **Make the tab holding the port hold writes without bound.** A port keeps at most
+  `MAX_WAITING_WRITES` writes and `MAX_WAITING_WRITE_BYTES` of payload; a write beyond either is
+  refused with `WRITE_QUEUE_FULL`, which says that nothing of it was written.
 
 ### What such a script can do
 
@@ -85,22 +115,23 @@ These follow from the missing sender identity, and no validation can prevent the
   holding the port.
 - **Write to the device**, with a `write-request` addressed to the current term, which every status
   names - or by calling serial-broker itself.
-- **Say anything a tab can say**, on either transport. On the worker it must first say `hello` under
-  the identity it speaks for. The consequences include:
-  - device data, sent data and errors that never happened, delivered to `onReceive`, `onSend` and
-    `onError`;
+- **Speak under the identity of a tab**, on either transport: an identity on the bus is a string in
+  every message that tab sends. On the worker it must first say `hello` under that identity. Under
+  the identity of the tab holding the port, and in the name of the term it really holds - both are
+  on the bus for anyone to read - it can say what that tab could say:
+  - device data and sent data that never happened, delivered to `onReceive` and `onSend`;
   - a status that is not the device's, in every tab that does not hold the port;
-  - a claim or a status of a term nobody holds: the tabs that do not hold the port take the real
-    holder's term for ended, ignore its statuses, address their writes to the invented term, and
-    see them time out, until the port changes hands;
-  - a status naming another tab limit, which makes those tabs withdraw from the configuration;
-  - a `write-result` for a pending write whose request id it knows. On `BroadcastChannel` every
-    write request reaches every tab, request id included.
-- **Hold the Web Locks** - the ownership lock or the places of a tab limit - and so keep every tab
-  away from the device.
-- **Cost work within the limits.** There is no rate limit: every well-formed message is decoded and
-  handled, the tab holding the port answers every `status-request`, every tab answers every
-  `diagnostics-request`, and every tab reports each distinct protocol version announced once.
+  - a `write-result` for a write addressed to that term, whose request id it knows. On
+    `BroadcastChannel` every write request reaches every tab, request id included.
+- **Report errors that did not happen** to `onError`, from any identity and within the rate.
+- **Hold the Web Locks** - the ownership lock, the places of a tab limit, or a lock named for a term
+  it invents - and so keep every tab away from the device, have an invented term believed while it
+  holds its lock, or, by queueing on the lock of a real term, make the other tabs wait for a goodbye
+  that never comes. A script that takes locks is beyond what validation or attribution can reach;
+  the first assumption of this document is why.
+- **Cost work up to the rates.** Every well-formed message is decoded, and a flood can crowd
+  legitimate answers, reports and log records out of the rates above - the tabs go on sharing the
+  port either way. Every tab also reports each distinct protocol version announced once.
 - **Occupy the broker.** A script that keeps as many participants alive as the broker keeps leaves
   no room for tabs opened afterwards, which then fall back to `BroadcastChannel` or, with
   `transport: 'sharedworker'`, keep trying.
@@ -129,11 +160,27 @@ each value, in `src/protocol/limits.ts`.
 | `MAX_PARTICIPANTS`             | 1024             | The tabs and observers the broker keeps.                                     |
 | `MAX_PORTS_PER_PARTICIPANT`    | 8                | The ports the broker keeps for one identity.                                 |
 | `MAX_CONFIGURATIONS`           | 4096             | The configurations the broker keeps bookkeeping for.                         |
+| `MAX_REPORTS_PER_COLLECTION`   | 1024             | The reports one diagnostics collection keeps.                                |
+| `MAX_WAITING_WRITES`           | 4096             | The writes waiting at one tab's port.                                        |
+| `MAX_WAITING_WRITE_BYTES`      | 64 MiB           | The payload bytes waiting at one tab's port.                                 |
 
 A cycle, a value shared between two places, a function or a symbol inside an error or a report
 exceeds its limit too. A tab logs an exceeded limit as `transport.limit-exceeded`, with the limit's
 name and value. The worker logs `worker.limit-exceeded`, `broker.limit-exceeded` and
 `worker.message-refused`, which no tab sees.
+
+### Rates
+
+How often the bus may make a tab work, beyond dropping a message (ADR-0031). Each is a burst
+allowed at once and an allowance coming back per second; the values and their reasons are in
+`src/protocol/limits.ts`. The first thing dropped is logged at `warn`, once per context and limit.
+
+| Limit                            | Burst | Per second | Bounds                                                                                                                |
+| -------------------------------- | ----- | ---------- | --------------------------------------------------------------------------------------------------------------------- |
+| `STATUS_ANSWER_RATE`             | 32    | 32         | Answers to `status-request` by the tab holding the port. Requests beyond it are answered together by the next answer. |
+| `DIAGNOSTICS_ANSWER_RATE`        | 8     | 4          | Answers to `diagnostics-request` by each tab.                                                                         |
+| `MALFORMED_MESSAGE_WARNING_RATE` | 16    | 2          | Records of malformed messages. They are dropped either way.                                                           |
+| `REMOTE_ERROR_RATE`              | 32    | 8          | Errors from other contexts delivered to `onError`.                                                                    |
 
 ## Threat model: the application side
 

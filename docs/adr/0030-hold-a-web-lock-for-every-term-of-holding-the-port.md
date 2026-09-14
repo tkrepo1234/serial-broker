@@ -87,7 +87,7 @@ instead.
 - **One lock per term, without the sender and the limit in its name.** A tab would then have to
   take the sender and the limit from the message itself, which is what the forged `status` with
   another `maxTabs` abused. Checking a tab-slot lock instead (`serial-broker/tab-slot/...`) proves
-  that *somebody* runs that limit, not that the tab holding the port does, and costs one request per
+  that _somebody_ runs that limit, not that the tab holding the port does, and costs one request per
   place - up to a hundred.
 - **`locks.query()` for everything.** The snapshot is stale the moment it is taken, and a query
   answers only about the moment it ran; a queued request is a standing subscription to the end of a

@@ -39,14 +39,14 @@ A token bucket (`core/rate-limit.ts`) expresses the rates: `burst` allowed at on
 coming back. A burst is what legitimate use looks like - every tab of an origin asking for the
 status as it joins - and what follows it is not.
 
-| What                              | Limit                                                                 |
-| --------------------------------- | --------------------------------------------------------------------- |
-| Answers to `status-request`       | `STATUS_ANSWER_RATE`: 32 at once, 32 per second                       |
-| Answers to `diagnostics-request`  | `DIAGNOSTICS_ANSWER_RATE`: 8 at once, 4 per second                    |
-| Records of malformed messages     | `MALFORMED_MESSAGE_WARNING_RATE`: 16 at once, 2 per second            |
-| Errors from other tabs            | `REMOTE_ERROR_RATE`: 32 at once, 8 per second                         |
-| Reports kept per collection       | `MAX_REPORTS_PER_COLLECTION`: 1024, as many as the broker keeps tabs  |
-| Writes waiting at a port          | `MAX_WAITING_WRITES`: 4096, and `MAX_WAITING_WRITE_BYTES`: 64 MiB     |
+| What                             | Limit                                                                |
+| -------------------------------- | -------------------------------------------------------------------- |
+| Answers to `status-request`      | `STATUS_ANSWER_RATE`: 32 at once, 32 per second                      |
+| Answers to `diagnostics-request` | `DIAGNOSTICS_ANSWER_RATE`: 8 at once, 4 per second                   |
+| Records of malformed messages    | `MALFORMED_MESSAGE_WARNING_RATE`: 16 at once, 2 per second           |
+| Errors from other tabs           | `REMOTE_ERROR_RATE`: 32 at once, 8 per second                        |
+| Reports kept per collection      | `MAX_REPORTS_PER_COLLECTION`: 1024, as many as the broker keeps tabs |
+| Writes waiting at a port         | `MAX_WAITING_WRITES`: 4096, and `MAX_WAITING_WRITE_BYTES`: 64 MiB    |
 
 Two of them are more than a bucket:
 
