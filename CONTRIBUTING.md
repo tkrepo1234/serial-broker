@@ -71,6 +71,20 @@ permission through a throwaway profile written before it starts; nothing clicks 
 prompt and no machine-wide setting is changed. Record what you saw in
 [the manual test plan](./docs/manual-test-plan.md).
 
+The **extreme suite** measures what the library costs at sizes no operator reaches - a hundred
+tabs, an hour of full-rate traffic, ten thousand writes under crashes, a simulated week - and
+asserts bounds on memory, timers, listeners, locks and messages. It is opt-in, never runs in CI,
+and records its last run in `test/integration/extreme/RESULTS.md`:
+
+```sh
+npm run test:extreme                       # the simulated browser, about a minute
+SERIAL_BROKER_EXTREME=1 npm run test:browser -- test/browser/extreme --workers=1   # Edge, six minutes
+```
+
+Every size has a `SERIAL_BROKER_EXTREME_*` variable; see
+[the testing guideline](./docs/guidelines/testing.md#the-extreme-suite). Run it after a change to
+`src/client/`, `src/worker/` or `src/owner/`, and commit the updated `RESULTS.md` with the change.
+
 ## Making a change
 
 1. Branch: `<type>/<short-description>`.

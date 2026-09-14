@@ -6,15 +6,16 @@ that matter, and they must be **deterministic**.
 
 ## Levels
 
-| Level               | Location                      | What it proves                                                                                                                                | Rule                                                                                     |
-| ------------------- | ----------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
-| **Unit**            | `test/unit/`                  | One module in isolation: backoff maths, validation, codecs, protocol encode/decode.                                                           | No fakes beyond the module's own dependencies. Fast (< 5 ms each).                       |
-| **Integration**     | `test/integration/`           | Several real modules against the simulated browser harness: a single tab end-to-end, reconnect, write queueing.                               | Uses the harness, never the real DOM.                                                    |
-| **Multi-context**   | `test/integration/multi-tab/` | The actual product claim: N simulated tabs sharing one port, ownership failover, broadcast fan-out, interlocking under contention.            | Mandatory for every change to `owner/`, `worker/` or `client/`.                          |
-| **Browser**         | `test/browser/`               | The **built** package in a real Chromium: a real `SharedWorker` handshake, real Web Locks, real `BroadcastChannel`, `dist/` loaded by a page. | Scenarios only, no races; `npm run test:browser`. See below and ADR-0035.                |
-| **Hardware**        | `test/browser/hardware/`      | The same scenarios against a real serial device, through a real UART.                                                                         | Runs only with `SERIAL_BROKER_HARDWARE=arduino`; results in `docs/manual-test-plan.md`.  |
-| **Emulated device** | `emulator/`                   | Real Chromium and the real Windows serial stack against a USB device whose failures are scriptable.                                           | Its own tests live in `emulator/test/`; runs are recorded in `docs/manual-test-plan.md`. |
-| **Manual**          | `debug/`                      | Real Chromium, real hardware. Documented, checklisted, never a substitute for the above.                                                      | Recorded in `docs/manual-test-plan.md`.                                                  |
+| Level               | Location                                             | What it proves                                                                                                                                                                      | Rule                                                                                                                                                    |
+| ------------------- | ---------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Unit**            | `test/unit/`                                         | One module in isolation: backoff maths, validation, codecs, protocol encode/decode.                                                                                                 | No fakes beyond the module's own dependencies. Fast (< 5 ms each).                                                                                      |
+| **Integration**     | `test/integration/`                                  | Several real modules against the simulated browser harness: a single tab end-to-end, reconnect, write queueing.                                                                     | Uses the harness, never the real DOM.                                                                                                                   |
+| **Multi-context**   | `test/integration/multi-tab/`                        | The actual product claim: N simulated tabs sharing one port, ownership failover, broadcast fan-out, interlocking under contention.                                                  | Mandatory for every change to `owner/`, `worker/` or `client/`.                                                                                         |
+| **Browser**         | `test/browser/`                                      | The **built** package in a real Chromium: a real `SharedWorker` handshake, real Web Locks, real `BroadcastChannel`, `dist/` loaded by a page.                                       | Scenarios only, no races; `npm run test:browser`. See below and ADR-0035.                                                                               |
+| **Hardware**        | `test/browser/hardware/`                             | The same scenarios against a real serial device, through a real UART.                                                                                                               | Runs only with `SERIAL_BROKER_HARDWARE=arduino`; results in `docs/manual-test-plan.md`.                                                                 |
+| **Extreme**         | `test/integration/extreme/`, `test/browser/extreme/` | What the library costs and whether it stays stable at sizes no operator reaches: a hundred tabs, an hour of full-rate traffic, thousands of writes under crashes, a simulated week. | Runs only with `SERIAL_BROKER_EXTREME=1` (`npm run test:extreme`), never in CI; each part records its last run in a `RESULTS.md` next to it. See below. |
+| **Emulated device** | `emulator/`                                          | Real Chromium and the real Windows serial stack against a USB device whose failures are scriptable.                                                                                 | Its own tests live in `emulator/test/`; runs are recorded in `docs/manual-test-plan.md`.                                                                |
+| **Manual**          | `debug/`                                             | Real Chromium, real hardware. Documented, checklisted, never a substitute for the above.                                                                                            | Recorded in `docs/manual-test-plan.md`.                                                                                                                 |
 
 ## Determinism is mandatory
 
@@ -119,6 +120,88 @@ second: the documented command runs six tests, not seven.
 
 **Record every hardware run in [the manual test plan](../manual-test-plan.md)** — date, browser
 version, device, result.
+
+## The extreme suite
+
+The ordinary suites prove behaviour. The extreme suite measures **cost and stability** at sizes an
+operator's screen never reaches, and asserts bounds on both. It is opt-in — `SERIAL_BROKER_EXTREME=1`,
+which `npm run test:extreme` sets — because a run takes minutes and asks for a heap the ordinary
+suite does not; it never runs in CI. Every scenario file is `describe.skipIf`, so `npm test` and
+the coverage run see the files and skip them.
+
+```sh
+npm run test:extreme                          # every scenario, both transports
+npm run test:extreme -- sustained-traffic     # one scenario file
+SERIAL_BROKER_EXTREME_TABS=1000 npm run test:extreme -- many-tabs
+```
+
+The in-process part, `test/integration/extreme/`, runs on the simulated browser with
+`--expose-gc`, which the script sets: memory is read after a full garbage collection, and the
+support refuses to measure without one. Its scenarios, each on both transports:
+
+| Scenario               | What it does                                                                                                                                              |
+| ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `many-tabs`            | 100 tabs on one configuration; the tab holding the port closed ten times among them; 20 configurations shared by 10 tabs each, with no cross-talk.        |
+| `long-lived-owner`     | 50 000 writes accepted by one tab in one term of holding the port: the record of accepted writes stays within its bound.                                  |
+| `sustained-traffic`    | A simulated hour at 115 200 baud in chunks of 255 bytes - 41 MB, 162 000 chunks - to 10 tabs with text decoding on, characters split by chunk boundaries. |
+| `writes-under-crashes` | 10 000 writes from 20 tabs, the tab holding the port killed every 100 writes with the batch at its port; at-most-once checked from the device's side.     |
+| `largest-payloads`     | 16 MiB payloads back to back from a tab that does not hold the port, then as many at once as the port keeps waiting.                                      |
+| `setup-release-churn`  | 1 000 setup and release cycles in two tabs taking turns holding the port.                                                                                 |
+| `simulated-week`       | 10 tabs through 7 simulated days of heartbeats and sweeps, with a chunk and a write an hour.                                                              |
+| `freezing-under-load`  | Half of 10 tabs frozen for a minute of full-rate traffic with a write on its way, resumed timers-first or tasks-first; every chunk in order.              |
+| `observer-watchers`    | A diagnostics observer with 1 000 watchers under traffic, then stopped.                                                                                   |
+
+Every scenario measures the same **footprint** before and after its load (`support/extreme.ts`):
+heap and `ArrayBuffer` memory after a collection, timers on the library's clock and on the bus's,
+device listeners, application listeners, Web Locks held and pending, writes pending and queued at
+the port, participants the worker knows, and messages sent and delivered on the wire - heartbeats
+included, counted by `FakeBus.meter`. The bounds are that every count is the same before and after,
+memory grows by no more than a few MiB, the messages stay within the scenario's **budget** - a
+formula of its load, written next to it, that an amplification would cross (the bus is
+deterministic, so the counts are the same on every run) - and, at the very end, **every tab still works**: a chunk
+reaches all of them and a write from the last of them reaches the device once. The sizes are
+`SIZES` in `support/extreme.ts`, each with a `SERIAL_BROKER_EXTREME_*` variable; the defaults keep a
+full run under a minute of measured load on a development machine, so a longer run is a variable
+away.
+
+Two things the simulated browser cannot do shape these scenarios. A killed tab's JavaScript runs
+on - only its timers, its messages and its locks stop - so the fake port refuses a write of a port
+the browser closed, and a scenario sets aside the writes the killed tab itself had outstanding:
+in a browser nobody is left to settle them. And the fake clock refuses more than ten thousand
+timers in one step, so a simulated week advances an hour at a time.
+
+A memory bound measures the harness as much as the library, so the harness keeps nothing of a tab
+that closed or was killed: its ports, listeners and bus connections are let go of, which
+`harness-conformance.test.ts` proves with a `WeakRef` and a collection. What the worker itself keeps
+of a killed tab - its port, until the sweep finds it silent (ADR-0021) - is the library's, and is
+held for `SILENT_PARTICIPANT_TIMEOUT_MS` by design. Some state the library keeps is visible to no
+count - the record of writes accepted at the port, for one - and is bounded through the heap alone:
+`long-lived-owner` fails when that record is unbounded.
+
+`npm run test:extreme` writes the run's numbers to `test/integration/extreme/RESULTS.md`, which is
+committed as the record of the last run; a diff of it is the drift.
+
+The real-browser part, `test/browser/extreme/`, is one Playwright scenario, skipped unless
+`SERIAL_BROKER_EXTREME=1`: twenty pages on one origin share the stand-in device for five minutes
+of loopback traffic, the page holding the port is closed every 30 seconds and replaced, and the
+heap, DOM nodes and event listeners of every page are read over CDP (`Performance.getMetrics`,
+after `HeapProfiler.collectGarbage`) at the start, the middle and the end - and the heap of the
+`SharedWorker` too, through `Runtime.getHeapUsage`, since a worker answers no `Performance` domain.
+The bound is a few MiB of heap and a handful of nodes and
+listeners from a page's first reading to its last, and every page still receives at the end.
+It writes `test/browser/extreme/RESULTS.md`. Run it alone, with one worker:
+
+```sh
+SERIAL_BROKER_EXTREME=1 npm run test:browser -- test/browser/extreme --workers=1
+```
+
+```powershell
+$env:SERIAL_BROKER_EXTREME='1'; npm run test:browser -- test/browser/extreme --workers=1
+```
+
+What these runs find is handled like any other finding: a leak or a bound that does not hold is
+fixed in `src/` with a regression test in the ordinary suite, and a limit that cannot be lifted is
+documented in [How shared ports behave](../site/shared-ports.md).
 
 ## Writing tests
 
