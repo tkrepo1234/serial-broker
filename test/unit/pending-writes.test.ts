@@ -4,7 +4,7 @@ import { PendingWrites, type PendingWriteHost } from '../../src/client/pending-w
 import { SerialBrokerErrorCode } from '../../src/core/error-codes.js';
 import { SerialBrokerError } from '../../src/core/errors.js';
 import type { RequestId, TermId } from '../../src/protocol/messages.js';
-import { FakeClock } from '../harness/fake-clock.js';
+import { FakeClock, flushMicrotasks } from '../harness/fake-clock.js';
 
 const PAYLOAD = new Uint8Array([1, 2, 3]);
 
@@ -199,11 +199,11 @@ describe('PendingWrites', () => {
     let outcome: unknown = 'pending';
     void outcomeOf(harness.writes.add(id('w1'), PAYLOAD)).then((value) => (outcome = value));
 
-    // Said by a tab that was never asked to write it: taking it would strand the write, never to
-    // be handed on and never to be answered (ADR-0030).
+    // Said by a tab that was never asked to write it. Taking it would tie the write to a term that
+    // is not writing it, and lose it when that term ends (ADR-0030).
     harness.writes.markStarted(id('w1'), SECOND);
-    harness.endTerm(FIRST);
-    await Promise.resolve();
+    harness.endTerm(SECOND);
+    await flushMicrotasks();
 
     expect(outcome).toBe('pending');
     expect(harness.dispatched).toEqual(['w1@t1']);
@@ -218,7 +218,7 @@ describe('PendingWrites', () => {
     // id off the bus (ADR-0030).
     harness.writes.handleResult(id('w1'), SECOND, undefined);
     harness.writes.handleResult(id('w1'), undefined, undefined);
-    await Promise.resolve();
+    await flushMicrotasks();
 
     expect(outcome).toBe('pending');
     expect(harness.writes.size).toBe(1);
