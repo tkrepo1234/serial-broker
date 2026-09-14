@@ -130,7 +130,9 @@ releases in one while the other keeps sending, and sets up again.
 
 4. **Optionally, say goodbye on `pagehide`** with `SerialBroker.dispose()`, also in `main.ts`. A
    closing tab destroys no components, so this is what lets another tab take the port over at once.
-   Without it the browser still frees everything as the tab dies.
+   Without it the browser still frees everything as the tab dies. With it, also reload the page on
+   `pageshow` with `event.persisted` set: a page the browser restores from the back/forward cache
+   would otherwise show the state from before `dispose()`.
 5. **Call `createSerialBroker()` at the top level of a component's `<script>`**, with your device's
    USB ids and baud rate. On Windows the ids are in Device Manager under _Hardware Ids_
    (`VID_1A86&PID_7523`). Every tab must pass the same name and options.
@@ -257,6 +259,12 @@ library's own remediation for `CONFIGURATION_CONFLICT` and `RECONNECT_EXHAUSTED`
 **`configure()` and `dispose()` live in `main.ts`, not in the module.** Both are page-wide: the
 worker URL has to be named once, before the first setup, and `pagehide` fires for a closing tab,
 where Svelte destroys no components. A module that did either would do it once per connection.
+
+**A page restored from the back/forward cache is loaded again.** `dispose()` on `pagehide` ends
+the library's client, and Chromium keeps a page using Web Locks, a `BroadcastChannel` or Web
+Serial out of the cache. Should a browser restore the page anyway - `pageshow` with `persisted`
+set - reloading is the one step that cannot leave a stale `open` on an operator's screen; setting up
+every connection again would work too, but it would take code in each component.
 
 **The status sentences are in the application, not in the module.** They are words for the
 application's users, and a team replaces them. `status-text.ts` types them as a `Record` over the

@@ -35,6 +35,14 @@ async function main(): Promise<void> {
   window.addEventListener('pagehide', () => {
     void SerialBroker.dispose();
   });
+  // Chromium keeps a page using serial-broker out of the back/forward cache, but should a browser
+  // restore it anyway, the page would show the state from before dispose() - an `open` status and
+  // an enabled Send, with nothing behind them. Loading the page again sets everything up afresh.
+  window.addEventListener('pageshow', (event) => {
+    if (event.persisted) {
+      window.location.reload();
+    }
+  });
 
   const target = document.getElementById('app');
   if (target === null) {
