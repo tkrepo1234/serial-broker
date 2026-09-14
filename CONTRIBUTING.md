@@ -48,11 +48,22 @@ is what CI does after `npx playwright install --with-deps chromium`. Pass Playwr
 arguments after `--`, for instance `npm run test:browser -- --headed test/browser/failover.spec.ts`.
 
 The same suite has a part that needs a real device, in `test/browser/hardware/`. It is skipped
-unless you ask for it:
+unless you ask for it, and it **runs on Windows only**: the permission is seeded into the browser
+profile as a Windows device instance ID, read with `Get-CimInstance Win32_PnPEntity`, so on any
+other platform no port is found and the tests fail rather than run.
 
 ```sh
 SERIAL_BROKER_HARDWARE=arduino npm run test:browser -- test/browser/hardware
 ```
+
+```powershell
+$env:SERIAL_BROKER_HARDWARE='arduino'; npm run test:browser -- test/browser/hardware
+```
+
+That runs six tests. The seventh, a 64 KiB round trip, takes about a quarter of an hour on the
+board this was written against and is asked for separately, with both variables set:
+`SERIAL_BROKER_HARDWARE_LARGE=1`. `SERIAL_BROKER_HARDWARE_PORT` picks the port when several of
+these boards are attached.
 
 It expects an Arduino (USB `0x2341`/`0x0078`) on a COM port, running a sketch that echoes every
 byte it receives at 9600 baud, and nothing else using that port. The browser is handed the

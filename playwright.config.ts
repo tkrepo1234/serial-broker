@@ -26,8 +26,10 @@ export default defineConfig({
   testMatch: '**/*.spec.ts',
   // Two at most: other agents and other suites share this machine, and a browser is not cheap.
   workers: 2,
-  // Tests within a file share an origin's `SharedWorker` and locks, so they run in order; files
-  // run in parallel, each in its own browser context, which is its own storage partition.
+  // Every test gets its own browser context - its own storage partition, its own `SharedWorker`
+  // and its own locks - so nothing is shared between tests and none of them may rely on what
+  // another left behind. `fullyParallel: false` is not about isolation, then: it is a second cap
+  // on how many browsers run at once on a machine that is also running everything else.
   fullyParallel: false,
   forbidOnly: process.env['CI'] !== undefined,
   // A flaky test is a failing test (docs/guidelines/testing.md). Nothing is retried.

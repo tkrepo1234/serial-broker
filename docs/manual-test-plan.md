@@ -119,12 +119,36 @@ it proves the software path, not the electrical one.
 
 ## What the browser suite now does for you
 
-`npm run test:browser` (ADR-0035) runs part of this plan on every CI run, and
-`SERIAL_BROKER_HARDWARE=arduino npm run test:browser -- test/browser/hardware` runs part of it
-against a device. What they cover of the checklist below: steps 3, 5, 6, 8 and 9 (in a browser and
-on hardware), 13–15 and 20–21 in a browser against the Web Serial stand-in, 25 and 28 in a
-browser, and the failover half of 29 - the broker that dies with a crashed renderer and is
-replaced without any application action.
+`npm run test:browser` (ADR-0035) runs part of this plan on every CI run, and the hardware part of
+that suite runs another part of it against a device — on Windows, because the permission it seeds
+is a Windows device instance ID:
+
+```sh
+SERIAL_BROKER_HARDWARE=arduino npm run test:browser -- test/browser/hardware
+```
+
+```powershell
+$env:SERIAL_BROKER_HARDWARE='arduino'; npm run test:browser -- test/browser/hardware
+```
+
+Add `SERIAL_BROKER_HARDWARE_LARGE=1` for the 64 KiB round trip, which takes about a quarter of an
+hour and is left out otherwise.
+
+What they cover of the checklist below:
+
+| Step                                           | Where                                                        |
+| ---------------------------------------------- | ------------------------------------------------------------ |
+| 3, 5, 6, 9                                     | in a browser against the stand-in, **and** on hardware       |
+| 8 (one `SharedWorker` for the origin)          | in a browser, counted in Chromium's target list              |
+| 13–15, 20, 21                                  | in a browser against the stand-in                            |
+| 20 again, with 5 000 and 65 536 bytes          | on hardware                                                  |
+| 25, repeating 5, 6, 9 and 13 over the fallback | in a browser                                                 |
+| 28                                             | in a browser                                                 |
+| 29, except the hidden-tab repeat               | in a browser: the worker terminated, each tab reporting once |
+
+Step 21 is covered with reads of 8 bytes against a 15-byte phrase, so every multi-byte character
+is cut in half by a read boundary; the checklist step still exists because a real line splits
+where it likes.
 
 What stays here, because it needs hands or a machine nobody has in CI: the port picker and site
 settings (steps 1, 2, 18, 19), a device physically unplugged (13–17), killing a tab from the

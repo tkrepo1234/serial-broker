@@ -84,21 +84,35 @@ changing it:
 - Every script an automation evaluates carries transient activation, so `USER_GESTURE_REQUIRED`
   cannot be produced in a browser test. It stays covered in-process.
 
+Two things a page cannot see about a `SharedWorker` — how many of them exist, and when one dies —
+come from Chromium's target list over CDP (`sharedWorkersOf`, `terminateSharedWorkers` in
+`test/browser/support/tab.ts`): the same list `chrome://inspect/#workers` shows. Terminate the
+worker with it rather than crashing a renderer and assuming the worker lived there; Chromium may
+host it in a client's process or in one of its own, and a test that assumes either fails minutes
+later for a reason that is not the library's.
+
 ### Against real hardware
 
 `test/browser/hardware/` runs the same scenarios against a device that answers. It is skipped
-unless `SERIAL_BROKER_HARDWARE=arduino` is set, and it never runs in CI:
+unless `SERIAL_BROKER_HARDWARE=arduino` is set, it never runs in CI, and it **works on Windows
+only**: the permission is seeded as a Windows device instance ID, read with
+`Get-CimInstance Win32_PnPEntity`, and elsewhere no port is found.
 
 ```sh
 SERIAL_BROKER_HARDWARE=arduino npm run test:browser -- test/browser/hardware
+```
+
+```powershell
+$env:SERIAL_BROKER_HARDWARE='arduino'; npm run test:browser -- test/browser/hardware
 ```
 
 It needs an Arduino (USB `0x2341`/`0x0078`) on a COM port running a sketch that echoes every byte
 at 9600 baud, and nothing else using that port. The browser is given the permission through a
 throwaway profile written before it starts — no prompt is answered and no machine-wide setting is
 touched. `SERIAL_BROKER_HARDWARE_PORT` picks the port when several boards are attached, and
-`SERIAL_BROKER_HARDWARE_LARGE=1` adds the 64 KiB round trip, which takes about a quarter of an
-hour on a board that echoes at 80 bytes a second.
+`SERIAL_BROKER_HARDWARE_LARGE=1` **in addition to** `SERIAL_BROKER_HARDWARE=arduino` adds the
+64 KiB round trip, which takes about a quarter of an hour on a board that echoes at 80 bytes a
+second: the documented command runs six tests, not seven.
 
 **Record every hardware run in [the manual test plan](../manual-test-plan.md)** — date, browser
 version, device, result.

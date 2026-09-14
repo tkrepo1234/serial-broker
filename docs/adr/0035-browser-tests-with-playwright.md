@@ -51,9 +51,21 @@ origin share), whose device can be open in one page only (enforced with a Web Lo
 browser releases when a page dies), and whose device is a loopback. Everything else in the page —
 the worker, the channel, the locks, the streams — is the browser's own.
 
+Two things about a `SharedWorker` are outside what any page can observe — how many of them the
+origin has, and when one stops existing — and both are claims this library rests on. They are
+taken from Chromium's target list over CDP, the list behind `chrome://inspect/#workers`, filtered
+to the test's own browser context. The broker is also **terminated** through it rather than by
+crashing the renderer that might be hosting it: Chromium is free to put a shared worker in a
+client's process or in one of its own, so a crash takes the broker with it only sometimes, and a
+test built on that assumption fails two minutes later for a reason that is not the library's.
+
 **The hardware tests run only when `SERIAL_BROKER_HARDWARE=arduino` is set**, and never in CI.
-They get the port through a throwaway browser profile whose `Preferences` file was written before
-the browser started, granting the serial permission for the test origin. That is where Chromium
+They are **Windows-only**: the seeded permission is a Windows device instance ID, read with
+`Get-CimInstance Win32_PnPEntity`, so nothing is found on another platform. The 64 KiB round trip
+needs a second variable, `SERIAL_BROKER_HARDWARE_LARGE=1`, because it takes about a quarter of an
+hour on the board this was written against — the documented command therefore runs six of the
+seven tests. They get the port through a throwaway browser profile whose `Preferences` file was
+written before the browser started, granting the serial permission for the test origin. That is where Chromium
 keeps such a grant anyway: content setting `serial_chooser_data`, one object per port, and on
 Windows that object is the port's **device instance ID** plus a display name
 (`chrome/browser/serial/serial_chooser_context.cc`). No prompt is answered, no policy or registry
@@ -139,12 +151,15 @@ only a browser can answer.
 
 ## Verification
 
-- `test/browser/shared-port.spec.ts` - three tabs, one port, one `SharedWorker`; write attribution;
-  a payload larger than a write chunk.
+- `test/browser/shared-port.spec.ts` - three tabs, one port, exactly one `SharedWorker` in the
+  browser's target list; write attribution; a payload larger than a write chunk; text whose
+  multi-byte characters are cut in half by a read boundary.
 - `test/browser/failover.spec.ts` - the tab holding the port closes; its renderer is killed; and
-  the broker that died with that renderer is replaced without any application action.
-- `test/browser/transports.spec.ts` - the `BroadcastChannel` fallback, and a worker script of
-  another protocol version reported as `PROTOCOL_VERSION_MISMATCH`.
+  the broker terminated outright is replaced without any application action, with the loss
+  reported once in every tab.
+- `test/browser/transports.spec.ts` - the `BroadcastChannel` fallback, proven to be the fallback
+  by the absence of a `SharedWorker`, sharing the port across a replug and a lost tab; and a worker
+  script of another protocol version reported as `PROTOCOL_VERSION_MISMATCH`.
 - `test/browser/minified-entry.spec.ts` - `dist/index.min.js` sharing the port with the readable
   build.
 - `test/browser/device-lifecycle.spec.ts` - the port picker from a real click, and an unplugged
