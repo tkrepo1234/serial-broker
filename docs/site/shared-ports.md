@@ -164,6 +164,11 @@ way: the status becomes `reconnecting` in every tab, and the owner tries again.
 - **After `connection.maxAttempts`** (unlimited by default) the status becomes `failed`, and the
   error `RECONNECT_EXHAUSTED` is reported once. A failed configuration comes back by itself when the
   device is plugged in again.
+- **An attempt the browser refuses is not repeated.** When opening the port, or listing the granted
+  ports, fails with `WEB_SERIAL_UNAVAILABLE` — serial access blocked by a permissions policy — every
+  further attempt would meet the same refusal. The status becomes `failed` at once, with no
+  `RECONNECT_EXHAUSTED`. As after `connection.maxAttempts`, the device being plugged in again tries
+  once more, and so does releasing the configuration and setting it up again.
 - **Only the port the tab holds counts.** Unplugging another port leaves the connection alone,
   even when the configuration matches that port too — with `device: { any: true }`, or with two
   identical adapters.

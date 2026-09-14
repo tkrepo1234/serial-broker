@@ -125,6 +125,7 @@ Remembered configurations carry a storage version of their own, so they survive 
 idle ──▶ opening ──▶ open ──▶ reconnecting ──▶ opening ─ …
    │                   │            │
    └▶ awaiting-permission          └▶ failed (after maxAttempts; revived by the device returning)
+                                    failed (at once, from an attempt refused with a non-retryable error)
                                     stopped (when the tab stops being the owner)
 ```
 

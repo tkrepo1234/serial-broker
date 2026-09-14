@@ -60,6 +60,7 @@ message.
 | `election.failed`                 | warn  | Requesting the ownership lock failed; the tab requests it again.                          |
 | `supervisor.open`                 | info  | The port opened.                                                                          |
 | `supervisor.reconnect`            | warn  | The connection was lost; the reason, attempt and delay are in the fields.                 |
+| `supervisor.gave-up`              | warn  | An attempt failed with an error that is not retryable; the status becomes `failed`.       |
 | `supervisor.device-connected`     | info  | The device reappeared, and a reconnect is attempted at once.                              |
 | `supervisor.teardown-failed`      | debug | Closing a lost connection failed or timed out at `step`; the next open may find it open.  |
 | `supervisor.sent`, `.received`    | debug | Traffic, with `byteLength`; with `logPayloads`, also `hex`.                               |

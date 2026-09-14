@@ -470,6 +470,9 @@ export class PortSupervisor {
           this.#handleConnectionLoss('listing-timed-out', error);
           return;
         }
+        // The browser refuses to list the ports at all - a permissions policy, for instance. That
+        // is not retryable, and another attempt would meet the same refusal (see
+        // {@link #giveUp}).
         this.#report(
           new SerialBrokerError(
             SerialBrokerErrorCode.WEB_SERIAL_UNAVAILABLE,
@@ -482,6 +485,8 @@ export class PortSupervisor {
             },
           ),
         );
+        this.#giveUp('listing-refused');
+        return;
       }
 
       if (this.#isStale(generation)) {
@@ -538,14 +543,15 @@ export class PortSupervisor {
       if (this.#isStale(generation)) {
         return;
       }
-      this.#handleConnectionLoss(
-        'open-failed',
-        mapOpenError(error, {
-          configName: this.configuration.name,
-          timestamp: this.environment.clock.now(),
-          extra: { attempt },
-        }),
-      );
+      const failure = mapOpenError(error, {
+        configName: this.configuration.name,
+        timestamp: this.environment.clock.now(),
+        extra: { attempt },
+      });
+      // Only a retryable failure leads to another attempt, as docs/site/errors.md promises. A
+      // `SecurityError` - serial blocked by a permissions policy - is not one: every attempt would
+      // meet it again, forever under the default `maxAttempts`.
+      this.#handleConnectionLoss('open-failed', failure, failure.isRetryable ? 'retry' : 'give-up');
       return;
     }
 
@@ -714,8 +720,17 @@ export class PortSupervisor {
    * Every way a connection can be lost - a failed open, a failed write, a dead stream, an
    * unplugged device - arrives here, so there is exactly one backoff policy and one place to
    * test it.
+   *
+   * @param next - `'give-up'` for a failed attempt whose error is not retryable: the status becomes
+   *   `failed` at once, as after `maxAttempts`, instead of another attempt being scheduled. A lost
+   *   connection is always retried, whatever its error - a failed write says nothing about whether
+   *   the port opens again.
    */
-  #handleConnectionLoss(reason: string, error: SerialBrokerError): void {
+  #handleConnectionLoss(
+    reason: string,
+    error: SerialBrokerError,
+    next: 'retry' | 'give-up' = 'retry',
+  ): void {
     const previous = this.#state;
     // `reconnecting` always has its retry scheduled, so a second report of the same loss has
     // nothing left to do. An attempt in progress is `listing` or `opening`, never this.
@@ -733,7 +748,31 @@ export class PortSupervisor {
       this.#trackTeardown(this.#closeWhenOpened(previous));
     }
 
+    if (next === 'give-up') {
+      this.#giveUp(reason);
+      return;
+    }
     this.#recordFailedAttempt(reason, error);
+  }
+
+  /**
+   * Stops trying after a failure that is not retryable, which the caller has already reported.
+   *
+   * The same terminal state `maxAttempts` leads to, and left the same ways: a device plugged in
+   * again, a successful `requestAccess()`, or the configuration set up anew. No
+   * `RECONNECT_EXHAUSTED` follows, because nothing was exhausted - the reported error is the reason,
+   * and stays the configuration's `lastErrorCode`.
+   */
+  #giveUp(reason: string): void {
+    this.#nextAttemptAt = undefined;
+    this.#state = { kind: 'failed' };
+    this.logger.warn('connection attempt failed and will not be retried', {
+      configName: this.configuration.name,
+      event: 'supervisor.gave-up',
+      reason,
+      attempt: this.#backoff.attempt,
+    });
+    this.#setStatus(SerialBrokerStatus.Failed);
   }
 
   /**
