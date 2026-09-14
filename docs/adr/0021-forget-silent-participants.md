@@ -145,3 +145,14 @@ participants "re-announce themselves" after a restart; nothing made an open tab 
 `test/unit/worker-transport-liveness.test.ts`, `test/unit/broker.test.ts`,
 `test/unit/worker-script.test.ts` and `test/integration/multi-tab/worker-restart.test.ts`; manual
 test plan step 29.
+
+### Note (2026-09-14): the worker ends with the tab that started it
+
+The browser benchmark (ADR-0037) found that the death this amendment handles is not rare. In
+Microsoft Edge 153 on Windows 11, the `SharedWorker` ended when the renderer of the page that
+started it crashed, and it survived the crash of any other page. That page is usually also the
+first to hold the port. The tab that takes the port over reports `open` as soon as the browser
+frees the lock, but every other tab stays `reconnecting` until its heartbeats give up on the worker:
+60 seconds in the measurement, with a write issued meanwhile ending in `WRITE_TIMEOUT`. The lock the
+worker holds for its lifetime, listed above as the upgrade path, would bring that down to the time
+the browser takes to free a lock. Until then it is a documented limit (`docs/site/performance.md`).

@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>serial-broker benchmark page</title>
+  </head>
+  <body>
+    <h1>serial-broker benchmark page</h1>
+    <p>
+      Drives the library through <code>window.bench</code>; see
+      bench/browser/pages/bench-harness.ts.
+    </p>
+
+    <script type="module">
+      import { SerialBroker } from '/dist/index.js';
+      import { installBenchHarness } from '/bench/bench-harness.js';
+
+      installBenchHarness(SerialBroker, window.webSerialStandIn);
+    </script>
+  </body>
+</html>

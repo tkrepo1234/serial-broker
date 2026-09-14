@@ -29,6 +29,8 @@ export default defineConfig(
       'docs/.venv/**',
       'docs/site/_build/**',
       'docs/site/api/reference/**',
+      // The benchmark's bundled runner (bench/run.mjs).
+      'bench/.build/**',
     ],
   },
 
@@ -150,12 +152,26 @@ export default defineConfig(
     },
   },
 
+  // The benchmarks answer to the test suite's constraints (bench/README.md): the scenarios drive
+  // the harness with real macrotask turns, and the browser benchmark's page code reads the
+  // browser's globals as any page does.
+  {
+    files: ['bench/**/*.ts'],
+    rules: {
+      '@typescript-eslint/no-unnecessary-condition': 'off',
+      'no-restricted-globals': 'off',
+    },
+  },
+
   // Build scripts are plain Node JavaScript with no TypeScript program behind them, so rules that
   // need type information cannot apply to them (ADR-0020).
   {
-    files: ['docs/site/build.mjs', 'scripts/*.mjs', 'test/browser/*.mjs'],
+    files: ['docs/site/build.mjs', 'scripts/*.mjs', 'test/browser/*.mjs', 'bench/*.mjs'],
     extends: [tseslint.configs.disableTypeChecked],
     languageOptions: { globals: { process: 'readonly' } },
+    // A script that exports a function documents its parameters in JSDoc; there is no TypeScript
+    // syntax to put a type in.
+    rules: { '@typescript-eslint/explicit-module-boundary-types': 'off' },
   },
 
   // The documentation's examples are application code shown to readers: they log to the
@@ -167,7 +183,7 @@ export default defineConfig(
 
   // Config files are Node-side and use default exports by convention.
   {
-    files: ['*.config.ts', '*.config.js', 'eslint.config.js'],
+    files: ['**/*.config.ts', '*.config.js', 'eslint.config.js'],
     rules: {
       'import-x/no-default-export': 'off',
       '@typescript-eslint/explicit-module-boundary-types': 'off',

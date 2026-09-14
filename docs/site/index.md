@@ -60,6 +60,7 @@ api/diagnostics
 :caption: Working on serial-broker
 
 internals
+performance
 ```
 
 [web-serial]: https://developer.mozilla.org/en-US/docs/Web/API/Web_Serial_API

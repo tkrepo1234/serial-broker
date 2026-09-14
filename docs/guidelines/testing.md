@@ -15,6 +15,7 @@ that matter, and they must be **deterministic**.
 | **Hardware**        | `test/browser/hardware/`      | The same scenarios against a real serial device, through a real UART.                                                                         | Runs only with `SERIAL_BROKER_HARDWARE=arduino`; results in `docs/manual-test-plan.md`.  |
 | **Emulated device** | `emulator/`                   | Real Chromium and the real Windows serial stack against a USB device whose failures are scriptable.                                           | Its own tests live in `emulator/test/`; runs are recorded in `docs/manual-test-plan.md`. |
 | **Manual**          | `debug/`                      | Real Chromium, real hardware. Documented, checklisted, never a substitute for the above.                                                      | Recorded in `docs/manual-test-plan.md`.                                                  |
+| **Benchmark**       | `bench/`                      | What the library costs: latency, throughput, handover and start times, an hour's steady state; on the harness and in a real browser.          | Not a test: nothing gates on a number. `npm run bench`; see below and ADR-0037.          |
 
 ## Determinism is mandatory
 
@@ -119,6 +120,36 @@ second: the documented command runs six tests, not seven.
 
 **Record every hardware run in [the manual test plan](../manual-test-plan.md)** — date, browser
 version, device, result.
+
+## The benchmarks
+
+`bench/` measures what the library costs, in two places, against expectations that were written
+down before the first measurement (`bench/expectations.ts`, ADR-0037). The results are the
+[Performance chapter](../site/performance.md) of the documentation.
+
+```sh
+npm run bench                                       # the harness scenarios, about a second
+SERIAL_BROKER_BENCH_BROWSER=1 npm run bench:browser   # the same in a real browser, minutes
+```
+
+```powershell
+$env:SERIAL_BROKER_BENCH_BROWSER='1'; npm run bench:browser
+```
+
+The harness benchmark runs the production classes on `test/harness/` and reports the library's own
+cost: percentiles of wall-clock time over many samples, plus what the fake clock can say exactly -
+simulated time, timers scheduled. The browser benchmark runs the built package in the installed
+Edge with the Web Serial stand-in, on port 8147 (`SERIAL_BROKER_BROWSER_TEST_PORT` moves it), and
+never in CI: its numbers depend on the machine and are recorded once, with the machine named.
+
+Both write `bench/results/*.json` and the fragments under `docs/site/_generated/` that the chapter
+includes; **commit what they wrote**. A result more than ten times worse than its expectation is
+printed at the end, and has to become either a fix in `src/` with a regression test or a limit
+recorded in the chapter - never an adjusted expectation.
+
+A benchmark is not a test. It reads the wall clock, which a test may not; it asserts only that it
+did what it measures; and no number in it fails a build. A change to `src/client/`, `src/worker/`
+or `src/owner/` that is meant to be faster shows in a diff of `bench/results/harness.json`.
 
 ## Writing tests
 

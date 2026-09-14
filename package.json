@@ -90,7 +90,9 @@
   },
   "scripts": {
     "build": "tsup && tsup --config tsup.debug.config.ts && tsc -p tsconfig.build.json && node scripts/cjs-types.mjs && node scripts/check-dist.mjs",
-    "typecheck": "tsc --noEmit && tsc -p emulator && tsc -p docs/site/examples/code",
+    "typecheck": "tsc --noEmit && tsc -p emulator && tsc -p docs/site/examples/code && tsc -p bench",
+    "bench": "npm run build && node bench/run.mjs",
+    "bench:browser": "npm run build && playwright test --config bench/browser/playwright.config.ts",
     "emulator": "node emulator/launch.mjs",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
@@ -116,6 +118,7 @@
     "@types/node": "^22.20.2",
     "@types/w3c-web-serial": "^1.0.8",
     "@vitest/coverage-v8": "^5.0.0",
+    "esbuild": "^0.28.2",
     "eslint": "^10.10.0",
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-import-x": "^4.17.1",
@@ -128,7 +131,7 @@
     "vitest": "^5.0.0"
   },
   "allowScripts": {
-    "esbuild@0.27.7": true,
+    "esbuild@0.28.2": true,
     "unrs-resolver@1.12.2": true
   }
 }

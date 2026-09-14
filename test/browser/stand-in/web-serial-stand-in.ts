@@ -88,6 +88,15 @@ export interface WebSerialStandInControl {
   isOpenHere(deviceId?: string): boolean;
   /** How many bytes this page has written to the device since the page loaded. */
   writtenHere(deviceId?: string): number;
+  /**
+   * Makes the device say something of its own: `bytes` arrive on the read stream, cut into
+   * `bufferSize` pieces as an echo is, without anything having been written.
+   *
+   * Only the page holding the device open has its read stream, so this works in that page alone
+   * and returns `false` anywhere else. It is what the benchmark uses to measure the path from the
+   * device to the tabs without the write that a loopback would need first.
+   */
+  emit(bytes: Uint8Array, deviceId?: string): boolean;
   /** Unplugs a device, for every page of the origin. */
   unplug(deviceId?: string): void;
   /** Plugs it back in. */
@@ -135,6 +144,8 @@ export function installWebSerialStandIn(options: WebSerialStandInOptions): void 
     forget(): Promise<void>;
     /** The device was unplugged while this page held it open. */
     lose(): void;
+    /** The device says `bytes` on its own. `false` if this page does not hold it open. */
+    emit(bytes: Uint8Array): boolean;
   }
 
   const devices: Device[] = options.devices.map((device) => ({
@@ -270,6 +281,11 @@ export function installWebSerialStandIn(options: WebSerialStandInOptions): void 
 
     function echo(chunk: Uint8Array): void {
       written += chunk.byteLength;
+      say(chunk);
+    }
+
+    /** Delivers `chunk` on the read stream in `bufferSize` pieces, as a real read loop does. */
+    function say(chunk: Uint8Array): void {
       for (let offset = 0; offset < chunk.byteLength; offset += bufferSize) {
         const end = Math.min(offset + bufferSize, chunk.byteLength);
         try {
@@ -363,6 +379,16 @@ export function installWebSerialStandIn(options: WebSerialStandInOptions): void 
           teardown();
           updateState(device.id, { granted: false });
           await Promise.resolve();
+        },
+      },
+
+      emit: {
+        value: (bytes: Uint8Array): boolean => {
+          if (!isOpen) {
+            return false;
+          }
+          say(bytes);
+          return true;
         },
       },
 
@@ -518,6 +544,7 @@ export function installWebSerialStandIn(options: WebSerialStandInOptions): void 
   const control: WebSerialStandInControl = {
     isOpenHere: (deviceId) => ports.get(deviceOf(deviceId).id)?.isOpenHere === true,
     writtenHere: (deviceId) => ports.get(deviceOf(deviceId).id)?.writtenByteCount ?? 0,
+    emit: (bytes, deviceId) => ports.get(deviceOf(deviceId).id)?.emit(bytes) === true,
     isGranted: (deviceId) => stateOf(deviceOf(deviceId).id).granted,
     unplug: (deviceId) => {
       const device = deviceOf(deviceId);

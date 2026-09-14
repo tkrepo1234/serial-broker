@@ -9,6 +9,9 @@
  *   by its script URL (ADR-0006): a minified build that started a worker of its own would leave its
  *   tabs unable to coordinate with tabs on the readable build.
  * - A minified file is smaller than its readable counterpart.
+ * - The size of every build is printed, as built and gzipped, so that CI reports it on every run.
+ *   There is no size budget: the sizes are reported, not enforced (BACKLOG.md, decided
+ *   2026-09-14).
  * - Every declaration the build emitted - not only the ones an entry point names - type-checks
  *   without the Web Serial types, which the package cannot make an application install.
  *
@@ -19,7 +22,8 @@ import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { gzipSync } from 'node:zlib';
+
+import { distSizes, kilobytes } from './dist-sizes.mjs';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const packageJson = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'));
@@ -38,8 +42,6 @@ const pairs = [
   ['dist/index.js', 'dist/index.min.js'],
   ['dist/diagnostics.js', 'dist/diagnostics.min.js'],
 ];
-const sizes = [];
-
 for (const [readable, minified] of pairs) {
   if (!existsSync(join(root, readable)) || !existsSync(join(root, minified))) {
     problems.push(`${readable} or ${minified} is missing`);
@@ -64,10 +66,6 @@ for (const [readable, minified] of pairs) {
     problems.push(`${readable} and ${minified} do not look for the same worker script`);
   }
 
-  for (const file of [readable, minified]) {
-    const bytes = readFileSync(join(root, file));
-    sizes.push({ file, bytes: statSync(join(root, file)).size, gzip: gzipSync(bytes).length });
-  }
   if (statSync(join(root, minified)).size >= statSync(join(root, readable)).size) {
     problems.push(`${minified} is not smaller than ${readable}`);
   }
@@ -102,9 +100,8 @@ if (problems.length > 0) {
   process.exit(1);
 }
 
-const kb = (bytes) => `${(bytes / 1024).toFixed(1)} KB`;
-for (const { file, bytes, gzip } of sizes) {
-  process.stdout.write(`${file}: ${kb(bytes)}, ${kb(gzip)} gzipped\n`);
+for (const { file, bytes, gzip } of distSizes(root)) {
+  process.stdout.write(`${file}: ${kilobytes(bytes)}, ${kilobytes(gzip)} gzipped\n`);
 }
 process.stdout.write('The build matches the package exports.\n');
 
