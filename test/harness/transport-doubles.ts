@@ -118,6 +118,7 @@ export function recordTransportRequest(
   const decodeFailures: unknown[] = [];
   const transportErrors: unknown[] = [];
   const clock = new FakeClock();
+  let secrets = 0;
 
   return {
     clock,
@@ -131,7 +132,9 @@ export function recordTransportRequest(
       onTransportError: (error) => transportErrors.push(error),
       logger: new ScopedLogger(logger, {}),
       clock,
-      newSecret: () => `secret-${clientId}`,
+      // A new value on every call, as the platform's source gives: a transport that drew its secret
+      // again instead of keeping it would bind a new identity on every worker (ADR-0028).
+      newSecret: () => `secret-${clientId}-${String((secrets += 1))}`,
     },
   };
 }
