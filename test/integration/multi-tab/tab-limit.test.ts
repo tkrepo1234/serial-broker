@@ -94,7 +94,7 @@ describe.each(TRANSPORT_MODES)('tabs beyond the tab limit (%s)', (transport) => 
 });
 
 describe.each(TRANSPORT_MODES)('a tab running a different tab limit (%s)', (transport) => {
-  it('reports the conflict to every tab, withdraws, and leaves the tab holding the port alone', async () => {
+  it('reports the conflict in that tab, withdraws, and leaves the tab holding the port alone', async () => {
     const { harness, device } = await harnessWithDevice(transport);
     const holder = harness.openTab();
     await holder.setup('Reader', { ...READER_OPTIONS, maxTabs: 1 });
@@ -108,7 +108,8 @@ describe.each(TRANSPORT_MODES)('a tab running a different tab limit (%s)', (tran
       maxTabs: 2,
       holdingTabMaxTabs: 1,
     });
-    expect(holder.errorCodes('Reader')).toContain(SerialBrokerErrorCode.CONFIGURATION_CONFLICT);
+    // The other tabs believe errors only from the tab holding the port (ADR-0025, amended).
+    expect(holder.errorCodes('Reader')).not.toContain(SerialBrokerErrorCode.CONFIGURATION_CONFLICT);
 
     device.emit('HOLDER');
     await harness.settle();

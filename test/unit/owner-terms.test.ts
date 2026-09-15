@@ -1,15 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
-import {
-  MAX_MESSAGES_AWAITING_A_TERM,
-  MAX_REMEMBERED_TERMS,
-  MAX_TERMS_BEING_CHECKED,
-  OwnerTerms,
-  type TermClaim,
-} from '../../src/client/owner-terms.js';
+import { MAX_TERM_FLOOD, OwnerTerms, type TermClaim } from '../../src/client/owner-terms.js';
 import { ScopedLogger } from '../../src/core/logger.js';
-import type { ClientId, TermId } from '../../src/protocol/messages.js';
-import { termLockName } from '../../src/protocol/version.js';
+import type { ClientId, ProtocolMessage, RequestId, TermId } from '../../src/protocol/messages.js';
+import { PROTOCOL_VERSION, termLockName } from '../../src/protocol/version.js';
 import { flushMicrotasks } from '../harness/fake-clock.js';
 import { FakeLockManager } from '../harness/fake-locks.js';
 import { fieldsOfEvent, recordingLogger } from '../harness/recording-logger.js';
@@ -74,6 +68,37 @@ async function holdTerm(
   };
 }
 
+const ENVELOPE = { v: PROTOCOL_VERSION, to: 'all', configName: CONFIG } as const;
+
+/** A claim of the term, as the tab holding it sends it. */
+function observe(terms: OwnerTerms, claim: TermClaim, apply: () => void): void {
+  terms.authorize({ ...ENVELOPE, type: 'owner-claimed', ...claim }, apply);
+}
+
+/** The goodbye of a term, from `from`. */
+function heardReleased(terms: OwnerTerms, term: TermId, from: ClientId): void {
+  terms.authorize({ ...ENVELOPE, type: 'owner-released', term, from }, () => undefined);
+}
+
+/** Whether what `from` says about the device is believed. */
+function speaksForATerm(terms: OwnerTerms, from: ClientId): boolean {
+  let isBelieved = false;
+  const message = { ...ENVELOPE, type: 'data-sent', from, originClientId: from, timestamp: 0 };
+  terms.authorize(
+    { ...message, payload: new Uint8Array() } as ProtocolMessage,
+    () => (isBelieved = true),
+  );
+  return isBelieved;
+}
+
+/** Whether what `from` says about a write of `term` is believed. */
+function speaksFor(terms: OwnerTerms, term: TermId, from: ClientId): boolean {
+  let isBelieved = false;
+  const message = { ...ENVELOPE, type: 'write-started', from, term, requestId: 'w-1' as RequestId };
+  terms.authorize(message as ProtocolMessage, () => (isBelieved = true));
+  return isBelieved;
+}
+
 /** Records what a claim or status was allowed to do. */
 function applied(): { run: () => void; count: () => number } {
   let count = 0;
@@ -93,7 +118,7 @@ describe('OwnerTerms', () => {
     await holdTerm(locks, 'owner', FIRST);
     const apply = applied();
 
-    terms.observe(FIRST, apply.run);
+    observe(terms, FIRST, apply.run);
     await flushMicrotasks();
 
     expect(terms.current).toBe('t1');
@@ -104,8 +129,8 @@ describe('OwnerTerms', () => {
     const { terms, records } = createTerms();
     const apply = applied();
 
-    terms.observe(FIRST, apply.run);
-    terms.observe(claimOf('t-invented'), apply.run);
+    observe(terms, FIRST, apply.run);
+    observe(terms, claimOf('t-invented'), apply.run);
     await flushMicrotasks();
 
     expect(terms.current).toBeUndefined();
@@ -118,8 +143,8 @@ describe('OwnerTerms', () => {
     await holdTerm(locks, 'owner', FIRST);
     const apply = applied();
 
-    terms.observe(claimOf('t1', 'c-mallory' as ClientId), apply.run);
-    terms.observe(claimOf('t1', HOLDER, 4), apply.run);
+    observe(terms, claimOf('t1', 'c-mallory' as ClientId), apply.run);
+    observe(terms, claimOf('t1', HOLDER, 4), apply.run);
     await flushMicrotasks();
 
     expect(apply.count()).toBe(0);
@@ -131,9 +156,9 @@ describe('OwnerTerms', () => {
     await holdTerm(locks, 'owner', FIRST);
     await holdTerm(locks, 'other', SECOND);
 
-    terms.observe(FIRST, () => undefined);
+    observe(terms, FIRST, () => undefined);
     await flushMicrotasks();
-    terms.observe(SECOND, () => undefined);
+    observe(terms, SECOND, () => undefined);
     await flushMicrotasks();
 
     expect(terms.current).toBe('t2');
@@ -145,13 +170,13 @@ describe('OwnerTerms', () => {
     const { terms, locks } = createTerms();
     await holdTerm(locks, 'owner', FIRST);
     await holdTerm(locks, 'other', SECOND);
-    terms.observe(FIRST, () => undefined);
+    observe(terms, FIRST, () => undefined);
     await flushMicrotasks();
-    terms.observe(SECOND, () => undefined);
+    observe(terms, SECOND, () => undefined);
     await flushMicrotasks();
     const apply = applied();
 
-    terms.observe(FIRST, apply.run);
+    observe(terms, FIRST, apply.run);
     await flushMicrotasks();
 
     expect(apply.count()).toBe(0);
@@ -161,7 +186,7 @@ describe('OwnerTerms', () => {
   it('ends a term the moment the browser frees the lock of a tab that died', async () => {
     const { terms, locks, ended } = createTerms();
     await holdTerm(locks, 'owner', FIRST);
-    terms.observe(FIRST, () => undefined);
+    observe(terms, FIRST, () => undefined);
     await flushMicrotasks();
 
     locks.killContext('owner');
@@ -175,13 +200,13 @@ describe('OwnerTerms', () => {
   it('ends a term at its goodbye, once its holder has let the lock go', async () => {
     const { terms, locks, ended } = createTerms();
     const holder = await holdTerm(locks, 'owner', FIRST);
-    terms.observe(FIRST, () => undefined);
+    observe(terms, FIRST, () => undefined);
     await flushMicrotasks();
 
     // The goodbye reached this tab before the lock was free, which is the usual order: the holder
     // posts it and then lets the lock go.
     holder.sayGoodbye();
-    terms.heardReleased(FIRST.term, HOLDER);
+    heardReleased(terms, FIRST.term, HOLDER);
     await flushMicrotasks();
     expect(ended).toEqual([]);
 
@@ -194,7 +219,7 @@ describe('OwnerTerms', () => {
   it('does not end a live term at a goodbye with somebody else queued on the lock', async () => {
     const { terms, locks, ended } = createTerms();
     await holdTerm(locks, 'owner', FIRST);
-    terms.observe(FIRST, () => undefined);
+    observe(terms, FIRST, () => undefined);
     await flushMicrotasks();
 
     // What a script of the origin can produce: a request of its own on the real term's lock, which
@@ -206,7 +231,7 @@ describe('OwnerTerms', () => {
         { mode: 'exclusive' },
         async () => undefined,
       );
-    terms.heardReleased(FIRST.term, HOLDER);
+    heardReleased(terms, FIRST.term, HOLDER);
     await flushMicrotasks();
 
     // The holder still holds the lock, and is still writing to the device.
@@ -218,10 +243,10 @@ describe('OwnerTerms', () => {
   it('does not end a live term at a goodbye nobody queued for', async () => {
     const { terms, locks, ended } = createTerms();
     await holdTerm(locks, 'owner', FIRST);
-    terms.observe(FIRST, () => undefined);
+    observe(terms, FIRST, () => undefined);
     await flushMicrotasks();
 
-    terms.heardReleased(FIRST.term, HOLDER);
+    heardReleased(terms, FIRST.term, HOLDER);
     await flushMicrotasks();
 
     expect(ended).toEqual([]);
@@ -231,11 +256,11 @@ describe('OwnerTerms', () => {
   it('does not end a term at a goodbye from anyone but its holder', async () => {
     const { terms, locks, ended } = createTerms();
     const holder = await holdTerm(locks, 'owner', FIRST);
-    terms.observe(FIRST, () => undefined);
+    observe(terms, FIRST, () => undefined);
     await flushMicrotasks();
 
     holder.sayGoodbye();
-    terms.heardReleased(FIRST.term, 'c-mallory' as ClientId);
+    heardReleased(terms, FIRST.term, 'c-mallory' as ClientId);
     await flushMicrotasks();
 
     expect(ended).toEqual([]);
@@ -244,7 +269,7 @@ describe('OwnerTerms', () => {
   it('waits for the goodbye of a holder that let go cleanly, rather than ending at the free lock', async () => {
     const { terms, locks, ended } = createTerms();
     const holder = await holdTerm(locks, 'owner', FIRST);
-    terms.observe(FIRST, () => undefined);
+    observe(terms, FIRST, () => undefined);
     await flushMicrotasks();
 
     // The order a tab letting go keeps: queue for the lock, say goodbye, let the lock go. The
@@ -254,7 +279,7 @@ describe('OwnerTerms', () => {
     await flushMicrotasks();
     expect(ended).toEqual([]);
 
-    terms.heardReleased(FIRST.term, HOLDER);
+    heardReleased(terms, FIRST.term, HOLDER);
     await flushMicrotasks();
 
     expect(ended).toEqual([{ term: 't1', wasCurrent: true }]);
@@ -265,27 +290,27 @@ describe('OwnerTerms', () => {
     await holdTerm(locks, 'owner', FIRST);
     const second = claimOf('t2', 'c-second' as ClientId);
     await holdTerm(locks, 'other', second);
-    terms.observe(FIRST, () => undefined);
+    observe(terms, FIRST, () => undefined);
     await flushMicrotasks();
-    terms.observe(second, () => undefined);
+    observe(terms, second, () => undefined);
     await flushMicrotasks();
 
-    expect(terms.isKnownSender(HOLDER)).toBe(true);
-    expect(terms.isKnownSender('c-second' as ClientId)).toBe(true);
-    expect(terms.isKnownSender('c-mallory' as ClientId)).toBe(false);
-    expect(terms.isFrom(FIRST.term, HOLDER)).toBe(true);
-    expect(terms.isFrom(FIRST.term, 'c-mallory' as ClientId)).toBe(false);
+    expect(speaksForATerm(terms, HOLDER)).toBe(true);
+    expect(speaksForATerm(terms, 'c-second' as ClientId)).toBe(true);
+    expect(speaksForATerm(terms, 'c-mallory' as ClientId)).toBe(false);
+    expect(speaksFor(terms, FIRST.term, HOLDER)).toBe(true);
+    expect(speaksFor(terms, FIRST.term, 'c-mallory' as ClientId)).toBe(false);
   });
 
   it('forgets the sender of a term that has ended', async () => {
     const { terms, locks } = createTerms();
     await holdTerm(locks, 'owner', FIRST);
-    terms.observe(FIRST, () => undefined);
+    observe(terms, FIRST, () => undefined);
     await flushMicrotasks();
     locks.killContext('owner');
     await flushMicrotasks();
 
-    expect(terms.isKnownSender(HOLDER)).toBe(false);
+    expect(speaksForATerm(terms, HOLDER)).toBe(false);
   });
 
   it('takes its own term without asking the browser, and ends it when this tab says so', async () => {
@@ -303,7 +328,7 @@ describe('OwnerTerms', () => {
     const { terms, ended } = createTerms();
     terms.takeOwn(FIRST);
 
-    terms.heardReleased(FIRST.term, HOLDER);
+    heardReleased(terms, FIRST.term, HOLDER);
     await flushMicrotasks();
 
     expect(ended).toEqual([]);
@@ -314,9 +339,9 @@ describe('OwnerTerms', () => {
     await holdTerm(locks, 'owner', FIRST);
     const applied: string[] = [];
 
-    terms.observe(FIRST, () => applied.push('claim'));
-    terms.observe(FIRST, () => applied.push('status'));
-    terms.observe(FIRST, () => applied.push('another status'));
+    observe(terms, FIRST, () => applied.push('claim'));
+    observe(terms, FIRST, () => applied.push('status'));
+    observe(terms, FIRST, () => applied.push('another status'));
     await flushMicrotasks();
 
     expect(applied).toEqual(['claim', 'status', 'another status']);
@@ -327,12 +352,12 @@ describe('OwnerTerms', () => {
     await holdTerm(locks, 'owner', FIRST);
     const apply = applied();
 
-    for (let index = 0; index < MAX_MESSAGES_AWAITING_A_TERM + 4; index += 1) {
-      terms.observe(FIRST, apply.run);
+    for (let index = 0; index < MAX_TERM_FLOOD + 4; index += 1) {
+      observe(terms, FIRST, apply.run);
     }
     await flushMicrotasks();
 
-    expect(apply.count()).toBe(MAX_MESSAGES_AWAITING_A_TERM);
+    expect(apply.count()).toBe(MAX_TERM_FLOOD);
     expect(fieldsOfEvent(records, 'session.term-flood')).toHaveLength(1);
   });
 
@@ -340,9 +365,9 @@ describe('OwnerTerms', () => {
     const { terms, locks, ended } = createTerms();
     const holder = await holdTerm(locks, 'owner', FIRST);
 
-    terms.observe(FIRST, () => undefined);
+    observe(terms, FIRST, () => undefined);
     holder.sayGoodbye();
-    terms.heardReleased(FIRST.term, HOLDER);
+    heardReleased(terms, FIRST.term, HOLDER);
     await flushMicrotasks();
     expect(ended).toEqual([]);
 
@@ -365,7 +390,7 @@ describe('OwnerTerms', () => {
       onEnded: (term) => ended.push(term),
     });
     const holder = await holdTerm(locks, 'owner', FIRST);
-    terms.observe(FIRST, () => undefined);
+    observe(terms, FIRST, () => undefined);
     await flushMicrotasks();
 
     holder.sayGoodbye();
@@ -382,10 +407,10 @@ describe('OwnerTerms', () => {
 
     // More invented terms than are checked at once, posted before the browser can answer about any
     // of them, and then the claim of the term that really holds the port.
-    for (let index = 0; index < 4 * MAX_TERMS_BEING_CHECKED; index += 1) {
-      terms.observe(claimOf(`t-invented-${String(index)}`), () => undefined);
+    for (let index = 0; index < 4 * MAX_TERM_FLOOD; index += 1) {
+      observe(terms, claimOf(`t-invented-${String(index)}`), () => undefined);
     }
-    terms.observe(FIRST, apply.run);
+    observe(terms, FIRST, apply.run);
     await flushMicrotasks();
 
     expect(apply.count()).toBe(1);
@@ -416,7 +441,7 @@ describe('OwnerTerms', () => {
     await holdTerm(locks, 'owner', FIRST);
     const apply = applied();
 
-    terms.observe(FIRST, apply.run);
+    observe(terms, FIRST, apply.run);
     await flushMicrotasks();
 
     expect(apply.count()).toBe(0);
@@ -425,20 +450,20 @@ describe('OwnerTerms', () => {
     // A refused request says nothing about the term, so nothing is remembered about it: the next
     // message naming it is checked afresh, rather than the tab ignoring the term that holds the
     // port until it next changes hands.
-    terms.observe(FIRST, apply.run);
+    observe(terms, FIRST, apply.run);
     await flushMicrotasks();
 
     expect(apply.count()).toBe(1);
     expect(terms.current).toBe('t1');
-    expect(terms.isKnownSender(HOLDER)).toBe(true);
+    expect(speaksForATerm(terms, HOLDER)).toBe(true);
   });
 
   it('remembers a bounded number of terms, forgetting the ones that are over first', async () => {
     const { terms, locks } = createTerms();
-    for (let index = 0; index <= MAX_REMEMBERED_TERMS; index += 1) {
+    for (let index = 0; index <= MAX_TERM_FLOOD; index += 1) {
       const claim = claimOf(`t-${String(index)}`);
       await holdTerm(locks, `owner-${String(index)}`, claim);
-      terms.observe(claim, () => undefined);
+      observe(terms, claim, () => undefined);
       await flushMicrotasks();
       locks.killContext(`owner-${String(index)}`);
       await flushMicrotasks();
@@ -447,15 +472,15 @@ describe('OwnerTerms', () => {
     // The oldest term is forgotten, so a message naming it is checked afresh rather than answered
     // from a record that grows for the life of the tab.
     expect(terms.isEnded(claimOf('t-0').term)).toBe(false);
-    expect(terms.isEnded(claimOf(`t-${String(MAX_REMEMBERED_TERMS)}`).term)).toBe(true);
+    expect(terms.isEnded(claimOf(`t-${String(MAX_TERM_FLOOD)}`).term)).toBe(true);
   });
 
   it('checks a bounded number of invented terms at once, and logs the flood once', async () => {
     const { terms, records } = createTerms();
     const apply = applied();
 
-    for (let index = 0; index < MAX_TERMS_BEING_CHECKED + 4; index += 1) {
-      terms.observe(claimOf(`t-invented-${String(index)}`), apply.run);
+    for (let index = 0; index < MAX_TERM_FLOOD + 4; index += 1) {
+      observe(terms, claimOf(`t-invented-${String(index)}`), apply.run);
     }
     await flushMicrotasks();
 
@@ -466,7 +491,7 @@ describe('OwnerTerms', () => {
   it('withdraws every outstanding request when the configuration goes away', async () => {
     const { terms, locks, ended } = createTerms();
     await holdTerm(locks, 'owner', FIRST);
-    terms.observe(FIRST, () => undefined);
+    observe(terms, FIRST, () => undefined);
     await flushMicrotasks();
     expect(locks.queueLength(termLockName(CONFIG, 't1', HOLDER, Number.POSITIVE_INFINITY))).toBe(1);
 

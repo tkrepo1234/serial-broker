@@ -194,14 +194,6 @@ export const STATUS_ANSWER_RATE: RateLimit = { burst: 32, perSecond: 32 };
 export const DIAGNOSTICS_ANSWER_RATE: RateLimit = { burst: 8, perSecond: 4 };
 
 /**
- * How often errors from other tabs are delivered to an application's `onError` (ADR-0031).
- *
- * Errors of a connection reach every tab (ADR-0012), and a reconnecting device produces one every
- * few seconds at most. The burst covers every tab of an origin reporting a conflict at once.
- */
-export const REMOTE_ERROR_RATE: RateLimit = { burst: 32, perSecond: 8 };
-
-/**
  * Records that something exceeded `limit` (named as the constant is): once per limit, at `warn`.
  *
  * Something that exceeds a limit is dropped every time, and a hostile sender repeats itself.

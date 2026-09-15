@@ -32,7 +32,6 @@ import { mapRequestPortError } from '../owner/serial-errors.js';
 import {
   MAX_WAITING_WRITE_BYTES,
   MAX_WAITING_WRITES,
-  REMOTE_ERROR_RATE,
   STATUS_ANSWER_RATE,
 } from '../protocol/limits.js';
 import type {
@@ -87,8 +86,6 @@ export class ConfigurationSession {
   readonly #terms: OwnerTerms;
   /** This context's term while it holds the port. */
   #term: TermId | undefined;
-  /** The term this context last held the port in, to answer with once it no longer does. */
-  #lastTerm: TermId | undefined;
   /**
    * The outcomes of writes performed at this context's port that have not been reported yet.
    *
@@ -102,8 +99,6 @@ export class ConfigurationSession {
   /** How often this context answers `status-request`, and the answer a flood is coalesced into. */
   readonly #statusAnswers: RateLimiter;
   #delayedStatusAnswer: TimerHandle | undefined;
-  /** How often errors from other contexts reach the application (ADR-0031). */
-  readonly #remoteErrors: RateLimiter;
   /**
    * The writes accepted at this context's port in the current term of holding it (ADR-0013).
    *
@@ -214,7 +209,6 @@ export class ConfigurationSession {
 
     this.#once = new OnceLog(logger);
     this.#statusAnswers = new RateLimiter(STATUS_ANSWER_RATE, environment.clock);
-    this.#remoteErrors = new RateLimiter(REMOTE_ERROR_RATE, environment.clock);
 
     this.#slot = Number.isFinite(configuration.maxTabs)
       ? new TabSlot(
@@ -564,26 +558,27 @@ export class ConfigurationSession {
       return;
     }
 
+    if ((message.type === 'owner-claimed' || message.type === 'status') && this.#election.isOwner) {
+      // While this context holds the lock, any other claim or status is stale - the lock cannot be
+      // held twice (ADR-0005). A former holder's status arriving after the lock did would show a
+      // status this port does not have, and a claim would hand this context's own writes out again.
+      return;
+    }
+    // Who may say what about the port is the terms' to decide (ADR-0026, ADR-0030).
+    this.#terms.authorize(message, () => {
+      this.#apply(message);
+    });
+  }
+
+  /** Acts on a message the terms have believed. */
+  #apply(message: ProtocolMessage): void {
     switch (message.type) {
       case 'owner-claimed':
-        // While this context holds the lock, any other claim is stale - the lock cannot be held
-        // twice (ADR-0005) - and acting on it would hand this context's own writes out again.
-        if (!this.#election.isOwner) {
-          // Proof that the former holder let go of the lock, not that its last words have arrived:
-          // they come from another sender. Its term is waited for (ADR-0026). The claim itself is
-          // believed only while the new term's lock is held (ADR-0030), which is asked first.
-          this.#terms.observe(message, () => {
-            if (!this.#isReleased) {
-              this.#writes.dispatchWaiting();
-            }
-          });
+        // Proof that the former holder let go of the lock, not that its last words have arrived:
+        // they come from another sender, and its term is waited for (ADR-0026).
+        if (!this.#isReleased) {
+          this.#writes.dispatchWaiting();
         }
-        return;
-
-      case 'owner-released':
-        // The term's last message: everything it said about its writes has arrived before it. It
-        // ends the term only from the term's own holder, and only while that holder is letting go.
-        this.#terms.heardReleased(message.term, message.from);
         return;
 
       case 'write-request':
@@ -591,34 +586,18 @@ export class ConfigurationSession {
         return;
 
       case 'write-started':
-        // Only the term the write was addressed to writes it, and only its holder speaks for it.
-        if (this.#terms.isFrom(message.term, message.from)) {
-          this.#writes.markStarted(message.requestId, message.term);
-        }
+        this.#writes.markStarted(message.requestId, message.term);
         return;
 
-      case 'write-result': {
-        if (message.term === undefined || !this.#terms.isFrom(message.term, message.from)) {
-          return;
-        }
-        const error =
-          message.ok || message.error === undefined ? undefined : deserializeError(message.error);
-
-        // A context that stopped owning the port between receiving a write and performing it
-        // says so rather than failing it. The write never started, so handing it to whoever
-        // owns the port now is not a repeat - and failing the caller because two tabs swapped
-        // roles mid-request would be an error about nothing.
-        this.#writes.handleResult(message.requestId, message.term, error);
+      case 'write-result':
+        this.#writes.handleResult(
+          message.requestId,
+          message.term,
+          message.ok || message.error === undefined ? undefined : deserializeError(message.error),
+        );
         return;
-      }
 
       case 'data-received':
-        // From the tab holding the port, or one that held it a moment ago and is still being
-        // waited for. What any other context says the device sent is not what the device sent.
-        if (!this.#terms.isKnownSender(message.from)) {
-          this.#logDataWithoutTerm(message.type, message.from);
-          return;
-        }
         this.#emitter.emit('onReceive', {
           name: this.#configuration.name,
           data: message.payload,
@@ -628,10 +607,6 @@ export class ConfigurationSession {
         return;
 
       case 'data-sent':
-        if (!this.#terms.isKnownSender(message.from)) {
-          this.#logDataWithoutTerm(message.type, message.from);
-          return;
-        }
         this.#emitter.emit('onSend', {
           name: this.#configuration.name,
           data: message.payload,
@@ -641,15 +616,7 @@ export class ConfigurationSession {
         return;
 
       case 'status':
-        if (this.#election.isOwner) {
-          // The tab holding the port states its own status. One from another tab was sent by a
-          // former holder before it let go, and arrived after the lock did: taking it would show a
-          // status this tab's port does not have, and hold back every write while it lasted.
-          return;
-        }
-        this.#terms.observe(message, () => {
-          this.#applyStatus(message);
-        });
+        this.#applyStatus(message);
         return;
 
       case 'status-request':
@@ -657,17 +624,10 @@ export class ConfigurationSession {
         return;
 
       case 'error':
-        if (!this.#remoteErrors.take()) {
-          this.#once.warn(
-            'remote-errors',
-            "dropped other contexts' errors beyond the rate limit; further ones are dropped without a record",
-            { event: 'session.remote-errors-dropped' },
-          );
-          return;
-        }
         this.#emitError(deserializeError(message.error), { broadcast: false });
         return;
 
+      case 'owner-released':
       case 'hello':
       case 'welcome':
       case 'heartbeat':
@@ -718,7 +678,6 @@ export class ConfigurationSession {
    */
   #startTerm(term: TermId): void {
     this.#term = term;
-    this.#lastTerm = term;
 
     this.transport.send({
       type: 'owner-claimed',
@@ -916,31 +875,12 @@ export class ConfigurationSession {
     payload: Uint8Array,
     requestedTerm: TermId,
   ): void {
-    if (requestedTerm !== this.#lastTerm) {
-      // Addressed to a term this tab does not hold and never held: every participant hears a write
-      // request, and only the tab holding its term acts on it (ADR-0040).
-      return;
-    }
     const supervisor = this.#supervisor;
     const term = this.#term;
-    if (supervisor === undefined || term === undefined) {
-      // This tab held the term the request was addressed to, and has let go of the port: nobody will
-      // write it in that term (ADR-0026). Saying so lets the originator hand it on once that term
-      // has ended.
-      this.#sendWriteResult(
-        origin,
-        requestId,
-        requestedTerm,
-        new SerialBrokerError(
-          SerialBrokerErrorCode.NOT_CONNECTED,
-          'This context does not hold the port in the term the write was addressed to',
-          {
-            configName: this.#configuration.name,
-            context: { requestedTerm, term },
-            timestamp: this.environment.clock.now(),
-          },
-        ),
-      );
+    if (supervisor === undefined || term === undefined || requestedTerm !== term) {
+      // Addressed to a term this tab does not hold: every participant hears a write request, and
+      // only the tab holding its term acts on it (ADR-0040). A tab that let go of the port in that
+      // term is released and hears nothing; its issuer hands the write on once the term has ended.
       return;
     }
 
@@ -1026,28 +966,6 @@ export class ConfigurationSession {
     return (
       this.#unreported.size < MAX_WAITING_WRITES &&
       this.#waitingWriteBytes + byteLength <= MAX_WAITING_WRITE_BYTES
-    );
-  }
-
-  /**
-   * Records, once, that device data was dropped for want of a term to attribute it to.
-   *
-   * The sender may be a script of the origin making data up - which is why the check exists
-   * (ADR-0030) - or the tab holding the port, heard by a tab that is still learning which term
-   * that is: this tab has asked for the status and is waiting for the answer and for the browser's
-   * word on the term's lock. What arrives in that window is dropped, so a tab joining while a
-   * device streams starts with what comes after it (`docs/site/shared-ports.md`).
-   */
-  #logDataWithoutTerm(type: 'data-received' | 'data-sent', from: ClientId): void {
-    this.#once.warn(
-      'data-without-a-term',
-      'dropped device data from a context that speaks for no term of holding the port; further ones are dropped without a record',
-      {
-        configName: this.#configuration.name,
-        event: 'session.data-without-a-term',
-        messageType: type,
-        from,
-      },
     );
   }
 
@@ -1172,8 +1090,8 @@ export class ConfigurationSession {
       maxTabs: this.#configuration.maxTabs,
       holdingTabMaxTabs,
     });
-    // Told to every tab, the one holding the port included, before this tab leaves the bus.
-    this.#emitError(conflict);
+    // Reported in this tab only: the other tabs believe errors only from the tab holding the port.
+    this.#emitError(conflict, { broadcast: false });
     this.#writes.failAll(conflict);
     this.#terms.dispose();
     this.#stopTimers();

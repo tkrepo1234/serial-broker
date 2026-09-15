@@ -3,11 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { SerialBrokerErrorCode } from '../../../src/core/error-codes.js';
 import { SerialBrokerError } from '../../../src/core/errors.js';
 import { SerialBrokerStatus } from '../../../src/core/types.js';
-import {
-  DIAGNOSTICS_ANSWER_RATE,
-  REMOTE_ERROR_RATE,
-  STATUS_ANSWER_RATE,
-} from '../../../src/protocol/limits.js';
+import { DIAGNOSTICS_ANSWER_RATE, STATUS_ANSWER_RATE } from '../../../src/protocol/limits.js';
 import {
   brokerChannelName,
   PROTOCOL_VERSION,
@@ -369,7 +365,7 @@ describe('a script of the origin that floods the bus with well-formed messages',
     expect(reports.length).toBeGreaterThan(0);
   });
 
-  it('reaches an application`s onError only as often as the rate for remote errors allows', async () => {
+  it('never reaches an application`s onError with an error it made up', async () => {
     const { harness, other, mallory, records } = await twoWatchedTabs();
     const error = new SerialBrokerError(SerialBrokerErrorCode.WRITE_FAILED, 'made up').toJSON();
 
@@ -378,8 +374,9 @@ describe('a script of the origin that floods the bus with well-formed messages',
     }
     await harness.settle();
 
-    expect(other.errorCodes('Reader').length).toBeLessThanOrEqual(REMOTE_ERROR_RATE.burst);
-    expect(fieldsOfEvent(records, 'session.remote-errors-dropped')).toHaveLength(2);
+    // Errors about the port are believed only from the tab holding it, as its data is.
+    expect(other.errorCodes('Reader')).toEqual([]);
+    expect(fieldsOfEvent(records, 'session.data-without-a-term')).toHaveLength(2);
   });
 
   it('is logged once per context, however many malformed messages arrive', async () => {
