@@ -119,12 +119,12 @@ export interface SerialBrokerModelSettings {
    */
   releaseOnDestroy?: boolean;
   /**
-   * Call `SerialBroker.restore()` before `setup()`, so configurations persisted by an earlier
+   * Call `SerialBroker.restore()` before `setup()`, so configurations remembered by an earlier
    * visit are set up again in this tab.
    *
    * @defaultValue false
    */
-  restorePersisted?: boolean;
+  restoreRemembered?: boolean;
 }
 
 /** Parameters of the model's `serialError` event. */
@@ -184,7 +184,7 @@ export default class SerialBrokerModel extends JSONModel {
   private readonly _settings: Required<
     Pick<
       SerialBrokerModelSettings,
-      'name' | 'options' | 'maxLines' | 'maxTextLength' | 'releaseOnDestroy' | 'restorePersisted'
+      'name' | 'options' | 'maxLines' | 'maxTextLength' | 'releaseOnDestroy' | 'restoreRemembered'
     >
   >;
 
@@ -202,7 +202,7 @@ export default class SerialBrokerModel extends JSONModel {
       maxLines: settings.maxLines ?? DEFAULT_MAX_LINES,
       maxTextLength: settings.maxTextLength ?? DEFAULT_MAX_TEXT_LENGTH,
       releaseOnDestroy: settings.releaseOnDestroy ?? false,
-      restorePersisted: settings.restorePersisted ?? false,
+      restoreRemembered: settings.restoreRemembered ?? false,
     };
 
     // A JSONModel is created before anything is connected, and a view may already be bound to it,
@@ -273,8 +273,9 @@ export default class SerialBrokerModel extends JSONModel {
    *
    * @param data - Text (encoded as UTF-8) or bytes. Nothing is appended: no newline, no
    *   terminator.
-   * @returns `true` when the bytes reached the device, `false` when the write failed; the failure
-   *   is in `/lastError` and in the `serialError` event.
+   * @returns `true` when the browser took the bytes for the port - not proof that the device
+   *   received them - and `false` when the write failed; the failure is in `/lastError` and in the
+   *   `serialError` event.
    */
   async send(data: SendableData): Promise<boolean> {
     try {
@@ -418,7 +419,7 @@ export default class SerialBrokerModel extends JSONModel {
     }
 
     try {
-      if (this._settings.restorePersisted) {
+      if (this._settings.restoreRemembered) {
         await SerialBroker.restore();
       }
       await SerialBroker.setup(this._settings.name, this._settings.options);

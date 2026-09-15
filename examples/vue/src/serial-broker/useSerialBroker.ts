@@ -62,7 +62,7 @@ export interface UseSerialBroker {
   readonly status: Readonly<Ref<SerialBrokerStatus>>;
   /** `true` while the configuration is set up in this tab: after `setup()`, until `released`. */
   readonly isSetUp: Readonly<Ref<boolean>>;
-  /** `status` is `'open'`: a write reaches the device now rather than waiting for the port. */
+  /** `status` is `'open'`: a write goes to the port now rather than waiting for it. */
   readonly canSend: ComputedRef<boolean>;
   /**
    * The most recent error, or `null`. Cleared when the port opens. Show `code` and `remediation`;
@@ -123,7 +123,7 @@ const usersByName = new Map<string, Set<ConfigurationUser>>();
  * `releaseOnDispose` is set and no other composable of this tab uses the name.
  *
  * Several components may call it with the same name and equivalent options. They share one
- * configuration: `setup()` is a no-op the second time, each composable receives every event, a
+ * configuration: the second `setup()` joins the first, each composable receives every event, a
  * `release()` in one shows `released` in all of them, and a `restart()` in one brings all of them
  * back.
  *
@@ -240,7 +240,7 @@ export function useSerialBroker(
         onReceive(event.text ?? `${toHex(event.data)}\n`, event.timestamp);
       }),
       SerialBroker.subscribe(name, 'onSend', (event) => {
-        // Every write that reached the device, from every tab - `origin` says whose it was.
+        // Every write the browser took for the port, from every tab - `origin` says whose it was.
         appendLines([
           line('sent', describeSent(event.data), event.timestamp, event.origin === 'local'),
         ]);
@@ -362,10 +362,11 @@ export function useSerialBroker(
   }
 
   async function restart(): Promise<void> {
-    // A configuration that shows `failed` is still set up, and setup() does nothing for a name
-    // that is set up - so it is released first. That is the library's own remediation for
-    // RECONNECT_EXHAUSTED and CONFIGURATION_CONFLICT.
-    if (safeExists(name)) {
+    // A configuration that shows `failed` is still set up, and setup() with the same options starts
+    // it again, whichever tab holds the port. A tab that withdrew with CONFIGURATION_CONFLICT,
+    // because the tab holding the port runs another `maxTabs`, is the exception: setup() does not
+    // bring it back, so it is released first.
+    if (hasWithdrawn(name)) {
       await release();
     }
     lastError.value = null;
@@ -439,10 +440,19 @@ function toSerialBrokerError(error: unknown, name: string): SerialBrokerError {
 }
 
 /** `exists()` throws for a name that is not valid; such a name is not set up either. */
-function safeExists(name: string): boolean {
+/**
+ * Whether this tab withdrew from the configuration: `failed` with `CONFIGURATION_CONFLICT`, over a
+ * different `maxTabs` in the tab holding the port.
+ */
+function hasWithdrawn(name: string): boolean {
   try {
-    return SerialBroker.exists(name);
+    if (!SerialBroker.exists(name)) {
+      return false;
+    }
+    const { status, lastErrorCode } = SerialBroker.getStatus(name);
+    return status === 'failed' && lastErrorCode === SerialBrokerErrorCode.CONFIGURATION_CONFLICT;
   } catch {
+    // An invalid name: nothing is set up under it.
     return false;
   }
 }

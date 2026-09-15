@@ -15,6 +15,7 @@ import {
   isSupported,
   SerialBroker,
   SerialBrokerError,
+  SerialBrokerErrorCode,
   type ErrorEvent,
   type ReceiveEvent,
   type SendEvent,
@@ -197,7 +198,8 @@ const onReceive = (event: ReceiveEvent): void => {
 };
 
 const onSend = (event: SendEvent): void => {
-  // Fires for every write that reached the device. With `maxTabs: 1` only this tab can have
+  // Fires for every write the browser took for the port - which says nothing about whether the
+  // device received it. With `maxTabs: 1` only this tab can have
   // issued it, so `origin` is always 'local' here; a larger limit would see 'remote' too.
   log(`sent ${String(event.data.byteLength)} bytes (${event.origin})`);
 };
@@ -207,6 +209,19 @@ const onError = (event: ErrorEvent): void => {
 };
 
 /**
+ * Whether this tab gave the configuration up over a different `maxTabs` in the tab holding the
+ * port. Such a tab shows `failed` with `CONFIGURATION_CONFLICT` and has left the bus; only a release
+ * and a new setup bring it back.
+ */
+function hasWithdrawn(): boolean {
+  if (!SerialBroker.exists(CONFIGURATION)) {
+    return false;
+  }
+  const { status, lastErrorCode } = SerialBroker.getStatus(CONFIGURATION);
+  return status === 'failed' && lastErrorCode === SerialBrokerErrorCode.CONFIGURATION_CONFLICT;
+}
+
+/**
  * Sets the configuration up in this tab and subscribes to it.
  *
  * `setup()` resolves once the configuration is registered, not once the port is open; the status
@@ -214,16 +229,16 @@ const onError = (event: ErrorEvent): void => {
  * set up has nothing to subscribe to, and they end with the configuration when it is released -
  * hence this runs again for "Use the device again".
  *
- * A configuration that shows `failed` is still set up, and `setup()` does nothing for a name that
- * is set up with the same options - re-running the connection would interrupt a working port. So
- * a configuration that still exists is released first, which ends the failed attempt, and the
- * `setup()` after it starts over. That is the library's own remediation for
- * `CONFIGURATION_CONFLICT` and `RECONNECT_EXHAUSTED`: release, then set up again.
+ * After `failed` the configuration is still set up, and `setup()` with the same options starts it
+ * again, whichever tab holds the port - a working or reconnecting one it leaves alone. The
+ * subscriptions below are the same functions, so making them again adds nothing. The exception is
+ * a tab that withdrew with `CONFIGURATION_CONFLICT` because the tab holding the port runs another
+ * `maxTabs`: `setup()` does not bring that one back, so it is released first.
  */
 async function useTheDevice(): Promise<void> {
   hideError();
   try {
-    if (SerialBroker.exists(CONFIGURATION)) {
+    if (hasWithdrawn()) {
       await SerialBroker.release(CONFIGURATION);
     }
     await SerialBroker.setup(CONFIGURATION, OPTIONS);
@@ -274,7 +289,7 @@ elements.release.addEventListener('click', () => {
 
 /**
  * Starts over: after `released` this joins the queue behind whoever took over; after `failed` it
- * releases the failed configuration and sets it up anew.
+ * sets the configuration up again, which tries again (see `useTheDevice()`).
  */
 elements.setup.addEventListener('click', () => {
   elements.setup.disabled = true;

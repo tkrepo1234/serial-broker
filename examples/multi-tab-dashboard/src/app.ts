@@ -16,6 +16,7 @@ import {
   releaseDevice,
   setRemembered,
   setUpDevice,
+  setUpDeviceAgain,
   startDevice,
   WORKER_URL,
 } from './device.js';
@@ -188,9 +189,8 @@ wireConnectButton(DEVICE_NAME, connectButton, strip, (text) => {
 
 retryButton.addEventListener('click', () => {
   void run('While starting over', async () => {
-    // A failed configuration stays registered; starting over means releasing it first.
-    await releaseDevice();
-    await setUpDevice(rememberCheckbox.checked);
+    // A failed configuration stays registered, and setting it up again tries again.
+    await setUpDeviceAgain(rememberCheckbox.checked);
     attach();
   });
 });

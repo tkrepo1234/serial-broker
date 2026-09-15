@@ -217,8 +217,8 @@ Read `lines` as what each side reported, not as a strict transcript of the wire.
 when the device is plugged in again - with the default `connection.autoReconnect: true`; with
 `false`, nothing is retried until `setup()` is called again. _Start again_ only tries sooner. After
 `CONFIGURATION_CONFLICT` a tab stays `failed` until it is released and set up again, which is what
-_Start again_ does. For any other `failed`, `setup()` with the same options would start over by
-itself; `restart()` releases first so that one path covers both.
+_Start again_ does. A failed configuration is usually still set up, and `setup()` with the same
+options starts it again from any tab, so `restart()` releases first only after that conflict.
 
 **Framing is the device's.** The library delivers `onReceive` events, not messages: an answer
 usually arrives as one, but event boundaries carry no meaning. The service ends a line at CR, LF or

@@ -23,8 +23,8 @@ file, [`src/main.ts`](src/main.ts).
   transition.
 - **A release button, and a way back.** _Release the device_ gives it up in this tab; _Use the
   device again_ sets the configuration up once more, which joins the queue behind whoever took
-  over. After `failed` the same button releases the failed configuration first and then sets it
-  up anew - which a `CONFIGURATION_CONFLICT` needs, and which does no harm otherwise.
+  over. After `failed` the same button sets the configuration up again, which tries again; a tab
+  that withdrew over a different `maxTabs` is released first.
 - **The connect button only where a click is needed.** _Choose device_ appears in
   `awaiting-permission` and nowhere else, and calls `requestAccess()` synchronously from the click.
 - **Errors with code and remediation.** The `SerialBrokerError` code, its message and the
@@ -146,13 +146,13 @@ page and sees _Use the device again_ reach `open`.
    tab only: the next tab in the queue takes over, and this tab's status ends at `released`.
    Calling `setup()` again joins the queue.
 
-   `setup()` with the same options starts a `failed` configuration again, from any tab. The one
-   exception is a tab that failed with `CONFIGURATION_CONFLICT`: it stays `failed` until it is
-   released and set up again. So this page's "try again" button releases first when the
-   configuration still exists, and sets up after that:
+   A configuration that shows `failed` is still set up, and `setup()` with the same options starts
+   it again, from any tab. So a "try again" button calls `setup()`. Only a tab that withdrew over a
+   different `maxTabs` needs a release first:
 
    ```ts
-   if (SerialBroker.exists('Cutter')) {
+   const { status, lastErrorCode } = SerialBroker.getStatus('Cutter');
+   if (status === 'failed' && lastErrorCode === SerialBrokerErrorCode.CONFIGURATION_CONFLICT) {
      await SerialBroker.release('Cutter');
    }
    await SerialBroker.setup('Cutter', options);
@@ -169,17 +169,15 @@ page and sees _Use the device again_ reach `open`.
 different limit reports `CONFIGURATION_CONFLICT` and shows `failed` until it is released and set
 up again with the same limit. The remediation sentence says so.
 
-**`setup()` again starts a `failed` configuration over, except after a conflict.** `setup()` with
-the name and options of a working configuration does nothing - re-running the connection would
-interrupt a working port - but for a `failed` one it tries again, from any tab. A withdrawal after
-`CONFIGURATION_CONFLICT` is the exception: the tab has left the bus, and only release and set up
-bring it back. `useTheDevice()` in [`src/main.ts`](src/main.ts) releases first in every case, so
-one button covers both. Two `failed` cases end by themselves as well: one reached after
-`connection.maxAttempts` (this page keeps the default, `Infinity`, so it never sees one) and one
-reached by an open failure that is not retryable both resume when the device is plugged in again -
-with the default `connection.autoReconnect: true`. With `autoReconnect: false` nothing is retried,
-not even on replug, until `setup()` is called again
-([Configuration](../../docs/site/configuration.md#reconnecting)).
+**A `failed` configuration is still set up, and `setup()` starts it again.** `setup()` with the
+name and options of an existing configuration leaves a working or reconnecting one alone -
+re-running the connection would interrupt a working port - and tries a failed one again, from
+any tab. `useTheDevice()` in [`src/main.ts`](src/main.ts) relies on that. Two
+`failed` cases end by themselves as well: one reached after `connection.maxAttempts` (this page
+keeps the default, `Infinity`, so it never sees one) and one reached by an open failure that is not
+retryable both resume when the device is plugged in again. A withdrawal after a conflict does
+neither: the tab has left the bus, `setup()` does not bring it back, and only release and set up
+do, which is what `useTheDevice()` does for a `failed` status with `CONFIGURATION_CONFLICT`.
 
 **A queued tab receives nothing, and its writes wait.** A `send()` issued while `queued` waits
 for a place up to `connection.writeTimeoutMs` (5 s by default) and then rejects with
@@ -245,12 +243,11 @@ disabled.** A disabled button suggests a state the user could reach; a hidden on
 does not apply. Send is the exception: it is disabled while a write would wait, because the input
 next to it stays useful.
 
-**_Use the device again_ stays in `failed`, and releases first.** The button could be hidden
-while the configuration is still set up, leaving _Release the device_ as the only way out and a
-second click for the way back. It stays, because the person at the screen wants one thing - the
-device again - and the two library calls behind it are the page's business. Releasing first is
-what a `CONFIGURATION_CONFLICT` needs; for any other `failed`, `setup()` alone would do. It is disabled while
-it runs, so that a second click cannot release the configuration the first is setting up.
+**_Use the device again_ stays in `failed`.** The button could be hidden while the configuration is
+still set up, leaving _Release the device_ as the only way out and a second click for the way back.
+It stays, because the person at the screen wants one thing - the device again - and whether that
+takes one library call or two is the page's business. It is disabled while it runs, so that a
+second click cannot release the configuration the first is setting up.
 
 **A retryable error is information, not a failure.** `isRetryable` means the library is already
 recovering, and the status shows the recovery. The panel stays red for the rest; a retryable one is

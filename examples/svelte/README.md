@@ -254,9 +254,11 @@ still worth reading after the port reopens, until the user dismisses it or start
 to `connection.writeTimeoutMs`, then rejects with `WRITE_TIMEOUT`. With the status shown next to
 the button, a disabled button says the same thing sooner, as in the minimal example.
 
-**`restart()` releases before it sets up.** `setup()` with the same options starts a `failed`
-configuration again by itself, but a tab that failed with `CONFIGURATION_CONFLICT` stays `failed`
-until it is released and set up again. Releasing first covers both.
+**`restart()` sets up again, and releases only where that cannot help.** A `failed` configuration is
+still set up, and `setup()` with the same options starts it again, from any tab. What this connection
+set up is released first in two cases: the tab withdrew with `CONFIGURATION_CONFLICT` because the tab
+holding the port runs another `maxTabs`, or the options changed so that they open the port
+differently, which `setup()` refuses for a name that is set up.
 
 **`configure()` and `dispose()` live in `main.ts`, not in the module.** Both are page-wide: the
 worker URL has to be named once, before the first setup, and `pagehide` fires for a closing tab,
