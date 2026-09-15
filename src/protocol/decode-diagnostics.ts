@@ -95,7 +95,7 @@ function isSettings(value: unknown): boolean {
   if (!isRecord(value)) {
     return false;
   }
-  const { device, serial, connection, encoding } = value;
+  const { device, serial, connection, encoding, receive } = value;
   return (
     isDevice(device) &&
     isRecord(serial) &&
@@ -103,10 +103,14 @@ function isSettings(value: unknown): boolean {
     hasAll(serial, SERIAL_TEXT_FIELDS, isNonEmptyString) &&
     isRecord(connection) &&
     hasAll(connection, CONNECTION_NUMBER_FIELDS, isNumber) &&
+    typeof connection['autoReconnect'] === 'boolean' &&
     isRecord(encoding) &&
     isNonEmptyString(encoding['encoding']) &&
     typeof encoding['decodeText'] === 'boolean' &&
-    typeof value['persist'] === 'boolean' &&
+    isRecord(receive) &&
+    isCount(receive['idleMs']) &&
+    isCount(receive['maxWaitMs']) &&
+    typeof value['remember'] === 'boolean' &&
     isTabLimit(value['maxTabs'])
   );
 }
@@ -137,6 +141,7 @@ function isConnectionDiagnostics(value: unknown): boolean {
     (CONNECTION_STATES as readonly unknown[]).includes(value['state']) &&
     hasAll(value, CONNECTION_COUNT_FIELDS, isCount) &&
     isOptionalTimestamp(value['nextAttemptAt']) &&
-    isOptionalTimestamp(value['openedAt'])
+    isOptionalTimestamp(value['openedAt']) &&
+    isOptionalTimestamp(value['stalledWriteSince'])
   );
 }

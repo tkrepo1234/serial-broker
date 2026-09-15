@@ -49,7 +49,7 @@ const OTHER_APPLICATION_HTML = `<!doctype html>
         device: { any: true },
         serial: { baudRate: 9600 },
         maxTabs: 2,
-        persist: false,
+        remember: false,
       });
       SerialBroker.subscribe('Cutter', 'onStatusChange', (event) => {
         document.body.dataset.status = event.status;

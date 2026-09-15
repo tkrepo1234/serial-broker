@@ -34,7 +34,7 @@ export const appConfig: ApplicationConfig = {
         encoding: { decodeText: true },
         // The application sets the configuration up on every load itself; nothing needs to be
         // remembered for SerialBroker.restore().
-        persist: false,
+        remember: false,
       },
     }),
   ],

@@ -29,7 +29,7 @@ about the rest of the page.
 - **Received lines, and who sent what.** Chunks are joined into lines; a partial line is shown
   until its ending arrives. Every write appears too, marked _this tab_ or _another tab_ - `onSend`
   fires in every tab, with `origin` saying whose write it was.
-- **Remembering and restoring.** _Remember this device_ decides `persist`; on load, `restore()`
+- **Remembering and restoring.** _Remember this device_ decides `remember`; on load, `restore()`
   brings a remembered configuration back before anything is set up. _Release in this tab_ stops
   this tab only; _Forget device_ also revokes the browser's permission.
 - **What the other tabs see.** Each tab tells the others the status serial-broker gave it, over a
@@ -126,9 +126,9 @@ entry point says it - to an operator, to be looked at, never to branch on.
 
 **A release in one tab is a release in one tab.** The others keep the device, and if the releasing
 tab held the port, another takes it over. What is remembered belongs to the origin: `release()`
-forgets the stored configuration only when no other tab still runs it with `persist: true`.
+forgets the stored configuration only when no other tab still runs it with `remember: true`.
 
-**Changing `persist` means setting up again.** A repeated `setup()` with only `persist` changed is
+**Changing `remember` means setting up again.** A repeated `setup()` with only `remember` changed is
 a no-op - the options count as equivalent - so the checkbox releases and sets up again. The status
 passes through `released` and comes back; the other tabs do not notice.
 
@@ -259,7 +259,7 @@ examples/multi-tab-dashboard/
 └── src/
     ├── main.ts             ?stand-in, then the application
     ├── app.ts              wires the panels to the page and the configuration
-    ├── device.ts           THE CONFIGURATION: worker URL, setup, restore, release, persist
+    ├── device.ts           THE CONFIGURATION: worker URL, setup, restore, release, remember
     ├── status.ts           every status named; the legend
     ├── permission.ts       the one user gesture
     ├── error-strip.ts      code, message, remediation; onError

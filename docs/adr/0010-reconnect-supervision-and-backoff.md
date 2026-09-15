@@ -1,6 +1,6 @@
 # ADR-0010: Supervise the connection with bounded exponential backoff
 
-- **Status:** Accepted
+- **Status:** Accepted, amended 2026-09-14 and 2026-09-15
 - **Date:** 2026-09-12
 
 ## Context
@@ -130,3 +130,19 @@ points make it precise.
   _Alternative rejected:_ keep retrying, with backoff. A permissions policy does not change while the
   page runs, so every attempt reports the same error to every tab, and `failed` is what the
   application should show.
+
+## Amendment (2026-09-15): reconnecting can be switched off, and `setup()` tries again
+
+- **`connection.autoReconnect`** (default `true`). With `false`, a connection that is lost, or an
+  attempt that fails, ends in `failed` with its error reported, and nothing is scheduled. A device
+  plugged in again does not revive it either. A configuration that never connected - its device was
+  absent, it waited in `awaiting-permission` - still connects when the device appears: that is the
+  first connection the application asked for, not a reconnect. Asked for by Tim on 2026-09-15 for
+  lines where a lost device has to be acknowledged before it is used again.
+- **`setup()` with equal options starts a failed configuration again**, with a fresh attempt counter,
+  in the tab holding the port. Before, it did nothing, and an application had to release and set up
+  again to offer a "try again" button. It is also how an application reconnects with
+  `autoReconnect: false`. A working or reconnecting configuration is left alone, as before.
+
+_Alternative rejected:_ `maxAttempts: 0` as the way to switch reconnecting off. It would still revive
+on a `connect` event, and it hides a yes-or-no decision in a number.

@@ -11,7 +11,7 @@
  * announcement, whose channel carries no version, and report `PROTOCOL_VERSION_MISMATCH`
  * (ADR-0023).
  */
-export const PROTOCOL_VERSION = 9;
+export const PROTOCOL_VERSION = 10;
 
 /**
  * `true` for a value that can be a protocol version: a positive safe integer.

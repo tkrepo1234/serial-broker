@@ -20,7 +20,7 @@ function createBroker(): { broker: Broker; delivered: Delivery[]; time: { now: n
   const broker = new Broker({
     deliver: (to, message) => delivered.push({ to, message }),
     logger: new ScopedLogger(NOOP_LOGGER, {}),
-    now: () => time.now,
+    monotonicNow: () => time.now,
   });
   return { broker, delivered, time };
 }

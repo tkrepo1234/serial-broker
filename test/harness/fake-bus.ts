@@ -131,7 +131,7 @@ export class FakeWorkerHost {
     this.#ports = new WorkerPorts({
       logger: new ScopedLogger(logger, {}),
       // Monotonic, as the worker script's own reading is: the silence sweep measures a duration.
-      now: () => clock.monotonicNow(),
+      monotonicNow: () => clock.monotonicNow(),
     });
     this.#scheduleSweep();
   }

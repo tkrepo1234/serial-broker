@@ -164,7 +164,7 @@ describe('permission and persistence', () => {
     harness.serial.grant(device);
 
     const tab = harness.openTab();
-    await tab.setup('Reader', { ...READER_OPTIONS, persist: false });
+    await tab.setup('Reader', { ...READER_OPTIONS, remember: false });
     await tab.close();
 
     const reloaded = harness.openTab();

@@ -35,6 +35,7 @@ export {
   type DeviceFilter,
   type DeviceKind,
   type EncodingSettings,
+  type ReceiveSettings,
   type ErrorEvent,
   type LogFields,
   type Logger,

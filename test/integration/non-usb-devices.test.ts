@@ -8,7 +8,12 @@ import { BrowserHarness } from '../harness/browser-harness.js';
 import { READER, READER_OPTIONS } from '../harness/devices.js';
 import { fieldsOfEvent, recordingLogger } from '../harness/recording-logger.js';
 
-const ANY_DEVICE = { device: { any: true }, serial: { baudRate: 9600 } } as const;
+const ANY_DEVICE = {
+  device: { any: true },
+  serial: { baudRate: 9600 },
+  // Each chunk as it is read, as in READER_OPTIONS.
+  receive: { idleMs: 0 },
+} as const;
 
 /**
  * Ports that report no USB identity at all.

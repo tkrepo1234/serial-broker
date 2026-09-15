@@ -21,7 +21,7 @@
     // Deliver received bytes as text, decoded across chunk boundaries.
     encoding: { decodeText: true },
     // The component sets the configuration up on every load, so nothing needs remembering.
-    persist: false,
+    remember: false,
   };
 
   // Set up when this component mounts, released when it is destroyed.

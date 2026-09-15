@@ -4,6 +4,7 @@ import type {
   ConnectionSettings,
   DeviceFilter,
   EncodingSettings,
+  ReceiveSettings,
   SerialSettings,
   SerialBrokerEventName,
   SerialBrokerStatus,
@@ -65,8 +66,10 @@ export interface EffectiveSettings {
   readonly connection: Required<ConnectionSettings>;
   /** Text encoding and decoding, including the defaults that were applied. */
   readonly encoding: Required<EncodingSettings>;
+  /** How received bytes are collected, including the defaults that were applied. */
+  readonly receive: Required<ReceiveSettings>;
   /** Whether the configuration is remembered across reloads. */
-  readonly persist: boolean;
+  readonly remember: boolean;
   /** How many tabs may use the configuration at once; `Infinity` for no limit (ADR-0025). */
   readonly maxTabs: number;
 }
@@ -87,6 +90,11 @@ export interface ConnectionDiagnostics {
   readonly bytesReceived: number;
   /** Bytes handed to the device since this context became the owner. */
   readonly bytesSent: number;
+  /**
+   * Epoch milliseconds since which a write has been stuck at the device, while one is: the device
+   * has not taken it within `writeTimeoutMs`, and the status still says `open` (ADR-0038).
+   */
+  readonly stalledWriteSince: number | undefined;
 }
 
 /** Writes a context has issued and that have not settled yet. */

@@ -17,7 +17,7 @@ export const FORWARD_INTERVAL_MS = 60_000;
 /** What the forwarder needs from the worker hosting it. */
 export interface RecordForwarderHost {
   /** The current time in milliseconds. */
-  now(): number;
+  monotonicNow(): number;
   /** Sends one record to every connected context. Must not throw. */
   forward(level: 'warn' | 'error', message: string, fields: LogFields): void;
   /**
@@ -48,7 +48,7 @@ export class RecordForwarder {
   #dropped = 0;
 
   constructor(private readonly host: RecordForwarderHost) {
-    this.#intervalStartedAt = host.now();
+    this.#intervalStartedAt = host.monotonicNow();
   }
 
   /**
@@ -91,7 +91,7 @@ export class RecordForwarder {
    * the first record of the interval that has just begun, whose budget is already reset.
    */
   #startNewInterval(): void {
-    const now = this.host.now();
+    const now = this.host.monotonicNow();
     if (now - this.#intervalStartedAt < FORWARD_INTERVAL_MS) {
       return;
     }

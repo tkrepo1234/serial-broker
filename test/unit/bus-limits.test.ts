@@ -534,7 +534,7 @@ describe('Broker within MAX_CONFIGURATIONS', () => {
     const broker = new Broker({
       deliver: (to) => delivered.push(to),
       logger: new ScopedLogger(logger, {}),
-      now: () => 0,
+      monotonicNow: () => 0,
     });
     const alice = 'alice' as ClientId;
     const bob = 'bob' as ClientId;

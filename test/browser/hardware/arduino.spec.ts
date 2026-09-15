@@ -115,6 +115,19 @@ test.describe('an Arduino running an echo sketch', () => {
     await tab?.waitForReceivedText(CONFIGURATION, 'HELLO');
   });
 
+  test('delivers an echoed line as one event, not one per byte (ADR-0039)', async ({
+    hardware,
+  }) => {
+    const [tab] = await connectedTabs(hardware, 1);
+
+    await tab?.send(CONFIGURATION, '1234\r\n');
+
+    // The board echoes a byte at a time, and the default quiet time joins them into one event.
+    await tab?.waitForReceivedText(CONFIGURATION, '1234\r\n');
+    await tab?.page.waitForTimeout(500);
+    expect(await tab?.receiveEventCount(CONFIGURATION)).toBe(1);
+  });
+
   test('echoes to both tabs sharing the port', async ({ hardware }) => {
     const tabs = await connectedTabs(hardware, 2);
 

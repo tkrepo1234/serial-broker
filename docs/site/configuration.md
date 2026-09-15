@@ -21,7 +21,7 @@ on the option:
 | `device`, `serial`                                                                                | The tab that holds the port, when it opens it. A tab in auto mode adopts the holder's.    |
 | `connection` except `writeTimeoutMs`, `encoding.decodeText`, and `encoding.encoding` for decoding | The tab that holds the port.                                                              |
 | `connection.writeTimeoutMs`                                                                       | The tab that issued the write — and the holding tab's, for each chunk.                    |
-| `encoding.encoding` for sending, `persist`                                                        | Each tab for itself.                                                                      |
+| `encoding.encoding` for sending, `remember`                                                       | Each tab for itself.                                                                      |
 | `maxTabs`                                                                                         | Every tab alike. A tab running a different limit than the tab holding the port withdraws. |
 
 In practice: **pass the same options for a name in every tab.** An application that lets the user
@@ -34,7 +34,7 @@ Within one tab, a name is one configuration, whichever code set it up: there is 
 settings and tab limit does nothing — also while the configuration is `failed`, so release it first
 to try again. Calling it with a different `device`, `baudRate`, `dataBits`, `stopBits`, `parity`,
 `flowControl`, `bufferSize` or `maxTabs` fails with `CONFIGURATION_CONFLICT`; release the
-configuration first. Other options passed to a second `setup()` in the same tab, `persist` among
+configuration first. Other options passed to a second `setup()` in the same tab, `remember` among
 them, are ignored. A
 `device` in auto mode never conflicts with one in auto mode, whatever either has resolved to; while
 it has resolved to nothing it conflicts with no explicit device either — the running configuration
@@ -66,7 +66,7 @@ the user chooses. Given, it is exactly one of four shapes; passing two at once i
   so a later visit reconnects without a prompt, with `restore()` or `setup()` alike: `setup()` in
   auto mode takes the device from the configuration remembered under the same name. Only a
   remembered auto-mode resolution is taken — not a device the remembered configuration named
-  explicitly — and nothing is taken with `persist: false`. Passing `resolved` yourself seeds the
+  explicitly — and nothing is taken with `remember: false`. Passing `resolved` yourself seeds the
   resolution, and wins over the remembered one.
 - **Shared:** a tab in auto mode adopts the device of the tab holding the port, whether that tab
   chose it in the picker or named it. Choose it once, in any tab.
@@ -149,8 +149,18 @@ context.
 | `openTimeoutMs`      | integer, 1 – 600,000                  | `10000`    |
 | `writeTimeoutMs`     | integer, 1 – 600,000                  | `5000`     |
 | `maxWriteChunkBytes` | integer, 1 byte – 16 MiB              | `4096`     |
+| `autoReconnect`      | boolean                               | `true`     |
 
 ### Reconnecting
+
+`autoReconnect`
+: Whether the tab holding the port reconnects by itself. With `false`, a lost connection or a
+failed attempt ends in `failed` with the error reported, and nothing is tried again — not after a
+delay, and not when the device is plugged in again. The application decides when to try: calling
+`setup()` again for the configuration, with the same options, starts it again. A configuration that
+never found its device still connects when the device appears; that is its first connection, not a
+reconnect. Use it on a production line where a lost device must be acknowledged by a person before
+the application talks to it again.
 
 The delay before reconnect attempt _n_ is
 
@@ -183,8 +193,9 @@ power switch. `1` disables it.
 
 `maxAttempts`
 : Attempts before the status becomes `failed` and `RECONNECT_EXHAUSTED` is reported. A failed
-configuration still revives when the device is plugged in again. Set a limit when a device that
-stays away should be shown as a problem rather than as endlessly reconnecting.
+configuration still revives when the device is plugged in again, and when `setup()` is called for
+it again. Set a limit when a device that stays away should be shown as a problem rather than as
+endlessly reconnecting.
 
 `stableAfterMs`
 : How long a connection has to hold before the attempt counter starts again from the beginning.
@@ -209,6 +220,37 @@ result.
 are never interleaved with another's, whatever the chunk size. Lower it for a device with a small
 receive buffer that drops the tail of a large write instead of slowing the sender down.
 
+## `receive`
+
+How what the device sends is collected into `onReceive` events (ADR-0039).
+
+| Option      | Type and range         | Default |
+| ----------- | ---------------------- | ------- |
+| `idleMs`    | integer, 0 – 3,600,000 | `50`    |
+| `maxWaitMs` | integer, 1 – 3,600,000 | `500`   |
+
+A read from the port returns whatever the driver holds at that moment, and a device that answers
+byte by byte — an echo, a slow microcontroller — would produce one event per byte: `1`, `2`, `3`,
+`4`, `\r`, `\n` for the answer `1234\r\n`. The tab holding the port therefore collects what it
+reads and delivers it as one event, in every tab, once the line has been quiet for `idleMs`. What
+was collected is also delivered at once when 64 KiB have come together and when the connection
+ends, before its status changes.
+
+`idleMs`
+: How long the line has to be quiet before what was collected is delivered. The default of 50 ms
+joins an answer from a device that sends a byte every few milliseconds, and is below what a person
+notices. Raise it for a device that pauses inside its answers; `0` delivers every chunk as it is
+read, with no delay, for an application that reacts to single bytes.
+
+`maxWaitMs`
+: The longest a delivery waits after its first byte, however busy the line stays. A device that
+streams without pause is delivered at this pace instead of never.
+
+The settings of the tab holding the port apply in every tab. They do not have to agree between
+tabs, and a difference is not a `CONFIGURATION_CONFLICT`. Nothing is split at a delimiter: the
+boundaries of an event still carry no meaning, and a message can still arrive in two events when
+the device pauses inside it.
+
 ## `encoding`
 
 | Option       | Type                                                         | Default   |
@@ -226,7 +268,7 @@ by the tab holding the port, so its setting applies in every tab.
 UTF-8; with any other encoding configured, sending a string fails with `INVALID_ARGUMENT`, and the
 application has to encode the bytes itself.
 
-## `persist`
+## `remember`
 
 - **Type:** boolean. **Default:** `true`.
 - **What it does:** remembers the configuration in `localStorage`, so `restore()` can set it up
@@ -235,8 +277,8 @@ application has to encode the bytes itself.
   options, or one that should not outlive the page.
 - **Keep in mind:** what is remembered is one entry per name for the whole origin, shared by every
   tab. `release()` forgets it only once no other tab still runs the configuration with
-  `persist: true`, and a tab that is closed or reloaded forgets nothing. A tab setting the name up
-  with `persist: false` forgets an entry left behind by an earlier setup, under the same condition.
+  `remember: true`, and a tab that is closed or reloaded forgets nothing. A tab setting the name up
+  with `remember: false` forgets an entry left behind by an earlier setup, under the same condition.
   The tab that saved last decides the remembered options.
 - **Where it is kept:** one `localStorage` key per configuration,
   `serial-broker/configurations/v2/entry/<name>`, listed in `serial-broker/configurations/v2/index`.

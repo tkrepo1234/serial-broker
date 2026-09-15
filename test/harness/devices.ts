@@ -8,5 +8,15 @@
  */
 export const READER = { vendorId: 0x1a86, productId: 0x7523 };
 
-/** Setup options for {@link READER} at a common baud rate, for tests where neither matters. */
-export const READER_OPTIONS = { device: READER, serial: { baudRate: 9600 } };
+/**
+ * Setup options for {@link READER} at a common baud rate, for tests where neither matters.
+ *
+ * Every chunk is delivered as it is read (`receive.idleMs: 0`): most tests are about something
+ * other than how received bytes are collected, and assert right after the device sent them. The
+ * collecting itself is pinned in `test/unit/receive-buffer.test.ts` and `test/integration/receiving.test.ts`.
+ */
+export const READER_OPTIONS = {
+  device: READER,
+  serial: { baudRate: 9600 },
+  receive: { idleMs: 0 },
+};

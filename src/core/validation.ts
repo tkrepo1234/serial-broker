@@ -3,7 +3,8 @@ import {
   DEFAULT_MAX_TABS,
   DEFAULT_CONNECTION_SETTINGS,
   DEFAULT_ENCODING_SETTINGS,
-  DEFAULT_PERSIST,
+  DEFAULT_RECEIVE_SETTINGS,
+  DEFAULT_REMEMBER,
   DEFAULT_SERIAL_SETTINGS,
   MAX_CONFIG_NAME_LENGTH,
   type NormalizedConfiguration,
@@ -465,6 +466,7 @@ export function normalizeConfiguration(name: unknown, options: unknown): Normali
   const serial = requireObject(raw.serial, 'options.serial');
   const connection = optionalObject(raw.connection, 'options.connection');
   const encoding = optionalObject(raw.encoding, 'options.encoding');
+  const receive = optionalObject(raw.receive, 'options.receive');
 
   // Each option is read with its default and its full argument name in one place, so the name a
   // rejection reports cannot drift from the field that was read.
@@ -502,6 +504,21 @@ export function normalizeConfiguration(name: unknown, options: unknown): Normali
         1,
         MAX_BUFFER_BYTES,
       ),
+      autoReconnect: requireBoolean(...connectionOption('autoReconnect')),
+    }),
+    receive: Object.freeze({
+      idleMs: requireInteger(
+        orDefault(receive['idleMs'], DEFAULT_RECEIVE_SETTINGS.idleMs),
+        'options.receive.idleMs',
+        0,
+        MAX_DELAY_MS,
+      ),
+      maxWaitMs: requireInteger(
+        orDefault(receive['maxWaitMs'], DEFAULT_RECEIVE_SETTINGS.maxWaitMs),
+        'options.receive.maxWaitMs',
+        1,
+        MAX_DELAY_MS,
+      ),
     }),
     encoding: Object.freeze({
       encoding: validateEncodingLabel(
@@ -513,7 +530,7 @@ export function normalizeConfiguration(name: unknown, options: unknown): Normali
         'options.encoding.decodeText',
       ),
     }),
-    persist: requireBoolean(orDefault(raw.persist, DEFAULT_PERSIST), 'options.persist'),
+    remember: requireBoolean(orDefault(raw.remember, DEFAULT_REMEMBER), 'options.remember'),
     maxTabs: requireIntegerOrInfinity(
       orDefault(raw.maxTabs, DEFAULT_MAX_TABS),
       'options.maxTabs',
@@ -541,7 +558,8 @@ export function toSetupOptions(configuration: NormalizedConfiguration): Effectiv
     serial: { ...configuration.serial },
     connection: { ...configuration.connection },
     encoding: { ...configuration.encoding },
-    persist: configuration.persist,
+    receive: { ...configuration.receive },
+    remember: configuration.remember,
     maxTabs: configuration.maxTabs,
   };
 }

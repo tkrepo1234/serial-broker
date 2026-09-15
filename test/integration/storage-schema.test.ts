@@ -51,7 +51,7 @@ describe('the layout of remembered configurations', () => {
     await tab.setup('Scale', READER_OPTIONS);
 
     expect(rememberedNames(harness.storage)).toEqual(['Reader', 'Scale']);
-    expect(rememberedEntry(harness.storage, 'Scale')).toMatchObject({ persist: true });
+    expect(rememberedEntry(harness.storage, 'Scale')).toMatchObject({ remember: true });
   });
 
   it('restores what an earlier visit stored, and nothing else', async () => {

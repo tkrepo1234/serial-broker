@@ -70,7 +70,7 @@ describe('normalizeConfiguration', () => {
     expect(config.connection.initialDelayMs).toBe(250);
     expect(config.connection.maxAttempts).toBe(Number.POSITIVE_INFINITY);
     expect(config.encoding).toEqual({ encoding: 'utf-8', decodeText: false });
-    expect(config.persist).toBe(true);
+    expect(config.remember).toBe(true);
   });
 
   it('freezes what it returns', () => {

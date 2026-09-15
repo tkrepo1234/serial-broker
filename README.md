@@ -127,7 +127,8 @@ browser will refuse.
 ### `setup(name, options): Promise<void>`
 
 Registers a configuration and starts keeping it connected. Safe to call on every page load:
-calling it again with equivalent options does nothing.
+calling it again with equivalent options does nothing - except start a configuration that has
+failed again.
 
 ```ts
 await SerialBroker.setup('Scale', {
@@ -150,12 +151,17 @@ await SerialBroker.setup('Scale', {
     openTimeoutMs: 10_000, // deadline for open() and close()
     writeTimeoutMs: 5_000, // deadline for one send(), including waiting for a connection
     maxWriteChunkBytes: 4096,
+    autoReconnect: true, // false: a lost connection ends in 'failed' until setup() is called again
+  },
+  receive: {
+    idleMs: 50, // deliver once the line is quiet this long; 0 delivers every chunk as read
+    maxWaitMs: 500, // but never hold bytes longer than this
   },
   encoding: {
     encoding: 'utf-8', // how received text is decoded; strings are always sent as UTF-8
     decodeText: true, // also deliver `text` on onReceive
   },
-  persist: true, // restore this configuration after a reload
+  remember: true, // restore this configuration after a reload
   maxTabs: Infinity, // at most this many tabs use it at once; 1 for exclusive use
 });
 ```

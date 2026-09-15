@@ -113,6 +113,7 @@ describe.each(TRANSPORT_MODES)('sharing one port across tabs (%s)', (transport) 
     await tab.setup('Scale', {
       device: { vendorId: 0x0403, productId: 0x6001 },
       serial: { baudRate: 19200 },
+      receive: { idleMs: 0 },
     });
 
     await tab.client.send('CardReader', 'A');

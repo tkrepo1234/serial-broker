@@ -52,7 +52,6 @@ An auto-mode configuration waits for the user even when exactly one port is gran
   `docs/manual-test-plan.md` has no auto-mode scenario.
 - The example applications still pass `device` explicitly (mostly `{ any: true }`); several could
   drop it and show the automatic mode instead.
-- The debugging surface's empty-state sentence still describes the old flow.
 
 The original request, for the record:
 
@@ -205,8 +204,9 @@ round"). All nine example applications exist with smoke tests. The usability rev
   and overwrote the remembered resolution. Fixed on 2026-09-15 (ADR-0036, amendment): `setup()` in
   auto mode takes a remembered auto-mode resolution, and the documentation no longer calls
   `restore()` first.
-- **P2:** `setup()` with equal options starts a `failed` configuration again, so a "try again"
-  button needs no release first.
+- **P2:** done on 2026-09-15 (ADR-0010, amended) in the tab holding the port. A tab that does not
+  hold the port still does nothing on a repeated `setup()`; whether it should ask the holding tab to
+  try again is for the complexity reduction.
 - **P3:** a new `onStatusChange` listener receives the current status once, so no example needs
   `getStatus()` right after `subscribe()`.
 - **P4:** `requestAccess()` works from any tab, not only the one holding the port: the permission is
@@ -346,12 +346,14 @@ What the implementers left open:
   write messages in between are lost. Needs a real browser to confirm.
 - The debugging surface renders "in 1.4 s" / "320 ms ago" from wall-clock timestamps; a system clock
   jump skews those displays until the next report.
-- `BrokerHost.now()` / `WorkerPortsHost.now()` are monotonic but still called `now`.
+- ~~`BrokerHost.now()` / `WorkerPortsHost.now()` are monotonic but still called `now`.~~ Renamed to
+  `monotonicNow()` on 2026-09-15.
 
 ### Browser and hardware tests
 
 - **A stuck write is invisible in the status** (ADR-0038): while the device takes nothing, the status
-  stays `open` and only `WRITE_TIMEOUT`s say so. A status or a diagnostics field for it is open.
+  stays `open`. Since 2026-09-15 diagnostics report `stalledWriteSince` and log
+  `supervisor.write-stalled`, and the debugging surface shows it; a public status for it is not planned.
 - **Releasing a configuration while the device holds a write cannot close the port** - the platform
   keeps it until the page goes (ADR-0038). Measured with usbip-win2 only; whether a physical
   USB-serial adapter's driver ends such a write is unverified.
@@ -364,8 +366,8 @@ What the implementers left open:
 - No browser test for `USER_GESTURE_REQUIRED`: every script an automation evaluates carries
   transient activation. The stand-in has no fault injection yet (open/write failing or hanging, a
   non-USB port).
-- `docs/manual-test-plan.md` still quotes lock names of protocol versions 1 and 2 in two places, and
-  step 1 still says "click Set up" where the button is "Create and connect".
+- `docs/manual-test-plan.md` quotes lock names of protocol versions 1 and 2 only inside the dated run
+  records of 2026-09-12 and 2026-09-13, where they are what was observed then.
 
 ---
 

@@ -107,7 +107,7 @@ export class SerialBrokerClient {
   readonly #store: ConfigurationStore;
   /**
    * The holds that tell other tabs this one still runs a remembered configuration, by name
-   * (ADR-0027). Only configurations set up with `persist: true` have one.
+   * (ADR-0027). Only configurations set up with `remember: true` have one.
    */
   readonly #holds = new Map<string, PersistenceHold>();
   readonly #disposal = new DisposalStack();
@@ -229,8 +229,10 @@ export class SerialBrokerClient {
           },
         );
       }
-      // Same device, same line settings: nothing to do. Re-running the connection would
-      // interrupt a working port for no reason.
+      // Same device, same line settings: nothing to do, since re-running the connection would
+      // interrupt a working port for no reason - unless it has given up, and setting it up again
+      // is how an application says "try again" (ADR-0010).
+      existing.retry();
       return;
     }
 
@@ -273,13 +275,13 @@ export class SerialBrokerClient {
    * Read only for a new configuration: a name already set up in this tab is judged against what it
    * runs, so `CONFIGURATION_CONFLICT` is decided as before. Taken only from an entry in auto mode
    * that has resolved: an entry naming its device explicitly was not chosen by the user in this
-   * mode, and `any` is not a device. Not taken for a configuration set up with `persist: false`,
+   * mode, and `any` is not a device. Not taken for a configuration set up with `remember: false`,
    * which does not use what is remembered, nor for one that passes `resolved` itself, or names its
    * device - what the call says wins.
    */
   #withRememberedDevice(configuration: NormalizedConfiguration): NormalizedConfiguration {
     const device = configuration.device;
-    if (!configuration.persist || device.kind !== 'auto' || device.resolved !== undefined) {
+    if (!configuration.remember || device.kind !== 'auto' || device.resolved !== undefined) {
       return configuration;
     }
     const remembered = this.#store.find(configuration.name)?.device;
@@ -409,7 +411,7 @@ export class SerialBrokerClient {
   #remember(session: ConfigurationSession): void {
     const configuration = session.definition;
     const name = configuration.name;
-    if (!configuration.persist) {
+    if (!configuration.remember) {
       void this.#forgetUnlessRunElsewhere(name);
       return;
     }
@@ -448,7 +450,7 @@ export class SerialBrokerClient {
   #rememberResolution(session: ConfigurationSession): void {
     const configuration = session.definition;
     if (
-      !configuration.persist ||
+      !configuration.remember ||
       this.#sessions.get(configuration.name) !== session ||
       !this.#holds.has(configuration.name)
     ) {
@@ -458,7 +460,7 @@ export class SerialBrokerClient {
   }
 
   /**
-   * Forgets a remembered configuration, unless another tab still runs it with `persist: true`.
+   * Forgets a remembered configuration, unless another tab still runs it with `remember: true`.
    *
    * The entry is one per name for the whole origin. Forgetting it while another tab runs the
    * configuration would cost that tab the configuration on its next reload (ADR-0027).

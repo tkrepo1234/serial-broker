@@ -29,8 +29,8 @@ export interface WorkerPort {
 /** What the ports need from the worker hosting them. */
 export interface WorkerPortsHost {
   readonly logger: ScopedLogger;
-  /** A reading of a monotonic clock in milliseconds, as `BrokerHost.now()` takes (ADR-0032). */
-  now(): number;
+  /** A reading of a monotonic clock in milliseconds, as `BrokerHost.monotonicNow()` takes (ADR-0032). */
+  monotonicNow(): number;
 }
 
 /**
@@ -108,7 +108,7 @@ export class WorkerPorts<Port extends WorkerPort> {
 
   constructor(private readonly host: WorkerPortsHost) {
     this.#forwarder = new RecordForwarder({
-      now: () => host.now(),
+      monotonicNow: () => host.monotonicNow(),
       forward: (level, message, fields) => {
         this.#forward(level, message, fields);
       },
@@ -130,7 +130,7 @@ export class WorkerPorts<Port extends WorkerPort> {
         this.#deliver(clientId, message);
       },
       logger: this.#logger,
-      now: () => host.now(),
+      monotonicNow: () => host.monotonicNow(),
     });
   }
 
@@ -199,7 +199,7 @@ export class WorkerPorts<Port extends WorkerPort> {
     // Also the moment at which records dropped by the forwarding budget are reported, so that a
     // count is never left waiting for a record that may never come (ADR-0029).
     this.#forwarder.flush();
-    const now = this.host.now();
+    const now = this.host.monotonicNow();
     for (const ports of this.#ports.values()) {
       for (const [port, heardAt] of [...ports]) {
         if (now - heardAt >= SILENT_PARTICIPANT_TIMEOUT_MS) {
@@ -328,7 +328,7 @@ export class WorkerPorts<Port extends WorkerPort> {
       this.#limits.exceeded('MAX_PORTS_PER_PARTICIPANT', { clientId });
       return false;
     }
-    ports.set(port, this.host.now());
+    ports.set(port, this.host.monotonicNow());
     return true;
   }
 

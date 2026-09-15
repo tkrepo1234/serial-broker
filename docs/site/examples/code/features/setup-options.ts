@@ -36,7 +36,7 @@ export async function setUpPanelPort(): Promise<boolean> {
       flowControl: 'hardware',
     },
     connection: { maxDelayMs: 5_000, writeTimeoutMs: 2_000 },
-    persist: false,
+    remember: false,
   });
   return true;
 }

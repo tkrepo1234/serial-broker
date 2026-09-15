@@ -10,7 +10,7 @@ import { STORAGE_SCHEMA_VERSION } from './configuration-store.js';
 export const PERSISTENCE_HOLD_RETRY_DELAY_MS = 1_000;
 
 /**
- * Name of the Web Lock every tab running a configuration with `persist: true` holds in shared mode.
+ * Name of the Web Lock every tab running a configuration with `remember: true` holds in shared mode.
  *
  * Versioned with the stored format, not with the protocol: tabs on different protocol versions
  * share the stored configurations (ADR-0022), so they have to share this lock too. The

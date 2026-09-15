@@ -15,6 +15,7 @@ import type {
 } from '../environment/environment.js';
 
 import { findGrantedPort } from './port-matcher.js';
+import { ReceiveBuffer } from './receive-buffer.js';
 import { mapOpenError } from './serial-errors.js';
 import { WriteQueue } from './write-queue.js';
 
@@ -58,6 +59,8 @@ type ConnectionState =
       readonly reader: ReadableStreamDefaultReader<Uint8Array>;
       readonly writer: WritableStreamDefaultWriter<Uint8Array>;
       readonly decoder: TextDecoder | undefined;
+      /** Collects what is read into deliveries (ADR-0039); flushed when the connection ends. */
+      readonly received: ReceiveBuffer;
     }
   /** The connection was lost and the next attempt is scheduled - there is always a timer. */
   | { readonly kind: 'reconnecting'; readonly timer: TimerHandle }
@@ -127,6 +130,8 @@ export class PortSupervisor {
   #openedAt: number | undefined;
   #bytesReceived = 0;
   #bytesSent = 0;
+  /** Since when a write has been stuck at the device, while one is (ADR-0038). Diagnostics only. */
+  #stalledSince: number | undefined;
 
   constructor(
     private readonly environment: SerialBrokerEnvironment,
@@ -153,6 +158,7 @@ export class PortSupervisor {
       queuedWrites: this.#writes.depth,
       bytesReceived: this.#bytesReceived,
       bytesSent: this.#bytesSent,
+      stalledWriteSince: this.#stalledSince,
     };
   }
 
@@ -191,6 +197,9 @@ export class PortSupervisor {
   async #stop(): Promise<void> {
     this.#generation += 1;
     const previous = this.#state;
+    if (previous.kind === 'open') {
+      previous.received.flush();
+    }
     this.#state = { kind: 'stopped' };
     this.#nextAttemptAt = undefined;
     this.#openedAt = undefined;
@@ -210,6 +219,20 @@ export class PortSupervisor {
 
     await this.#teardown;
     this.#setStatus(SerialBrokerStatus.Idle);
+  }
+
+  /**
+   * Tries again after the supervisor gave up, as a device plugged in again does.
+   *
+   * Does nothing in any other state: a connection that works, or one being retried, is left alone.
+   */
+  retry(): void {
+    if (this.#state.kind !== 'failed') {
+      return;
+    }
+    this.#backoff.reset();
+    this.#state = { kind: 'idle' };
+    void this.#connect();
   }
 
   /**
@@ -383,6 +406,7 @@ export class PortSupervisor {
       event: 'supervisor.write-stalled',
       chunkBytes,
     });
+    this.#stalledSince = this.environment.clock.now();
     try {
       await written;
       this.#bytesSent += chunkBytes;
@@ -402,6 +426,8 @@ export class PortSupervisor {
           ),
         );
       }
+    } finally {
+      this.#stalledSince = undefined;
     }
   }
 
@@ -456,7 +482,12 @@ export class PortSupervisor {
     }
 
     // A device reappearing after reconnection was abandoned revives it: the terminal state
-    // exists to stop pointless retrying, not to require an application restart.
+    // exists to stop pointless retrying, not to require an application restart. Unless the
+    // application reconnects itself (`autoReconnect: false`), which a device coming back does
+    // not change.
+    if (this.#state.kind === 'failed' && !this.configuration.connection.autoReconnect) {
+      return;
+    }
     if (this.#state.kind === 'failed' || this.#state.kind === 'awaiting-permission') {
       this.#backoff.reset();
       this.#state = { kind: 'idle' };
@@ -673,16 +704,20 @@ export class PortSupervisor {
       return;
     }
 
+    // A streaming decoder per connection: a multi-byte character cannot span a disconnect,
+    // so its state must not either. See ADR-0015.
+    const decoder = this.configuration.encoding.decodeText
+      ? new TextDecoder(this.configuration.encoding.encoding)
+      : undefined;
     this.#state = {
       kind: 'open',
       port,
       reader: readable.getReader(),
       writer: writable.getWriter(),
-      // A streaming decoder per connection: a multi-byte character cannot span a disconnect,
-      // so its state must not either. See ADR-0015.
-      decoder: this.configuration.encoding.decodeText
-        ? new TextDecoder(this.configuration.encoding.encoding)
-        : undefined,
+      decoder,
+      received: new ReceiveBuffer(this.environment.clock, this.configuration.receive, (data) => {
+        this.#deliver(data, decoder);
+      }),
     };
 
     // The stability window is a duration, so it is measured on the monotonic clock (ADR-0032);
@@ -760,9 +795,7 @@ export class PortSupervisor {
           return;
         }
 
-        if (value.byteLength > 0) {
-          this.#deliver(value, state.decoder);
-        }
+        state.received.push(value);
       }
     } catch (error) {
       if (this.#isStale(generation)) {
@@ -783,12 +816,10 @@ export class PortSupervisor {
     }
   }
 
-  #deliver(chunk: Uint8Array, decoder: TextDecoder | undefined): void {
-    // A copy, because the application may retain or mutate what it receives and the stream
-    // may reuse its buffer. See docs/guidelines/defensive-programming.md.
-    const data = new Uint8Array(chunk);
+  /** Hands on one delivery of the receive buffer, which owns the bytes (a copy of what was read). */
+  #deliver(data: Uint8Array, decoder: TextDecoder | undefined): void {
     this.#bytesReceived += data.byteLength;
-    const text = decoder?.decode(chunk, { stream: true });
+    const text = decoder?.decode(data, { stream: true });
     this.#traceTraffic('received', data);
     this.callbacks.onData(data, text);
   }
@@ -832,6 +863,9 @@ export class PortSupervisor {
     // nothing left to do. An attempt in progress is `listing` or `opening`, never this.
     if (previous.kind === 'stopped' || previous.kind === 'reconnecting') {
       return;
+    }
+    if (previous.kind === 'open') {
+      previous.received.flush();
     }
 
     this.#generation += 1;
@@ -878,6 +912,10 @@ export class PortSupervisor {
    * handler, and a device that is still away was reported when it went.
    */
   #recordFailedAttempt(reason: string, cause: SerialBrokerError): void {
+    if (!this.configuration.connection.autoReconnect) {
+      this.#giveUp(reason);
+      return;
+    }
     this.#backoff.recordDisconnected(
       this.environment.clock.monotonicNow(),
       this.configuration.connection.stableAfterMs,

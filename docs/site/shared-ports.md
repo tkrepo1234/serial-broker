@@ -238,13 +238,13 @@ Two things are remembered between visits, by two different parties:
 - **The browser remembers which port the user chose.** serial-broker cannot grant, store or
   forge this permission. `release(name, { forgetDevice: true })` revokes it.
 - **serial-broker remembers the configuration**, in `localStorage`, unless you set
-  `persist: false`. `SerialBroker.restore()` sets up every remembered configuration.
+  `remember: false`. `SerialBroker.restore()` sets up every remembered configuration.
 
 What is remembered belongs to the origin, not to one tab. `release()` in one tab therefore forgets
-a configuration only when no other tab still runs it with `persist: true`; otherwise the next
+a configuration only when no other tab still runs it with `remember: true`; otherwise the next
 reload of those tabs would lose it. The same holds for `releaseAll()`, for
 `release(name, { forgetDevice: true })` — which still revokes the permission for every tab — and
-for a tab that sets the name up with `persist: false`. A tab that is closed, reloaded or crashes
+for a tab that sets the name up with `remember: false`. A tab that is closed, reloaded or crashes
 forgets nothing, so the configuration is there on the next visit. Every tab running a remembered
 configuration holds a shared Web Lock, `serial-broker/persisted/v2/<name>`, and the browser lets it
 go when the tab goes away, however it goes.
