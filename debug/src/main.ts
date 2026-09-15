@@ -177,11 +177,11 @@ const host: DetailHost = {
       await requireClient().release(name, { forgetDevice });
     });
   },
-  chooseDevice(name) {
+  chooseDevice(name, chooseAgain) {
     const detail = details.get(name)?.detail;
     let pending: Promise<boolean>;
     try {
-      pending = requireClient().requestAccess(name);
+      pending = requireClient().requestAccess(name, { chooseAgain });
     } catch (error) {
       detail?.showError(error);
       return;

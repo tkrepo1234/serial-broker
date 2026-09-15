@@ -325,6 +325,12 @@
           Shows the browser's port picker. Only the tab that holds the port can show it, and the
           browser remembers the choice.
         </dd>
+        <dt>Choose a different device…</dt>
+        <dd>
+          For a configuration that took its device from the picker: shows every port again, and the
+          port you choose becomes the device in every tab and in what is remembered. The tab holding
+          the port closes the old device and opens the new one.
+        </dd>
         <dt>Edit settings…</dt>
         <dd>
           Changes the settings this page uses: it disconnects and connects again with the new ones.
@@ -405,6 +411,9 @@
               ⋯
             </button>
             <div data-part="menu" class="menu" popover role="menu">
+              <button data-part="menuChooseAgain" type="button" role="menuitem">
+                Choose a different device…
+              </button>
               <button data-part="menuEdit" type="button" role="menuitem">Edit settings…</button>
               <button data-part="menuDisconnect" type="button" role="menuitem">Disconnect</button>
               <button data-part="menuForget" type="button" role="menuitem" class="danger">

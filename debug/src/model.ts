@@ -22,7 +22,8 @@ export interface TabView {
 }
 
 /** What the user can do with a configuration from this page. */
-export type ConfigurationAction = 'connect' | 'disconnect' | 'choose-device' | 'edit';
+export type ConfigurationAction =
+  'connect' | 'disconnect' | 'choose-device' | 'choose-again' | 'edit';
 
 /** A configuration as the list and its detail view show it. */
 export interface ConfigurationView {
@@ -121,6 +122,17 @@ function describeConfiguration(
       here.configuration.status === 'awaiting-permission'
     ) {
       actions.add('choose-device');
+    }
+    // Any tab taking part may let the user choose a different device for a configuration in auto
+    // mode that has one; the tab holding the port switches to it (ADR-0036).
+    const device = here.configuration.settings.device;
+    if (
+      'auto' in device &&
+      device.resolved !== undefined &&
+      here.configuration.status !== 'queued' &&
+      !isWithdrawn(here, owner)
+    ) {
+      actions.add('choose-again');
     }
   } else if (settings !== undefined) {
     actions.add('connect');
