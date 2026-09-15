@@ -9,70 +9,31 @@
  */
 import { expect, test } from '@playwright/test';
 
-import {
-  installWebSerialStandIn,
-  type WebSerialStandInControl,
-} from '../../test/browser/stand-in/web-serial-stand-in.js';
+import { ExampleTab, installLoopback, USUAL_IDS, type ExampleUi } from '../smoke-support.js';
 
-/** The stand-in's controls, as the page sees them; `page.evaluate` cannot import the type. */
-interface StandInWindow {
-  readonly webSerialStandIn?: WebSerialStandInControl;
-}
+const UI: ExampleUi = {
+  ...USUAL_IDS,
+  url: 'http://localhost:8151/',
+  release: '#release',
+  setUpAgain: '#restart',
+};
 
 test('connects on load, echoes a line, and survives the device being unplugged', async ({
-  browser,
+  context,
 }) => {
-  const context = await browser.newContext();
-  // Before the first page: the stand-in has to be there before the page's own script runs.
-  await context.addInitScript(installWebSerialStandIn, {
-    devices: [{ id: 'loopback', granted: true }],
+  await installLoopback(context, true);
+  const tab = await ExampleTab.open(context, UI);
+
+  await tab.expectOpenWithoutClick();
+  await expect(tab.locator('#send-button')).toBeEnabled();
+  await tab.sendLine('PING');
+  await expect(tab.locator('#send-input')).toHaveValue('');
+  await expect(tab.locator('#error')).toBeHidden();
+
+  await tab.recoverFromUnplug(async () => {
+    await expect(tab.locator('#error')).toBeVisible();
   });
-  const page = await context.newPage();
-  const pageErrors: string[] = [];
-  page.on('pageerror', (error) => pageErrors.push(error.message));
-  const consoleNoise: string[] = [];
-  page.on('console', (message) => {
-    if (message.type() === 'warning' || message.type() === 'error') {
-      consoleNoise.push(`${message.type()}: ${message.text()}`);
-    }
-  });
+  await expect(tab.locator('#send-button')).toBeEnabled();
 
-  await page.goto('http://localhost:8151/');
-
-  // The device is already granted, so the page opens the port without a click.
-  await expect(page.locator('#status')).toHaveText('open');
-  await expect(page.locator('#connect')).toBeHidden();
-  await expect(page.locator('#send-button')).toBeEnabled();
-
-  await page.fill('#send-input', 'PING');
-  await page.click('#send-button');
-
-  // The loopback echoes what was written, line ending included.
-  await expect(page.locator('#received')).toContainText('PING');
-  await expect(page.locator('#send-input')).toHaveValue('');
-  await expect(page.locator('#error')).toBeHidden();
-
-  // Unplugging the device is a failure the library recovers from by itself: the page shows the
-  // error as a note (data-retryable) next to the reconnecting status, and clears it once the
-  // device is back and the port is open again.
-  await page.evaluate(() => {
-    (window as unknown as StandInWindow).webSerialStandIn?.unplug();
-  });
-  await expect(page.locator('#status')).toHaveText('reconnecting');
-  await expect(page.locator('#error')).toBeVisible();
-  await expect(page.locator('#error')).toHaveAttribute('data-retryable', 'true');
-  await expect(page.locator('#error-code')).toHaveText('DEVICE_DISCONNECTED');
-  await expect(page.locator('#send-button')).toBeDisabled();
-
-  await page.evaluate(() => {
-    (window as unknown as StandInWindow).webSerialStandIn?.plug();
-  });
-  await expect(page.locator('#status')).toHaveText('open');
-  await expect(page.locator('#error')).toBeHidden();
-  await expect(page.locator('#send-button')).toBeEnabled();
-
-  expect(pageErrors).toEqual([]);
-  expect(consoleNoise).toEqual([]);
-
-  await context.close();
+  tab.expectQuiet();
 });

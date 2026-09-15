@@ -10,11 +10,15 @@
  * page of the origin can hold it open, as in the browser.
  */
 
-import { expect, test, type BrowserContext, type Page } from '@playwright/test';
+import { expect, test } from '@playwright/test';
 
-import { installWebSerialStandIn } from '../../test/browser/stand-in/web-serial-stand-in.js';
+import { ExampleTab, installLoopback, USUAL_IDS, type ExampleUi } from '../smoke-support.js';
 
-const APPLICATION_URL = 'http://localhost:8153/';
+const UI: ExampleUi = {
+  ...USUAL_IDS,
+  url: 'http://localhost:8153/',
+  setUpAgain: '#setup',
+};
 
 /**
  * A page of the same origin that is not this example - another application, or a copy of this one
@@ -60,57 +64,43 @@ const OTHER_APPLICATION_HTML = `<!doctype html>
 </html>
 `;
 
-/** Uncaught errors and console warnings or errors of every page: any of them fails the test. */
-const noise: string[] = [];
+/** Every tab a test opened: the noise of any of them fails the test. */
+const tabs: ExampleTab[] = [];
 
 test.beforeEach(async ({ context }) => {
-  noise.length = 0;
-  // Before the first page: the stand-in must be there before the page's own scripts run.
-  await context.addInitScript(installWebSerialStandIn, {
-    devices: [{ id: 'loopback', granted: true }],
-  });
+  tabs.length = 0;
+  await installLoopback(context, true);
 });
 
 test.afterEach(() => {
-  expect(noise, 'the page wrote to the console or threw').toEqual([]);
+  for (const tab of tabs) {
+    tab.expectQuiet();
+  }
 });
 
-async function openTab(context: BrowserContext, url = APPLICATION_URL): Promise<Page> {
-  const page = await context.newPage();
-  page.on('pageerror', (error) => noise.push(`pageerror: ${error.message}`));
-  page.on('console', (message) => {
-    if (message.type() === 'error' || message.type() === 'warning') {
-      noise.push(`console.${message.type()}: ${message.text()}`);
-    }
-  });
-  await page.goto(url);
-  return page;
-}
-
-async function sendLine(page: Page, line: string): Promise<void> {
-  await page.locator('#send-input').fill(line);
-  await page.locator('#send-button').click();
-  await expect(page.locator('#received')).toContainText(line);
+async function openTab(context: Parameters<typeof ExampleTab.open>[0], url = UI.url) {
+  const tab = await ExampleTab.open(context, { ...UI, url });
+  tabs.push(tab);
+  return tab;
 }
 
 test('one tab opens the granted device, sends a line and sees it echoed', async ({ context }) => {
   const tab = await openTab(context);
 
   // The device was granted on an "earlier visit", so no click is needed to reach `open`.
-  await expect(tab.locator('#status')).toHaveText('open');
-  await expect(tab.locator('#connect')).toBeHidden();
+  await tab.expectOpenWithoutClick();
   await expect(tab.locator('#release')).toBeVisible();
   await expect(tab.locator('#error')).toBeHidden();
 
-  await sendLine(tab, 'CUT 10');
+  await tab.sendLine('CUT 10');
 });
 
 test('a second tab is queued, and takes over when the first releases', async ({ context }) => {
   const first = await openTab(context);
-  await expect(first.locator('#status')).toHaveText('open');
+  await first.expectStatus('open');
 
   const second = await openTab(context);
-  await expect(second.locator('#status')).toHaveText('queued');
+  await second.expectStatus('queued');
   await expect(second.locator('#status-explanation')).toContainText(
     'Another tab is using the device',
   );
@@ -120,31 +110,31 @@ test('a second tab is queued, and takes over when the first releases', async ({ 
   await expect(second.locator('#send-button')).toBeDisabled();
 
   await first.locator('#release').click();
-  await expect(first.locator('#status')).toHaveText('released');
+  await first.expectStatus('released');
   await expect(first.locator('#release')).toBeHidden();
   await expect(first.locator('#setup')).toBeVisible();
 
-  await expect(second.locator('#status')).toHaveText('open');
-  await sendLine(second, 'CUT 20');
+  await second.expectStatus('open');
+  await second.sendLine('CUT 20');
   // The tab that released receives nothing any more.
   await expect(first.locator('#received')).not.toContainText('CUT 20');
 
   // Asking for the device again joins the queue behind the tab that took over.
   await first.locator('#setup').click();
-  await expect(first.locator('#status')).toHaveText('queued');
+  await first.expectStatus('queued');
 });
 
 test('a second tab takes over when the first closes', async ({ context }) => {
   const first = await openTab(context);
-  await expect(first.locator('#status')).toHaveText('open');
+  await first.expectStatus('open');
 
   const second = await openTab(context);
-  await expect(second.locator('#status')).toHaveText('queued');
+  await second.expectStatus('queued');
 
-  await first.close();
+  await first.page.close();
 
-  await expect(second.locator('#status')).toHaveText('open');
-  await sendLine(second, 'CUT 30');
+  await second.expectStatus('open');
+  await second.sendLine('CUT 30');
 });
 
 test('a tab that finds the device run under another limit fails, and "Use the device again" starts over', async ({
@@ -158,7 +148,7 @@ test('a tab that finds the device run under another limit fails, and "Use the de
 
   // The example's tab withdraws: the tab holding the port decides the limit (ADR-0025).
   const tab = await openTab(context);
-  await expect(tab.locator('#status')).toHaveText('failed');
+  await tab.expectStatus('failed');
   await expect(tab.locator('#error')).toBeVisible();
   await expect(tab.locator('#error-code')).toHaveText('CONFIGURATION_CONFLICT');
   await expect(tab.locator('#error-recovering')).toBeHidden();
@@ -168,15 +158,15 @@ test('a tab that finds the device run under another limit fails, and "Use the de
   await expect(tab.locator('#setup')).toBeVisible();
 
   // The other application goes away, but a withdrawn tab does not come back by itself ...
-  await other.close();
-  await expect(tab.locator('#status')).toHaveText('failed');
+  await other.page.close();
+  await tab.expectStatus('failed');
 
   // ... and `setup()` alone would do nothing for a name that is still set up. The button
   // releases the failed configuration first, and the new one reaches the device.
   await tab.locator('#setup').click();
-  await expect(tab.locator('#status')).toHaveText('open');
+  await tab.expectStatus('open');
   await expect(tab.locator('#error')).toBeHidden();
   await expect(tab.locator('#setup')).toBeHidden();
   await expect(tab.locator('#release')).toBeVisible();
-  await sendLine(tab, 'CUT 40');
+  await tab.sendLine('CUT 40');
 });
