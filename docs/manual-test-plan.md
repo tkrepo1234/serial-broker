@@ -110,9 +110,9 @@ it proves the software path, not the electrical one.
 
 1. `npm run debug` — builds the package and serves `dist/` over `http://localhost`. Web Serial
    refuses anything that is not a secure context, so a LAN address over plain HTTP will not do.
-2. Open `http://localhost:<port>/debug/` in Chrome — the debugging surface. Each card lists the
-   tabs running a configuration and which of them holds the port; use it to confirm the failover
-   steps rather than inferring them.
+2. Open `http://localhost:<port>/debug/` in Chrome — the debugging surface. Its list shows every
+   configuration; choosing one opens its detail view, which lists the tabs running it and which of
+   them holds the port. Use it to confirm the failover steps rather than inferring them.
 3. Attach a USB-serial device. A CH340 adapter (`0x1a86` / `0x7523`) with its TX and RX pins
    bridged is ideal: everything sent comes straight back, so send and receive are visible in
    one window.
@@ -164,23 +164,23 @@ The checklist exercises on real hardware what the scenario matrix in
 Steps 1 and the `awaiting-permission` half of 2 were confirmed in the 2026-09-12 browser run;
 they are left unticked because the checklist is about a run **with** hardware.
 
-- [ ] **1.** Click _New configuration_, enter the device's IDs, click _Create and connect_. The card shows
-      `awaiting-permission` and _Choose device…_.
+- [ ] **1.** Click _New configuration_, enter the device's IDs, click _Create and connect_. Its detail
+      view shows `awaiting-permission` and _Choose device…_.
 - [ ] **2.** Click _Choose device…_. Chrome shows its port picker, filtered to the configured
       device. Pick it: status becomes `open`.
 - [ ] **3.** Send `HELLO`. With TX/RX bridged, both a `sent` and a `received` line appear.
 - [ ] **4.** Reload the page. It reconnects **with no prompt** — the browser remembered the
       permission and the library remembered the configuration.
 - [ ] **4a.** The same connection the other way round, on a browser that has not been given the
-      device: click _Choose a device…_, dismiss the picker once (nothing changes, no error), then
-      press it again and pick the port. The dialog opens filled in — the device's IDs, or _any
-      port_ for a port without USB IDs, a free name, 9600 baud. _Connect_ reaches `open`
-      **without a second prompt**.
+      device: click _Choose a device…_. The dialog opens first, with a free name and 9600 baud and
+      no device to fill in. _Connect_ opens Chrome's port picker; dismiss it once: nothing is set
+      up, and no error is shown. Click _Choose a device…_ and _Connect_ again and pick the port: the
+      configuration takes its device from the port and reaches `open` **without a second prompt**.
 
 ### Several tabs
 
-- [ ] **5.** Open the debugging surface in a second and third tab and click _Connect_ on the card.
-      Each reaches `open` without prompting.
+- [ ] **5.** Open the debugging surface in a second and third tab, choose the configuration in the
+      list and click _Connect_ in its detail view. Each reaches `open` without prompting.
 - [ ] **6.** Send from tab 2. Every tab's traffic shows it once, from tab 2. The device receives
       it **once**.
 - [ ] **7.** Send from tab 3 while tab 1 is in the background. It still works.
@@ -189,7 +189,7 @@ they are left unticked because the checklist is about a run **with** hardware.
 ### Failover
 
 - [ ] **9.** Close the tab that was opened first. The others stay `open` or briefly show
-      `connecting`, then `open`. Sending still works.
+      `reconnecting` or `connecting`, then `open`. Sending still works.
 - [ ] **10.** Kill a tab from Chrome's task manager (right-click → End process) rather than
       closing it. Same result: this is the crash path, with no unload handler.
 - [ ] **11.** Repeat until one tab is left. It takes over each time.
@@ -249,9 +249,10 @@ they are left unticked because the checklist is about a run **with** hardware.
       `PROTOCOL_VERSION_MISMATCH`, log `environment.transport-fallback` with
       `reason: 'worker-other-protocol-version'`, and behave as in step 25.
 - [ ] **29.** With two tabs sharing the port, terminate the worker from `chrome://inspect/#workers`.
-      Within about a minute each tab reports `BROKER_UNAVAILABLE` once, a new worker appears there,
-      and steps 5 and 6 work again without a reload. Repeat with one tab hidden for more than five
-      minutes beforehand: it reconnects too, within about four minutes.
+      As soon as the worker is gone each tab reports `BROKER_UNAVAILABLE` once, a new worker appears
+      there, and steps 5 and 6 work again without a reload. Repeat with one tab hidden for more than
+      five minutes beforehand: it reconnects as quickly — the worker's Web Lock is freed, and no
+      timer waits (ADR-0041).
 
 ## Recording a run
 
