@@ -282,14 +282,19 @@ export class ConfigurationSession {
   }
 
   /**
-   * Tries again where the connection gave up: in the tab holding the port, whose supervisor did.
+   * Tries again where the connection gave up (ADR-0010): in the tab holding the port, whose
+   * supervisor did, or - from any other tab - by asking that tab to.
    *
-   * A tab that withdrew over a different tab limit stays withdrawn; so does a tab that does not
-   * hold the port, whose status is the holding tab's to change.
+   * A tab that withdrew over a different tab limit stays withdrawn.
    */
   retry(): void {
-    if (this.#withdrawal === undefined) {
-      this.#supervisor?.retry();
+    if (this.#withdrawal !== undefined) {
+      return;
+    }
+    if (this.#supervisor !== undefined) {
+      this.#supervisor.retry();
+    } else if (this.#status === SerialBrokerStatus.Failed) {
+      this.#requestStatus(true);
     }
   }
 
@@ -620,6 +625,10 @@ export class ConfigurationSession {
         return;
 
       case 'status-request':
+        if (message.retry) {
+          // Nothing happens unless this tab's supervisor gave up: a working connection is left alone.
+          this.#supervisor?.retry();
+        }
         this.#answerStatusRequest();
         return;
 
@@ -1173,13 +1182,15 @@ export class ConfigurationSession {
     }
   }
 
-  #requestStatus(): void {
+  /** @param retry - Whether the tab holding the port is to try again where it gave up. */
+  #requestStatus(retry = false): void {
     this.transport.send({
       type: 'status-request',
       v: PROTOCOL_VERSION,
       from: this.transport.clientId,
       to: 'all',
       configName: this.#configuration.name,
+      retry,
     });
   }
 

@@ -439,8 +439,14 @@ function decodeChecked(raw: unknown): ProtocolMessage {
 
     case 'attach':
     case 'detach':
-    case 'status-request':
       return { type, v, from, to, configName: read.configName() };
+
+    case 'status-request': {
+      const configName = read.configName();
+      // Optional: a request that only asks for the status carries none.
+      const retry = raw['retry'] === undefined ? false : read.boolean('retry');
+      return { type, v, from, to, configName, retry };
+    }
 
     case 'owner-claimed': {
       const configName = read.configName();

@@ -230,6 +230,11 @@ export interface ErrorMessage extends Envelope {
 export interface StatusRequestMessage extends Envelope {
   readonly type: 'status-request';
   readonly configName: string;
+  /**
+   * The sender's application set the configuration up again while it had `failed`: the tab holding
+   * the port tries again, as `setup()` in that tab would (ADR-0010). Optional on the bus.
+   */
+  readonly retry: boolean;
 }
 
 /**

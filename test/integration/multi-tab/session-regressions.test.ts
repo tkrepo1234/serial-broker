@@ -101,6 +101,31 @@ describe.each(TRANSPORT_MODES)('the tab that holds the port (%s)', (transport) =
   });
 });
 
+describe.each(TRANSPORT_MODES)('a configuration that failed (%s)', (transport) => {
+  it('connects again when a tab that does not hold the port sets it up again', async () => {
+    const { harness, device } = harnessWithDevice(transport);
+    const manual = { ...READER_OPTIONS, connection: { autoReconnect: false } };
+    const holder = harness.openTab();
+    await holder.setup('Reader', manual);
+    const other = harness.openTab();
+    await other.setup('Reader', manual);
+
+    harness.serial.unplug(device);
+    await harness.settle();
+    harness.serial.plug(device);
+    await harness.advance(60_000);
+    expect(other.client.getStatus('Reader').status).toBe('failed');
+
+    // Setting a configuration up again is how an application says "try again" (ADR-0010), in
+    // whichever tab it happens.
+    await other.client.setup('Reader', manual);
+    await harness.settle();
+
+    expect(holder.client.getStatus('Reader').status).toBe('open');
+    expect(other.client.getStatus('Reader').status).toBe('open');
+  });
+});
+
 describe('a write of another tab during a clean release', () => {
   it('is sent once, and written by the next holder once the term has ended', async () => {
     const { harness, device } = harnessWithDevice('broadcastchannel');

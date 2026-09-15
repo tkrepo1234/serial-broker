@@ -49,6 +49,7 @@ function statusRequest(): ProtocolMessage {
     from: SELF,
     to: 'all',
     configName: 'Reader',
+    retry: false,
   };
 }
 
