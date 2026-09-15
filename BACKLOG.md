@@ -190,8 +190,8 @@ after this many iterations is what hardens the product now.
 - [x] The repository root and every directory contain only what is used, and the top-level README
       describes the layout.
 
-Still open from the usability review: P3 (a new `onStatusChange` listener receives the current status
-once) and P4 (`requestAccess()` from any tab).
+P3 and P4 from the usability review were done the same day (see "Performance tests, example apps and a
+usability review").
 
 ---
 
@@ -213,10 +213,10 @@ round"). All nine example applications exist with smoke tests. The usability rev
   `restore()` first.
 - **P2:** done on 2026-09-15 (ADR-0010, amended): `setup()` with equal options starts a `failed`
   configuration again, from any tab; the example applications use it.
-- **P3:** a new `onStatusChange` listener receives the current status once, so no example needs
-  `getStatus()` right after `subscribe()`.
-- **P4:** `requestAccess()` works from any tab, not only the one holding the port: the permission is
-  the origin's, and the holding tab looks for granted ports again when told.
+- **P3:** done on 2026-09-15: a new `onStatusChange` listener receives the current status once, and no
+  example calls `getStatus()` right after `subscribe()` any more.
+- **P4:** done on 2026-09-15 (ADR-0036): `requestAccess()` works from any tab taking part; the holding
+  tab looks for the granted port again when told, with the device chosen in auto mode.
 - P2 to P4 change the API's behaviour; weigh them in the complexity reduction, where each removes
   a step every example now takes.
 - Examples: done on 2026-09-15 - `examples/openui5`'s regular expression uses escapes, and its

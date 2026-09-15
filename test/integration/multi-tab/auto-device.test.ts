@@ -142,19 +142,25 @@ describe('a configuration in auto mode', () => {
     expect(device.isOpen).toBe(true);
   });
 
-  it('still refuses the picker in a tab that knows another tab holds the port', async () => {
+  it('lets a tab that does not hold the port choose the device, which the holding tab adopts', async () => {
     const harness = new BrowserHarness();
-    harness.serial.addDevice(READER.vendorId, READER.productId);
+    const device = harness.serial.addDevice(READER.vendorId, READER.productId);
     const owner = harness.openTab();
     await owner.setup('Reader', AUTO);
-
     const other = harness.openTab();
     await other.setup('Reader', AUTO);
 
-    // Only the tab holding the port can act on the choice (ADR-0009).
-    await expect(other.client.requestAccess('Reader')).rejects.toMatchObject({
-      code: SerialBrokerErrorCode.PERMISSION_REQUIRED,
+    harness.serial.pickerQueue.push(device);
+    await expect(other.client.requestAccess('Reader')).resolves.toBe(true);
+    await harness.settle();
+
+    expect(owner.client.getStatus('Reader')).toMatchObject({
+      status: SerialBrokerStatus.Open,
+      deviceKind: 'usb',
+      vendorId: READER.vendorId,
     });
+    expect(other.client.getStatus('Reader').status).toBe(SerialBrokerStatus.Open);
+    expect(device.isOpen).toBe(true);
   });
 
   it('remembers the resolved device, so a later visit reconnects without a prompt', async () => {

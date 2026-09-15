@@ -276,8 +276,6 @@ async function start() {
   SerialBroker.subscribe(CONFIGURATION, 'onReceive', onReceive);
   SerialBroker.subscribe(CONFIGURATION, 'onSend', onSend);
   SerialBroker.subscribe(CONFIGURATION, 'onError', onError);
-  // The status may have moved on between setup() and the subscription above.
-  showStatus(SerialBroker.getStatus(CONFIGURATION).status);
 }
 
 ui.connect.addEventListener('click', () => {

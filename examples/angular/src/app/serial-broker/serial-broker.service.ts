@@ -249,8 +249,6 @@ export class SerialBrokerService {
       return;
     }
     this.#subscribe();
-    // The status may have moved on between setup() resolving and the subscriptions above.
-    this.#applyStatus(SerialBroker.getStatus(this.name).status);
   }
 
   /**

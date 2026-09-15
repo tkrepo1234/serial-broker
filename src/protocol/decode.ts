@@ -439,7 +439,14 @@ function decodeChecked(raw: unknown): ProtocolMessage {
       const configName = read.configName();
       // Optional: a request that only asks for the status carries none.
       const retry = raw['retry'] === undefined ? false : read.boolean('retry');
-      return { type, v, from, to, configName, retry };
+      if (raw['device'] === undefined) {
+        return { type, v, from, to, configName, retry };
+      }
+      const device = read.device();
+      if (device.kind !== 'usb' && device.kind !== 'non-usb') {
+        return malformed(type, 'device');
+      }
+      return { type, v, from, to, configName, retry, device };
     }
 
     case 'owner-claimed': {

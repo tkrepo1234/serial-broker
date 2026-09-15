@@ -22,8 +22,8 @@ user picks. On the first visit nothing has been picked, so the status becomes `a
 and the button appears. After the user has chosen the port once, the configuration remembers
 which device it is, later visits open it with no prompt, and the button never shows.
 
-The script reads the status with `getStatus()` after subscribing, because the status can change
-between `setup()` and the moment the listener is registered.
+The status listener is told the current status once as soon as it is registered, so the button is
+right from the start, whatever happened between `setup()` and `subscribe()`.
 
 `requestAccess()` is called directly in the click handler. An `await` in front of it would use up
 the click, and the browser only shows its port picker in response to one.

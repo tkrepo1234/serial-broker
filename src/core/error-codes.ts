@@ -136,7 +136,7 @@ export const REMEDIATION: Record<SerialBrokerErrorCode, string> = {
   BROKER_UNAVAILABLE:
     'The broker script could not be loaded, or the worker running it stopped answering. If it did not load, ensure serial-broker.worker.js is served from the same origin, or pass its URL with SerialBroker.configure({ workerUrl }). If it stopped answering, the tabs connect to a new worker on their own and nothing needs to be done unless it keeps happening - except when the new worker runs another version of serial-broker, which is reported as PROTOCOL_VERSION_MISMATCH and only a reload resolves.',
   PERMISSION_REQUIRED:
-    'Only the tab holding the port can ask the user for it. Offer requestAccess() in response to the status "awaiting-permission", which every tab receives, and ask the user to try again if this happens anyway.',
+    'This tab does not take part in the configuration: it is queued under maxTabs, or it withdrew over a different tab limit. Offer requestAccess() in a tab that uses the device - any such tab can ask, whichever holds the port - or once this tab has a place.',
   PERMISSION_DENIED:
     'The user dismissed the port picker or the permission was revoked in site settings. Offer the action again from a user gesture.',
   USER_GESTURE_REQUIRED:

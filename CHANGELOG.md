@@ -11,10 +11,23 @@ coordinate with each other. See
 
 ## [Unreleased]
 
-**Wire protocol version 12.** Tabs of this build and tabs of an earlier one do not share a worker,
+**Wire protocol version 13.** Tabs of this build and tabs of an earlier one do not share a worker,
 a lock or a bus; they detect each other and report `PROTOCOL_VERSION_MISMATCH`. Reload every tab
 of an application after deploying it. Configurations remembered by an earlier build are not
 migrated (see below).
+
+### Changed after the reduction (protocol 13)
+
+- **A new `onStatusChange` listener is told the current status once**, right after `subscribe()`
+  returns, with `previousStatus` equal to `status`. No application has to call `getStatus()` after
+  subscribing any more; the documentation's examples, the task counts and the example applications
+  no longer do.
+- **`requestAccess()` works from any tab taking part in a configuration**, not only the one holding the
+  port: the permission belongs to the origin. A tab that does not hold the port shows the picker and
+  asks the holding tab to look for the port again with `status-request`, which now carries the device
+  chosen in auto mode (`device`); the holding tab adopts it (ADR-0036). A supervisor waiting for
+  permission looks again too. Only a `queued` tab, or one that withdrew, is refused with
+  `PERMISSION_REQUIRED`.
 
 ### The complexity and code reduction, in numbers
 

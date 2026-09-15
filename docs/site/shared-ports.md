@@ -90,12 +90,13 @@ What is remembered belongs to the origin, not to one tab. `release()` in one tab
 configuration only when no other tab still runs it with `remember: true`, and a tab that is closed,
 reloaded or crashes forgets nothing. Details are in [`remember`](configuration.md#remember).
 
-Only the tab holding the port can ask the user for permission, because only it can open the port the
-user chooses. In a tab that knows another tab holds the port, `requestAccess()` resolves `true`
-without asking when the status is `open`, and otherwise rejects with `PERMISSION_REQUIRED`. A tab
-that has just set the configuration up, and does not yet know of a tab holding the port, may ask at
-once — `setup()` and `requestAccess()` in one click — and its choice is used as soon as it holds the
-port. [First connection](first-connection.md#3-ask-for-permission-once) shows the usual pattern.
+Any tab taking part in a configuration can ask the user for permission: the permission belongs to the
+origin. A tab that does not hold the port shows the picker, and the tab holding the port then looks for
+the granted port again and opens it - in auto mode with the device the user chose, which it adopts.
+`requestAccess()` resolves `true` without asking when the status is already `open`. A tab that has just
+set the configuration up may ask at once — `setup()` and `requestAccess()` in one click. Only a tab
+`queued` under `maxTabs`, or one that withdrew, rejects with `PERMISSION_REQUIRED`.
+[First connection](first-connection.md#3-ask-for-permission-once) shows the usual pattern.
 
 ## Limiting how many tabs use a port
 

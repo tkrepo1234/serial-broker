@@ -37,7 +37,7 @@ export const STATUS_PRESENTATIONS: Readonly<Record<SerialBrokerStatus, StatusPre
   'awaiting-permission': {
     label: 'Waiting for permission',
     tone: 'attention',
-    hint: 'The browser has no granted port for this device. Choose it - the one click serial-broker needs. Only the tab holding the port can act on the choice; if the picker refuses here, try the click in another tab. The diagnostics panel says which tab holds the port.',
+    hint: 'The browser has no granted port for this device. Choose it - the one click serial-broker needs. The click works in any tab: the tab holding the port opens the port you choose.',
   },
   connecting: {
     label: 'Connecting…',
@@ -92,7 +92,6 @@ export function watchStatus(name: string, render: (status: string) => void): Uns
   const stop = SerialBroker.subscribe(name, 'onStatusChange', (event) => {
     render(event.status);
   });
-  render(SerialBroker.getStatus(name).status);
   return stop;
 }
 

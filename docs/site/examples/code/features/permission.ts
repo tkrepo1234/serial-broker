@@ -14,7 +14,6 @@ export function offerDeviceChoice(name: string, button: HTMLButtonElement): () =
   const stopListening = SerialBroker.subscribe(name, 'onStatusChange', (event) => {
     update(event.status);
   });
-  update(SerialBroker.getStatus(name).status);
 
   const onClick = (): void => {
     // No `await` before this call: it would use up the click, and the browser would refuse to

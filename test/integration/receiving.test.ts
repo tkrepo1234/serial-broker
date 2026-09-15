@@ -35,9 +35,12 @@ function eventsOf(tab: VirtualTab): string[] {
   tab.client.subscribe('Reader', 'onReceive', (event) =>
     events.push(`receive:${event.text ?? ''}`),
   );
-  tab.client.subscribe('Reader', 'onStatusChange', (event) =>
-    events.push(`status:${event.status}`),
-  );
+  tab.client.subscribe('Reader', 'onStatusChange', (event) => {
+    // Changes only: a new listener is also told the current status once.
+    if (event.previousStatus !== event.status) {
+      events.push(`status:${event.status}`);
+    }
+  });
   return events;
 }
 

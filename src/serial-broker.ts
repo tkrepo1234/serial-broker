@@ -193,7 +193,7 @@ export interface SerialBrokerApi {
    * | `onReceive` | The tab holding the port delivers what the device sent, collected until the line is quiet (`receive`, ADR-0039), in every tab. Delivery boundaries carry no meaning - this library performs no framing (ADR-0002). |
    * | `onSend` | The browser took bytes for the port, in every tab. `origin` is `'local'` if this tab issued the write and `'remote'` if another one did. |
    * | `onError` | Anything goes wrong, in every tab that is affected. |
-   * | `onStatusChange` | The connection status changes. |
+   * | `onStatusChange` | The connection status changes. A new listener is also told the current status once, right after `subscribe()` returns, with `previousStatus` equal to `status`. |
    *
    * A listener that throws is reported through `onError` and does not prevent the other
    * listeners receiving the event. Registering the same function twice has no extra effect.
@@ -284,17 +284,18 @@ export interface SerialBrokerApi {
    * only ports without USB identity, and for one in auto mode that has not resolved yet - which
    * then takes its device from the port chosen, and remembers it (ADR-0036).
    *
-   * Allowed in the tab holding the port, and in a tab that does not yet know of another tab
-   * holding it - so `setup()` and `requestAccess()` may follow each other in one click, and the
-   * choice is used the moment this tab holds the port.
+   * Allowed in any tab taking part in the configuration: the permission belongs to the origin. In a
+   * tab that does not hold the port, the tab holding it looks for the granted port again and opens
+   * it - in auto mode with the device chosen here. `setup()` and `requestAccess()` may follow each
+   * other in one click.
    *
    * @param name - The configuration name.
    * @returns `true` if a device is now available, `false` if the user dismissed the picker - a
    *   decision, not a failure, so it does not throw.
    * @throws A `SerialBrokerError` with code `UNKNOWN_CONFIGURATION`, `USER_GESTURE_REQUIRED` when
    *   called outside a gesture, `DEVICE_MISMATCH` when the chosen port is not the configured
-   *   device, or `PERMISSION_REQUIRED` when another tab owns the configuration and must be the one
-   *   to ask, or this tab is `queued`.
+   *   device, or `PERMISSION_REQUIRED` when this tab is `queued` under `maxTabs` or withdrew from the
+   *   configuration.
    * @example
    * ```ts
    * connectButton.addEventListener('click', async () => {

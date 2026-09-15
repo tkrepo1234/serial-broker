@@ -220,6 +220,10 @@ export function installHarness(
       await api.setup(name, options);
 
       api.subscribe(name, 'onStatusChange', (event) => {
+        // The current status a new listener is told once is already the first entry below.
+        if (event.previousStatus === event.status) {
+          return;
+        }
         entry.statuses.push(event.status);
       });
       api.subscribe(name, 'onReceive', (event) => {

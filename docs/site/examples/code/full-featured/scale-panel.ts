@@ -127,7 +127,6 @@ export class ScalePanel {
         }
       }),
     ];
-    this.#renderStatus(SerialBroker.getStatus(NAME).status);
   }
 
   /**

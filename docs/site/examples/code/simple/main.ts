@@ -31,8 +31,6 @@ SerialBroker.subscribe(DEVICE, 'onStatusChange', (event) => {
 SerialBroker.subscribe(DEVICE, 'onReceive', (event) => {
   output.textContent += event.text ?? '';
 });
-// The status may already have changed before the listener was registered.
-showStatus(SerialBroker.getStatus(DEVICE).status);
 
 connectButton.addEventListener('click', () => {
   // Called directly in the click: an `await` before it would use up the click. It can still fail -

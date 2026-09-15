@@ -26,7 +26,6 @@ export function showStatus(label: HTMLElement): Unsubscribe {
   const stop = SerialBroker.subscribe('Scale', 'onStatusChange', (event) => {
     label.textContent = event.status;
   });
-  label.textContent = SerialBroker.getStatus('Scale').status;
   return stop;
 }
 // [/status]
@@ -36,7 +35,6 @@ export function offerDeviceChoice(button: HTMLButtonElement): void {
   SerialBroker.subscribe('Scale', 'onStatusChange', (event) => {
     button.hidden = event.status !== 'awaiting-permission';
   });
-  button.hidden = SerialBroker.getStatus('Scale').status !== 'awaiting-permission';
   button.addEventListener('click', () => {
     SerialBroker.requestAccess('Scale').catch((error: unknown) => {
       console.error(error);

@@ -259,7 +259,9 @@ export class PortSupervisor {
    * Does nothing in any other state: a connection that works, or one being retried, is left alone.
    */
   retry(): void {
-    if (this.#state.kind !== 'failed') {
+    // `awaiting-permission` too: another tab may just have been granted the port (the permission is
+    // the origin's), and this tab has to look again.
+    if (this.#state.kind !== 'failed' && this.#state.kind !== 'awaiting-permission') {
       return;
     }
     this.#backoff.reset();

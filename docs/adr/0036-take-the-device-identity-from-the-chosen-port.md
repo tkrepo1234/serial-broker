@@ -52,8 +52,11 @@ options are written out. An application may pass `resolved` itself.
 
 **`requestAccess()` may be called before the tab holds the port** - in the same gesture that set the
 configuration up, while the election is one lock round trip away. The choice is used once the tab
-holds the port; if another tab turns out to hold it, the holder's device is adopted. A tab that
-knows another tab holds the port, or is `queued`, is refused with `PERMISSION_REQUIRED`.
+holds the port; if another tab turns out to hold it, the holder's device is adopted. A tab that knows
+another tab holds the port may ask too, since the permission is the origin's: it sends the device its
+user chose with its request to try again, and the tab holding the port adopts it and looks for the port
+again. Only a tab that is `queued`, or withdrew, is refused with `PERMISSION_REQUIRED`
+(2026-09-15; before, every tab but the holder was refused).
 
 **The resolution is remembered, reported and shared.**
 

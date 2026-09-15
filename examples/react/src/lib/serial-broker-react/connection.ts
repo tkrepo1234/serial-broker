@@ -292,8 +292,6 @@ export class SerialConnection {
           this.#update({ lastError: event.error });
         }),
       ];
-      // The status may have changed between setup() and the subscriptions above.
-      this.#onStatus(SerialBroker.getStatus(name).status);
     } catch (error: unknown) {
       // Released by other code in this tab between setup() and here: UNKNOWN_CONFIGURATION.
       this.#detach();

@@ -158,19 +158,23 @@ describe('error reporting', () => {
     });
   });
 
-  it('refuses to request access for a configuration owned by another tab', async () => {
+  it('lets a tab that does not hold the port ask for it, and the tab holding it connects', async () => {
     const harness = new BrowserHarness();
-    harness.serial.addDevice(READER.vendorId, READER.productId);
+    const device = harness.serial.addDevice(READER.vendorId, READER.productId);
     const owner = harness.openTab();
     await owner.setup('Reader', READER_OPTIONS);
     const peer = harness.openTab();
     await peer.setup('Reader', READER_OPTIONS);
+    expect(owner.client.getStatus('Reader').status).toBe(SerialBrokerStatus.AwaitingPermission);
 
-    // Only the tab that will hold the port can act on the picker's result, so asking from
-    // anywhere else would prompt the user for nothing.
-    await expect(peer.client.requestAccess('Reader')).rejects.toMatchObject({
-      code: SerialBrokerErrorCode.PERMISSION_REQUIRED,
-    });
+    // The permission is the origin's: granted in this tab, the tab holding the port opens it.
+    harness.serial.pickerQueue.push(device);
+    await expect(peer.client.requestAccess('Reader')).resolves.toBe(true);
+    await harness.settle();
+
+    expect(owner.client.getStatus('Reader').status).toBe(SerialBrokerStatus.Open);
+    expect(peer.client.getStatus('Reader').status).toBe(SerialBrokerStatus.Open);
+    expect(device.isOpen).toBe(true);
   });
 
   it('does nothing when access is requested for a port that is already open', async () => {

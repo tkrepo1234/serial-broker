@@ -382,7 +382,10 @@ export interface StatusChangeEvent {
   readonly name: string;
   /** The status now in effect. */
   readonly status: SerialBrokerStatus;
-  /** The status that was in effect before. */
+  /**
+   * The status that was in effect before. Equal to `status` in the one event a new listener receives
+   * to learn the current status, and in no other.
+   */
   readonly previousStatus: SerialBrokerStatus;
   /** Epoch milliseconds at which the transition happened. */
   readonly timestamp: number;

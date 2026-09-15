@@ -38,7 +38,6 @@ export function showStatus(name: string, element: HTMLElement): Unsubscribe {
     element.dataset['tone'] = tone;
   };
 
-  render(SerialBroker.getStatus(name).status);
   return SerialBroker.subscribe(name, 'onStatusChange', (event) => {
     render(event.status);
   });

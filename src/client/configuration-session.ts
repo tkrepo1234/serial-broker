@@ -334,7 +334,28 @@ export class ConfigurationSession {
     event: TEvent,
     listener: (payload: SerialBrokerEventMap[TEvent]) => void,
   ): () => void {
-    return this.#emitter.add(event, listener);
+    const remove = this.#emitter.add(event, listener);
+    if (event === 'onStatusChange') {
+      // The current status, once, so that no application has to read `getStatus()` right after
+      // subscribing. After `subscribe()` has returned, as every event is delivered, and only to a
+      // listener still registered then; `previousStatus` equals `status`, which no change has.
+      void Promise.resolve().then(() => {
+        if (this.#isReleased) {
+          return;
+        }
+        this.#emitter.emitTo(
+          'onStatusChange',
+          listener as (payload: SerialBrokerEventMap['onStatusChange']) => void,
+          {
+            name: this.#configuration.name,
+            status: this.#status,
+            previousStatus: this.#status,
+            timestamp: this.environment.clock.now(),
+          },
+        );
+      });
+    }
+    return remove;
   }
 
   /** Removes an event listener. */
@@ -431,23 +452,22 @@ export class ConfigurationSession {
    */
   async requestAccess(): Promise<void> {
     if (this.#supervisor === undefined) {
-      // Another context owns the port. If it is open, there is nothing to ask for; if it is
-      // waiting for permission, that context has to be the one to prompt, because only it can
-      // act on the result.
+      // Another tab holds the port, or none does yet. If it is open, there is nothing to ask for.
       if (this.#status === SerialBrokerStatus.Open) {
         return;
       }
-      const isHeldElsewhere =
+      // The permission is the origin's, so any tab taking part may ask the user for it. A tab
+      // waiting for a place, or one that has left the configuration, does not take part.
+      if (
         this.#status === SerialBrokerStatus.Queued ||
-        this.#terms.current !== undefined ||
         this.#withdrawal !== undefined ||
-        this.#isReleased;
-      if (isHeldElsewhere) {
+        this.#isReleased
+      ) {
         throw new SerialBrokerError(
           SerialBrokerErrorCode.PERMISSION_REQUIRED,
           this.#status === SerialBrokerStatus.Queued
             ? 'This tab is queued behind the tabs using this configuration and cannot use the device yet'
-            : 'Another tab currently owns this configuration and must be the one to request access',
+            : 'This tab no longer takes part in this configuration',
           {
             configName: this.#configuration.name,
             context: { status: this.#status },
@@ -460,8 +480,13 @@ export class ConfigurationSession {
     await this.#pickPort();
     // The picker stays open for as long as the user likes, so this tab may hold the port by now,
     // or no longer. Its supervisor, if there is one, decides what the grant means for the
-    // connection; without one, the choice is found among the granted ports once there is.
-    await this.#supervisor?.useGrantedPort();
+    // connection. Without one, the tab holding the port is asked to look again - with the device
+    // the user chose, which in auto mode it has no other way to learn.
+    if (this.#supervisor !== undefined) {
+      await this.#supervisor.useGrantedPort();
+    } else {
+      this.#requestStatus(true);
+    }
   }
 
   /**
@@ -604,9 +629,14 @@ export class ConfigurationSession {
         return;
 
       case 'status-request':
-        if (message.retry) {
-          // Nothing happens unless this tab's supervisor gave up: a working connection is left alone.
-          this.#supervisor?.retry();
+        if (message.retry && this.#supervisor !== undefined) {
+          // Asked by a tab whose user chose the device, or whose application set it up again. A
+          // resolution chosen there is taken first (ADR-0036); then nothing happens unless this
+          // tab's supervisor gave up or waits for permission - a working connection is left alone.
+          if (message.device !== undefined) {
+            this.resolveDevice(message.device, 'picker');
+          }
+          this.#supervisor.retry();
         }
         this.#answerStatusRequest();
         return;
@@ -1107,7 +1137,16 @@ export class ConfigurationSession {
       to: 'all',
       configName: this.#configuration.name,
       retry,
+      ...(retry ? this.#chosenDevice() : {}),
     });
+  }
+
+  /** The device auto mode resolved to, for a request to the tab holding the port. */
+  #chosenDevice(): { device?: ResolvedDevice } {
+    const device = this.#configuration.device;
+    return device.kind === 'auto' && device.resolved !== undefined
+      ? { device: device.resolved }
+      : {};
   }
 
   #broadcastStatus(status: SerialBrokerStatus): void {

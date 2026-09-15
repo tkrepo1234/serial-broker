@@ -18,7 +18,6 @@ export async function operateAlone(banner: HTMLElement): Promise<() => Promise<v
     banner.textContent =
       'The press is operated in another window. This window takes over when it is closed.';
   };
-  show(SerialBroker.getStatus('Press').status);
   const stopShowing = SerialBroker.subscribe('Press', 'onStatusChange', (event) => {
     show(event.status);
   });

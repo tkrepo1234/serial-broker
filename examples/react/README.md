@@ -240,9 +240,9 @@ once: called later, the library logs `facade.late-configure`. In `main.tsx` it r
 load; a hot update of a component does not run it again.
 
 **One tab holds the port; no tab can tell which.** Do not write UI that claims "this tab owns the
-device". In a tab that knows another tab holds the port, the library refuses to show the port
-picker with `PERMISSION_REQUIRED`, unless the status is `open`; `connect()` puts that error in
-`lastError`, and its remediation says what to do.
+device". It does not need to: `connect()` shows the port picker in any tab, and the tab holding the
+port opens the port the user chose. Only a tab queued under `maxTabs` is refused with
+`PERMISSION_REQUIRED`, which `connect()` puts in `lastError` with its remediation.
 
 **Lines start when someone looks.** When the last component unmounts, the store forgets the lines:
 kept, they would have a gap nobody could see.

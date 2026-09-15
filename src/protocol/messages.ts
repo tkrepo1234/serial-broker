@@ -221,6 +221,11 @@ export interface StatusRequestMessage extends Envelope {
    * the port tries again, as `setup()` in that tab would (ADR-0010). Optional on the bus.
    */
   readonly retry: boolean;
+  /**
+   * With `retry`: the device the sender's user chose in auto mode, which the tab holding the port
+   * adopts before it looks for the port again (ADR-0036). Absent otherwise.
+   */
+  readonly device?: Extract<StatusDevice, { readonly kind: 'usb' } | { readonly kind: 'non-usb' }>;
 }
 
 /**

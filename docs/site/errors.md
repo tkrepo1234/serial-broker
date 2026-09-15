@@ -202,14 +202,13 @@ every tab uses; see [The worker script](installing.md#the-worker-script).
 ### Permission
 
 `PERMISSION_REQUIRED`
-: **Raised by** `requestAccess()` in a tab that knows another tab holds the port, whenever the status
-is not `open` — `awaiting-permission`, `connecting`, `reconnecting`, `failed` — and in a tab that is
-`queued`. Only the tab holding the port can use the user's choice. Not raised in a tab that has just
-set the configuration up and has not yet heard of a tab holding the port: it may ask in the same
-click as `setup()`.
+: **Raised by** `requestAccess()` in a tab that does not take part in the configuration: one that is
+`queued` behind the tabs using it under `maxTabs`, or one that withdrew because the tab holding the
+port runs a different tab limit. Any other tab may ask: the permission belongs to the origin, and the
+tab holding the port opens the port the user chose.
 **Context:** `status`.
 **Do:** offer `requestAccess()` in response to `awaiting-permission`, which every tab receives, and
-show this error if it occurs anyway: the button may be clicked in a tab that does not hold the port.
+show this error if it occurs anyway; a queued tab can ask once it has a place.
 
 `PERMISSION_DENIED`
 : **Not raised.** When the user closes the port picker without choosing — or no port in the picker

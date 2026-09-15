@@ -116,11 +116,10 @@ npm run test:examples -- examples/multi-tab-dashboard/smoke.spec.ts
 
 ## What a developer needs to know
 
-**Only the tab holding the port can ask for permission.** Every tab shows `awaiting-permission`,
-and every tab shows the button, but `requestAccess()` in a tab that knows another tab holds the
-port rejects with `PERMISSION_REQUIRED` - unless the status is already `open`, when it resolves
-`true` without asking. A tab that has just set the configuration up and knows of no holder yet may
-ask at once. The hint under the status says so, and the error strip shows the remediation. With a device already granted, the
+**Any tab can ask for permission.** Every tab shows `awaiting-permission` and the button, and a click
+in any of them works: the permission belongs to the origin, and the tab holding the port opens the
+port the user chose. If the status is already `open`, `requestAccess()` resolves `true` without
+asking. The hint under the status says so, and the error strip shows the remediation. With a device already granted, the
 question does not arise: `setup()` opens it with no prompt in whichever tab holds the port.
 
 **Which tab holds the port is invisible to the application, on purpose.** Nothing in the main

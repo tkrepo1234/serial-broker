@@ -20,17 +20,16 @@ hand. The serial-broker code imports `SerialBroker` from `serial-broker`.
 | ------------------------------------------------------------------------------- | ------------- | ------------------- | ------------------------------------------------------------ |
 | [Connect and print received text](#connect-and-print-received-text)             | 2 / 3 / 3     | 7 / 2 / 5           | Not possible; by hand, an election and a channel             |
 | [Send a command and await it](#send-a-command-and-await-it)                     | 1 / 0 / 3     | 4 / 0 / 3           | Every write sent to the tab holding the port, and its result |
-| [Show the status](#show-the-status)                                             | 2 / 0 / 2     | 2 / 0 / 3           | Every change sent to every tab, and asked for on joining     |
-| [Ask for permission](#ask-for-permission)                                       | 3 / 0 / 3     | 1 / 1 / 3           | The tab holding the port told to look again                  |
+| [Show the status](#show-the-status)                                             | 1 / 0 / 2     | 2 / 0 / 3           | Every change sent to every tab, and asked for on joining     |
+| [Ask for permission](#ask-for-permission)                                       | 2 / 0 / 3     | 1 / 1 / 3           | The tab holding the port told to look again                  |
 | [Release](#release)                                                             | 1 / 1 / 2     | 3 / 0 / 2           | The port closed before the lock is let go                    |
 | [Remember and restore](#remember-and-restore)                                   | 2 / 1 / 2     | 4 / 1 / 3           | A stored entry kept while any tab still runs it              |
 | [Use the device from one tab at a time](#use-the-device-from-one-tab-at-a-time) | 1 / 3 / 2     | 3 / 1 / 2           | A Web Lock around the port                                   |
 
 Each cell reads _calls / options / concepts_.
 
-Every task uses only `setup()`, `subscribe()`, `requestAccess()`, `send()` and `release()`, with two
-exceptions: `getStatus()` reads the status once after subscribing, and `restore()` brings back the
-configurations a page does not set up itself.
+Every task uses only `setup()`, `subscribe()`, `requestAccess()`, `send()` and `release()`, with one
+exception: `restore()` brings back the configurations a page does not set up itself.
 
 ## Connect and print received text
 
@@ -98,8 +97,8 @@ shows a channel that serialises commands.
 ```
 
 **Concepts:** eight statuses, listed in [the API reference](api/index.md); the list may grow, so an
-unknown value is shown, not thrown on. `getStatus()` after `subscribe()` catches a change made
-before the listener was registered.
+unknown value is shown, not thrown on. A new listener is told the current status once, so nothing
+has to read it separately.
 
 With Web Serial alone:
 
@@ -125,8 +124,8 @@ asks for the current one.
 ```
 
 **Concepts:** the browser shows its picker only during a click, so `requestAccess()` comes first in
-the handler; the status is `awaiting-permission` while nobody has chosen; only the tab holding the
-port can ask, and in the others `requestAccess()` rejects with `PERMISSION_REQUIRED`.
+the handler; the status is `awaiting-permission` while nobody has chosen; any tab can ask, and the tab
+holding the port opens the port the user chose.
 
 With Web Serial alone:
 

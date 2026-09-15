@@ -73,8 +73,6 @@ async function main(): Promise<void> {
     // Failures without a call to answer for them: the device unplugged, the port not opening.
     showError(event.error);
   });
-  // The status may already have changed between setup() and the subscription above.
-  showStatus(SerialBroker.getStatus(NAME).status);
 
   connectButton.addEventListener('click', () => {
     // requestAccess() has to be the first thing in the click handler. The browser shows its port

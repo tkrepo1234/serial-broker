@@ -109,6 +109,25 @@ export class EventEmitter {
     }
   }
 
+  /**
+   * Delivers `payload` to one listener, if it is still registered for `event`, isolated like
+   * {@link emit}.
+   */
+  emitTo<TEvent extends SerialBrokerEventName>(
+    event: TEvent,
+    listener: (payload: SerialBrokerEventMap[TEvent]) => void,
+    payload: SerialBrokerEventMap[TEvent],
+  ): void {
+    if (this.#listeners.get(event)?.has(listener) !== true) {
+      return;
+    }
+    try {
+      listener(payload);
+    } catch (error) {
+      this.#reportSafely(event, error);
+    }
+  }
+
   /** Removes every listener. Used when a configuration is released. */
   clear(): void {
     this.#listeners.clear();

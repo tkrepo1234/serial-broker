@@ -78,7 +78,12 @@ export class VirtualTab {
     this.client.subscribe(name, 'onReceive', (event) => record.received.push(event));
     this.client.subscribe(name, 'onSend', (event) => record.sent.push(event));
     this.client.subscribe(name, 'onError', (event) => record.errors.push(event));
-    this.client.subscribe(name, 'onStatusChange', (event) => record.statuses.push(event));
+    this.client.subscribe(name, 'onStatusChange', (event) => {
+      // A trail of changes: the current status every new listener is told once is not one.
+      if (event.previousStatus !== event.status) {
+        record.statuses.push(event);
+      }
+    });
 
     await this.harness.settle();
   }

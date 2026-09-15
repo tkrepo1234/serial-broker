@@ -41,8 +41,6 @@ SerialBroker.subscribe('Adapter', 'onStatusChange', (event) => {
 SerialBroker.subscribe('Adapter', 'onReceive', (event) => {
   output.textContent += event.text ?? '';
 });
-
-statusLabel.textContent = SerialBroker.getStatus('Adapter').status;
 ```
 
 Every tab receives these events, whichever tab holds the port. `event.data` always holds the raw
@@ -50,8 +48,8 @@ bytes; `event.text` is there because `decodeText` is on. What the device sends i
 the line has been quiet for a moment, so a short answer usually arrives as one event — but an event
 is not a message; see [Receiving](guarantees.md#receiving).
 
-Read the status once with `getStatus()` after subscribing: it may have changed before the listener
-was registered.
+A new `onStatusChange` listener is told the current status once, right after `subscribe()` returns,
+so the label is right from the start without a separate `getStatus()`.
 
 ## 3. Ask for permission, once
 
@@ -79,9 +77,10 @@ Call `requestAccess()` **directly** in the click handler. An `await` before it u
 and the browser refuses to show the picker (`USER_GESTURE_REQUIRED`). `requestAccess()` resolves
 `false` when the user closes the picker without choosing.
 
-Every tab shows `awaiting-permission`, but only the tab holding the port can ask; in the others
-`requestAccess()` rejects with `PERMISSION_REQUIRED`, so show the error rather than dropping it. The
-rules are in [Permission, and remembering devices](shared-ports.md#permission-and-remembering-devices).
+Every tab shows `awaiting-permission`, and the button works in each of them: the permission belongs to
+the origin, and the tab holding the port opens the port the user chose. Only a tab `queued` under
+`maxTabs` rejects with `PERMISSION_REQUIRED`, so show the error rather than dropping it. The rules
+are in [Permission, and remembering devices](shared-ports.md#permission-and-remembering-devices).
 
 Once the user has chosen the port, the browser remembers the choice for your origin. On every later
 visit, `setup()` finds the port and opens it with no prompt.
