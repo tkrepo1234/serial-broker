@@ -188,7 +188,9 @@ export class ConfigurationSession {
         this.#writes.handleTermEnded(term);
         // The port is with nobody until the next tab claims it. Only the term that held it as far
         // as this tab knew says that; a term that had been succeeded describes nothing any more.
-        if (wasCurrent && !this.#election.isOwner && !this.#isReleased) {
+        // A configuration that gave up, and does not reconnect by itself, stays `failed`: the next
+        // tab to hold the port does not connect either (ADR-0010).
+        if (wasCurrent && !this.#election.isOwner && !this.#isReleased && !this.#staysFailed()) {
           this.#setStatus(SerialBrokerStatus.Reconnecting);
         }
       },
@@ -448,12 +450,37 @@ export class ConfigurationSession {
    *
    * Allowed while this tab holds the port, and before anyone is known to: a tab that has just set
    * the configuration up may ask in the same gesture, and the choice is used the moment this tab
-   * holds the port (ADR-0036). A tab that knows another tab holds it has no use for a choice.
+   * holds the port (ADR-0036). A tab that knows another tab holds it asks that tab to look again.
+   *
+   * @param options - `chooseAgain`: an auto-mode configuration lets the user choose a different
+   *   device, which the tab holding the port switches to, even while it is open.
+   * @throws A {@link SerialBrokerError} with code `INVALID_ARGUMENT` for `chooseAgain` in a
+   *   configuration that names its device, before the picker opens.
    */
-  async requestAccess(): Promise<void> {
+  async requestAccess(
+    options: { readonly chooseAgain: boolean } = { chooseAgain: false },
+  ): Promise<void> {
+    const { chooseAgain } = options;
+    if (chooseAgain && this.#configuration.device.kind !== 'auto') {
+      throw new SerialBrokerError(
+        SerialBrokerErrorCode.INVALID_ARGUMENT,
+        `"${this.#configuration.name}" names its device, so there is nothing to choose again. To use another device, release the configuration and set it up with the other device.`,
+        {
+          configName: this.#configuration.name,
+          context: {
+            argumentName: 'options.chooseAgain',
+            expected: 'a configuration in auto mode',
+            actualValue: true,
+            deviceKind: describeDevice(this.#configuration.device).kind,
+          },
+          timestamp: this.environment.clock.now(),
+        },
+      );
+    }
     if (this.#supervisor === undefined) {
-      // Another tab holds the port, or none does yet. If it is open, there is nothing to ask for.
-      if (this.#status === SerialBrokerStatus.Open) {
+      // Another tab holds the port, or none does yet. If it is open, there is nothing to ask for -
+      // unless the user is to choose a different device.
+      if (this.#status === SerialBrokerStatus.Open && !chooseAgain) {
         return;
       }
       // The permission is the origin's, so any tab taking part may ask the user for it. A tab
@@ -477,33 +504,41 @@ export class ConfigurationSession {
       }
     }
 
-    await this.#pickPort();
+    const changed = await this.#pickPort(chooseAgain);
     // The picker stays open for as long as the user likes, so this tab may hold the port by now,
     // or no longer. Its supervisor, if there is one, decides what the grant means for the
-    // connection. Without one, the tab holding the port is asked to look again - with the device
-    // the user chose, which in auto mode it has no other way to learn.
-    if (this.#supervisor !== undefined) {
-      await this.#supervisor.useGrantedPort();
-    } else {
+    // connection: a different device is switched to, even from an open connection. Without one,
+    // the tab holding the port is asked to look again - with the device the user chose, which in
+    // auto mode it has no other way to learn.
+    const supervisor = this.#supervisor;
+    if (supervisor === undefined) {
       this.#requestStatus(true);
+    } else if (changed) {
+      await supervisor.followDevice();
+    } else {
+      await supervisor.useGrantedPort();
     }
   }
 
   /**
    * Opens the picker for the device in effect and takes what the user chose.
    *
-   * In auto mode the chosen port's identity becomes the device (ADR-0036). Otherwise the port has
-   * to be the configured device - a browser applies the filter, but the check behind it holds
-   * should one offer a port it did not ask for.
+   * In auto mode the chosen port's identity becomes the device (ADR-0036): the first time, and
+   * whenever the user is to choose again, when the picker is unfiltered. Otherwise the port has to be
+   * the configured device - a browser applies the filter, but the check behind it holds should one
+   * offer a port it did not ask for.
    *
+   * @returns `true` if the device in effect changed.
    * @throws A {@link SerialBrokerError} with code `PERMISSION_DENIED` if the user dismisses
    *   the picker, `DEVICE_MISMATCH` if the chosen port is not the configured device, or
    *   `USER_GESTURE_REQUIRED` if the call was not made during a gesture.
    */
-  async #pickPort(): Promise<void> {
+  async #pickPort(chooseAgain: boolean): Promise<boolean> {
     let port: SerialPortLike;
     try {
-      port = await this.environment.serial.requestPort(toRequestOptions(this.#configuration));
+      port = await this.environment.serial.requestPort(
+        chooseAgain ? {} : toRequestOptions(this.#configuration),
+      );
     } catch (error) {
       throw mapRequestPortError(error, {
         configName: this.#configuration.name,
@@ -512,9 +547,8 @@ export class ConfigurationSession {
     }
 
     const device = this.#configuration.device;
-    if (device.kind === 'auto' && device.resolved === undefined) {
-      this.resolveDevice(resolveDevice(port), 'picker');
-      return;
+    if (device.kind === 'auto' && (chooseAgain || device.resolved === undefined)) {
+      return this.resolveDevice(resolveDevice(port), 'picker');
     }
     if (!matchesDevice(port, this.#configuration)) {
       const info = port.getInfo();
@@ -537,6 +571,7 @@ export class ConfigurationSession {
         },
       );
     }
+    return false;
   }
 
   /**
@@ -544,13 +579,16 @@ export class ConfigurationSession {
    * holding the port runs (ADR-0036).
    *
    * Only auto mode resolves, and only to something else than it has: the tab holding the port
-   * decides, so a device adopted from it replaces one this tab chose earlier. The client passes
-   * what a remembered entry resolved to before the session starts.
+   * decides, so a device adopted from it replaces one this tab chose earlier, and a device the user
+   * chose again replaces the one before. The client passes what a remembered entry resolved to
+   * before the session starts.
+   *
+   * @returns `true` if the device in effect changed.
    */
-  resolveDevice(resolved: ResolvedDevice, source: 'picker' | 'holder' | 'remembered'): void {
+  resolveDevice(resolved: ResolvedDevice, source: 'picker' | 'holder' | 'remembered'): boolean {
     const device = this.#configuration.device;
     if (device.kind !== 'auto' || isSameResolution(device.resolved, resolved)) {
-      return;
+      return false;
     }
     this.#configuration = Object.freeze({
       ...this.#configuration,
@@ -565,6 +603,7 @@ export class ConfigurationSession {
       productId: resolved.kind === 'usb' ? resolved.productId : undefined,
     });
     this.onDeviceResolved();
+    return true;
   }
 
   // --- Bus ----------------------------------------------------------------------------------
@@ -631,12 +670,16 @@ export class ConfigurationSession {
       case 'status-request':
         if (message.retry && this.#supervisor !== undefined) {
           // Asked by a tab whose user chose the device, or whose application set it up again. A
-          // resolution chosen there is taken first (ADR-0036); then nothing happens unless this
-          // tab's supervisor gave up or waits for permission - a working connection is left alone.
-          if (message.device !== undefined) {
-            this.resolveDevice(message.device, 'picker');
+          // resolution chosen there is taken first (ADR-0036), and a different device is switched
+          // to, even from an open connection: the user chose it. Otherwise nothing happens unless
+          // this tab's supervisor gave up or waits for permission - a working connection is left
+          // alone.
+          const supervisor = this.#supervisor;
+          if (message.device !== undefined && this.resolveDevice(message.device, 'picker')) {
+            void supervisor.followDevice();
+          } else {
+            supervisor.retry();
           }
-          this.#supervisor.retry();
         }
         this.#answerStatusRequest();
         return;
@@ -751,7 +794,9 @@ export class ConfigurationSession {
     );
 
     this.#supervisor = supervisor;
-    supervisor.start();
+    // Taken over from a term that gave up, in a configuration that does not reconnect by itself:
+    // this tab does not connect either, until the application or the user says so (ADR-0010).
+    supervisor.start(this.#staysFailed() ? 'failed' : 'connecting');
 
     // Becoming the owner is also a change of owner, and has to treat pending writes exactly as an
     // announcement from a peer would. Whoever held the port before let go of the lock - but what it
@@ -1118,6 +1163,20 @@ export class ConfigurationSession {
       this.#statusAnswers.take();
       this.#broadcastStatus(this.#status);
     }, this.#statusAnswers.delayUntilAllowed());
+  }
+
+  /**
+   * `true` while the configuration, as this tab last knew it, gave up and waits for the application
+   * or the user: `failed`, with `autoReconnect: false`.
+   *
+   * A term of holding the port that ends does not change that, so neither the tabs that watch it end
+   * nor the tab taking over treat the handover as a reason to connect (ADR-0010). A tab that knows
+   * nothing - the only tab, reloaded - is `idle`, and connects: setting up is the application asking.
+   */
+  #staysFailed(): boolean {
+    return (
+      this.#status === SerialBrokerStatus.Failed && !this.#configuration.connection.autoReconnect
+    );
   }
 
   /** Stops what this session scheduled. */

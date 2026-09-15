@@ -294,6 +294,21 @@ export interface ReleaseOptions {
   readonly forgetDevice?: boolean;
 }
 
+/** Options for {@link SerialBrokerApi.requestAccess}. */
+export interface RequestAccessOptions {
+  /**
+   * Lets the user choose a different device for a configuration in auto mode that already has one.
+   *
+   * The picker is opened unfiltered, and the port the user chooses becomes the device of every tab
+   * and is remembered, as the first choice was. The tab holding the port closes the old device and
+   * opens the new one. A dismissed picker changes nothing. A configuration that names its device
+   * rejects with `INVALID_ARGUMENT`: set it up with the other device instead. See ADR-0036.
+   *
+   * @defaultValue false
+   */
+  readonly chooseAgain?: boolean;
+}
+
 /**
  * A point-in-time view of a configuration.
  *

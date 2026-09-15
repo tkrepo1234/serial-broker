@@ -93,7 +93,9 @@ reloaded or crashes forgets nothing. Details are in [`remember`](configuration.m
 Any tab taking part in a configuration can ask the user for permission: the permission belongs to the
 origin. A tab that does not hold the port shows the picker, and the tab holding the port then looks for
 the granted port again and opens it - in auto mode with the device the user chose, which it adopts.
-`requestAccess()` resolves `true` without asking when the status is already `open`. A tab that has just
+`requestAccess()` resolves `true` without asking when the status is already `open`, unless it is called
+with `{ chooseAgain: true }` to choose a different device in auto mode; see
+[`device`](configuration.md#device). A tab that has just
 set the configuration up may ask at once — `setup()` and `requestAccess()` in one click. Only a tab
 `queued` under `maxTabs`, or one that withdrew, rejects with `PERMISSION_REQUIRED`.
 [First connection](first-connection.md#3-ask-for-permission-once) shows the usual pattern.

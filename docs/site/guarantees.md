@@ -131,8 +131,12 @@ instead.
 
 **With `connection.autoReconnect: false`**, a lost connection or a failed attempt ends in `failed`,
 with its error reported, and nothing is tried again: not after a delay, and not when the device is
-plugged in again. A configuration that has never been connected still connects when its device
-appears; that is its first connection, not a reconnect.
+plugged in again. The errors reported for the loss carry `isRetryable: false`. Nor does a handover
+connect it: when the tab holding a `failed` configuration closes or crashes, the tab that takes the
+port over stays `failed`, and so does every other tab. A configuration that has never been connected
+still connects when its device appears; that is its first connection, not a reconnect. A page that
+loads while no other tab runs the configuration knows nothing of the failure, and connects when it
+sets the configuration up: that is the application asking.
 
 **Starting a failed configuration again.** Calling `setup()` again with the same options starts a
 `failed` configuration again, whatever made it fail and whichever tab calls it: a tab that does not

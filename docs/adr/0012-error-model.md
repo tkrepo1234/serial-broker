@@ -26,7 +26,7 @@ One error class, `SerialBrokerError extends Error`, carrying:
 | `configName`  | Which configuration, when applicable.                                                       |
 | `context`     | Structured, structurally-cloneable detail (attempt number, timeout value, peer version...). |
 | `remediation` | A specific, actionable sentence for the developer. Mandatory.                               |
-| `isRetryable` | Whether the library is handling it by retrying.                                             |
+| `isRetryable` | Whether the library is handling it by retrying: never with `autoReconnect: false`.          |
 | `timestamp`   | From the injected clock.                                                                    |
 | `cause`       | The original error, always chained, never discarded.                                        |
 
@@ -66,4 +66,11 @@ string matching on the message.
 ## Verification
 
 Unit tests assert the mapping table, round-trip serialisation, cause chaining, and that every
-code has a non-empty remediation string.
+code has a non-empty remediation string. `test/integration/auto-reconnect.test.ts` asserts that
+`isRetryable` follows `connection.autoReconnect` in every tab.
+
+## History
+
+- 2026-09-12: Accepted.
+- 2026-09-15: `isRetryable` says whether the library recovers: a configuration with
+  `autoReconnect: false` reports lost connections and failed attempts with `false` (ADR-0010).

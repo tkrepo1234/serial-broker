@@ -47,8 +47,10 @@ on this.
 user.
 
 `isRetryable`
-: `true` for the codes serial-broker recovers from by itself when `connection.autoReconnect` is on.
-The status shows the recovery; the application need not act. See [below](#retryable-errors).
+: `true` when serial-broker is recovering by itself and the application need not act: the status
+shows the recovery. With `connection.autoReconnect: false` the errors of a lost connection or a
+failed attempt carry `false`, in every tab, because nothing retries them. See
+[below](#retryable-errors).
 
 `configName`
 : The configuration the error concerns, where there is one.
@@ -103,9 +105,10 @@ Each ends a connection attempt or a connection, and the tab holding the port sch
 attempt as described in [Reconnecting](guarantees.md#reconnecting). Only when the attempts are used
 up does a non-retryable error follow: `RECONNECT_EXHAUSTED`.
 
-`isRetryable` belongs to the code. With `connection.autoReconnect: false` these errors still carry
-`isRetryable: true`, but nothing is retried: the status becomes `failed`, and the application starts
-the configuration again with `setup()`. Watch the status rather than `isRetryable` in that case.
+With `connection.autoReconnect: false` nothing is retried: these errors carry `isRetryable: false`,
+in every tab, the status becomes `failed`, and the application starts the configuration again with
+`setup()`. An application that skips retryable errors therefore still sees every loss it has to act
+on.
 
 An attempt to connect that fails with a code that is not retryable — `WEB_SERIAL_UNAVAILABLE`, when
 the browser refuses to open the port or to list the granted ports — is not repeated. The status
@@ -120,8 +123,9 @@ usually means another program has the device open, or the adapter rejects the li
 
 `INVALID_ARGUMENT`
 : **Raised by** any method, for an argument that fails validation, including every option of
-`setup()`; and by `send()` for a string when the configured `encoding` is not UTF-8, and for a
-payload over 16 MiB (`context.byteLength`).
+`setup()`; by `send()` for a string when the configured `encoding` is not UTF-8, and for a
+payload over 16 MiB (`context.byteLength`); and by `requestAccess()` with `{ chooseAgain: true }` for
+a configuration that names its device, which is set up with the other device instead.
 **Context:** `argumentName` names the field, such as `options.serial.baudRate`; `expected` says what
 it must be; `actualType` and, for simple values, `actualValue` say what it was.
 **Do:** check the reported argument against its type and range in

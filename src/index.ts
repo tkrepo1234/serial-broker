@@ -43,6 +43,7 @@ export {
   type NonUsbDeviceFilter,
   type ReceiveEvent,
   type ReleaseOptions,
+  type RequestAccessOptions,
   type ResolvedDeviceFilter,
   type SendableData,
   type SendEvent,

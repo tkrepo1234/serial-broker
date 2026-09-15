@@ -105,6 +105,12 @@ granted ports apart: it uses the first and logs `matcher.ambiguous`.
   over the remembered one.
 - **Shared:** a tab in auto mode adopts the device of the tab holding the port, whether that tab chose
   it in the picker or named it. Choose it once, in any tab.
+- **Change the device:** when an adapter is swapped for another model, call
+  `requestAccess(name, { chooseAgain: true })` from a click, in any tab. The picker is unfiltered,
+  the port chosen becomes the device of every tab and is remembered, and the tab holding the port
+  closes the old device and opens the new one, also while it is open. Dismissing the picker changes
+  nothing. A configuration that names its device rejects this with `INVALID_ARGUMENT`: set it up
+  with the other device instead.
 - **Keep in mind:** until the user has chosen, an auto-mode configuration matches no granted port,
   even when only one is granted; `getStatus().deviceKind` is `'auto'` then. `setup()` and
   `requestAccess()` may follow each other in one click.
@@ -195,9 +201,12 @@ these settings feed are in [Reconnecting](guarantees.md#reconnecting).
 : Whether the tab holding the port reconnects by itself. With `false`, a lost connection or a failed
 attempt ends in `failed` with the error reported, and nothing is tried again — not after a delay,
 and not when the device is plugged in again. The application decides when to try: calling `setup()`
-again with the same options, in any tab, starts the configuration again. A configuration that never
-found its device still connects when the device appears; that is its first connection, not a
-reconnect. **Set it to `false`** on a production line where a lost device must be acknowledged by a
+again with the same options, in any tab, starts the configuration again. A handover does not start
+it either: when the tab holding a `failed` configuration closes or crashes, the tab taking the port
+over stays `failed`, as every other tab does. The errors of the loss carry `isRetryable: false`. A
+configuration that never found its device still connects when the device appears; that is its first
+connection, not a reconnect. So does a page that loads while no other tab runs the configuration: it
+knows nothing of the failure, and setting the configuration up is the application asking. **Set it to `false`** on a production line where a lost device must be acknowledged by a
 person before the application talks to it again. **Cost:** every glitch — a loose cable, an adapter
 reset on wake — needs the application to act.
 

@@ -382,6 +382,20 @@ export function normalizeReleaseOptions(options: unknown): { readonly forgetDevi
   });
 }
 
+/**
+ * Validates the options passed to `requestAccess()`, before the picker is opened.
+ *
+ * @throws A {@link SerialBrokerError} with code `INVALID_ARGUMENT`.
+ */
+export function normalizeRequestAccessOptions(options: unknown): {
+  readonly chooseAgain: boolean;
+} {
+  const raw = optionalObject(options, 'options');
+  return Object.freeze({
+    chooseAgain: requireBoolean(orDefault(raw['chooseAgain'], false), 'options.chooseAgain'),
+  });
+}
+
 const TRANSPORT_KINDS: readonly TransportKind[] = ['auto', 'sharedworker', 'broadcastchannel'];
 
 /**
