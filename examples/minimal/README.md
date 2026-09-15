@@ -23,7 +23,6 @@ await SerialBroker.setup('Device', {
 SerialBroker.subscribe('Device', 'onStatusChange', (event) => showStatus(event.status));
 SerialBroker.subscribe('Device', 'onReceive', (event) => appendReceived(event.text ?? ''));
 SerialBroker.subscribe('Device', 'onError', (event) => showError(event.error));
-showStatus(SerialBroker.getStatus('Device').status); // it may have changed before subscribing
 
 // Shown only while the status is 'awaiting-permission': the browser shows its port picker
 // during a click and nowhere else. requestAccess() comes first in the handler - no await before it.
