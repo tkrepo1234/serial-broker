@@ -34,21 +34,6 @@ export function storageEntryKey(name: string): string {
   return `${KEY_PREFIX}/entry/${name}`;
 }
 
-/**
- * Keys of formats this version does not read, removed the first time configurations are restored.
- *
- * Version 1 kept every configuration in one JSON object, and the versions before it kept that
- * object under a key carrying the protocol version (ADR-0022). Nothing is carried over: before
- * 1.0 a configuration that has to be set up once more costs a click, and a reader for a format
- * nobody has in production costs a function that can go wrong.
- */
-export const DISCARDED_STORAGE_KEYS: readonly string[] = [
-  'serial-broker/configurations/v1',
-  ...[4, 3, 2, 1].map(
-    (protocolVersion) => `serial-broker/v${String(protocolVersion)}/configurations`,
-  ),
-];
-
 /** Reported when persistence fails. Never fatal: the library keeps working in memory. */
 export type StorageProblemReporter = (error: SerialBrokerError) => void;
 
@@ -105,8 +90,6 @@ export class ConfigurationStore {
    * application observes, and reporting from a save would say the same thing on every write.
    */
   load(): NormalizedConfiguration[] {
-    this.#discardOldFormats();
-
     const { names, isIntact } = this.#readIndex(true);
     const restored: NormalizedConfiguration[] = [];
     const kept: string[] = [];
@@ -355,39 +338,6 @@ export class ConfigurationStore {
       this.storage.removeItem(storageEntryKey(name));
     } catch (error) {
       this.#reportUnavailable('clear', error);
-    }
-  }
-
-  /**
-   * Removes what versions before this one stored.
-   *
-   * Their formats are not read (see {@link DISCARDED_STORAGE_KEYS}), and leaving them would leave
-   * a copy of every configuration a user ever had in `localStorage` for good. A key that is not
-   * there is not written to, so this is a few reads on the restore path and nothing else.
-   */
-  #discardOldFormats(): void {
-    const discarded: string[] = [];
-    try {
-      for (const key of DISCARDED_STORAGE_KEYS) {
-        if (this.storage.getItem(key) !== null) {
-          this.storage.removeItem(key);
-          discarded.push(key);
-        }
-      }
-    } catch (error) {
-      // Not reported: the index is read next and says the same thing about storage, in the words
-      // the application can act on.
-      this.logger.debug('could not remove configurations stored in an older format', {
-        event: 'storage.old-format-kept',
-        reason: describeUnknown(error),
-      });
-    }
-
-    if (discarded.length > 0) {
-      this.logger.info('removed configurations stored in a format this version does not read', {
-        event: 'storage.old-format-discarded',
-        keys: discarded.join(', '),
-      });
     }
   }
 

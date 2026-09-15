@@ -1,7 +1,6 @@
-import { describeUnknown } from '../core/errors.js';
+import { describeUnknown, isAbortError } from '../core/errors.js';
 import type { ScopedLogger } from '../core/logger.js';
 import type { LockManagerLike } from '../environment/environment.js';
-import { isAbortError } from '../owner/election.js';
 import type { ClientId, TermId } from '../protocol/messages.js';
 import { termLockName } from '../protocol/version.js';
 

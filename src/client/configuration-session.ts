@@ -292,12 +292,6 @@ export class ConfigurationSession {
   }
 
   /**
-   * Stops everything and releases the port if this context holds it.
-   *
-   * Pending writes are rejected rather than left hanging: the application asked for the
-   * configuration to go away, and a promise that never settles is the worst possible answer.
-   */
-  /**
    * Tries again where the connection gave up: in the tab holding the port, whose supervisor did.
    *
    * A tab that withdrew over a different tab limit stays withdrawn; so does a tab that does not
@@ -309,6 +303,12 @@ export class ConfigurationSession {
     }
   }
 
+  /**
+   * Stops everything and releases the port if this context holds it.
+   *
+   * Pending writes are rejected rather than left hanging: the application asked for the
+   * configuration to go away, and a promise that never settles is the worst possible answer.
+   */
   async release(): Promise<void> {
     if (this.#isReleased) {
       return;
@@ -506,7 +506,7 @@ export class ConfigurationSession {
 
     const device = this.#configuration.device;
     if (device.kind === 'auto' && device.resolved === undefined) {
-      this.#resolveDevice(resolveDevice(port), 'picker');
+      this.resolveDevice(resolveDevice(port), 'picker');
       return;
     }
     if (!matchesDevice(port, this.#configuration)) {
@@ -537,9 +537,10 @@ export class ConfigurationSession {
    * holding the port runs (ADR-0036).
    *
    * Only auto mode resolves, and only to something else than it has: the tab holding the port
-   * decides, so a device adopted from it replaces one this tab chose earlier.
+   * decides, so a device adopted from it replaces one this tab chose earlier. The client passes
+   * what a remembered entry resolved to before the session starts.
    */
-  #resolveDevice(resolved: ResolvedDevice, source: 'picker' | 'holder'): void {
+  resolveDevice(resolved: ResolvedDevice, source: 'picker' | 'holder' | 'remembered'): void {
     const device = this.#configuration.device;
     if (device.kind !== 'auto' || isSameResolution(device.resolved, resolved)) {
       return;
@@ -1067,7 +1068,8 @@ export class ConfigurationSession {
         this.#announceSent(payload, origin);
       },
       (error: unknown) => {
-        const failure = toSerialBrokerError(error, this.#configuration.name);
+        // The supervisor rejects a write with a library error only.
+        const failure = error as SerialBrokerError;
         accepted.finish(origin, requestId, failure);
         report.finished(failure);
       },
@@ -1268,7 +1270,7 @@ export class ConfigurationSession {
       // The device the tab holding the port runs - configured, or chosen by its user. A tab in
       // auto mode follows it; any other tab keeps what it was configured with (ADR-0036). Believed
       // for the same reason as the limit: the term's lock was held when this status was checked.
-      this.#resolveDevice(message.device, 'holder');
+      this.resolveDevice(message.device, 'holder');
     }
     if (message.status === SerialBrokerStatus.Open) {
       // The owner states `open` when the port opens, and again after reaching a new broker. A
@@ -1404,14 +1406,4 @@ function statusDevice(filter: NormalizedDeviceFilter): StatusDevice {
   return device.kind === 'usb'
     ? { kind: 'usb', vendorId: device.vendorId, productId: device.productId }
     : { kind: device.kind };
-}
-
-/** Wraps anything thrown by the supervisor that is not already a library error. */
-function toSerialBrokerError(error: unknown, configName: string): SerialBrokerError {
-  return error instanceof SerialBrokerError
-    ? error
-    : new SerialBrokerError(SerialBrokerErrorCode.WRITE_FAILED, 'The write failed', {
-        configName,
-        cause: error,
-      });
 }

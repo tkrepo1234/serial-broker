@@ -8,7 +8,6 @@ import {
 } from '../../protocol/messages.js';
 import { brokerChannelName } from '../../protocol/version.js';
 
-import { MessageSender } from './message-sender.js';
 import type { Transport, TransportRequest } from './transport.js';
 
 /** The messages a broker sends or is sent, which concern no context in turn. */
@@ -56,7 +55,6 @@ export class BroadcastChannelTransport implements Transport {
 
   readonly #channel: BroadcastChannelLike;
   readonly #disposal = new DisposalStack();
-  readonly #sender: MessageSender;
   readonly #request: TransportRequest;
   readonly #attached = new Set<string>();
   readonly #owned = new Set<string>();
@@ -67,13 +65,6 @@ export class BroadcastChannelTransport implements Transport {
     this.#request = request;
     this.#limits = new LimitWarnings(request.logger, 'transport.limit-exceeded');
     this.#channel = createChannel(brokerChannelName());
-    this.#sender = new MessageSender(
-      request,
-      (message) => {
-        this.#channel.postMessage(message);
-      },
-      this.#disposal,
-    );
 
     this.#channel.addEventListener('message', (event: { readonly data: unknown }) => {
       this.#receive(event.data);
@@ -86,28 +77,30 @@ export class BroadcastChannelTransport implements Transport {
     this.#disposal.add(() => {
       this.#channel.close();
     });
-
-    // No secret: every context of the origin receives what is posted here, so one would be no
-    // secret, and nothing on this transport is held to an identity anyway (ADR-0028, SECURITY.md).
-    this.#sender.sendHello();
+    // No presence messages: with no broker, nobody keeps track of who is on the channel.
   }
 
   /** {@inheritDoc Transport.send} */
   send(message: ProtocolMessage): void {
-    this.#sender.send(message);
+    if (this.#disposal.isDisposed) {
+      return;
+    }
+    try {
+      this.#channel.postMessage(message);
+    } catch (error) {
+      this.#request.onTransportError(error);
+    }
   }
 
   /** {@inheritDoc Transport.attach} */
   attach(configName: string): void {
     this.#attached.add(configName);
-    this.#sender.sendAttach(configName);
   }
 
   /** {@inheritDoc Transport.detach} */
   detach(configName: string): void {
     this.#attached.delete(configName);
     this.#owned.delete(configName);
-    this.#sender.sendDetach(configName);
   }
 
   /** {@inheritDoc Transport.setOwnership} */
@@ -124,8 +117,6 @@ export class BroadcastChannelTransport implements Transport {
     if (this.#disposal.isDisposed) {
       return;
     }
-
-    this.#sender.sendGoodbye();
 
     this.#attached.clear();
     this.#owned.clear();

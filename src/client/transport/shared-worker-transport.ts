@@ -7,7 +7,6 @@ import { LimitWarnings } from '../../protocol/limits.js';
 import { BROKER_ID, type ProtocolMessage, type WorkerLogMessage } from '../../protocol/messages.js';
 import { brokerChannelName, PROTOCOL_VERSION } from '../../protocol/version.js';
 
-import { MessageSender } from './message-sender.js';
 import type { Transport, TransportRequest } from './transport.js';
 
 /** The `SharedWorker` surface this transport uses. Narrowed so a fake stays small. */
@@ -81,7 +80,6 @@ export class SharedWorkerTransport implements Transport {
   readonly #url: string | URL;
   readonly #startup: WorkerStartup | undefined;
   readonly #disposal = new DisposalStack();
-  readonly #sender: MessageSender;
   readonly #attached = new Set<string>();
   readonly #owned = new Set<string>();
   /** The port to the current worker. Replaced when the transport gives up on a worker. */
@@ -127,20 +125,13 @@ export class SharedWorkerTransport implements Transport {
     this.#startup = startup;
     this.#secret = request.newSecret();
     this.#limits = new LimitWarnings(request.logger, 'transport.limit-exceeded');
-    this.#sender = new MessageSender(
-      request,
-      (message) => {
-        this.#port.postMessage(message);
-      },
-      this.#disposal,
-    );
 
     this.#port = this.#connect();
     this.#disposal.add(() => {
       this.#port.close();
     });
 
-    this.#sender.sendHello(this.#secret);
+    this.#sendHello();
 
     this.#scheduleHeartbeat();
     this.#disposal.add(() => {
@@ -152,20 +143,28 @@ export class SharedWorkerTransport implements Transport {
 
   /** {@inheritDoc Transport.send} */
   send(message: ProtocolMessage): void {
-    this.#sender.send(message);
+    if (this.#disposal.isDisposed) {
+      return;
+    }
+    try {
+      this.#port.postMessage(message);
+    } catch (error) {
+      // A closed port, or a payload that cannot be cloned: reported, never thrown into the caller.
+      this.#request.onTransportError(error);
+    }
   }
 
   /** {@inheritDoc Transport.attach} */
   attach(configName: string): void {
     this.#attached.add(configName);
-    this.#sender.sendAttach(configName);
+    this.send({ type: 'attach', v: PROTOCOL_VERSION, from: this.clientId, to: 'all', configName });
   }
 
   /** {@inheritDoc Transport.detach} */
   detach(configName: string): void {
     this.#attached.delete(configName);
     this.#owned.delete(configName);
-    this.#sender.sendDetach(configName);
+    this.send({ type: 'detach', v: PROTOCOL_VERSION, from: this.clientId, to: 'all', configName });
   }
 
   /** {@inheritDoc Transport.setOwnership} */
@@ -185,7 +184,7 @@ export class SharedWorkerTransport implements Transport {
       return;
     }
 
-    this.#sender.sendGoodbye();
+    this.send({ type: 'goodbye', v: PROTOCOL_VERSION, from: this.clientId, to: 'all' });
 
     for (const failure of this.#disposal.disposeAll()) {
       this.#request.logger.warn('a cleanup step failed while closing the bus', {
@@ -353,8 +352,19 @@ export class SharedWorkerTransport implements Transport {
     this.#request.logger.info('started a new SharedWorker', {
       event: 'transport.worker-restarted',
     });
-    this.#sender.sendHello(this.#secret);
+    this.#sendHello();
     this.#sendHeartbeat();
+  }
+
+  /** Announces this context: always the first message on a port (ADR-0024). */
+  #sendHello(): void {
+    this.send({
+      type: 'hello',
+      v: PROTOCOL_VERSION,
+      from: this.clientId,
+      to: 'all',
+      secret: this.#secret,
+    });
   }
 
   #sendHeartbeat(): void {

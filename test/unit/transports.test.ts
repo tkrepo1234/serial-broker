@@ -339,20 +339,22 @@ describe('BroadcastChannelTransport', () => {
       addEventListener: () => undefined,
     } as unknown as BroadcastChannelLike;
 
-    new BroadcastChannelTransport(rec.request, () => channel);
+    new BroadcastChannelTransport(rec.request, () => channel).send(
+      envelope(SELF, 'all', STATUS_REQUEST) as ProtocolMessage,
+    );
 
     expect(rec.transportErrors.length).toBeGreaterThan(0);
   });
 
-  it('closes cleanly and stops sending', () => {
+  it('posts no presence messages, and nothing once closed', () => {
     const { transport, posted } = create();
 
-    transport.close();
-    const after = posted.length;
+    // Nobody keeps track of presence on the channel, so attaching and closing post nothing.
     transport.attach('Reader');
+    transport.close();
+    transport.send(envelope(SELF, 'all', STATUS_REQUEST) as ProtocolMessage);
 
-    expect((posted.at(-1) as ProtocolMessage).type).toBe('goodbye');
-    expect(posted).toHaveLength(after);
+    expect(posted).toEqual([]);
   });
 
   it('identifies itself as the fallback', () => {

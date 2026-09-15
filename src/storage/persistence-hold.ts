@@ -1,6 +1,6 @@
 import type { Clock, TimerHandle } from '../core/clock.js';
 import { createSignal, type Signal } from '../core/deadline.js';
-import { describeUnknown } from '../core/errors.js';
+import { describeUnknown, isAbortError } from '../core/errors.js';
 import type { ScopedLogger } from '../core/logger.js';
 import type { LockManagerLike } from '../environment/environment.js';
 
@@ -77,7 +77,7 @@ export class PersistenceHold {
       .then(
         () => undefined,
         (error: unknown) => {
-          if (isAbortLike(error) || this.#isStopped) {
+          if (isAbortError(error) || this.#isStopped) {
             return;
           }
           this.logger.warn('requesting the hold on a remembered configuration failed', {
@@ -155,18 +155,6 @@ export async function forgetUnlessHeld(
       event: 'storage.hold-failed',
       error: describeUnknown(error),
     });
-    return false;
-  }
-}
-
-function isAbortLike(error: unknown): boolean {
-  try {
-    return (
-      typeof error === 'object' &&
-      error !== null &&
-      (error as { name?: unknown }).name === 'AbortError'
-    );
-  } catch {
     return false;
   }
 }

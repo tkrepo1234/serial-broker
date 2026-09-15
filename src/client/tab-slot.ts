@@ -1,9 +1,8 @@
 import type { Clock, TimerHandle } from '../core/clock.js';
 import { createSignal, type Signal } from '../core/deadline.js';
-import { describeUnknown } from '../core/errors.js';
+import { describeUnknown, isAbortError } from '../core/errors.js';
 import type { ScopedLogger } from '../core/logger.js';
 import type { LockManagerLike } from '../environment/environment.js';
-import { isAbortError } from '../owner/election.js';
 import { tabSlotGateLockName, tabSlotLockName } from '../protocol/version.js';
 
 /** How long to wait before queueing again after the browser refused a lock request. */

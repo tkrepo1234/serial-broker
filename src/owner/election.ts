@@ -1,6 +1,6 @@
 import type { Clock, TimerHandle } from '../core/clock.js';
 import { createSignal, type Signal } from '../core/deadline.js';
-import { describeUnknown } from '../core/errors.js';
+import { describeUnknown, isAbortError } from '../core/errors.js';
 import type { ScopedLogger } from '../core/logger.js';
 import type { LockManagerLike } from '../environment/environment.js';
 import { ownerLockName } from '../protocol/version.js';
@@ -175,23 +175,5 @@ export class OwnershipElection {
         this.start();
       }, ELECTION_RETRY_DELAY_MS);
     }
-  }
-}
-
-/**
- * Recognises the `AbortError` a cancelled lock request rejects with.
- *
- * Never throws: it runs in the rejection handlers that rejoin the election and the tab limit's
- * queue, and a throw there would leave the context out of either for good.
- */
-export function isAbortError(error: unknown): boolean {
-  if (typeof error !== 'object' || error === null) {
-    return false;
-  }
-  try {
-    return (error as { name?: unknown }).name === 'AbortError';
-  } catch {
-    // A `name` getter that throws. Whatever this is, it is not the platform's abort.
-    return false;
   }
 }
