@@ -2,10 +2,6 @@ import { describe, expect, it } from 'vitest';
 
 import { SerialBrokerErrorCode } from '../../../src/core/error-codes.js';
 import { SerialBrokerStatus } from '../../../src/core/types.js';
-import {
-  SILENT_PARTICIPANT_TIMEOUT_MS,
-  SWEEP_INTERVAL_MS,
-} from '../../../src/protocol/heartbeat.js';
 import { ownerLockName } from '../../../src/protocol/version.js';
 import { TRANSPORT_MODES, type VirtualTab } from '../../harness/browser-harness.js';
 import { READER, READER_OPTIONS } from '../../harness/devices.js';
@@ -132,10 +128,9 @@ describe.skipIf(!IS_EXTREME).each(TRANSPORT_MODES)(
                 await harness.advance(1_000);
               }
             }
-            // Longer than any write deadline, so every outcome is in; then long enough for the
-            // worker to forget the tabs that died (ADR-0021).
+            // Longer than any write deadline, so every outcome is in; the worker forgot the tabs that
+            // died when the browser let go of their locks (ADR-0041).
             await harness.advance(10_000);
-            await harness.busClock.advance(SILENT_PARTICIPANT_TIMEOUT_MS + SWEEP_INTERVAL_MS);
             await harness.settle();
             // Reduced to numbers before the footprint is taken: ten thousand settled promises and
             // their errors are the scenario's to keep, not the library's.

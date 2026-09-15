@@ -48,6 +48,8 @@ const LOCK_NAME_PREFIX = 'serial-broker/';
 /** A collection that is still listening. */
 interface Collection {
   readonly reports: ParticipantDiagnostics[];
+  /** The contexts those reports came from, so that each is kept once. */
+  readonly reporters: Set<string>;
   /** How many characters and bytes those reports hold, so the collection is bounded in both. */
   characters: number;
   readonly timer: TimerHandle;
@@ -108,6 +110,7 @@ export class DiagnosticsObserver {
       },
       logger: this.#logger,
       clock: environment.clock,
+      locks: environment.locks,
     });
   }
 
@@ -145,7 +148,13 @@ export class DiagnosticsObserver {
       const timer = this.#environment.clock.setTimer(() => {
         this.#finishCollection(requestId);
       }, windowMs);
-      this.#collections.set(requestId, { reports, characters: 0, timer, finish: resolve });
+      this.#collections.set(requestId, {
+        reports,
+        reporters: new Set(),
+        characters: 0,
+        timer,
+        finish: resolve,
+      });
     });
 
     this.#transport.send({
@@ -245,10 +254,7 @@ export class DiagnosticsObserver {
         const collection = this.#collections.get(message.requestId);
         // A context answers once, but a bus is not obliged to deliver once; and an answer that
         // arrives after its window has closed belongs to nothing.
-        if (
-          collection === undefined ||
-          collection.reports.some((report) => report.clientId === message.report.clientId)
-        ) {
+        if (collection === undefined || collection.reporters.has(message.report.clientId)) {
           return;
         }
         if (collection.reports.length >= MAX_REPORTS_PER_COLLECTION) {
@@ -274,6 +280,7 @@ export class DiagnosticsObserver {
         }
         collection.characters += characters;
         collection.reports.push(message.report);
+        collection.reporters.add(message.report.clientId);
         return;
       }
 

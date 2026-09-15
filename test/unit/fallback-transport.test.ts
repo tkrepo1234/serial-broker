@@ -1,9 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import {
-  FallbackTransport,
-  MAX_REPLAYED_MESSAGES,
-} from '../../src/client/transport/fallback-transport.js';
+import { FallbackTransport } from '../../src/client/transport/fallback-transport.js';
 import type {
   WorkerLoadFailure,
   WorkerStartup,
@@ -53,19 +50,6 @@ function statusRequest(): ProtocolMessage {
   };
 }
 
-function dataReceived(): ProtocolMessage {
-  return {
-    type: 'data-received',
-    v: PROTOCOL_VERSION,
-    from: SELF,
-    to: 'all',
-    configName: 'Reader',
-    payload: new Uint8Array([1]),
-    text: undefined,
-    timestamp: 0,
-  };
-}
-
 const LOAD_ERROR = { type: 'error' };
 
 function setUp(options: { fallbackThrows?: boolean } = {}): {
@@ -74,18 +58,25 @@ function setUp(options: { fallbackThrows?: boolean } = {}): {
   fallback: RecordingTransport;
   records: LogRecord[];
   transportErrors: unknown[];
+  reconnects: () => number;
   ready: () => void;
   failToLoad: (reason?: WorkerLoadFailure) => void;
 } {
   const { logger, records } = recordingLogger();
   const { request, transportErrors } = recordTransportRequest(SELF, logger);
+  let reconnects = 0;
 
   const worker = new RecordingTransport('sharedworker');
   const fallback = new RecordingTransport('broadcastchannel');
   let startup: WorkerStartup | undefined;
 
   const transport = new FallbackTransport(
-    request,
+    {
+      ...request,
+      onReconnected: () => {
+        reconnects += 1;
+      },
+    },
     (_request, workerStartup) => {
       startup = workerStartup;
       return worker;
@@ -104,6 +95,7 @@ function setUp(options: { fallbackThrows?: boolean } = {}): {
     fallback,
     records,
     transportErrors,
+    reconnects: () => reconnects,
     ready: () => startup?.onReady(),
     failToLoad: (reason = 'worker-script-failed') => startup?.onLoadFailed(LOAD_ERROR, reason),
   };
@@ -137,22 +129,20 @@ describe('FallbackTransport', () => {
     expect(fallback.operations).toEqual([]);
   });
 
-  it('replays everything, in order, over BroadcastChannel when the script fails to load', () => {
-    const { transport, worker, fallback, transportErrors, failToLoad } = setUp();
+  it('tells BroadcastChannel what it takes part in, and has the client restate the rest', () => {
+    const { transport, worker, fallback, transportErrors, reconnects, failToLoad } = setUp();
     transport.attach('Reader');
     transport.send(statusRequest());
     transport.attach('Printer');
+    transport.attach('Scale');
     transport.detach('Printer');
 
     failToLoad();
 
-    // Nothing sent before the failure reached anyone, so each of it is sent once, in order.
-    expect(fallback.operations).toEqual([
-      'attach Reader',
-      'send status-request',
-      'attach Printer',
-      'detach Printer',
-    ]);
+    // Nothing sent before the failure reached anyone, and nothing of it is sent again: what the
+    // others need to know, the client states anew (ADR-0041).
+    expect(fallback.operations).toEqual(['attach Reader', 'attach Scale']);
+    expect(reconnects()).toBe(1);
     expect(transport.kind).toBe('broadcastchannel');
     expect(worker.isClosed).toBe(true);
     // Recovered, so not an error for the application.
@@ -172,27 +162,8 @@ describe('FallbackTransport', () => {
     expect(worker.operations).toHaveLength(workerOperations);
   });
 
-  it('logs the fallback with how much was replayed', () => {
-    const { transport, records, failToLoad } = setUp();
-    transport.send(statusRequest());
-    transport.send(statusRequest());
-
-    failToLoad();
-
-    expect(records).toContainEqual([
-      'warn',
-      expect.any(String),
-      expect.objectContaining({
-        event: 'environment.transport-fallback',
-        reason: 'worker-script-failed',
-        replayedMessages: 2,
-        droppedMessages: 0,
-      }) as LogFields,
-    ]);
-  });
-
-  it('forgets what it kept once the broker has answered, and never falls back after that', () => {
-    const { transport, fallback, transportErrors, ready, failToLoad } = setUp();
+  it('never falls back once the broker has answered', () => {
+    const { transport, fallback, transportErrors, reconnects, ready, failToLoad } = setUp();
     transport.attach('Reader');
 
     ready();
@@ -201,23 +172,7 @@ describe('FallbackTransport', () => {
     expect(transport.kind).toBe('sharedworker');
     expect(fallback.operations).toEqual([]);
     expect(transportErrors).toEqual([LOAD_ERROR]);
-  });
-
-  it('bounds the traffic it keeps, never the messages other tabs wait for', () => {
-    const { transport, fallback, records, failToLoad } = setUp();
-    for (let index = 0; index < MAX_REPLAYED_MESSAGES + 5; index += 1) {
-      transport.send(dataReceived());
-    }
-    transport.send(statusRequest());
-    transport.attach('Reader');
-
-    failToLoad();
-
-    expect(
-      fallback.operations.filter((operation) => operation === 'send data-received'),
-    ).toHaveLength(MAX_REPLAYED_MESSAGES);
-    expect(fallback.operations.slice(-2)).toEqual(['send status-request', 'attach Reader']);
-    expect(records.at(-1)?.[2]).toMatchObject({ droppedMessages: 5 });
+    expect(reconnects()).toBe(0);
   });
 
   it('neither falls back nor reports anything once closed', () => {

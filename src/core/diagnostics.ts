@@ -180,7 +180,13 @@ export interface DiagnosticsSnapshot {
   readonly collectedAt: number;
   /** The observer's own identity on the bus, which appears in no report. */
   readonly observerClientId: string;
-  /** Every context that answered within the window, in the order the answers arrived. */
+  /**
+   * Every context that answered within the window, in the order the answers arrived.
+   *
+   * A report of another context is checked only as far as filing it needs - its sender and its named
+   * configurations (ADR-0018, amended). Read its other fields defensively: another build may report
+   * differently.
+   */
   readonly participants: readonly ParticipantDiagnostics[];
   /**
    * This library's Web Locks across the origin, or `undefined` where the browser cannot list

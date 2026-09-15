@@ -1,5 +1,6 @@
 import type { Clock } from '../../core/clock.js';
 import type { ScopedLogger } from '../../core/logger.js';
+import type { LockManagerLike } from '../../environment/environment.js';
 import type { DecodeFailure } from '../../protocol/decode.js';
 import type { ClientId, ProtocolMessage } from '../../protocol/messages.js';
 
@@ -58,12 +59,14 @@ export interface TransportRequest {
    */
   readonly onTransportError: (error: unknown, recovering?: boolean) => void;
   /**
-   * Called when the transport has reached a new broker after the old one stopped answering
-   * (ADR-0021, amended). Whatever was sent or broadcast in between may be lost, so the client asks
-   * again for what it needs. Only a `SharedWorker` transport ever reconnects.
+   * Called when the transport has reached a new bus: a new worker after the old one ended, or
+   * `BroadcastChannel` after the worker script turned out unusable (ADR-0041). Whatever was sent or
+   * broadcast before may be lost, so the client states again what the others need to know.
    */
   readonly onReconnected?: (() => void) | undefined;
   readonly logger: ScopedLogger;
-  /** Time, for the heartbeats a `SharedWorker` participant sends (ADR-0021). */
+  /** Time, for the deadline of the worker's handshake (ADR-0041). */
   readonly clock: Clock;
+  /** The context's Web Locks, which tell the worker and the tabs who is still there (ADR-0041). */
+  readonly locks: LockManagerLike;
 }

@@ -1,35 +1,43 @@
 import { describe, expect, it } from 'vitest';
 
-import { SILENT_PARTICIPANT_TIMEOUT_MS } from '../../src/protocol/heartbeat.js';
 import {
   MAX_IDENTIFIER_LENGTH,
   MAX_PARTICIPANTS,
   MAX_PORTS_PER_PARTICIPANT,
 } from '../../src/protocol/limits.js';
 import { BROKER_ID } from '../../src/protocol/messages.js';
+import { contextLockName, workerLockName } from '../../src/protocol/version.js';
 import { WorkerPorts } from '../../src/worker/worker-ports.js';
+import { flushMicrotasks } from '../harness/fake-clock.js';
+import { FakeLockManager } from '../harness/fake-locks.js';
 import { fieldsOfEvent, recordingLogger, type LogRecord } from '../harness/recording-logger.js';
-import { envelope, FakeMessagePort, hello } from '../harness/transport-doubles.js';
+import { envelope, FakeMessagePort, hello, holdLock } from '../harness/transport-doubles.js';
 
 /**
- * What a port on the worker may say, and on whose behalf.
+ * What a port on the worker may say, on whose behalf, and for how long it is served.
  *
  * Every script of the origin can start the worker and post anything on its port (SECURITY.md). These
  * tests speak for such a script - Mallory - next to well-behaved tabs, and assert on what the tabs
  * still receive.
  */
 
+const WORKER_ID = 'worker-1';
+
 interface World {
   readonly ports: WorkerPorts<FakeMessagePort>;
   readonly records: LogRecord[];
-  readonly time: { now: number };
+  readonly locks: FakeLockManager;
 }
 
 function createWorld(): World {
   const { logger, records } = recordingLogger();
-  const time = { now: 0 };
-  const ports = new WorkerPorts<FakeMessagePort>({ logger, monotonicNow: () => time.now });
-  return { ports, records, time };
+  const locks = new FakeLockManager();
+  const ports = new WorkerPorts<FakeMessagePort>({
+    logger,
+    locks: locks.forContext(WORKER_ID),
+    workerId: WORKER_ID,
+  });
+  return { ports, records, locks };
 }
 
 /** A new port, not yet having said anything. */
@@ -37,15 +45,18 @@ function connect(): FakeMessagePort {
   return new FakeMessagePort();
 }
 
-/** A port that said hello as `id` and attached to Reader; what the worker answered is cleared. */
+/**
+ * A port of a live tab `id`: the tab holds its own lock, as a tab does before it says hello
+ * (ADR-0041), and says hello naming Reader. What the worker answered is cleared.
+ */
 function join(world: World, id: string, port = connect()): FakeMessagePort {
-  world.ports.receive(port, hello(id));
-  world.ports.receive(port, envelope(id, 'all', { type: 'attach', configName: 'Reader' }));
+  if (world.locks.holderOf(contextLockName(id)) === undefined) {
+    holdLock(world.locks, id, contextLockName(id));
+  }
+  world.ports.receive(port, hello(id, ['Reader']));
   port.posted.length = 0;
   return port;
 }
-
-const HEARTBEAT = { type: 'heartbeat', configNames: ['Reader'] };
 
 const probe = (from: string, to = 'all'): unknown =>
   envelope(from, to, { type: 'status-request', configName: 'Reader' });
@@ -69,15 +80,33 @@ const recordsPosted = (port: FakeMessagePort): Record<string, unknown>[] =>
   >[];
 
 describe('WorkerPorts', () => {
+  it('holds a lock for as long as the worker runs, and is ready once it does', async () => {
+    const world = createWorld();
+
+    await world.ports.ready;
+
+    // Every tab waits on it: the browser lets it go the moment the worker ends (ADR-0041).
+    expect(world.locks.holderOf(workerLockName(WORKER_ID))).toBe(WORKER_ID);
+  });
+
+  it('answers a hello with a welcome that names the worker, on the port it came on', () => {
+    const world = createWorld();
+    const alice = join(world, 'alice');
+    const mallory = connect();
+
+    world.ports.receive(mallory, hello('alice'));
+
+    expect(mallory.posted).toEqual([
+      expect.objectContaining({ type: 'welcome', to: 'alice', worker: WORKER_ID }),
+    ]);
+    expect(typesPosted(alice)).toEqual([]);
+  });
+
   it('refuses what a port says before it has said hello', () => {
     const world = createWorld();
     const bob = join(world, 'bob');
     const mallory = connect();
 
-    world.ports.receive(
-      mallory,
-      envelope('mallory', 'all', { type: 'attach', configName: 'Reader' }),
-    );
     world.ports.receive(mallory, probe('mallory'));
 
     // A tab's first message is always hello (ADR-0024); one that is not comes from something else.
@@ -92,11 +121,7 @@ describe('WorkerPorts', () => {
     const mallory = join(world, 'mallory');
 
     // Without the check one port could speak for every context: here, end Alice's participation.
-    world.ports.receive(mallory, envelope('alice', 'all', { type: 'goodbye' }));
-    world.ports.receive(
-      mallory,
-      envelope('alice', 'all', { type: 'detach', configName: 'Reader' }),
-    );
+    world.ports.receive(mallory, hello('alice', []));
     world.ports.receive(bob, probe('bob'));
 
     expect(typesPosted(alice)).toEqual(['status-request']);
@@ -108,7 +133,6 @@ describe('WorkerPorts', () => {
     const firstPort = join(world, 'alice');
     const bob = join(world, 'bob');
 
-    // Alice gave up on a worker that hung and connected again under the same identity.
     const secondPort = join(world, 'alice');
     world.ports.receive(bob, probe('bob'));
 
@@ -116,32 +140,59 @@ describe('WorkerPorts', () => {
     expect(typesPosted(firstPort)).toEqual(['status-request']);
   });
 
-  it('ends only the port that said goodbye, not the identity the tab still has ports for', () => {
-    const world = createWorld();
-    const firstPort = join(world, 'alice');
-    const bob = join(world, 'bob');
-    const secondPort = join(world, 'alice');
-
-    world.ports.receive(secondPort, envelope('alice', 'all', { type: 'goodbye' }));
-    world.ports.receive(bob, probe('bob'));
-
-    expect(secondPort.closed).toBe(true);
-    expect(typesPosted(firstPort)).toEqual(['status-request']);
-    expect(fieldsOfEvent(world.records, 'broker.disconnect')).toEqual([]);
-  });
-
-  it('forgets a participant whose last port said goodbye', () => {
+  it('routes by what the latest hello of a context names', () => {
     const world = createWorld();
     const alice = join(world, 'alice');
     const bob = join(world, 'bob');
 
-    world.ports.receive(alice, envelope('alice', 'all', { type: 'goodbye' }));
+    world.ports.receive(alice, hello('alice', []));
+    world.ports.receive(bob, probe('bob'));
+    world.ports.receive(alice, hello('alice', ['Reader']));
+    world.ports.receive(bob, probe('bob'));
+
+    expect(typesPosted(alice)).toEqual(['welcome', 'welcome', 'status-request']);
+  });
+
+  it('keeps a participant for as long as its lock is held, and forgets it once the browser lets go', async () => {
+    const world = createWorld();
+    const alice = join(world, 'alice');
+    const bob = join(world, 'bob');
+    await flushMicrotasks();
+    expect(fieldsOfEvent(world.records, 'broker.disconnect')).toEqual([]);
+
+    // Alice's tab died, closed or was discarded: whichever, the browser lets go of her lock.
+    world.locks.killContext('alice');
+    await flushMicrotasks();
     world.ports.receive(bob, probe('bob'));
 
     expect(typesPosted(alice)).toEqual([]);
     expect(fieldsOfEvent(world.records, 'broker.disconnect')).toEqual([
       expect.objectContaining({ clientId: 'alice' }),
     ]);
+  });
+
+  it('forgets at once an identity no context holds a lock for', async () => {
+    const world = createWorld();
+    const bob = join(world, 'bob');
+    const mallory = connect();
+
+    world.ports.receive(mallory, hello('nobody', ['Reader']));
+    await flushMicrotasks();
+    world.ports.receive(bob, probe('bob'));
+
+    expect(typesPosted(mallory)).toEqual(['welcome']);
+    expect(fieldsOfEvent(world.records, 'broker.disconnect')).toEqual([
+      expect.objectContaining({ clientId: 'nobody' }),
+    ]);
+  });
+
+  it('stops waiting on the contexts once disposed', () => {
+    const world = createWorld();
+    join(world, 'alice');
+
+    world.ports.dispose();
+
+    expect(world.locks.queueLength(contextLockName('alice'))).toBe(0);
   });
 
   it('sends the records it writes at warn to every connected port, as it wrote them', () => {
@@ -197,23 +248,12 @@ describe('WorkerPorts', () => {
     ]);
   });
 
-  it('answers a hello on the port it came on, not on the other ports of that identity', () => {
-    const world = createWorld();
-    const alice = join(world, 'alice');
-    const mallory = connect();
-
-    world.ports.receive(mallory, hello('alice'));
-
-    expect(typesPosted(mallory)).toEqual(['welcome']);
-    expect(typesPosted(alice)).toEqual([]);
-  });
-
   it("refuses a hello that names the broker's own identity", () => {
     const world = createWorld();
     const bob = join(world, 'bob');
     const mallory = connect();
 
-    world.ports.receive(mallory, hello(BROKER_ID));
+    world.ports.receive(mallory, hello(BROKER_ID, ['Reader']));
     world.ports.receive(mallory, probe(BROKER_ID));
 
     expect(typesPosted(mallory)).toEqual([]);
@@ -253,11 +293,12 @@ describe('WorkerPorts', () => {
     ]);
   });
 
-  it('keeps no more than MAX_PARTICIPANTS participants, and admits another once one leaves', () => {
+  it('keeps no more than MAX_PARTICIPANTS participants, and admits another once one leaves', async () => {
     const world = createWorld();
-    const participants = Array.from({ length: MAX_PARTICIPANTS }, (_, index) =>
-      join(world, `tab-${String(index)}`),
-    );
+    for (let index = 0; index < MAX_PARTICIPANTS; index += 1) {
+      join(world, `tab-${String(index)}`);
+    }
+    holdLock(world.locks, 'late', contextLockName('late'));
     const late = connect();
 
     world.ports.receive(late, hello('late'));
@@ -266,12 +307,10 @@ describe('WorkerPorts', () => {
       expect.objectContaining({ limit: 'MAX_PARTICIPANTS' }),
     ]);
 
-    // Its port keeps its identity, so its next heartbeat gets in once there is room.
-    world.ports.receive(
-      participants[0] as FakeMessagePort,
-      envelope('tab-0', 'all', { type: 'goodbye' }),
-    );
-    world.ports.receive(late, envelope('late', 'all', { type: 'heartbeat', configNames: [] }));
+    // Its port keeps its identity, so its next hello gets in once there is room.
+    world.locks.killContext('tab-0');
+    await flushMicrotasks();
+    world.ports.receive(late, hello('late'));
     expect(typesPosted(late)).toEqual(['welcome']);
   });
 
@@ -291,47 +330,6 @@ describe('WorkerPorts', () => {
     expect(fieldsOfEvent(world.records, 'worker.limit-exceeded')).toEqual([
       expect.objectContaining({ limit: 'MAX_PORTS_PER_PARTICIPANT' }),
     ]);
-  });
-
-  it('forgets a silent port of a tab that is still heard from on another', () => {
-    const world = createWorld();
-    const oldPort = join(world, 'alice');
-    const bob = join(world, 'bob');
-    world.time.now = SILENT_PARTICIPANT_TIMEOUT_MS / 2;
-    const newPort = join(world, 'alice');
-    world.ports.receive(bob, probe('bob'));
-    expect(typesPosted(oldPort)).toEqual(['status-request']);
-    oldPort.posted.length = 0;
-    newPort.posted.length = 0;
-
-    world.time.now = SILENT_PARTICIPANT_TIMEOUT_MS;
-    world.ports.receive(bob, envelope('bob', 'all', HEARTBEAT));
-    world.ports.sweep();
-    world.ports.receive(bob, probe('bob'));
-
-    expect(oldPort.posted).toHaveLength(0);
-    expect(typesPosted(newPort)).toEqual(['status-request']);
-    expect(fieldsOfEvent(world.records, 'broker.forgot-silent')).toEqual([]);
-  });
-
-  it('forgets a participant all of whose ports fell silent, and knows it again from its next message', () => {
-    const world = createWorld();
-    const alice = join(world, 'alice');
-    const bob = join(world, 'bob');
-
-    world.time.now = SILENT_PARTICIPANT_TIMEOUT_MS;
-    world.ports.receive(bob, envelope('bob', 'all', HEARTBEAT));
-    world.ports.sweep();
-    world.ports.receive(bob, probe('bob'));
-    expect(typesPosted(alice)).toEqual([]);
-    expect(fieldsOfEvent(world.records, 'broker.forgot-silent')).toEqual([
-      expect.objectContaining({ clientId: 'alice' }),
-    ]);
-
-    // Only throttled: the port still speaks as Alice, without a new hello.
-    world.ports.receive(alice, envelope('alice', 'all', HEARTBEAT));
-    world.ports.receive(bob, probe('bob'));
-    expect(typesPosted(alice)).toEqual(['welcome', 'status-request']);
   });
 
   it('does not echo a sender of any length back in its welcome to another protocol version', () => {

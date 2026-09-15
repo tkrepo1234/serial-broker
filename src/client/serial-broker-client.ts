@@ -637,6 +637,7 @@ export class SerialBrokerClient {
       },
       logger: this.#logger,
       clock: this.environment.clock,
+      locks: this.environment.locks,
     });
 
     // Not registered with `#disposal`: `dispose()` closes the transport itself, before the device

@@ -45,6 +45,8 @@ const NAME = 'Reader';
 const OPTIONS: SerialBrokerOptions = {
   device: STAND_IN_DEVICE,
   serial: { baudRate: 9600 },
+  // Every chunk as it is read: this counts or times chunks, not collected answers (ADR-0039).
+  receive: { idleMs: 0 },
   remember: false,
 };
 type Transport = ScenarioResult['transport'];
@@ -149,8 +151,8 @@ class BenchTab {
     await this.page.waitForFunction(
       (name) => (window as unknown as BenchWindow).bench.openedAt(name) !== undefined,
       NAME,
-      // A page that lost the worker with the crashed page reconnects only when its heartbeats give
-      // up on it, about a minute later (ADR-0021).
+      // A page that lost the worker with the crashed page reconnects once the browser lets go of the
+      // worker's lock (ADR-0041); the margin is for a browser that is slow to.
       { timeout: 180_000 },
     );
     const openedAt = await this.page.evaluate(

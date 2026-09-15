@@ -170,6 +170,8 @@ describe.skipIf(!IS_EXTREME).each(TRANSPORT_MODES)('many tabs (%s)', (transport)
           await tab.client.setup(name, {
             device: { vendorId: 0x1000 + position, productId: READER.productId },
             serial: { baudRate: 9600 },
+            // Every chunk as it is read: this counts or times chunks, not collected answers (ADR-0039).
+            receive: { idleMs: 0 },
           });
         }
         tabs.push(tab);

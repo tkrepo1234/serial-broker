@@ -1,18 +1,16 @@
 import { describe, expect, it } from 'vitest';
 
-import {
-  HEARTBEAT_INTERVAL_MS,
-  SILENT_PARTICIPANT_TIMEOUT_MS,
-  SWEEP_INTERVAL_MS,
-} from '../../../src/protocol/heartbeat.js';
 import { BrowserHarness } from '../../harness/browser-harness.js';
 import { READER, READER_OPTIONS } from '../../harness/devices.js';
 
+/** A day, on the bus's clock: far longer than anything the worker could time. */
+const DAY_MS = 24 * 3_600_000;
+
 /**
- * Tabs that die without saying goodbye, as the worker experiences them (ADR-0021).
+ * Tabs that go away, as the worker experiences them (ADR-0041).
  *
- * A real worker is never told that a tab died. The harness now behaves the same way, so the only
- * thing that can make the worker forget a tab is that its heartbeats stop.
+ * A real worker is never told that a tab died, and the harness is not either. What tells it is the
+ * Web Lock every tab holds for its lifetime, which the browser lets go of when the tab goes.
  */
 describe('tabs on the SharedWorker', () => {
   async function twoTabs(): Promise<{
@@ -31,31 +29,37 @@ describe('tabs on the SharedWorker', () => {
     return { harness, device, owner, other };
   }
 
-  it('are forgotten by the worker once a tab that died stops sending heartbeats', async () => {
+  it('are forgotten by the worker as soon as a tab that died lets go of its lock', async () => {
     const { harness, other } = await twoTabs();
     expect(harness.bus.workerHost.clientCount).toBe(2);
 
     await other.kill();
-    // Not yet: a quiet tab is not a dead one until the timeout has passed.
-    await harness.busClock.advance(SILENT_PARTICIPANT_TIMEOUT_MS - SWEEP_INTERVAL_MS);
-    expect(harness.bus.workerHost.clientCount).toBe(2);
 
-    await harness.busClock.advance(2 * SWEEP_INTERVAL_MS);
-    await harness.settle();
+    // No time passes: nothing is timed.
     expect(harness.bus.workerHost.clientCount).toBe(1);
   });
 
-  it('are all kept while they are alive, however long they stay idle', async () => {
-    const { harness, device, other } = await twoTabs();
+  it('are forgotten by the worker as soon as a tab closes', async () => {
+    const { harness, other } = await twoTabs();
 
-    await harness.busClock.advance(10 * SILENT_PARTICIPANT_TIMEOUT_MS + HEARTBEAT_INTERVAL_MS);
+    await other.close();
+
+    expect(harness.bus.workerHost.clientCount).toBe(1);
+  });
+
+  it('are all kept while they are alive, however long they stay idle, with nothing sent', async () => {
+    const { harness, device, other } = await twoTabs();
+    const sentBefore = harness.bus.meter.sent;
+
+    await harness.busClock.advance(7 * DAY_MS);
     await harness.settle();
+    const sentWhileIdle = harness.bus.meter.sent - sentBefore;
     device.emit('STILL HERE');
     await harness.settle();
 
+    expect(sentWhileIdle).toBe(0);
     expect(harness.bus.workerHost.clientCount).toBe(2);
     expect(other.receivedText('Reader')).toBe('STILL HERE');
-    // The worker answered every heartbeat, so no tab gave up on it.
     expect(other.recordFor('Reader').errors).toEqual([]);
   });
 
@@ -63,8 +67,6 @@ describe('tabs on the SharedWorker', () => {
     const { harness, device, owner, other } = await twoTabs();
 
     await owner.kill();
-    await harness.settle();
-    await harness.busClock.advance(SILENT_PARTICIPANT_TIMEOUT_MS + SWEEP_INTERVAL_MS);
     await harness.settle();
     await other.client.send('Reader', 'PING');
     await harness.settle();

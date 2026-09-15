@@ -1,5 +1,5 @@
 import { NOOP_LOGGER } from '../core/logger.js';
-import { SWEEP_INTERVAL_MS } from '../protocol/heartbeat.js';
+import type { LockManagerLike } from '../environment/environment.js';
 
 import { WorkerPorts } from './worker-ports.js';
 
@@ -11,11 +11,11 @@ import { WorkerPorts } from './worker-ports.js';
  * it routes between them (ADR-0006).
  *
  * It deliberately holds no important state. If the worker dies - it crashed, the browser ended it,
- * or someone terminated it - no tab is told: their ports simply go quiet. The broker answers every
- * heartbeat, so each tab notices within a few heartbeats, starts a new worker, and restores its
- * part there with a heartbeat (ADR-0021). What is lost is the traffic in between. The things that
- * must not be lost - which context owns the port, what happens to an in-flight write - are held by
- * the Web Lock and by the context that issued the write (ADR-0005, ADR-0013).
+ * or someone terminated it - its ports simply go quiet, but the browser lets go of the Web Lock it
+ * held for its lifetime, and every tab waiting on that lock starts a new worker and says hello there
+ * again (ADR-0041). What is lost is the traffic in between. The things that must not be lost - which
+ * context owns the port, what happens to an in-flight write - are held by the Web Lock and by the
+ * context that issued the write (ADR-0005, ADR-0013).
  *
  * Any script of the origin can connect a port too. What a port may say, and on whose behalf, is
  * decided in `WorkerPorts`; this file only connects the browser to it.
@@ -28,14 +28,15 @@ declare const self: {
   onconnect: ((event: { readonly ports: readonly MessagePort[] }) => void) | null;
 };
 
+declare const navigator: { readonly locks: LockManagerLike };
+
 // Nothing here writes anywhere: a `SharedWorker` cannot reach the logger an application configured.
 // What the worker records at `warn` is instead sent to the connected tabs, which log it through
-// their own loggers (ADR-0029). `performance.now()` rather than `Date.now()`: the only thing timed
-// in the worker is how long a tab has been silent, and the system clock being set forward must not
-// make every tab look gone (ADR-0021, ADR-0032).
+// their own loggers (ADR-0029).
 const ports = new WorkerPorts<MessagePort>({
   logger: NOOP_LOGGER,
-  monotonicNow: () => performance.now(),
+  locks: navigator.locks,
+  workerId: crypto.randomUUID(),
 });
 
 self.onconnect = (event): void => {
@@ -48,21 +49,17 @@ self.onconnect = (event): void => {
     ports.receive(port, messageEvent.data);
   });
 
-  // One message that could not be cloned is lost, and only that message. Added here, once per
-  // port, because a port is forgotten and registered again every time its tab is throttled past
-  // the sweep. The port stays open: closing it would cut a live tab - perhaps the owner - off from
-  // every other for good, and nothing would tell it so, which is why ADR-0021 never closes ports.
+  // One message that could not be cloned is lost, and only that message. The port stays open:
+  // closing it would cut a live tab - perhaps the owner - off from every other, and nothing would
+  // tell it so.
   port.addEventListener('messageerror', () => {
     ports.reportMessageError(port);
   });
 
-  // A `SharedWorker` port does not deliver anything until it is started.
-  port.start();
+  // A `SharedWorker` port delivers nothing until it is started, and keeps what arrives meanwhile. It
+  // is started once the worker holds its lifetime lock, so no tab waits on that lock before the
+  // worker has it (ADR-0041).
+  void ports.ready.then(() => {
+    port.start();
+  });
 };
-
-// A port reports nothing when the tab behind it dies, so ports and participants that stay silent past
-// the timeout are forgotten (ADR-0021). A forgotten port is never closed: a tab that was only
-// throttled keeps its connection, and its next message registers it again.
-setInterval(() => {
-  ports.sweep();
-}, SWEEP_INTERVAL_MS);

@@ -11,7 +11,7 @@
  * announcement, whose channel carries no version, and report `PROTOCOL_VERSION_MISMATCH`
  * (ADR-0023).
  */
-export const PROTOCOL_VERSION = 11;
+export const PROTOCOL_VERSION = 12;
 
 /**
  * `true` for a value that can be a protocol version: a positive safe integer.
@@ -69,6 +69,27 @@ export function termLockName(
   maxTabs: number,
 ): string {
   return `${NAMESPACE}/term/v${String(PROTOCOL_VERSION)}/${String(maxTabs)}/${term}/${clientId}/${configName}`;
+}
+
+/**
+ * Name of the Web Lock a context on the `SharedWorker` holds for as long as it lives (ADR-0041).
+ *
+ * The worker waits on it, and the browser grants it the moment the context has gone - closed,
+ * crashed or discarded - which is how the worker forgets a context that can no longer say so.
+ */
+export function contextLockName(clientId: string): string {
+  return `${NAMESPACE}/context/v${String(PROTOCOL_VERSION)}/${clientId}`;
+}
+
+/**
+ * Name of the Web Lock a worker holds for as long as it runs (ADR-0041).
+ *
+ * Named after the worker's own identity, which it sends in every `welcome`: tabs wait on it, and the
+ * browser grants it the moment the worker has ended. A second worker - one started from another
+ * script URL - holds a lock of its own, so neither can be taken for the other.
+ */
+export function workerLockName(workerId: string): string {
+  return `${NAMESPACE}/worker/v${String(PROTOCOL_VERSION)}/${workerId}`;
 }
 
 /** Name of the Web Lock tabs queue at before competing for one of the places (ADR-0025). */

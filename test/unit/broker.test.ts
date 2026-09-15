@@ -35,8 +35,9 @@ function message(
   return { v: PROTOCOL_VERSION, from, to, ...partial } as ProtocolMessage;
 }
 
-const attach = (from: ClientId, configName = 'Reader'): ProtocolMessage =>
-  message(from, 'all', { type: 'attach', configName } as never);
+/** A `hello` saying that `from` takes part in exactly `configNames`. */
+const hello = (from: ClientId, ...configNames: string[]): ProtocolMessage =>
+  message(from, 'all', { type: 'hello', configNames } as never);
 
 /** A routable message with no side effects, used to observe where the broker sends things. */
 const probe = (from: ClientId, to: ProtocolMessage['to'], configName = 'Reader'): ProtocolMessage =>
@@ -45,16 +46,16 @@ const probe = (from: ClientId, to: ProtocolMessage['to'], configName = 'Reader')
 /**
  * The broker in isolation.
  *
- * It resolves two delivery targets and forgets contexts that go away. That is deliberately all it
- * does - everything requiring judgement lives in the participants (ADR-0006, ADR-0040) - so these
- * tests are about routing and nothing else.
+ * It resolves two delivery targets from what each participant's latest `hello` says. That is
+ * deliberately all it does - everything requiring judgement lives in the participants (ADR-0006,
+ * ADR-0040) - so these tests are about routing and nothing else.
  */
 describe('Broker', () => {
   it('delivers a broadcast to every participant except the sender', () => {
     const { broker, delivered } = createBroker();
-    broker.handleMessage(ALICE, attach(ALICE));
-    broker.handleMessage(BOB, attach(BOB));
-    broker.handleMessage(CAROL, attach(CAROL));
+    broker.handleMessage(ALICE, hello(ALICE, 'Reader'));
+    broker.handleMessage(BOB, hello(BOB, 'Reader'));
+    broker.handleMessage(CAROL, hello(CAROL, 'Reader'));
 
     broker.handleMessage(ALICE, probe(ALICE, 'all'));
 
@@ -63,9 +64,10 @@ describe('Broker', () => {
     expect(delivered.map((entry) => entry.to)).toEqual([BOB, CAROL]);
   });
 
-  it('does not deliver a broadcast to a context that never attached', () => {
+  it('does not deliver a broadcast to a context whose hello names no such configuration', () => {
     const { broker, delivered } = createBroker();
-    broker.handleMessage(ALICE, attach(ALICE));
+    broker.handleMessage(ALICE, hello(ALICE, 'Reader'));
+    broker.handleMessage(BOB, hello(BOB));
 
     broker.handleMessage(ALICE, probe(ALICE, 'all'));
 
@@ -74,8 +76,8 @@ describe('Broker', () => {
 
   it('routes a message addressed to one participant', () => {
     const { broker, delivered } = createBroker();
-    broker.handleMessage(ALICE, attach(ALICE));
-    broker.handleMessage(BOB, attach(BOB));
+    broker.handleMessage(ALICE, hello(ALICE, 'Reader'));
+    broker.handleMessage(BOB, hello(BOB, 'Reader'));
 
     broker.handleMessage(
       ALICE,
@@ -91,9 +93,9 @@ describe('Broker', () => {
 
   it('believes no claim of ownership: a write request goes to every participant', () => {
     const { broker, delivered } = createBroker();
-    broker.handleMessage(ALICE, attach(ALICE));
-    broker.handleMessage(BOB, attach(BOB));
-    broker.handleMessage(CAROL, attach(CAROL));
+    broker.handleMessage(ALICE, hello(ALICE, 'Reader'));
+    broker.handleMessage(BOB, hello(BOB, 'Reader'));
+    broker.handleMessage(CAROL, hello(CAROL, 'Reader'));
     broker.handleMessage(
       CAROL,
       message(CAROL, 'all', { type: 'owner-claimed', configName: 'Reader' } as never),
@@ -111,8 +113,8 @@ describe('Broker', () => {
 
   it('forgets a disconnected participant', () => {
     const { broker, delivered } = createBroker();
-    broker.handleMessage(ALICE, attach(ALICE));
-    broker.handleMessage(BOB, attach(BOB));
+    broker.handleMessage(ALICE, hello(ALICE, 'Reader'));
+    broker.handleMessage(BOB, hello(BOB, 'Reader'));
 
     broker.handleDisconnect(BOB);
     broker.handleMessage(ALICE, probe(ALICE, 'all'));
@@ -120,46 +122,42 @@ describe('Broker', () => {
     expect(delivered).toHaveLength(0);
   });
 
-  it('stops routing to a context that detached', () => {
+  it('takes a later hello for everything the sender takes part in, dropping what it no longer names', () => {
     const { broker, delivered } = createBroker();
-    broker.handleMessage(ALICE, attach(ALICE));
-    broker.handleMessage(BOB, attach(BOB));
+    broker.handleMessage(ALICE, hello(ALICE, 'Reader', 'Scale'));
+    broker.handleMessage(BOB, hello(BOB, 'Reader', 'Scale'));
 
-    broker.handleMessage(
-      BOB,
-      message(BOB, 'all', { type: 'detach', configName: 'Reader' } as never),
-    );
-    broker.handleMessage(ALICE, probe(ALICE, 'all'));
+    broker.handleMessage(BOB, hello(BOB, 'Scale'));
+    broker.handleMessage(ALICE, probe(ALICE, 'all', 'Reader'));
+    broker.handleMessage(ALICE, probe(ALICE, 'all', 'Scale'));
 
-    expect(delivered).toHaveLength(0);
+    expect(
+      delivered.map((entry) => [entry.to, (entry.message as { configName: string }).configName]),
+    ).toEqual([[BOB, 'Scale']]);
   });
 
   it('keeps configurations apart', () => {
     const { broker, delivered } = createBroker();
-    broker.handleMessage(ALICE, attach(ALICE, 'Reader'));
-    broker.handleMessage(BOB, attach(BOB, 'Scale'));
+    broker.handleMessage(ALICE, hello(ALICE, 'Reader'));
+    broker.handleMessage(BOB, hello(BOB, 'Scale'));
 
     broker.handleMessage(ALICE, probe(ALICE, 'all', 'Reader'));
 
     expect(delivered).toHaveLength(0);
   });
 
-  it('ignores detaching from a configuration, or a disconnect, it knows nothing about', () => {
+  it('ignores a disconnect of a participant it knows nothing about', () => {
     const { broker } = createBroker();
 
     expect(() => {
-      broker.handleMessage(
-        ALICE,
-        message(ALICE, 'all', { type: 'detach', configName: 'Unknown' } as never),
-      );
       broker.handleDisconnect(CAROL);
     }).not.toThrow();
   });
 
   it('drops everything when disposed', () => {
     const { broker, delivered } = createBroker();
-    broker.handleMessage(ALICE, attach(ALICE));
-    broker.handleMessage(BOB, attach(BOB));
+    broker.handleMessage(ALICE, hello(ALICE, 'Reader'));
+    broker.handleMessage(BOB, hello(BOB, 'Reader'));
 
     broker.dispose();
     broker.handleMessage(ALICE, probe(ALICE, 'all'));
@@ -169,7 +167,7 @@ describe('Broker', () => {
 
   it('delivers a diagnostics request to every connected context but the sender, attached or not', () => {
     const { broker, delivered } = createBroker();
-    broker.handleMessage(ALICE, attach(ALICE));
+    broker.handleMessage(ALICE, hello(ALICE, 'Reader'));
 
     broker.handleMessage(
       CAROL,
@@ -180,27 +178,16 @@ describe('Broker', () => {
     expect(delivered.map((entry) => entry.to)).toEqual([ALICE, BOB]);
   });
 
-  it.each(['hello', 'welcome', 'goodbye', 'worker-log'] as const)('passes on no %s', (type) => {
+  it.each([
+    ['hello', { configNames: ['Reader'] }],
+    ['welcome', { worker: 'w-1' }],
+    ['worker-log', {}],
+  ] as const)('passes on no %s', (type, body) => {
     const { broker, delivered } = createBroker();
-    broker.handleMessage(BOB, attach(BOB));
+    broker.handleMessage(BOB, hello(BOB, 'Reader'));
 
-    broker.handleMessage(ALICE, message(ALICE, 'all', { type } as never));
+    broker.handleMessage(ALICE, message(ALICE, 'all', { type, ...body } as never));
 
     expect(delivered).toHaveLength(0);
-  });
-
-  it('restores a participant it forgot from its heartbeat', () => {
-    const { broker, delivered } = createBroker();
-    broker.handleMessage(ALICE, attach(ALICE));
-    broker.handleDisconnect(ALICE);
-
-    // Alice was only throttled; her heartbeat still names what she takes part in.
-    broker.handleMessage(
-      ALICE,
-      message(ALICE, 'all', { type: 'heartbeat', configNames: ['Reader'] } as never),
-    );
-    broker.handleMessage(BOB, probe(BOB, 'all'));
-
-    expect(delivered.map((entry) => entry.to)).toEqual([ALICE]);
   });
 });

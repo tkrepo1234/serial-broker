@@ -209,7 +209,7 @@ describe.each(TRANSPORT_MODES)('diagnostics observer (%s)', (transport) => {
     ]);
     // The peer also waits on the lock of the owner's term, which is how it learns that the term is
     // over the moment the owner lets go of it (ADR-0030).
-    expect(snapshot.locks?.pending.filter((lock) => !ownership(lock))).toEqual([
+    expect(snapshot.locks?.pending.filter((lock) => lock.name.includes('/term/'))).toEqual([
       expect.objectContaining({ mode: 'shared', browserClientId: peer.id }),
     ]);
     // Both tabs run the configuration remembered, and each holds it for the other (ADR-0027).

@@ -10,20 +10,20 @@ import type { Transport, TransportRequest } from '../../src/client/transport/tra
 import type { Clock } from '../../src/core/clock.js';
 import { NOOP_LOGGER } from '../../src/core/logger.js';
 import type { Logger } from '../../src/core/types.js';
-import { SWEEP_INTERVAL_MS } from '../../src/protocol/heartbeat.js';
 import { BROKER_ID, type ClientId } from '../../src/protocol/messages.js';
 import { PROTOCOL_VERSION } from '../../src/protocol/version.js';
 import { WorkerPorts, type WorkerPort } from '../../src/worker/worker-ports.js';
 
 import type { FakeClock } from './fake-clock.js';
+import type { FakeLockManager } from './fake-locks.js';
 
 type MessageListener = (event: { readonly data: unknown }) => void;
 
 /**
  * What crossed the bus, counted where a browser pays for it.
  *
- * `sent` is every message a context handed to the bus - heartbeats and handshakes included, which
- * the transports exchange below the client. `delivered` is every arrival at a context: one per
+ * `sent` is every message a context handed to the bus - handshakes included, which the transports
+ * exchange below the client. `delivered` is every arrival at a context: one per
  * receiving context, each a structured clone in a browser, so a broadcast to nine peers is one
  * sent and nine delivered. Only what actually arrives is counted, not what was posted to a
  * closed port or a dead context.
@@ -53,8 +53,8 @@ function deliver(listener: MessageListener, message: unknown): void {
  * The worker's end of one port.
  *
  * Closing either end of a real port disentangles both: what is posted afterwards reaches nobody,
- * and neither side is told. So the worker keeps posting into a port its tab closed until the sweep
- * forgets it, and the tab hears none of it.
+ * and neither side is told. So the worker keeps posting into a port its tab closed until the tab's
+ * lock tells it the tab has gone, and the tab hears none of it.
  */
 class FakeWorkerPort implements WorkerPort {
   #isOpen = true;
@@ -114,22 +114,31 @@ export interface ForeignWorkerPort {
  * identity, therefore fails a test rather than surviving into a browser.
  */
 export class FakeWorkerHost {
+  static #nextWorkerNumber = 0;
+  /** The worker's identity, and the context its Web Locks belong to. */
+  readonly workerId: string;
   readonly #ports: WorkerPorts<FakeWorkerPort>;
   readonly #allPorts = new Set<FakeWorkerPort>();
   /** The participants the worker's own records say it knows. */
   readonly #participants = new Set<unknown>();
+  /** What arrived before the worker held its lifetime lock, as a port not yet started keeps it. */
+  #unstarted: [FakeWorkerPort, unknown][] | undefined = [];
   #isCrashed = false;
 
   /**
+   * @param locks - The browser's lock manager: the worker holds a lock for its lifetime there, and
+   *   waits on the lock of every context it hears of (ADR-0041).
    * @param logger - Receives the worker's own records, which a real worker has no way to hand to a
    *   tab. For tests that assert on them.
    * @param meter - Counts what crosses this worker's ports.
    */
   constructor(
-    private readonly clock: FakeClock,
+    private readonly locks: FakeLockManager,
     logger: Logger = NOOP_LOGGER,
     private readonly meter: BusMeter = { sent: 0, delivered: 0 },
   ) {
+    FakeWorkerHost.#nextWorkerNumber += 1;
+    this.workerId = `worker-${String(FakeWorkerHost.#nextWorkerNumber)}`;
     this.#ports = new WorkerPorts({
       logger: {
         log: (level, message, fields) => {
@@ -141,10 +150,17 @@ export class FakeWorkerHost {
           logger.log(level, message, fields);
         },
       },
-      // Monotonic, as the worker script's own reading is: the silence sweep measures a duration.
-      monotonicNow: () => clock.monotonicNow(),
+      locks: locks.forContext(this.workerId),
+      workerId: this.workerId,
     });
-    this.#scheduleSweep();
+    // The worker script starts no port before it holds its lifetime lock.
+    void this.#ports.ready.then(() => {
+      const unstarted = this.#unstarted ?? [];
+      this.#unstarted = undefined;
+      for (const [port, raw] of unstarted) {
+        this.#receive(port, raw);
+      }
+    });
   }
 
   /**
@@ -159,8 +175,8 @@ export class FakeWorkerHost {
    * Simulates the worker itself dying: it crashed, was ended for memory, or was terminated from
    * `chrome://inspect`.
    *
-   * Nobody is told. Its ports deliver nothing in either direction any more, its broker's state is
-   * gone, and it runs no code - not even its sweep.
+   * Its ports deliver nothing in either direction any more, its broker's state is gone, and it runs
+   * no code. The browser lets go of its locks, which is all a tab learns (ADR-0041).
    */
   crash(): void {
     this.#isCrashed = true;
@@ -169,17 +185,9 @@ export class FakeWorkerHost {
     }
     this.#allPorts.clear();
     this.#participants.clear();
+    this.#unstarted = undefined;
     this.#ports.dispose();
-  }
-
-  #scheduleSweep(): void {
-    this.clock.setTimer(() => {
-      if (this.#isCrashed) {
-        return;
-      }
-      this.#ports.sweep();
-      this.#scheduleSweep();
-    }, SWEEP_INTERVAL_MS);
+    this.locks.killContext(this.workerId);
   }
 
   /**
@@ -210,7 +218,17 @@ export class FakeWorkerHost {
       return;
     }
     this.meter.sent += 1;
-    this.#ports.receive(port, raw);
+    if (this.#unstarted !== undefined) {
+      this.#unstarted.push([port, raw]);
+      return;
+    }
+    this.#receive(port, raw);
+  }
+
+  #receive(port: FakeWorkerPort, raw: unknown): void {
+    if (!this.#isCrashed && port.isOpen) {
+      this.#ports.receive(port, raw);
+    }
   }
 
   /** Connects a port for a script that is not a tab, which the test then speaks for. */
@@ -346,11 +364,13 @@ export class FakeBus {
   constructor(
     readonly mode: TransportMode,
     workerScript: WorkerScript = 'loads',
-    /** Time for the bus: the heartbeats tabs send and the worker's sweep. */
+    /** Time for the bus: the deadline of the worker's handshake. */
     readonly clock: FakeClock,
+    /** The browser's locks, which the workers hold and wait on (ADR-0041). */
+    readonly locks: FakeLockManager,
   ) {
     this.#workerScript = workerScript;
-    this.#workerHost = new FakeWorkerHost(clock, NOOP_LOGGER, this.meter);
+    this.#workerHost = new FakeWorkerHost(locks, NOOP_LOGGER, this.meter);
   }
 
   /** In `sharedworker` mode, the script the browser runs for a worker started now. */
@@ -374,7 +394,7 @@ export class FakeBus {
    * Simulates the worker dying while tabs are connected to it.
    *
    * As in a browser, the tabs are not told: their ports simply go dead. The next tab to start the
-   * worker - one opened later, or one that gave up on the dead one (ADR-0021) - starts a new one,
+   * worker - one opened later, or one whose wait on the dead one's lock ended (ADR-0041) - starts a new one,
    * which knows nothing of the tabs that were connected to the old.
    *
    * @param restartsAs - The script every worker started from now on runs. A different one is what
@@ -382,7 +402,7 @@ export class FakeBus {
    */
   crashWorker(restartsAs: WorkerScript = this.#workerScript): void {
     this.#workerHost.crash();
-    this.#workerHost = new FakeWorkerHost(this.clock, NOOP_LOGGER, this.meter);
+    this.#workerHost = new FakeWorkerHost(this.locks, NOOP_LOGGER, this.meter);
     this.#workerScript = restartsAs;
   }
 
@@ -401,7 +421,7 @@ export class FakeBus {
    */
   killContext(contextId: string, _clientId?: ClientId): void {
     // A real worker is never told that a tab died: the port simply stops, in both directions, and
-    // the broker learns of it only when the tab's heartbeats stop arriving (ADR-0021).
+    // the worker learns of it only when the browser lets go of the tab's lock (ADR-0041).
     this.#killed.add(contextId);
     for (const port of this.#workerEnds.get(contextId) ?? []) {
       port.close();
@@ -415,8 +435,8 @@ export class FakeBus {
   /**
    * Lets go of a context that closed after cleaning up, as the browser lets go of a closed tab.
    *
-   * Its ports to the worker are closed - the transport said goodbye first, so the worker has
-   * already let go of its end - and dropped. Unlike {@link FakeBus.killContext} nothing is cut off:
+   * Its ports to the worker are closed - the transport let go of its lock first, so the worker has
+   * learnt it has gone - and dropped. Unlike {@link FakeBus.killContext} nothing is cut off:
    * a closed context has nothing left to send.
    */
   forgetContext(contextId: string): void {
@@ -427,8 +447,8 @@ export class FakeBus {
   }
 
   #createWorkerTransport(contextId: string, tabRequest: TransportRequest): Transport {
-    // Heartbeats run on the bus's own clock, so that tests asserting on the library's timers are
-    // not disturbed by them.
+    // The handshake deadline runs on the bus's own clock, so that tests asserting on the library's
+    // timers are not disturbed by it.
     const request: TransportRequest = { ...tabRequest, clock: this.#clockFor(contextId) };
 
     // Wrapped exactly as the browser environment wraps it, so every scenario in this mode also

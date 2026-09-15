@@ -13,13 +13,9 @@ const VALID = validMessages();
 
 /** Every message type paired with the fields it must have to be accepted. */
 const REQUIRED_FIELDS: Record<ProtocolMessageType, readonly string[]> = {
-  hello: [],
+  hello: ['configNames'],
   'worker-log': ['level', 'message', 'fields'],
-  goodbye: [],
-  welcome: [],
-  heartbeat: ['configNames'],
-  attach: ['configName'],
-  detach: ['configName'],
+  welcome: ['worker'],
   'owner-claimed': ['configName', 'maxTabs'],
   'owner-released': ['configName'],
   'status-request': ['configName'],
@@ -141,9 +137,9 @@ describe('decode matrix', () => {
   it.each([
     ['a NaN timestamp', { ...VALID.status, timestamp: Number.NaN }],
     ['an infinite timestamp', { ...VALID.status, timestamp: Number.POSITIVE_INFINITY }],
-    ['an empty configuration name', { ...VALID.attach, configName: '' }],
+    ['an empty configuration name', { ...VALID['status-request'], configName: '' }],
     ['an empty request id', { ...VALID['write-started'], requestId: '' }],
-    ['an empty sender', { ...VALID.attach, from: '' }],
+    ['an empty sender', { ...VALID['status-request'], from: '' }],
   ])('rejects %s', (_label, message) => {
     expect(decodeMessage(message).ok).toBe(false);
   });
@@ -176,8 +172,8 @@ describe('decode matrix', () => {
   });
 
   it.each([
-    ['no sender', { ...VALID.attach, from: undefined }],
-    ['no recipient', { ...VALID.attach, to: undefined }],
+    ['no sender', { ...VALID['status-request'], from: undefined }],
+    ['no recipient', { ...VALID['status-request'], to: undefined }],
   ])('rejects a message with %s', (_label, raw) => {
     expect(decodeMessage(raw).ok).toBe(false);
   });
@@ -216,7 +212,7 @@ describe('decode matrix', () => {
   });
 
   it('never throws, whatever it is handed', () => {
-    const hostile: Record<string, unknown> = { ...BASE, type: 'attach' };
+    const hostile: Record<string, unknown> = { ...BASE, type: 'status-request' };
     hostile['self'] = hostile;
     Object.defineProperty(hostile, 'configName', {
       get() {

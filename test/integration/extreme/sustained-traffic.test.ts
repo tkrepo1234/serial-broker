@@ -41,6 +41,8 @@ describe.skipIf(!IS_EXTREME).each(TRANSPORT_MODES)('sustained device traffic (%s
       const options = {
         device: READER,
         serial: { baudRate: SIZES.trafficBaud, bufferSize: CHUNK_BYTES },
+        // Every chunk as it is read: this counts or times chunks, not collected answers (ADR-0039).
+        receive: { idleMs: 0 },
         encoding: { decodeText: true },
       };
       const tabs: VirtualTab[] = [];

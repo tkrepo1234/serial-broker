@@ -6,6 +6,7 @@ import type { ClientId, ProtocolMessage } from '../../src/protocol/messages.js';
 import { PROTOCOL_VERSION } from '../../src/protocol/version.js';
 
 import { FakeClock } from './fake-clock.js';
+import { FakeLockManager } from './fake-locks.js';
 
 /**
  * A `MessagePort` with the test at the other end.
@@ -22,6 +23,8 @@ export class FakeMessagePort implements MessagePortLike {
   readonly posted: unknown[] = [];
   /** `true` once `close()` was called. */
   closed = false;
+  /** `true` once `start()` was called. */
+  started = false;
 
   /**
    * Every listener, per event type, in the order added.
@@ -37,6 +40,7 @@ export class FakeMessagePort implements MessagePortLike {
 
   start(): void {
     // Nothing is queued before start: delivery happens only when a test calls deliver().
+    this.started = true;
   }
 
   close(): void {
@@ -81,16 +85,33 @@ export function envelope(from: string, to: string, body: Record<string, unknown>
   return { v: PROTOCOL_VERSION, from, to, ...body };
 }
 
-/** A `hello` as a tab's `SharedWorker` transport sends it. */
-export function hello(from: string): unknown {
-  return envelope(from, 'all', { type: 'hello' });
+/** A `hello` as a tab's `SharedWorker` transport sends it, naming what the tab takes part in. */
+export function hello(from: string, configNames: readonly string[] = []): unknown {
+  return envelope(from, 'all', { type: 'hello', configNames });
+}
+
+/** A `welcome` as a worker answers a `hello`, naming the worker's lifetime lock (ADR-0041). */
+export function welcome(to: string, worker = 'worker-1'): unknown {
+  return envelope('serial-broker/broker', to, { type: 'welcome', worker });
+}
+
+/**
+ * Holds a Web Lock for context `contextId` until the context is killed (`locks.killContext`): the
+ * lock a live tab holds for itself, or a running worker for its lifetime (ADR-0041).
+ */
+export function holdLock(locks: FakeLockManager, contextId: string, name: string): void {
+  void locks.forContext(contextId).request(name, { mode: 'exclusive' }, async () => {
+    await new Promise<never>(() => undefined);
+  });
 }
 
 /** A {@link TransportRequest} together with what its callbacks have recorded so far. */
 export interface TransportRequestRecorder {
   readonly request: TransportRequest;
-  /** The request's clock. Heartbeats run when a test advances it, and not otherwise. */
+  /** The request's clock. The handshake deadline runs when a test advances it, and not otherwise. */
   readonly clock: FakeClock;
+  /** The browser's locks: the transport's own is held in context `clientId`. */
+  readonly locks: FakeLockManager;
   /** Every message the transport delivered. */
   readonly messages: ProtocolMessage[];
   /** Every message the transport refused to deliver because it failed validation. */
@@ -113,9 +134,11 @@ export function recordTransportRequest(
   const decodeFailures: unknown[] = [];
   const transportErrors: unknown[] = [];
   const clock = new FakeClock();
+  const locks = new FakeLockManager();
 
   return {
     clock,
+    locks,
     messages,
     decodeFailures,
     transportErrors,
@@ -126,6 +149,7 @@ export function recordTransportRequest(
       onTransportError: (error) => transportErrors.push(error),
       logger: new ScopedLogger(logger, {}),
       clock,
+      locks: locks.forContext(clientId),
     },
   };
 }

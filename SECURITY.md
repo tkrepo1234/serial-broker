@@ -62,8 +62,10 @@ sends, and in its diagnostics report.
 ### What such a script cannot do
 
 - **Break a tab or the worker with what it posts.** Every decoder is total: it never throws,
-  whatever it is handed, and accepts nothing that is not a complete, well-typed message. A seeded
-  fuzz test holds the message, report, announcement and handshake decoders to that.
+  whatever it is handed, and accepts nothing that is not a complete, well-typed message - a
+  diagnostics report is typed only as far as filing it needs, and read defensively below that
+  (ADR-0018). A seeded fuzz test holds the message, report, announcement and handshake decoders to
+  that.
 - **Make a tab or the worker hold, or pass on, anything of any size.** Every field is bounded (see
   [Limits](#limits)). An accepted message is rebuilt from the fields its type declares, so nothing a
   sender adds travels further - not to the application, and not into the copy the broker makes for
@@ -79,8 +81,8 @@ sends, and in its diagnostics report.
   request goes to every participant of its configuration, and only the tab holding the term it names
   acts on it (ADR-0040).
 - **Take a tab's messages away on the worker, or end its participation.** Ports of one identity are
-  served next to each other, never instead of each other, and a `goodbye` ends only the port it
-  arrived on.
+  served next to each other, never instead of each other, and a context's participation ends only
+  when the browser lets go of the Web Lock that context holds for its lifetime (ADR-0041).
 - **Grow the broker without bound.** It keeps a bounded number of participants, ports per
   participant, and configurations.
 - **End, or invent, a term of holding the port.** A term is a Web Lock held by the tab that holds
@@ -159,7 +161,7 @@ each value, in `src/protocol/limits.ts`.
 | `MAX_CONFIG_NAME_LENGTH`               | 128 characters   | A configuration name in a message: the limit `setup()` enforces.             |
 | `MAX_PAYLOAD_BYTES`                    | 16 MiB           | The payload of a `write-request`, `data-received` or `data-sent`.            |
 | `MAX_TEXT_LENGTH`                      | 32 MiB of UTF-16 | The decoded text of a `data-received`.                                       |
-| `MAX_HEARTBEAT_CONFIGURATIONS`         | 1024 names       | Each list of configuration names in a heartbeat.                             |
+| `MAX_HELLO_CONFIGURATIONS`             | 1024 names       | The list of configuration names in a `hello`.                                |
 | `MAX_ERROR_VALUES`                     | 256 values       | A serialised error, its context and cause, however nested.                   |
 | `MAX_ERROR_CHARACTERS`                 | 64 KiB           | All strings of a serialised error together.                                  |
 | `MAX_REPORT_VALUES`                    | 65 536 values    | A diagnostics report, however nested.                                        |

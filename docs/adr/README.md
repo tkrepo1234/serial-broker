@@ -29,7 +29,7 @@ because of a decision references it in a comment (`// See ADR-0005.`).
 | [0018](./0018-diagnostics-observer.md)                                   | Expose coordination internals to operators through a diagnostics observer           | Amended by 0031                         |
 | [0019](./0019-ship-the-debugging-surface.md)                             | Ship the debugging surface in the package, as static content                        | Accepted                                |
 | [0020](./0020-documentation-toolchain.md)                                | Build the developer documentation with Sphinx, MyST and a TSDoc-generated reference | Accepted                                |
-| [0021](./0021-forget-silent-participants.md)                             | Forget tabs that stop sending heartbeats                                            | Accepted                                |
+| [0021](./0021-forget-silent-participants.md)                             | Forget tabs that stop sending heartbeats                                            | Superseded by 0041                      |
 | [0022](./0022-version-stored-configurations-separately.md)               | Version stored configurations separately from the protocol                          | Amended by 0027, 0033                   |
 | [0023](./0023-announce-the-protocol-version.md)                          | Announce the protocol version on an unversioned channel                             | Accepted                                |
 | [0024](./0024-keep-the-worker-handshake-version-independent.md)          | Keep the handshake with the worker readable by every protocol version               | Accepted                                |
@@ -49,3 +49,4 @@ because of a decision references it in a comment (`// See ADR-0005.`).
 | [0038](./0038-leave-a-write-the-device-has-not-taken-in-flight.md)       | Leave a write the device has not taken in flight                                    | Accepted                                |
 | [0039](./0039-collect-received-bytes-until-the-line-is-quiet.md)         | Collect received bytes until the line is quiet                                      | Accepted                                |
 | [0040](./0040-route-to-all-participants-drop-the-identity-secret.md)     | Route to all participants; drop the identity secret                                 | Accepted                                |
+| [0041](./0041-tell-liveness-through-web-locks.md)                        | Tell who is still there through Web Locks, not heartbeats                           | Accepted                                |

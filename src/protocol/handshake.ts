@@ -24,9 +24,25 @@ import { PROTOCOL_VERSION } from './version.js';
  *    only come from the worker itself, and means that nothing the tab sent has reached anyone.
  */
 
-/** The worker's answer to a tab's `hello`, in this build's protocol version. */
-export function welcomeFor(clientId: ClientId): WelcomeMessage {
-  return { type: 'welcome', v: PROTOCOL_VERSION, from: BROKER_ID, to: clientId };
+/**
+ * How long a tab waits for the worker's `welcome` before it gives up on that worker.
+ *
+ * The one timer the liveness of the bus still needs (ADR-0041): a worker that has ended frees its
+ * lifetime lock, but a worker whose script fetch hangs, or one that cannot take its lock, never
+ * holds one to free. Only whether the welcome has arrived is checked, not how late the timer ran,
+ * so a hidden tab whose timers the browser holds back is not misjudged: its welcome arrived long
+ * before. A tab that has never been welcomed moves to `BroadcastChannel` (ADR-0007); one that was,
+ * starts a new worker.
+ */
+export const HANDSHAKE_DEADLINE_MS = 45_000;
+
+/**
+ * The worker's answer to a tab's `hello`, in this build's protocol version.
+ *
+ * @param workerId - The identity the worker's lifetime lock is named after (ADR-0041).
+ */
+export function welcomeFor(clientId: ClientId, workerId: string): WelcomeMessage {
+  return { type: 'welcome', v: PROTOCOL_VERSION, from: BROKER_ID, to: clientId, worker: workerId };
 }
 
 /**

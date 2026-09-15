@@ -1,25 +1,19 @@
 import { describe, expect, it } from 'vitest';
 
 import { SerialBrokerErrorCode } from '../../../src/core/error-codes.js';
-import {
-  HEARTBEAT_INTERVAL_MS,
-  MAX_UNANSWERED_HEARTBEATS,
-} from '../../../src/protocol/heartbeat.js';
 import { BrowserHarness } from '../../harness/browser-harness.js';
 import { READER, READER_OPTIONS } from '../../harness/devices.js';
 
 /**
  * A worker that dies while tabs are open: it crashed, was ended for memory, or was terminated from
- * `chrome://inspect` (ADR-0021, amended).
+ * `chrome://inspect` (ADR-0041).
  *
  * A port to a dead worker reports nothing in either direction, and tabs opened later start a new
- * worker that knows none of the tabs already open. The open tabs notice only that the broker stops
- * answering their heartbeats, and then connect to the new worker themselves.
+ * worker that knows none of the tabs already open. The browser lets go of the lock the worker held
+ * for its lifetime, and every open tab waiting on it connects to the new worker at once. No time
+ * passes in these scenarios: nothing about noticing the loss is timed.
  */
 describe('tabs whose worker dies', () => {
-  /** Enough for every tab to miss the heartbeats that mark a broker as gone, whatever its timer's phase. */
-  const DETECTION_MS = (MAX_UNANSWERED_HEARTBEATS + 1) * HEARTBEAT_INTERVAL_MS;
-
   async function twoTabs(): Promise<{
     harness: BrowserHarness;
     device: ReturnType<BrowserHarness['serial']['addDevice']>;
@@ -36,11 +30,10 @@ describe('tabs whose worker dies', () => {
     return { harness, device, owner, other };
   }
 
-  it('share the port again through a new worker', async () => {
+  it('share the port again through a new worker, at once', async () => {
     const { harness, device, owner, other } = await twoTabs();
 
     harness.bus.crashWorker();
-    await harness.busClock.advance(DETECTION_MS);
     await harness.settle();
 
     device.emit('AFTER');
@@ -59,7 +52,8 @@ describe('tabs whose worker dies', () => {
     const { harness, owner, other } = await twoTabs();
 
     harness.bus.crashWorker();
-    await harness.busClock.advance(3 * DETECTION_MS);
+    await harness.settle();
+    await harness.busClock.advance(3_600_000);
     await harness.settle();
 
     for (const tab of [owner, other]) {
@@ -80,7 +74,6 @@ describe('tabs whose worker dies', () => {
     harness.bus.crashWorker();
     const late = harness.openTab();
     await late.setup('Reader', READER_OPTIONS);
-    await harness.busClock.advance(DETECTION_MS);
     await harness.settle();
 
     device.emit('TOGETHER');
@@ -90,8 +83,8 @@ describe('tabs whose worker dies', () => {
     expect(other.receivedText('Reader')).toBe('TOGETHER');
     expect(harness.bus.workerHost.clientCount).toBe(3);
 
-    // It set up while the new worker knew no owner to ask for the status, and learns it all the
-    // same: the owner restates it on reaching the new worker.
+    // It may have set up while the new worker knew no owner to ask for the status, and learns it
+    // all the same: the owner restates it on reaching the new worker.
     expect(late.client.getStatus('Reader').status).toBe('open');
     const writing = late.client.send('Reader', 'LATE');
     await harness.settle();
@@ -102,14 +95,13 @@ describe('tabs whose worker dies', () => {
   it('hand on a write that was lost with the dead worker, and write it once', async () => {
     const { harness, device, other } = await twoTabs();
 
+    // Sent into the dead worker in the same task that ended it, before any tab could hear of it.
     harness.bus.crashWorker();
-    // Sent into the dead worker: nothing tells the tab that it went nowhere.
     const writing = other.client.send('Reader', 'LOST');
-    await harness.settle();
-    await harness.busClock.advance(DETECTION_MS);
     await harness.settle();
 
     await expect(writing).resolves.toBeUndefined();
     expect(device.writtenText()).toBe('LOST');
+    expect(device.written).toHaveLength(1);
   });
 });

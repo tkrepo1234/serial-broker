@@ -124,3 +124,15 @@ write results that never arrive. Reloading that tab resolves it.
 
 Verified by `test/unit/fallback-transport.test.ts` and
 `test/integration/multi-tab/worker-script-fallback.test.ts`; manual test plan step 27.
+
+## Amendment (2026-09-15): restate instead of replaying
+
+The fallback no longer keeps what the tab sent before the `welcome` to replay it. When it moves to
+`BroadcastChannel`, it attaches what the tab takes part in and has the client restate itself - the
+tab holding the port its status, every other tab a request for it - as a tab does after reaching a
+new worker ([ADR-0041](./0041-tell-liveness-through-web-locks.md)). Write requests that went into
+the unusable worker are handed on when the holder's `open` arrives, and the holder recognises one it
+has already accepted (ADR-0013). No `owner-released` can be lost in the switch in a way that matters:
+a tab knows of a term only from a message sent on the bus it is on, and a term ends when its Web
+Lock is freed (ADR-0030). Traffic sent before the switch is lost, where it was replayed up to 1000
+messages. A worker that has not welcomed the tab within 45 seconds is given up on the same way.

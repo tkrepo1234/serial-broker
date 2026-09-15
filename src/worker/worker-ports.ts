@@ -1,15 +1,16 @@
+import { describeUnknown } from '../core/errors.js';
 import { OnceLog, ScopedLogger } from '../core/logger.js';
 import type { LogFields, Logger } from '../core/types.js';
+import type { LockManagerLike } from '../environment/environment.js';
 import { decodeMessage, describeDecodeFailure, type DecodeFailure } from '../protocol/decode.js';
 import { helloSenderOf, welcomeFor } from '../protocol/handshake.js';
-import { SILENT_PARTICIPANT_TIMEOUT_MS } from '../protocol/heartbeat.js';
 import {
   MAX_PARTICIPANTS,
   MAX_PORTS_PER_PARTICIPANT,
   warnLimitExceeded,
 } from '../protocol/limits.js';
 import { BROKER_ID, type ClientId, type ProtocolMessage } from '../protocol/messages.js';
-import { PROTOCOL_VERSION } from '../protocol/version.js';
+import { contextLockName, PROTOCOL_VERSION, workerLockName } from '../protocol/version.js';
 
 import { Broker } from './broker.js';
 
@@ -26,12 +27,10 @@ export interface WorkerPortsHost {
    * in the suite. Its warnings are forwarded to the connected tabs as well (ADR-0029).
    */
   readonly logger: Logger;
-  /**
-   * A reading of a monotonic clock in milliseconds, to tell how long ago a port was last heard from.
-   * Only differences are used: no participant may fall silent because the system clock was set
-   * forward (ADR-0032).
-   */
-  monotonicNow(): number;
+  /** `navigator.locks` of the worker: the locks that say who is still there (ADR-0041). */
+  readonly locks: LockManagerLike;
+  /** This worker's identity, unique among workers: its lifetime lock is named after it. */
+  readonly workerId: string;
 }
 
 /**
@@ -50,8 +49,8 @@ const REFUSAL_MESSAGES: Readonly<Record<Refusal, string>> = {
 };
 
 /**
- * The worker's side of every port: who is behind each one, when it was last heard from, and what
- * reaches the broker from it.
+ * The worker's side of every port: who is behind each one, whether that context is still there, and
+ * what reaches the broker from it.
  *
  * A port is anybody's. Every script of the origin can start the worker and say anything on its port,
  * and the envelope's `from` is whatever the sender wrote (SECURITY.md). Nothing routed here needs to
@@ -60,10 +59,14 @@ const REFUSAL_MESSAGES: Readonly<Record<Refusal, string>> = {
  *
  * - **A port says who it is once.** Its first message must be `hello`, and names the identity the
  *   port speaks as from then on. A message before it, or one naming another sender, is dropped.
- * - **An identity can have several ports.** A tab that gave up on a worker that hung connects again
- *   on a new port under the same identity (ADR-0021). Everything addressed to the identity goes to
- *   each of its ports; a port its tab closed receives nothing, and is forgotten once found silent.
- * - **A goodbye ends one port.** The identity leaves the broker when its last port has gone.
+ * - **An identity can have several ports.** Everything addressed to the identity goes to each of
+ *   them; a port its tab closed receives nothing.
+ *
+ * A port reports nothing when the context behind it goes away, so liveness comes from Web Locks
+ * (ADR-0041). Every context holds a lock named after its identity for as long as it lives, and the
+ * worker waits on it from the moment it first hears of the identity: the browser grants it once the
+ * context has gone - closed, crashed or discarded - and the worker forgets the identity then. The
+ * worker holds a lock of its own for its lifetime, which the tabs wait on in the same way.
  *
  * The number of identities and of ports per identity is bounded (`limits.ts`). Kept apart from the
  * worker script so that the harness routes through exactly this code (ADR-0014).
@@ -73,11 +76,18 @@ const REFUSAL_MESSAGES: Readonly<Record<Refusal, string>> = {
  * key, so what is forwarded is bounded without a budget of its own.
  */
 export class WorkerPorts<Port extends WorkerPort> {
+  /**
+   * Settles once the worker holds its lifetime lock. Until then no port is started, so that no tab
+   * is welcomed to a worker whose end the browser could not announce (ADR-0041).
+   */
+  readonly ready: Promise<void>;
   readonly #broker: Broker;
-  /** The identity each port said hello as. Kept while the port is only forgotten by the sweep. */
+  /** The identity each port said hello as. */
   readonly #identities = new WeakMap<Port, ClientId>();
-  /** The ports of each identity the broker knows, with when each was last heard from. */
-  readonly #ports = new Map<ClientId, Map<Port, number>>();
+  /** The ports of each identity the broker knows. */
+  readonly #ports = new Map<ClientId, Set<Port>>();
+  /** Withdraws the requests waiting on the contexts' locks when the worker is disposed. */
+  readonly #abort = new AbortController();
   readonly #logger: ScopedLogger;
   readonly #once: OnceLog;
 
@@ -96,12 +106,28 @@ export class WorkerPorts<Port extends WorkerPort> {
     this.#once = new OnceLog(this.#logger);
     this.#broker = new Broker({
       deliver: (clientId, message) => {
-        for (const port of [...(this.#ports.get(clientId)?.keys() ?? [])]) {
+        for (const port of [...(this.#ports.get(clientId) ?? [])]) {
           post(port, message);
         }
       },
       clients: () => this.#ports.keys(),
       logger: this.#logger,
+    });
+    this.ready = new Promise((resolve) => {
+      // Held until the worker ends: the browser lets it go then, and every tab waiting on it learns
+      // so at once. A worker that cannot take it never becomes ready, and its tabs treat it as one
+      // that does not answer.
+      void host.locks
+        .request(workerLockName(host.workerId), { mode: 'exclusive' }, async () => {
+          resolve();
+          await new Promise<never>(() => undefined);
+        })
+        .catch((error: unknown) => {
+          this.#logger.error('could not take the worker lock; no tab is welcomed', {
+            event: 'worker.lock-failed',
+            reason: describeUnknown(error),
+          });
+        });
     });
   }
 
@@ -130,48 +156,20 @@ export class WorkerPorts<Port extends WorkerPort> {
       return;
     }
 
-    if (message.type === 'goodbye') {
-      this.#leave(port, message.from);
-      return;
-    }
     if (!this.#register(port, message.from)) {
       return;
     }
-    if (message.type === 'hello' || message.type === 'heartbeat') {
-      // The answer tells the port that sent it that this worker runs: a tab whose hello or
-      // heartbeats go unanswered gives up on this worker (ADR-0007, ADR-0021).
-      post(port, welcomeFor(message.from));
+    if (message.type === 'hello') {
+      // The answer tells the port that sent it that this worker runs, and names the lock that tells
+      // it when this worker has ended (ADR-0007, ADR-0041).
+      post(port, welcomeFor(message.from, this.host.workerId));
     }
     this.#broker.handleMessage(message.from, message);
   }
 
-  /**
-   * Forgets every port, and every identity, that has sent nothing for the silence timeout.
-   *
-   * A port reports nothing when the tab behind it dies (ADR-0021). The port's identity is kept, so
-   * that a tab that was only throttled comes back with its next message, without saying hello again;
-   * the port itself is never closed, since closing it would cut such a tab off for good.
-   */
-  sweep(): void {
-    const now = this.host.monotonicNow();
-    for (const [clientId, ports] of [...this.#ports]) {
-      for (const [port, heardAt] of [...ports]) {
-        if (now - heardAt >= SILENT_PARTICIPANT_TIMEOUT_MS) {
-          ports.delete(port);
-        }
-      }
-      if (ports.size === 0) {
-        this.#logger.info('forgot a participant that fell silent', {
-          clientId,
-          event: 'broker.forgot-silent',
-        });
-        this.#forget(clientId);
-      }
-    }
-  }
-
-  /** Drops all state. Ports are left as they are. */
+  /** Drops all state, and stops waiting on the contexts' locks. Ports are left as they are. */
   dispose(): void {
+    this.#abort.abort();
     this.#ports.clear();
     this.#broker.dispose();
   }
@@ -207,7 +205,7 @@ export class WorkerPorts<Port extends WorkerPort> {
       return;
     }
     for (const [clientId, ports] of [...this.#ports]) {
-      for (const port of [...ports.keys()]) {
+      for (const port of [...ports]) {
         post(port, { ...decoded.message, to: clientId });
       }
     }
@@ -226,34 +224,43 @@ export class WorkerPorts<Port extends WorkerPort> {
         warnLimitExceeded(this.#once, 'worker.limit-exceeded', 'MAX_PARTICIPANTS');
         return false;
       }
-      ports = new Map();
-      this.#ports.set(clientId, ports);
+      const registered = new Set<Port>();
+      ports = registered;
+      this.#ports.set(clientId, registered);
       this.#logger.debug('participant connected', { clientId, event: 'broker.connect' });
+      this.#forgetWhenGone(clientId, registered);
     } else if (!ports.has(port) && ports.size >= MAX_PORTS_PER_PARTICIPANT) {
       warnLimitExceeded(this.#once, 'worker.limit-exceeded', 'MAX_PORTS_PER_PARTICIPANT', {
         clientId,
       });
       return false;
     }
-    ports.set(port, this.host.monotonicNow());
+    ports.add(port);
     return true;
   }
 
-  /** Ends one port's participation, and the identity's once no port is left. */
-  #leave(port: Port, clientId: ClientId): void {
-    this.#identities.delete(port);
-    const ports = this.#ports.get(clientId);
-    if (ports?.delete(port) === true && ports.size === 0) {
-      this.#forget(clientId);
-    }
-    try {
-      port.close();
-    } catch {
-      // Closing an already-closed port throws in some engines and means nothing here.
-    }
+  /**
+   * Waits on the context's lock, and forgets the identity once the browser grants it (ADR-0041).
+   *
+   * A context takes its lock before it says hello, so the request queues behind it. Granted, the lock
+   * is let go at once. A message still on its way from the context that has gone registers the
+   * identity again and is routed; the next grant, immediate, forgets it again.
+   */
+  #forgetWhenGone(clientId: ClientId, registered: Set<Port>): void {
+    void this.host.locks
+      .request(contextLockName(clientId), { mode: 'shared', signal: this.#abort.signal }, () => {
+        if (this.#ports.get(clientId) === registered) {
+          this.#forget(clientId);
+        }
+        return Promise.resolve();
+      })
+      .catch(() => {
+        // Withdrawn because the worker was disposed, or refused: the identity is then kept as long as
+        // the worker runs, bounded by `MAX_PARTICIPANTS`.
+      });
   }
 
-  /** Forgets an identity whose last port has gone. */
+  /** Forgets an identity whose context has gone. */
   #forget(clientId: ClientId): void {
     this.#ports.delete(clientId);
     this.#broker.handleDisconnect(clientId);
@@ -274,7 +281,7 @@ export class WorkerPorts<Port extends WorkerPort> {
         event: 'worker.other-protocol-version',
         reason: describeDecodeFailure(failure),
       });
-      post(port, welcomeFor(otherVersionSender));
+      post(port, welcomeFor(otherVersionSender, this.host.workerId));
       return;
     }
 
@@ -314,7 +321,7 @@ function post(port: WorkerPort, message: ProtocolMessage): void {
   try {
     port.postMessage(message);
   } catch {
-    // A port belonging to a context that has just gone away. The sweep forgets it; failing the whole
-    // delivery loop over it would punish every other tab.
+    // A port belonging to a context that has just gone away, which its lock is about to tell. Failing
+    // the whole delivery loop over it would punish every other tab.
   }
 }

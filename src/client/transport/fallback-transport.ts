@@ -3,20 +3,6 @@ import type { ProtocolMessage } from '../../protocol/messages.js';
 import type { WorkerLoadFailure, WorkerStartup } from './shared-worker-transport.js';
 import type { Transport, TransportRequest } from './transport.js';
 
-/**
- * Most traffic messages - data received and data sent - kept for replay while the worker has
- * not answered.
- *
- * A worker script normally answers within milliseconds, and a missing one, or one of another
- * protocol version, is found out about as fast. One that says nothing at all is given up on once
- * `MAX_UNANSWERED_HEARTBEATS` heartbeats went unanswered - under a minute in a visible tab, a few in
- * a hidden one (ADR-0021) - so the record is kept for that long at most. In that time only traffic
- * arrives in quantity, and this bound trades its completeness for bounded memory. Every other
- * message is always kept: dropping an ownership claim or a write result would leave other tabs
- * waiting, and the rest of what a tab says in that time is bounded by the time itself.
- */
-export const MAX_REPLAYED_MESSAGES = 1000;
-
 /** What the log says on falling back, for each way of finding out that the worker is unusable. */
 const FALLBACK_LOG_MESSAGES: Readonly<Record<WorkerLoadFailure, string>> = {
   'worker-script-failed': 'the SharedWorker script did not load; using BroadcastChannel',
@@ -24,11 +10,6 @@ const FALLBACK_LOG_MESSAGES: Readonly<Record<WorkerLoadFailure, string>> = {
     'the SharedWorker script runs another protocol version; using BroadcastChannel',
   'worker-not-answering': 'the SharedWorker never answered; using BroadcastChannel',
 };
-
-/** Something the application's side of the bus asked for, in the order it asked. */
-type Operation =
-  | { readonly kind: 'send'; readonly message: ProtocolMessage }
-  | { readonly kind: 'attach' | 'detach'; readonly configName: string };
 
 /**
  * A `SharedWorker` transport that moves to `BroadcastChannel` when the worker script turns out
@@ -40,22 +21,22 @@ type Operation =
  * nothing. Falling back at construction alone would leave that tab cut off from every other
  * (ADR-0007).
  *
- * So until the broker's `welcome` proves the script runs, everything asked of the bus is kept.
- * If the script fails first, none of it reached anyone, and replaying it over a
- * `BroadcastChannel` delivers each message exactly once, in the order it was sent - except traffic
- * beyond {@link MAX_REPLAYED_MESSAGES}, which is counted and dropped. Once the
- * welcome arrives the record is dropped, and a later worker error is an ordinary transport error.
+ * So until the broker's `welcome` proves the script runs, the transport can still move. When it
+ * does, nothing it sent reached anyone, and nothing is sent again: the new bus is told what this
+ * context takes part in, and the client states again what the others need to know, as it does after
+ * reaching a new worker (ADR-0041). Who holds the port is the Web Locks' to say, not a message's, so
+ * no term can be left waiting on a word that went into the unusable worker: a tab that knows of a
+ * term has heard of it on the bus the term's holder is on. Traffic sent in between is lost.
  */
 export class FallbackTransport implements Transport {
   readonly clientId;
 
   readonly #request: TransportRequest;
   readonly #createFallback: (request: TransportRequest) => Transport;
+  readonly #attached = new Set<string>();
   #active: Transport;
-  /** `undefined` once the outcome is known: the worker answered, or the fallback took over. */
-  #pending: Operation[] | undefined = [];
-  #keptTraffic = 0;
-  #droppedMessages = 0;
+  /** The worker answered, or the fallback took over: nothing moves any more. */
+  #isSettled = false;
   #isClosed = false;
 
   /**
@@ -74,7 +55,7 @@ export class FallbackTransport implements Transport {
     this.#createFallback = createFallback;
     this.#active = createWorkerTransport(request, {
       onReady: () => {
-        this.#pending = undefined;
+        this.#isSettled = true;
       },
       onLoadFailed: (event, reason) => {
         this.#fallBack(event, reason);
@@ -89,42 +70,25 @@ export class FallbackTransport implements Transport {
 
   /** {@inheritDoc Transport.send} */
   send(message: ProtocolMessage): void {
-    this.#keep({ kind: 'send', message });
     this.#active.send(message);
   }
 
   /** {@inheritDoc Transport.attach} */
   attach(configName: string): void {
-    this.#keep({ kind: 'attach', configName });
+    this.#attached.add(configName);
     this.#active.attach(configName);
   }
 
   /** {@inheritDoc Transport.detach} */
   detach(configName: string): void {
-    this.#keep({ kind: 'detach', configName });
+    this.#attached.delete(configName);
     this.#active.detach(configName);
   }
 
   /** {@inheritDoc Transport.close} */
   close(): void {
     this.#isClosed = true;
-    this.#pending = undefined;
     this.#active.close();
-  }
-
-  #keep(operation: Operation): void {
-    const pending = this.#pending;
-    if (pending === undefined) {
-      return;
-    }
-    if (operation.kind === 'send' && isTraffic(operation.message)) {
-      if (this.#keptTraffic >= MAX_REPLAYED_MESSAGES) {
-        this.#droppedMessages += 1;
-        return;
-      }
-      this.#keptTraffic += 1;
-    }
-    pending.push(operation);
   }
 
   #fallBack(event: unknown, reason: WorkerLoadFailure): void {
@@ -134,8 +98,7 @@ export class FallbackTransport implements Transport {
       // protocol version can close the bus before the worker transport goes on to fall back.
       return;
     }
-    const pending = this.#pending;
-    if (pending === undefined) {
+    if (this.#isSettled) {
       this.#request.onTransportError(event);
       return;
     }
@@ -149,35 +112,18 @@ export class FallbackTransport implements Transport {
       return;
     }
 
-    this.#pending = undefined;
+    this.#isSettled = true;
     const failed = this.#active;
     this.#active = fallback;
     failed.close();
-
-    for (const operation of pending) {
-      switch (operation.kind) {
-        case 'send':
-          fallback.send(operation.message);
-          break;
-        case 'attach':
-          fallback.attach(operation.configName);
-          break;
-        case 'detach':
-          fallback.detach(operation.configName);
-          break;
-      }
+    for (const configName of this.#attached) {
+      fallback.attach(configName);
     }
 
     this.#request.logger.warn(FALLBACK_LOG_MESSAGES[reason], {
       event: 'environment.transport-fallback',
       reason,
-      replayedMessages: pending.filter((operation) => operation.kind === 'send').length,
-      droppedMessages: this.#droppedMessages,
     });
+    this.#request.onReconnected?.();
   }
-}
-
-/** Data the device sent or was sent: plentiful, and the only messages the replay may drop. */
-function isTraffic(message: ProtocolMessage): boolean {
-  return message.type === 'data-received' || message.type === 'data-sent';
 }

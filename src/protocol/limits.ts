@@ -54,12 +54,12 @@ export const MAX_PAYLOAD_BYTES = 16 * 1024 * 1024;
 export const MAX_TEXT_LENGTH = 2 * MAX_PAYLOAD_BYTES;
 
 /**
- * The most configuration names one heartbeat may list.
+ * The most configuration names one `hello` may list.
  *
- * A heartbeat lists every configuration its tab takes part in (ADR-0021), and the broker keeps
+ * A `hello` lists every configuration its tab takes part in (ADR-0041), and the broker keeps
  * bookkeeping for each. No application sets up a thousand configurations in one tab.
  */
-export const MAX_HEARTBEAT_CONFIGURATIONS = 1024;
+export const MAX_HELLO_CONFIGURATIONS = 1024;
 
 /**
  * The most values a serialised error may be made of, counting every object, array, string and number
@@ -78,13 +78,13 @@ export const MAX_ERROR_VALUES = 256;
 export const MAX_ERROR_CHARACTERS = 64 * 1024;
 
 /**
- * The most values a diagnostics report may be made of: 64 for each configuration a heartbeat may
+ * The most values a diagnostics report may be made of: 64 for each configuration a `hello` may
  * name.
  *
  * A configuration's report has about 45 values - its settings, listener counts, pending writes and
  * connection. A report is kept in the snapshot an observer returns.
  */
-export const MAX_REPORT_VALUES = 64 * MAX_HEARTBEAT_CONFIGURATIONS;
+export const MAX_REPORT_VALUES = 64 * MAX_HELLO_CONFIGURATIONS;
 
 /**
  * The most characters a diagnostics report may hold in all its strings together: 1 MiB.
@@ -97,27 +97,27 @@ export const MAX_REPORT_CHARACTERS = 1024 * 1024;
  * The most participants a broker keeps: tabs and diagnostics observers on its worker.
  *
  * A tab limit is at most 100 per configuration, and an origin with a thousand open tabs is not one a
- * browser keeps running. Every participant is a set of ports, a timestamp and an entry in each
- * configuration it takes part in.
+ * browser keeps running. Every participant is a set of ports, a lock request that tells the worker
+ * when it has gone (ADR-0041), and an entry in each configuration it takes part in.
  */
 export const MAX_PARTICIPANTS = 1024;
 
 /**
  * The most ports a broker keeps for one participant.
  *
- * A tab that gave up on a worker that hung connects to it again on a new port, and its old port is
- * kept until the sweep finds it silent (ADR-0021). A tab gives up at most once every 45 seconds, so
- * it has at most five ports within the three minutes a silent port is kept.
+ * A tab connects one port to a worker, and another only to a worker it was given up on without the
+ * worker having ended: one that did not welcome it in time. Anything beyond a few is a script of the
+ * origin opening ports under another context's identity, which are kept until that context has gone.
  */
 export const MAX_PORTS_PER_PARTICIPANT = 8;
 
 /**
  * The most configurations a broker keeps bookkeeping for, across all participants.
  *
- * Four tabs' worth of the heartbeat limit. A configuration is kept only while a participant takes
+ * Four tabs' worth of the `hello` limit. A configuration is kept only while a participant takes
  * part in it.
  */
-export const MAX_CONFIGURATIONS = 4 * MAX_HEARTBEAT_CONFIGURATIONS;
+export const MAX_CONFIGURATIONS = 4 * MAX_HELLO_CONFIGURATIONS;
 
 /**
  * The most fields, counting their values, one forwarded worker record may carry (ADR-0029).
@@ -214,7 +214,7 @@ export function warnLimitExceeded(
   );
 }
 
-/** A bound on a nested structure: how many values, and how many characters and bytes in total. */
+/** A bound on a nested structure: how many values, and how many characters in total. */
 export interface StructureBudget {
   readonly values: number;
   readonly characters: number;
@@ -222,16 +222,19 @@ export interface StructureBudget {
 
 /**
  * Which part of its budget a structure from another context exceeds, if any: more than
- * `budget.values` values, or more than `budget.characters` characters in its strings and bytes in its
- * binary data, all together.
+ * `budget.values` values, or more than `budget.characters` characters in its strings together.
  *
- * Structured cloning carries arrays of any length, objects of any width and depth, `Map`s, `Set`s,
- * typed arrays and cycles. The walk is iterative, so depth cannot overflow the stack; it stops at
- * the first value over budget, so its own cost is bounded by the budget; and a value met a second
- * time - a cycle, or a shared reference - fails the check, so it cannot loop and no consumer that
- * walks the structure recursively, such as `JSON.stringify` in a logger, meets one. A function or a
- * symbol fails it too: no structured clone contains one, and a message holding one could not be
- * posted on to another tab. Both count as exceeding `values`: the structure is not a tree of values.
+ * Only a tree of plain values is within any budget: plain objects, arrays, strings, numbers,
+ * booleans, `null` and `undefined`. Structured cloning carries more - `Map`s, `Set`s, binary data,
+ * dates, regular expressions - but what a sender adds to one of those does not survive the next
+ * clone, so a message holding one would not be the same message in the next tab, and nothing the
+ * library sends holds one. A function or a symbol cannot be cloned at all. All of these count as
+ * exceeding `values`.
+ *
+ * The walk is iterative, so depth cannot overflow the stack; it stops at the first value over
+ * budget, so its own cost is bounded by the budget; and a value met a second time - a cycle, or a
+ * shared reference - fails the check, so it cannot loop and no consumer that walks the structure
+ * recursively, such as `JSON.stringify` in a logger, meets one.
  *
  * Never throws: every read is of an own property of a structured clone, which has no getters.
  *
@@ -245,7 +248,7 @@ export function exceedsStructureBudget(
 }
 
 /**
- * How many characters and bytes a structure holds, counted within `budget`.
+ * How many characters a structure holds, counted within `budget`.
  *
  * For what a structure costs to keep, where the count of such structures is bounded separately -
  * the reports of a diagnostics collection (ADR-0031). A structure that exceeds `budget` is counted
@@ -275,53 +278,44 @@ function measureStructure(
 
     if (typeof value === 'string') {
       characters += value.length;
+      if (characters > budget.characters) {
+        return { excess: 'characters', characters };
+      }
     } else if (typeof value === 'object' && value !== null) {
-      if (seen.has(value)) {
+      if (seen.has(value) || !isTreeNode(value)) {
         return { excess: 'values', characters };
       }
       seen.add(value);
-      const width = widthOf(value);
-      if (width.bytes !== undefined) {
-        characters += width.bytes;
-      } else if (values + pending.length + width.children > budget.values) {
+      if (values + pending.length + widthOf(value, budget.values) > budget.values) {
         // Refused before its children are listed: an array of a billion holes is refused at once.
         return { excess: 'values', characters };
-      } else {
-        pushChildren(value, pending);
       }
-    }
-
-    if (characters > budget.characters) {
-      return { excess: 'characters', characters };
+      pushChildren(value, pending);
     }
   }
   return { excess: undefined, characters };
 }
 
-/** How many children a structured value has, or how many bytes a binary one holds. */
-function widthOf(value: object): { readonly children: number; readonly bytes?: number } {
-  if (ArrayBuffer.isView(value)) {
-    return { children: 0, bytes: value.buffer.byteLength };
-  }
-  if (value instanceof ArrayBuffer) {
-    return { children: 0, bytes: value.byteLength };
-  }
+/** `true` for an array or a plain object: what a tree of plain values is made of. */
+function isTreeNode(value: object): boolean {
+  return Array.isArray(value) || Object.prototype.toString.call(value) === '[object Object]';
+}
+
+/** How many children a node has, counted no further than `limit` and without listing them. */
+function widthOf(value: object, limit: number): number {
   if (Array.isArray(value)) {
-    return { children: value.length };
-  }
-  if (value instanceof Map) {
-    return { children: 2 * value.size };
-  }
-  if (value instanceof Set) {
-    return { children: value.size };
+    return value.length;
   }
   let keys = 0;
   for (const key in value) {
     if (Object.hasOwn(value, key)) {
       keys += 1;
+      if (keys > limit) {
+        break;
+      }
     }
   }
-  return { children: keys };
+  return keys;
 }
 
 function pushChildren(value: object, pending: unknown[]): void {
@@ -330,19 +324,11 @@ function pushChildren(value: object, pending: unknown[]): void {
     for (const entry of value as readonly unknown[]) {
       pending.push(entry);
     }
-  } else if (value instanceof Map) {
-    for (const [key, entry] of value) {
-      pending.push(key, entry);
-    }
-  } else if (value instanceof Set) {
-    for (const entry of value) {
-      pending.push(entry);
-    }
-  } else {
-    for (const key in value) {
-      if (Object.hasOwn(value, key)) {
-        pending.push((value as Record<string, unknown>)[key]);
-      }
+    return;
+  }
+  for (const key in value) {
+    if (Object.hasOwn(value, key)) {
+      pending.push((value as Record<string, unknown>)[key]);
     }
   }
 }

@@ -11,7 +11,7 @@
  * process of its own, so a killed renderer takes the worker with it only sometimes, and a test
  * built on that would fail two minutes later for a reason that is not the library's. The worker
  * is therefore terminated outright, as step 29 of the manual test plan does from
- * `chrome://inspect/#workers`; what the tabs then do is ADR-0021. See ADR-0035.
+ * `chrome://inspect/#workers`; what the tabs then do is ADR-0041. See ADR-0035.
  */
 
 import { expect, test, type BrowserContext } from '@playwright/test';
@@ -65,17 +65,16 @@ test.describe('the tab holding the port goes away', () => {
 
 test.describe('the broker dies', () => {
   test('the tabs notice, get a new one, and go on sharing the port', async ({ context }) => {
-    // Three unanswered heartbeats, 15 seconds apart, is how a dead worker is recognised
-    // (ADR-0021), so this one is slow by design.
-    test.setTimeout(180_000);
     await installStandIn(context, GRANTED_DEVICE);
     const tabs = await openConnectedTabs(context, 3);
     const holder = await tabHoldingThePort(tabs);
     const sender = tabs[(holder + 1) % tabs.length];
     const [worker] = await terminateSharedWorkers(tabs[0]);
 
+    // The browser lets go of the lock the worker held for its lifetime, and every tab waiting on it
+    // starts a new worker at once (ADR-0041): within the default wait, not after a timeout of ours.
     for (const tab of tabs) {
-      await tab.waitForLogEvent('transport.broker-restored', 150_000);
+      await tab.waitForLogEvent('transport.broker-restored');
     }
 
     // The bus is back, carried by a worker that is not the one that died, so a tab that does not

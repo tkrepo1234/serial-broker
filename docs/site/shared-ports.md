@@ -172,21 +172,27 @@ comparing clock readings.
 
 ### Hidden tabs
 
-A browser runs the timers of a hidden tab late: Chromium aligns them to whole seconds and, after a
-few minutes hidden, runs repeating timers only about once a minute. Messages between tabs and device
-events are not held back. In a hidden tab, deadlines and reconnect delays can therefore end up to a
-minute late. Learning that the tab holding the port has gone does not: that is a Web Lock being
-freed, which the browser grants as promptly in a hidden tab as in a visible one. A deadline that runs
-late first handles the messages that arrived meanwhile, so a write whose result is already waiting
-resolves instead of timing out.
+A browser runs the timers of a hidden tab late: Chromium aligns them to whole seconds, and after five
+minutes hidden, runs repeating timers only once a minute. Messages between tabs and device events
+are not held back. In a hidden tab, deadlines and reconnect delays can therefore end up to a minute
+late, and write timeouts take that much longer. Learning that the tab holding the port has gone does
+not: it is a Web Lock being freed, not a timer, and the browser grants a waiting tab that lock as
+promptly in a hidden tab as in a visible one. The same holds for learning that the worker has ended,
+or that a tab has gone: both are Web Locks too.
+
+A deadline that runs a second or more late first handles the messages that arrived meanwhile, so a
+write whose result is already waiting resolves instead of timing out.
 
 ### Frozen tabs
 
-Chromium freezes hidden tabs to save energy: a frozen tab runs nothing until it is shown again. It
-does not freeze a tab that uses Web Serial, or that holds a Web Lock another tab is waiting for, so
-neither the tab holding the port nor a tab holding a place under `maxTabs` is frozen by that policy.
-Other tabs can be. A frozen tab hears nothing and sends nothing, and its own writes wait. When it is
-shown again it catches up, and a write that succeeded meanwhile resolves.
+Chromium freezes hidden tabs to save energy: a frozen tab runs nothing until it is shown again.
+It does not freeze a tab that uses Web Serial, or that holds a Web Lock another tab is waiting
+for — so neither the tab holding the port, nor a tab holding a place that another tab queues for
+under `maxTabs`, is frozen by that policy. Other tabs can be. A frozen tab hears nothing and sends
+nothing; its own writes wait. It still holds its Web Locks, so the worker keeps it. When it is shown
+again, its overdue timers
+and the messages that arrived meanwhile run in no defined order; as for a hidden tab, a deadline
+that is late handles the waiting messages first, so a write that succeeded meanwhile resolves.
 
 ### What serial-broker cannot know
 
@@ -203,8 +209,9 @@ when the tab runs again, it carries on where it stopped.
 serial-broker listens for no page lifecycle events. In Chromium, a page that holds a Web Lock, uses
 Web Serial or listens on a `BroadcastChannel` is not kept in the back/forward cache, and a tab with a
 configuration set up does all three, so navigating away unloads it like closing it: the browser
-closes its port and releases its locks. To close the port and say goodbye to the other tabs at once,
-call `SerialBroker.dispose()` in a `pagehide` listener. Should a browser restore such a page from the
+closes its port and lets its locks go, and the worker forgets the tab as soon as it does. To close
+the port before the lock is let go, call
+`SerialBroker.dispose()` in a `pagehide` listener. Should a browser restore such a page from the
 cache anyway — `pageshow` with `persisted` set — set its configurations up again.
 
 A tab the browser discards to save memory is gone, as if it had crashed, and another tab takes over.
@@ -214,9 +221,9 @@ brings its remembered configurations back.
 ### Sleep, and changes to the system clock
 
 When a computer sleeps, every tab and the worker stop together, and when it wakes, their overdue
-timers run. USB adapters are often reset on wake; the tab holding the port then reconnects as for any
-unplugged device. A write that crosses the bus in the moment of waking may be lost and rejects with
-`WRITE_TIMEOUT`.
+timers run. USB adapters are often reset on wake; the tab holding the port then reconnects as for
+any unplugged device. No tab is forgotten for having slept: who is still there is a Web Lock, not a
+timer.
 
 Setting or correcting the system clock — by the user, a time zone change or an NTP step — affects
 nothing serial-broker times: every duration is read from `performance.now()`, which counts on

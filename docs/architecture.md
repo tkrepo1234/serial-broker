@@ -64,7 +64,7 @@ owner                src/owner/                what a context does while it hold
   │
 worker               src/worker/               the broker, and its SharedWorker entry point
 storage              src/storage/              configuration persistence
-protocol             src/protocol/             messages and their validator, heartbeats, the
+protocol             src/protocol/             messages and their validator, the lock names, the
                                                worker handshake, the version announcement
 core                 src/core/                 errors, types, validation, time, bytes, events
 environment          src/environment/          the platform's interfaces, and the composition
@@ -151,12 +151,11 @@ kill any of them at a chosen instruction boundary, and assert a backoff schedule
 ### 6. The worker is replaceable
 
 A `MessagePort` reports nothing when the context at its other end dies, in either direction. So
-every tab sends the worker a heartbeat every 15 seconds, naming the configurations it takes part
-in, and the worker forgets a tab it has not heard from for three minutes, looking every 30
-seconds ([ADR-0021](./adr/0021-forget-silent-participants.md)). A tab whose last three heartbeats
-went unanswered takes the worker for dead — crashed, ended for memory, terminated from
-`chrome://inspect` — reports `BROKER_UNAVAILABLE`, starts a new worker, and hands on what it had
-sent into the old one.
+every tab holds a Web Lock for its lifetime, which the worker waits on and is granted when the tab
+has gone, and the worker holds one for its lifetime, which every tab waits on
+([ADR-0041](./adr/0041-tell-liveness-through-web-locks.md)). A tab granted the worker's lock takes
+the worker for dead — crashed, ended for memory, terminated from `chrome://inspect` — reports
+`BROKER_UNAVAILABLE`, starts a new worker, and hands on what it had sent into the old one.
 
 Every tab shows the worker a random secret in its `hello` and in no other message, so that no other
 script of the origin can connect to the worker under that tab's identity; a tab that replaces its

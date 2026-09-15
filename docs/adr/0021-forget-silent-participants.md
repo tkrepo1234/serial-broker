@@ -1,6 +1,6 @@
 # ADR-0021: Forget tabs that stop sending heartbeats
 
-- **Status:** Accepted, amended 2026-09-13 and 2026-09-15
+- **Status:** Superseded by [ADR-0041](./0041-tell-liveness-through-web-locks.md); amended 2026-09-13 and 2026-09-15
 - **Date:** 2026-09-13
 
 ## Context
