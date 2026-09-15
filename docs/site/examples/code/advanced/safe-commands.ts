@@ -22,7 +22,7 @@ export type Outcome =
 /**
  * Runs a command so that the tab holding the port closing halfway can never make it run twice.
  *
- * serial-broker resends a write that had not reached the device, and rejects one that had with
+ * serial-broker resends a write that had not begun, and rejects one that had with
  * `OWNER_LOST_DURING_WRITE`. Only the application can decide what that means for a command.
  */
 export async function runCommand(channel: LineChannel, command: Command): Promise<Outcome> {

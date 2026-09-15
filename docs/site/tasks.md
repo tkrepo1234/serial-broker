@@ -1,4 +1,4 @@
-# Tasks, counted
+# Compared with Web Serial
 
 What seven common tasks take with serial-broker, next to the same tasks with the Web Serial API
 alone. Each task has its code both ways; both are type-checked with the rest of the documentation's
@@ -40,8 +40,8 @@ configurations a page does not set up itself.
 :end-before: // [/connect]
 ```
 
-**Concepts:** a configuration is a name with its options; `onReceive` delivers every chunk, in every
-tab; a chunk is not a line.
+**Concepts:** a configuration is a name with its options; `onReceive` delivers what the device sent,
+collected until the line is quiet, in every tab; a delivery is not a line.
 
 With Web Serial alone:
 

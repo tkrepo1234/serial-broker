@@ -1,10 +1,10 @@
 import { SerialBroker, type Unsubscribe } from 'serial-broker';
 
 /**
- * Hands complete lines to `onLine`, however the device's output was split into chunks.
+ * Hands complete lines to `onLine`, however the device's output was split into deliveries.
  *
  * The configuration needs `encoding: { decodeText: true }`. The decoder keeps a multi-byte
- * character that is split across two chunks intact; this function only has to join the text.
+ * character that is split across two reads intact; this function only has to join the text.
  *
  * @returns A function that stops listening.
  */

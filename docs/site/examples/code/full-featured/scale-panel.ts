@@ -168,7 +168,7 @@ export class ScalePanel {
     }
   }
 
-  /** Assembles lines, because a chunk from the device is not a line. */
+  /** Assembles lines, because a delivery from the device is not a line. */
   #receive(text: string): void {
     const lines = (this.#partialLine + text).split('\r\n');
     this.#partialLine = lines.pop() ?? '';

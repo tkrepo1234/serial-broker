@@ -20,8 +20,7 @@ holding it need not be the tab holding the port. If the device protocol carries 
 identifier, match answers by identifier instead and drop the lock.
 
 The timeout matters more than it seems. When the tab holding the port closes, whatever the device
-sends before the next tab has reopened the port is lost — see
-[When the tab holding the port goes away](../shared-ports.md#when-the-tab-holding-the-port-goes-away).
+sends before the next tab has reopened the port is lost — see [Failover](../guarantees.md#failover).
 An answer lost that way can only be noticed by waiting for it.
 
 ## Commands that must not run twice
