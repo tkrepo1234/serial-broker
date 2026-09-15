@@ -92,7 +92,8 @@ await SerialBroker.send('Adapter', new Uint8Array([0x02, 0x41, 0x03]));
 ```
 
 Nothing is appended to what you send: if the device expects a line ending, include it. The
-promise resolves once the bytes have been handed to the device.
+promise resolves once the browser has taken the bytes for the port — not once the device has
+received them, which Web Serial does not report.
 
 If the port is not open yet, `send()` waits for it — up to `connection.writeTimeoutMs`, five
 seconds by default — and then rejects with `WRITE_TIMEOUT`.

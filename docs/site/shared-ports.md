@@ -51,7 +51,7 @@ Every tab that has set up a configuration receives:
 
 - **`onReceive`** for every chunk the device sends, with the same bytes in every tab — from the
   moment that tab knows which tab holds the port (see below).
-- **`onSend`** for every write that reached the device — including writes from other tabs.
+- **`onSend`** for every write the browser took for the port — including writes from other tabs.
   `event.origin` is `'local'` for writes this tab issued and `'remote'` for the others.
 - **`onStatusChange`** whenever the connection status changes. The owner decides the status;
   every tab reports the same one.
@@ -82,8 +82,11 @@ What you can rely on:
 - **The bytes of one `send()` are never interleaved** with the bytes of another, even when a large
   payload is split into chunks of `connection.maxWriteChunkBytes` for a device with a small
   buffer.
-- **The promise resolves when the bytes were handed to the device** — not when the device acted on
-  them. A serial port cannot report that.
+- **The promise resolves when the browser has taken the bytes for the port** — into its transmit
+  buffer of `serial.bufferSize` bytes — not when the device has received them, let alone acted on
+  them. Web Serial reports neither. A write that fits in that buffer resolves even while the device
+  takes nothing, and reaches it once it takes data again; only a write that does not fit waits for
+  the device, and fails with `WRITE_TIMEOUT` if it does not come back in time.
 - **A write waits for a connection** that is not open yet, for up to `connection.writeTimeoutMs`,
   and then rejects with `WRITE_TIMEOUT`.
 - **A write is refused rather than queued without end.** The tab holding the port keeps at most
@@ -217,8 +220,13 @@ browser reported the port it holds as disconnected. If that report arrives after
 found the port missing, the status moves on from `awaiting-permission` to `reconnecting`.
 
 A device that is switched off while its USB adapter stays plugged in is the hardest case: the port
-stays open and simply stops answering. Reads wait; a write does not complete and fails after
-`connection.writeTimeoutMs` with `WRITE_TIMEOUT`, which starts reconnection like any other loss.
+stays open and simply stops answering. Reads wait; a write larger than the port's buffer does not
+complete and fails after `connection.writeTimeoutMs` with `WRITE_TIMEOUT`. The connection is **not**
+torn down for that. The browser can neither withdraw a write the device has not taken nor close a
+port while one is outstanding, and a port it could not close cannot be opened again until the page
+is gone — however soon the device recovers (ADR-0038). So the write stays in flight, the writes
+behind it are not begun and fail at their own deadline with `started: false`, and everything
+carries on the moment the device answers again.
 
 Writes issued while the status is `reconnecting` wait for the connection, within their own
 timeout.

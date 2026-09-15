@@ -1,6 +1,6 @@
 # ADR-0035: Test the built package in a real browser, and against real hardware
 
-- **Status:** Accepted
+- **Status:** Accepted, amended 2026-09-15 (see the end)
 - **Date:** 2026-09-14
 - **Deciders:** maintainers
 
@@ -166,3 +166,20 @@ only a browser can answer.
   device coming back.
 - `test/browser/hardware/arduino.spec.ts` - the same scenarios against an Arduino echoing on a COM
   port. Runs are recorded in [the manual test plan](../manual-test-plan.md).
+
+## Amendment (2026-09-15): the emulator as a second hardware target
+
+`SERIAL_BROKER_HARDWARE=emulator` runs `test/browser/hardware/emulator.spec.ts` against the USB/IP
+emulator (ADR-0017), attached to Windows by usbip-win2: the browser, the Windows serial stack and
+`usbser.sys` are real, and only the device is ours. The spec starts the emulator as a child process
+and drives it through its terminal - unplug and plug, hang and resume, one byte per read - so it
+covers the steps of the manual test plan that a board on a cable cannot perform on cue, and it
+counts the bytes that reached the device from the emulator's own status rather than inferring them
+from the echo. It gets the port the same way as the Arduino spec: a profile seeded with the port's
+device instance ID, which for the emulator is stable because it reports a serial number. Both specs
+share that launch (`support/hardware-context.ts`); nothing is seeded, clicked or changed beyond
+what the Arduino spec already does.
+
+Its first run found what no simulation could: a write the device does not take cannot be withdrawn
+and blocks closing the port, which made the library's reconnect after `WRITE_TIMEOUT` unrecoverable
+(ADR-0038).

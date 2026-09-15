@@ -18,6 +18,13 @@ migrated (see below).
 
 ### Added
 
+- `test/browser/hardware/emulator.spec.ts` runs the library in a real browser against the USB/IP
+  emulator attached by usbip-win2, with `SERIAL_BROKER_HARDWARE=emulator`. The spec starts and
+  drives the emulator itself - unplug and plug, a hung device, one byte per read, an owner killed
+  while its write is held - and counts the bytes that reached the device. The Arduino spec now
+  shares its browser launch with it.
+- The emulator logs a transfer the host cancels (`transfer N cancelled by the host`), which is how a
+  write aborted at the device shows up.
 - Framework integrations as runnable examples, each with a reusable module, a README on taking it
   into an application of your own and a smoke test: `examples/react` (a `useSerialBroker` hook on
   `useSyncExternalStore`, safe under StrictMode and hot updates and shared by several components),
@@ -118,6 +125,15 @@ migrated (see below).
 
 ### Changed
 
+- **A write the device does not take in time no longer ends the connection** (ADR-0038). `send()`
+  still rejects with `WRITE_TIMEOUT`, but the chunk stays in flight and holds the write queue: the
+  writes behind it are not begun and fail at their deadline with `started: false`, and writing
+  carries on when the device takes data again. Tearing the connection down made recovery
+  impossible: in Chromium on Windows a port with a write outstanding neither closes nor opens again
+  until the page is gone, however soon the device recovers - measured against the USB/IP emulator.
+- The documentation of `send()`, `onSend` and `serial.bufferSize` no longer says the bytes reached
+  the device: a `send()` resolves once the browser has taken them for the port, and one that fits
+  in `bufferSize` resolves even while the device takes nothing.
 - **Breaking:** the `status` message carries the device of the tab holding the port (protocol
   version 9). `SerialBrokerStatusSnapshot` has the extra key `deviceKind`,
   `EffectiveSettings.device` in diagnostics is the full `DeviceFilter` union, and the context of

@@ -285,9 +285,12 @@ These reject the `send()` call they belong to, in the tab that issued it.
   **Context:** `started`: `false` if the write never began, so the device received nothing, and
   never will: the tab holding the port does not begin a write that has waited that long; `true` if
   it had begun and may still complete after the rejection.
-- The device did not accept a chunk within `writeTimeoutMs`, typically because of flow control.
-  **Context:** `bytesWritten` of `byteLength`. The tab holding the port also treats the
-  connection as broken and reconnects.
+- The device did not accept a chunk within `writeTimeoutMs`, typically because of flow control or
+  a device that has stopped answering. **Context:** `bytesWritten` of `byteLength`. The connection
+  stays open and the chunk stays in flight: the browser can neither withdraw it nor close a port
+  while it is outstanding (ADR-0038). The writes behind it are not begun until the device takes
+  it, and fail at their own deadline with `started: false`; the rest of this write is never
+  sent.
 
 **Do:** when `started` is `false`, the write can be sent again. Otherwise treat it like
 `OWNER_LOST_DURING_WRITE`. If timeouts are frequent while the status is `open`, check

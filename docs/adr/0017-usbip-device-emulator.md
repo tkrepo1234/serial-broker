@@ -89,12 +89,14 @@ with usbip-win2.
 
 ### Risks and mitigations
 
-- **Unverified against the real client.** The server is tested against the protocol
-  specification and an independent client, not yet against usbip-win2 itself. The emulator's
-  README and the manual plan state this until the first run is recorded.
+- **Unverified against the real client.** The server was tested against the protocol
+  specification and an independent client only. Resolved on 2026-09-15: usbip-win2 0.9.8.0
+  attaches it, Windows binds `usbser.sys`, and the browser suite runs against it (ADR-0035,
+  amended).
 
 ## Verification
 
 `emulator/test/` — descriptors, the wire format at the specification's byte offsets, the device's
-behaviour including unlink and hang, and the server over real TCP. The first run against
-usbip-win2 is recorded in `docs/manual-test-plan.md`.
+behaviour including unlink and hang, and the server over real TCP.
+`test/browser/hardware/emulator.spec.ts` runs it under usbip-win2 from a real browser; the first run,
+on 2026-09-15, is recorded in `docs/manual-test-plan.md`.

@@ -304,7 +304,7 @@ export interface ReceiveEvent {
 export interface SendEvent {
   /** The configuration name. */
   readonly name: string;
-  /** The bytes that were handed to the device. A copy. */
+  /** The bytes the browser took for the port. A copy. */
   readonly data: Uint8Array;
   /**
    * `'local'` when this context issued the write, `'remote'` when another one did.
@@ -313,7 +313,7 @@ export interface SendEvent {
    * is exposed. See ADR-0011.
    */
   readonly origin: 'local' | 'remote';
-  /** Epoch milliseconds at which the bytes were handed to the device. */
+  /** Epoch milliseconds at which the browser took the bytes for the port. */
   readonly timestamp: number;
 }
 
@@ -347,7 +347,7 @@ export interface StatusChangeEvent {
 export interface SerialBrokerEventMap {
   /** A chunk arrived from the device. Delivered in every tab. */
   readonly onReceive: ReceiveEvent;
-  /** Bytes reached the device. Delivered in every tab, including the one that sent them. */
+  /** The browser took bytes for the port. Delivered in every tab, including the one that sent them. */
   readonly onSend: SendEvent;
   /** Something went wrong. */
   readonly onError: ErrorEvent;

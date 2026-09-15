@@ -298,3 +298,4 @@ and the [Performance](performance.md) chapter records the results [ADR-0037].
 | 0035 | Test the built package in a real browser, and against real hardware                 |
 | 0036 | Take the device identity from the port the user chooses                             |
 | 0037 | Measure performance against expectations written first                              |
+| 0038 | Leave a write the device has not taken in flight                                    |

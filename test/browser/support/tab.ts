@@ -128,6 +128,28 @@ export class Tab {
     );
   }
 
+  /** Starts a send and returns at once; {@link Tab.waitForSendOutcome} says how it ended. */
+  async startSend(name: string, text: string): Promise<number> {
+    return await this.page.evaluate(
+      ([configName, payload]) =>
+        (window as unknown as HarnessWindow).harness.startSend(configName, payload),
+      [name, text] as const,
+    );
+  }
+
+  /** Waits until a send from {@link Tab.startSend} has ended: `sent`, or `error:<code>`. */
+  async waitForSendOutcome(handle: number, timeout = 20_000): Promise<string> {
+    await this.page.waitForFunction(
+      (id) => (window as unknown as HarnessWindow).harness.sendOutcome(id) !== 'pending',
+      handle,
+      { timeout },
+    );
+    return await this.page.evaluate(
+      (id) => (window as unknown as HarnessWindow).harness.sendOutcome(id),
+      handle,
+    );
+  }
+
   /** Sends a payload of the harness's pattern. `seed` picks the sequence; see `PageHarness`. */
   async sendPattern(name: string, byteLength: number, seed = 0): Promise<void> {
     await this.page.evaluate(

@@ -350,13 +350,20 @@ What the implementers left open:
 
 ### Browser and hardware tests
 
+- **A stuck write is invisible in the status** (ADR-0038): while the device takes nothing, the status
+  stays `open` and only `WRITE_TIMEOUT`s say so. A status or a diagnostics field for it is open.
+- **Releasing a configuration while the device holds a write cannot close the port** - the platform
+  keeps it until the page goes (ADR-0038). Measured with usbip-win2 only; whether a physical
+  USB-serial adapter's driver ends such a write is unverified.
+- The emulator spec does not cover steps 10 (a tab killed from the task manager), 16 (backoff while
+  unplugged, two minutes) and 18-19 (permission revoked); 16 could be driven from the emulator.
 - The seeded serial permission is Windows-only (device instance ID); macOS and Linux store vendor,
   product and serial number. CI exercises Chromium only.
 - The 64 KiB hardware round trip takes a quarter of an hour on the Arduino (about 80 bytes a second
   of echo); a bridged USB-serial adapter would echo at line rate.
 - No browser test for `USER_GESTURE_REQUIRED`: every script an automation evaluates carries
   transient activation. The stand-in has no fault injection yet (open/write failing or hanging, a
-  non-USB port). The browser suite does not drive the USB/IP emulator.
+  non-USB port).
 - `docs/manual-test-plan.md` still quotes lock names of protocol versions 1 and 2 in two places, and
   step 1 still says "click Set up" where the button is "Create and connect".
 

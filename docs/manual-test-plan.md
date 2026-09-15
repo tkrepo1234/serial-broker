@@ -10,12 +10,12 @@ step.
 
 ## Status
 
-|                          |                                                                                              |
-| ------------------------ | -------------------------------------------------------------------------------------------- |
-| **Browser, no hardware** | **automated since 2026-09-14** (`test/browser/`, ADR-0035); before that by hand, see below   |
-| **Emulated device**      | built 2026-09-13 (`emulator/`), _never run against usbip-win2_                               |
-| **With real hardware**   | **first run 2026-09-14** — automated, `test/browser/hardware/` against an Arduino; see below |
-| **Blocking for**         | the first published release                                                                  |
+|                          |                                                                                                          |
+| ------------------------ | -------------------------------------------------------------------------------------------------------- |
+| **Browser, no hardware** | **automated since 2026-09-14** (`test/browser/`, ADR-0035); before that by hand, see below               |
+| **Emulated device**      | **first run 2026-09-15** — automated, `test/browser/hardware/emulator.spec.ts` via usbip-win2; see below |
+| **With real hardware**   | **first run 2026-09-14** — automated, `test/browser/hardware/` against an Arduino; see below             |
+| **Blocking for**         | the first published release                                                                              |
 
 ### 2026-09-12 — Edge 153.0.0.0, Windows 11 Home 26200, no device attached
 
@@ -204,8 +204,10 @@ they are left unticked because the checklist is about a run **with** hardware.
 - [ ] **16.** Unplug and leave it out for two minutes. Retries slow to roughly one every 30
       seconds; the console (with a logger configured) shows the backoff growing.
 - [ ] **17.** Power the device off without unplugging the adapter, if the hardware allows it.
-      The port stays open and the read loop stalls; verify that writing reports a failure
-      rather than silently doing nothing.
+      The port stays open and the read loop stalls. A short write still resolves — the browser
+      buffers `serial.bufferSize` bytes — but a write larger than that fails with
+      `WRITE_TIMEOUT`, the status stays `open`, and once the device is back sending works
+      again with no reload (ADR-0038).
 
 ### Permission changes
 
@@ -326,3 +328,48 @@ Worth keeping, because it is the kind of thing only hardware shows:
 
 Not covered by this run: unplugging the device (needs a hand), the port picker and site settings,
 and anything the debugging surface shows.
+
+### 2026-09-15 — Edge 153.0.4234.32 (headless), Windows 11 Home 26200, usbip-win2 0.9.8.0: the first run against the emulator
+
+The USB/IP emulator (`emulator/`, ADR-0017) attached by usbip-win2 0.9.8.0: Windows bound
+`usbser.sys` and named the port **COM4**, device instance ID `USB\VID_1209&PID_0001\EMULATOR-0001`
+— stable across attaches, because the emulator reports a serial number. By hand first (`npm run
+emulator`: attached, configured, 9600 8N1, COM4 in Device Manager), then automatically by
+`test/browser/hardware/emulator.spec.ts`, which starts the emulator and drives it through its
+terminal (ADR-0035, amended). Browser and permission as in the Arduino run: Playwright 1.63.0, a
+throwaway profile, no prompt answered.
+
+Ten tests, all green, against the build containing ADR-0038:
+
+- **Step 3** — one tab echoes `HELLO`.
+- **Steps 5, 6** — two tabs share the port; a write from the second reaches the device **once**,
+  counted at the device (8 bytes more in the emulator's `status`), and both tabs see one echo.
+- **Step 9** — three tabs; the holder is closed, another reopens COM4 and the echo works again.
+- **Steps 13–15** — `unplug`: both tabs `reconnecting`; `plug`: usbip-win2 attaches again, both
+  tabs `open`, sending works with no application action.
+- **Step 17, a short write** — with the device hung, a 15-byte write **resolves**, though the
+  device took nothing: it is in the browser's 255-byte port buffer. It arrives once the device
+  takes data again.
+- **Step 17, a long write** — 4 096 bytes fail with `WRITE_TIMEOUT`; the status stays `open`, and
+  after `resume` the same tab sends again.
+- **Step 21** — `chunk 1`: `Grüße, 温度` twice, one byte per read, decoded intact.
+- **Steps 20, 22** — 65 536 bytes of every byte value echoed in order, in about three seconds.
+- **The platform itself** — with Web Serial alone and the device holding a write, `writer.abort()`
+  stays pending; after `resume` the abort and `port.close()` still do not settle, and `port.open()`
+  reports the port already open.
+- **Step 24** — the device hung, a 1 034-byte write from tab B held at the device, tab A (the
+  holder) crashed: B's `send()` rejects with `OWNER_LOST_DURING_WRITE`, B takes the port over, and
+  after `resume` the device has received the bytes at most once.
+
+**Found on the way, and fixed in the same change (ADR-0038):** before the fix the long write of
+step 17 left the configuration reconnecting for ever. A probe with Web Serial alone showed why: with
+a write outstanding at the device, `writer.abort()` and `port.close()` never settle and
+`port.open()` fails with "The port is already open" — also after the device recovers — until the
+page's context goes away. Left alone, the same write completes when the device takes data, and
+close and reopen take milliseconds. The library now leaves such a write in flight instead of
+tearing the connection down.
+
+Not covered here: steps 1–2, 4, 4a and 18–19 (the picker and site settings), 10 (a tab killed from
+the task manager), 16 (two minutes of backoff), 25–29 (their browser tests run against the
+stand-in) and 26 (Android). Nor the electrical path: an emulated device proves the software stack,
+not a UART.

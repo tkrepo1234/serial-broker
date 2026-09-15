@@ -134,6 +134,7 @@ describe('UsbipServer', () => {
     const readReply = replyHeader(await client.read(48));
 
     expect(unlinkReply).toMatchObject({ command: 4, seqnum: 6, status: -104 });
+    expect(events).toContainEqual({ kind: 'unlinked', seqnum: 5, wasPending: true });
     expect(writeReply.seqnum).toBe(7);
     expect(readReply).toMatchObject({ seqnum: 8, actualLength: 1 });
   });

@@ -15,9 +15,11 @@ hung mid-write, and made to split its answers, on command, which is what testing
 actually needs. Why this approach and not a virtual COM port driver is in
 [ADR-0017](../docs/adr/0017-usbip-device-emulator.md).
 
-> **Status:** built and covered by its own tests (`emulator/test/`), which drive it with an
-> independent USB/IP client. **It has not yet been run against usbip-win2 on Windows.** The
-> first run is recorded in [the manual test plan](../docs/manual-test-plan.md).
+> **Status:** covered by its own tests (`emulator/test/`), which drive it with an independent
+> USB/IP client, and **run against usbip-win2 0.9.8.0 on Windows 11 since 2026-09-15**:
+> `test/browser/hardware/emulator.spec.ts` drives it from a real browser
+> (`SERIAL_BROKER_HARDWARE=emulator`). The run is recorded in
+> [the manual test plan](../docs/manual-test-plan.md).
 
 ## One-time setup
 
@@ -83,16 +85,16 @@ Every transfer is logged, so you can see exactly which bytes reached the device 
 
 ## Which steps of the manual test plan it covers
 
-| Steps                        | How                                                                             |
-| ---------------------------- | ------------------------------------------------------------------------------- |
-| 1–12, 18–19, 23, 25          | As written: it behaves like the loopback adapter the plan assumes.              |
-| 13–15 (unplug, replug)       | `unplug`, then `plug`.                                                          |
-| 16 (backoff while unplugged) | `unplug` and wait; `plug` when done.                                            |
-| 17 (powered off, port open)  | `hang`. Writes must fail with a timeout rather than succeed silently.           |
-| 20 (large payload)           | As written.                                                                     |
-| 21 (text across chunks)      | `chunk 1` first; every multi-byte character then arrives split.                 |
-| 22 (binary)                  | As written; `send \x02\xff\x03` covers the receiving direction.                 |
-| 24 (owner lost during write) | `hang`, write from tab B, kill tab A, then `resume`. The bytes must not repeat. |
+| Steps                        | How                                                                                                                                              |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 1–12, 18–19, 23, 25          | As written: it behaves like the loopback adapter the plan assumes.                                                                               |
+| 13–15 (unplug, replug)       | `unplug`, then `plug`.                                                                                                                           |
+| 16 (backoff while unplugged) | `unplug` and wait; `plug` when done.                                                                                                             |
+| 17 (powered off, port open)  | `hang`. A write that fits the port buffer still resolves; a larger one fails with a timeout, and the port works again after `resume` (ADR-0038). |
+| 20 (large payload)           | As written.                                                                                                                                      |
+| 21 (text across chunks)      | `chunk 1` first; every multi-byte character then arrives split.                                                                                  |
+| 22 (binary)                  | As written; `send \x02\xff\x03` covers the receiving direction.                                                                                  |
+| 24 (owner lost during write) | `hang`, write from tab B, kill tab A, then `resume`. The bytes must not repeat.                                                                  |
 
 Not covered: step 26, which needs an Android device. And the plan still has to be run on real
 hardware once before a release: an emulated device proves the software path, not the electrical
