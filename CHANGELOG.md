@@ -11,10 +11,43 @@ coordinate with each other. See
 
 ## [Unreleased]
 
-**Wire protocol version 11.** Tabs of this build and tabs of an earlier one do not share a worker,
+**Wire protocol version 12.** Tabs of this build and tabs of an earlier one do not share a worker,
 a lock or a bus; they detect each other and report `PROTOCOL_VERSION_MISMATCH`. Reload every tab
 of an application after deploying it. Configurations remembered by an earlier build are not
 migrated (see below).
+
+### Changed in the source reduction, part 2 (protocol 12)
+
+- **Who is still there is told by Web Locks, not heartbeats** (ADR-0041, superseding ADR-0021). A
+  tab holds `serial-broker/context/v12/<clientId>` for its lifetime and says `hello` only once it
+  holds it; the worker waits on that lock and forgets the tab the moment it is granted. The worker
+  holds `serial-broker/worker/v12/<workerId>`, named in its `welcome`, and starts no port before it
+  holds it; every tab waits on it and starts a new worker as soon as it is granted. No heartbeat, no
+  sweep, no count of unanswered heartbeats; the one timer left is the 45-second handshake deadline for
+  a worker that never answers. After a crash of the tab that started the worker, the other tabs are
+  back within the time the browser takes to free a lock: the browser benchmark's `handover/crash`
+  `everyTab` went from 60 s to 325 ms at the median, and the documented limit is gone.
+- **`hello` carries every configuration a tab takes part in** and is sent again whenever that
+  changes; `attach`, `detach`, `heartbeat` and `goodbye` are gone, and `welcome` names the worker:
+  **19 message types become 15.** `MAX_HEARTBEAT_CONFIGURATIONS` is now `MAX_HELLO_CONFIGURATIONS`.
+  `SILENT_PARTICIPANT_TIMEOUT_MS`, `SWEEP_INTERVAL_MS`, `HEARTBEAT_INTERVAL_MS` and
+  `MAX_UNANSWERED_HEARTBEATS` are gone; `TransportRequest` takes the context's `locks`.
+- **The fallback to `BroadcastChannel` restates instead of replaying** (ADR-0007, amended): it attaches
+  what the tab takes part in and has the client restate its status or ask for it, as after reaching
+  a new worker. `MAX_REPLAYED_MESSAGES` and the `replayedMessages`/`droppedMessages` log fields are
+  gone; traffic sent before the switch is lost.
+- **The tab holding the port bounds and answers its writes in the supervisor**: `PortSupervisor`
+  refuses a write beyond `MAX_WAITING_WRITES` or `MAX_WAITING_WRITE_BYTES` (the record is now
+  `supervisor.write-queue-full`), and its `stop()` resolves once every write has been answered. The
+  writes of an ended term are handed on through `dispatchWaiting`, and `owner-claimed` no longer
+  triggers a dispatch.
+- **A diagnostics report is filed, not validated in full** (ADR-0018, amended): only its sender, transport,
+  version, time and named configurations are checked; the debugging surface reads the rest
+  defensively. The structure budget admits only trees of plain values - no `Map`, `Set`, binary data,
+  dates or regular expressions in a report or an error.
+- `SharedWorkerTransport`'s state is one phase; `PortSupervisor`'s connect is split into finding,
+  opening and reading. The browser suite's "the broker dies" no longer needs two and a half minutes.
+- `src` went from 13 383 to 13 260 lines.
 
 ### Changed in the source reduction (protocol 11)
 

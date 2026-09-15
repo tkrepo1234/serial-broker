@@ -89,9 +89,9 @@ interface PendingWrite {
   /**
    * Set while the request sits with its addressed term, which has not answered yet.
    *
-   * Stops the same command being queued twice at the owner when a status change or an
-   * ownership announcement retriggers dispatch. Cleared when that term hands the write back
-   * because it could not write it, or has ended without beginning it.
+   * Stops the same command being queued twice at the owner when a status change retriggers
+   * dispatch. Cleared when that term hands the write back because it could not write it; once the
+   * term has ended without beginning it, the write is handed on whatever this says.
    */
   isDispatched: boolean;
   /**
