@@ -5,20 +5,20 @@ here instead of repeating them. What is not written here is not promised.
 
 ## At a glance
 
-| Promise                                                                           | Holds                             | Section                                                   |
-| --------------------------------------------------------------------------------- | --------------------------------- | --------------------------------------------------------- |
-| Exactly one tab has the port open at a time.                                      | Always.                           | [Failover](#failover)                                     |
-| A resolved `send()` means the browser took all its bytes for the port.            | Always. Receipt is not reported.  | [What a resolved send means](#what-a-resolved-send-means) |
-| Writes from one tab reach the port in the order that tab issued them.             | Always.                           | [Order](#order-and-interleaving)                          |
-| The bytes of one `send()` are never interleaved with another's.                   | Always.                           | [Order](#order-and-interleaving)                          |
-| Writes from different tabs have a defined order.                                  | **Not promised.**                 | [Order](#order-and-interleaving)                          |
-| A write reaches the device at most once, and is never repeated by the library.    | Always, with one crash exception. | [Write outcomes](#write-outcomes)                         |
-| A write rejected with `started: false` is never written afterwards.               | Always, with one delay exception. | [Write outcomes](#write-outcomes)                         |
-| Another tab takes over when the tab holding the port goes away.                   | However it goes away.             | [Failover](#failover)                                     |
-| Data the device sends while the port changes hands is delivered.                  | **Not promised.**                 | [Failover](#failover)                                     |
-| The connection comes back when the device does.                                   | With `connection.autoReconnect`.  | [Reconnecting](#reconnecting)                             |
-| Every tab that has set up a configuration receives the same data from the device. | Once the tab knows who holds it.  | [Receiving](#receiving)                                   |
-| Nothing is queued without a bound.                                                | Always.                           | [Limits](#limits)                                         |
+| Promise                                                                           | Holds                            | Section                                                   |
+| --------------------------------------------------------------------------------- | -------------------------------- | --------------------------------------------------------- |
+| Exactly one tab has the port open at a time.                                      | Always.                          | [Failover](#failover)                                     |
+| A resolved `send()` means the browser took all its bytes for the port.            | Always. Receipt is not reported. | [What a resolved send means](#what-a-resolved-send-means) |
+| Writes from one tab reach the port in the order that tab issued them.             | Always.                          | [Order](#order-and-interleaving)                          |
+| The bytes of one `send()` are never interleaved with another's.                   | Always.                          | [Order](#order-and-interleaving)                          |
+| Writes from different tabs have a defined order.                                  | **Not promised.**                | [Order](#order-and-interleaving)                          |
+| A write reaches the device at most once, and is never repeated by the library.    | Always.                          | [Write outcomes](#write-outcomes)                         |
+| A write rejected with `started: false` is never written afterwards.               | Always.                          | [Write outcomes](#write-outcomes)                         |
+| Another tab takes over when the tab holding the port goes away.                   | However it goes away.            | [Failover](#failover)                                     |
+| Data the device sends while the port changes hands is delivered.                  | **Not promised.**                | [Failover](#failover)                                     |
+| The connection comes back when the device does.                                   | With `connection.autoReconnect`. | [Reconnecting](#reconnecting)                             |
+| Every tab that has set up a configuration receives the same data from the device. | Once the tab knows who holds it. | [Receiving](#receiving)                                   |
+| Nothing is queued without a bound.                                                | Always.                          | [Limits](#limits)                                         |
 
 ## What a resolved send means
 
@@ -56,33 +56,26 @@ Every `send()` ends in one of these outcomes, in the tab that issued it.
 | ----------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | Resolves                                                                      | Every byte, once, taken by the browser for the port.                                                                                                                                             |
 | `WRITE_QUEUE_FULL`                                                            | Nothing, ever. It can be sent again.                                                                                                                                                             |
-| `WRITE_TIMEOUT` with `started: false`                                         | Nothing, ever: a write is not begun after the issuing tab's `writeTimeoutMs`, whatever the tab holding the port is set to. It can be sent again.                                                 |
-| `WRITE_TIMEOUT` with `started: true`                                          | Begun. It goes on after the rejection, and `onSend` reports it once it has finished.                                                                                                             |
+| `WRITE_TIMEOUT` with `started: false`                                         | Nothing, ever: the tab holding the port begins no write without the issuing tab's approval, and that tab gives none once its `writeTimeoutMs` has run out. It can be sent again.                 |
+| `WRITE_TIMEOUT` with `started: true`                                          | The issuing tab had let it begin. It goes on after the rejection, and `onSend` reports it once it has finished.                                                                                  |
 | `WRITE_TIMEOUT` with `bytesWritten` — the device did not take a chunk in time | `bytesWritten` of `byteLength` bytes. The rest is never sent. The connection stays open, the chunk stays in flight, and the writes behind it are not begun until the device takes it (ADR-0038). |
 | `WRITE_FAILED`                                                                | `bytesWritten` of `byteLength` bytes. The tab holding the port reconnects.                                                                                                                       |
 | The tab holding the port went away before it began the write                  | Nothing yet: the next tab to hold the port writes it, once.                                                                                                                                      |
-| `OWNER_LOST_DURING_WRITE` — that tab went away after it began the write       | Unknown: some, all or none of the bytes. It is never sent again.                                                                                                                                 |
+| `OWNER_LOST_DURING_WRITE` — that tab went away after it was let begin         | Unknown: some, all or none of the bytes. It is never sent again.                                                                                                                                 |
 
 Repeating a write after `OWNER_LOST_DURING_WRITE` is the application's decision, because only it
 knows whether a command is safe to repeat. A second "dispense", "cut" or "move 10 mm" is worse than
 none. [Commands that must not run twice](examples/advanced.md#commands-that-must-not-run-twice)
 shows how to decide.
 
-**The one exception to `started: false`.** The tab holding the port does not begin a write once
-what was left of the issuing tab's `writeTimeoutMs` has passed since it received the request. A
-request that waited before that tab could handle it — its main thread was busy, or the machine went
-to sleep with the request on its way — can therefore be begun after the issuing tab rejected it with
-`started: false`, by as long as it waited. Different `writeTimeoutMs` settings in different tabs do
-not widen this.
-
-**The one exception to at-most-once.** A tab that closes finishes the writes it began and reports
-them before it lets go of the port. A tab that crashes reports nothing more, and a write it had
-begun is rejected with `OWNER_LOST_DURING_WRITE` as soon as the browser frees its lock — unless it
-crashed in the moment between handing the bytes to the device and its report that it had begun
-reaching the tab that issued the write. From outside, such a tab looks exactly like one that never
-received the write, so the write is handed to the next tab holding the port and may reach the device
-twice. No library can decide this case; a protocol that must never execute a command twice needs a
-request identifier the device checks.
+**Why `started` is exact.** The tab holding the port asks the tab that issued a write before it
+begins it, and begins it only on that tab's yes. The issuing tab says yes only while it still waits
+on the write, and from that moment counts it as begun. So no delay — a busy main thread, a machine
+asleep, messages crossing — and no difference in `writeTimeoutMs` between tabs can make a write
+rejected with `started: false` reach the device. And a tab holding the port that crashes, at any
+moment, leaves either a write it was never let begin, which the next tab writes once, or one the
+issuing tab knows may have begun, which is `OWNER_LOST_DURING_WRITE`. A tab that closes finishes
+the writes it began and reports them before it lets go of the port.
 
 A write issued by the tab holding the port itself is lost with that tab when it crashes: there is no
 one left to report to.

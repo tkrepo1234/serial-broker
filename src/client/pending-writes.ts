@@ -71,14 +71,13 @@ interface PendingWrite {
   readonly requestId: RequestId;
   readonly payload: Uint8Array;
   readonly settled: Signal;
-  /** When it was issued, on the monotonic clock: the moment its `writeTimeoutMs` counts from. */
-  readonly issuedAt: number;
   /**
-   * The term that reported beginning to write it, once one has.
+   * The term this context let begin the write, once it has (see {@link PendingWrites.approve}).
    *
    * The line between replayable and not. Before it, the bytes demonstrably never reached the
-   * device and the request can be re-sent to a new owner. After it, whether they arrived is
-   * unknowable and the request must never be repeated. See ADR-0013.
+   * device and the request can be re-sent to a new owner: no term begins a write without this
+   * context's approval. After it, whether they arrived is unknowable and the request must never be
+   * repeated - unless that term answers that it did not begin it after all. See ADR-0013.
    */
   startedTerm: TermId | undefined;
   /**
@@ -114,18 +113,10 @@ export interface PendingWriteHost {
    * Hands a request to whoever holds the port in `term`.
    *
    * Called only when the tracker has decided it is safe to do so, which is what keeps the
-   * at-most-once guarantee in one place.
-   *
-   * `remainingMs` is what is left of the write's deadline at this moment. The tab holding the port
-   * begins the write only within that long of receiving it: after this tab's deadline has run, it
-   * has reported the write as never started (ADR-0013).
+   * at-most-once guarantee in one place. The tab holding the port begins the write only once
+   * {@link PendingWrites.approve} has said yes.
    */
-  readonly dispatch: (
-    requestId: RequestId,
-    payload: Uint8Array,
-    term: TermId,
-    remainingMs: number,
-  ) => void;
+  readonly dispatch: (requestId: RequestId, payload: Uint8Array, term: TermId) => void;
   /** `true` when a connection exists to write to. Checked at every dispatch decision. */
   readonly canDispatch: () => boolean;
   /** The term of the tab holding the port, as far as this context has heard. */
@@ -190,7 +181,6 @@ export class PendingWrites {
       requestId,
       payload,
       settled: createSignal(),
-      issuedAt: this.host.clock.monotonicNow(),
       startedTerm: undefined,
       addressedTerm: undefined,
       isDispatched: false,
@@ -229,18 +219,27 @@ export class PendingWrites {
   }
 
   /**
-   * Records that `term` has begun writing a request, making it non-replayable.
+   * Decides whether `term` may begin writing a request now, and if it may, counts it as begun.
    *
-   * Only the term the request was addressed to can have begun it: no other tab was asked to write
-   * it, and a tab in another term answers `NOT_CONNECTED` rather than writing (ADR-0026). A report
-   * from anywhere else concerns a copy that reached the wrong tab, or is forged, and taking it
-   * would strand a write nobody is writing (ADR-0030).
+   * The tab holding the port asks before it begins any write (ADR-0013). The answer is yes only while
+   * this context still waits on the write: one whose deadline has run was reported to its caller as
+   * not started, and one that was released or refused is gone. Deciding and marking happen in one
+   * turn of this context's event loop, so no deadline can run between them - from here on the
+   * deadline reports `started: true`, and the write is never handed to another term.
+   *
+   * Only the term the request was addressed to may begin it: no other tab was asked to write it
+   * (ADR-0026). A question from anywhere else concerns a copy that reached the wrong tab, or is forged,
+   * and approving it would strand a write nobody is writing (ADR-0030).
+   *
+   * @returns `true` if the term may begin the write.
    */
-  markStarted(requestId: RequestId, term: TermId): void {
+  approve(requestId: RequestId, term: TermId): boolean {
     const pending = this.#writes.get(requestId);
-    if (pending?.addressedTerm === term) {
-      pending.startedTerm ??= term;
+    if (pending?.addressedTerm !== term) {
+      return false;
     }
+    pending.startedTerm ??= term;
+    return true;
   }
 
   /**
@@ -252,7 +251,9 @@ export class PendingWrites {
    * it would settle - resolve, even - a write that is still on its way to the device.
    *
    * `NOT_CONNECTED` is the one outcome that does not settle the write: that term did not write it
-   * and will not, so the request goes back to be handed to whoever holds the port next.
+   * and will not, so the request goes back to be handed to whoever holds the port next. That holds
+   * for a write this context had let begin, too - the port closed before the term could - and the
+   * next term has to ask again.
    */
   handleResult(
     requestId: RequestId,
@@ -269,9 +270,8 @@ export class PendingWrites {
       return;
     }
 
-    if (pending.startedTerm !== undefined) {
-      return;
-    }
+    // Only the addressed term is ever let begin a write, so this undoes that term's approval alone.
+    pending.startedTerm = undefined;
     pending.isDispatched = false;
     this.#dispatch(pending);
   }
@@ -394,10 +394,6 @@ export class PendingWrites {
 
     pending.isDispatched = true;
     pending.addressedTerm = term;
-    // A write held here, or handed on again, has spent part of its time already: the tab holding the
-    // port counts only what is left, so it never begins the write after this tab has given up on it.
-    const elapsedMs = this.host.clock.monotonicNow() - pending.issuedAt;
-    const remainingMs = Math.max(0, this.host.writeTimeoutMs - elapsedMs);
-    this.host.dispatch(pending.requestId, pending.payload, term, remainingMs);
+    this.host.dispatch(pending.requestId, pending.payload, term);
   }
 }

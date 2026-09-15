@@ -18,7 +18,7 @@ written down.
 
 | Capability                | What it means                                                                                             |
 | ------------------------- | --------------------------------------------------------------------------------------------------------- |
-| **Shares one port**       | Every tab reads and writes. A write reaches the device at most once, with one crash exception.            |
+| **Shares one port**       | Every tab reads and writes. A write reaches the device at most once.                                      |
 | **Survives tabs closing** | Another tab takes over when the tab holding the port closes, crashes or is killed.                        |
 | **Reconnects**            | A device unplugged or switched off is reopened with the same settings when it returns, unless turned off. |
 | **Remembers the device**  | The user chooses the port once; later visits connect with no prompt, in every tab.                        |

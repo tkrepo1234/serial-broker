@@ -105,8 +105,9 @@ export class OwnerTerms {
    * | --- | --- |
    * | `owner-claimed`, `status` | its term's lock is held, and no later term has been heard of - which may be only after the lock has been checked |
    * | `owner-released` | never on its own: noted, and it ends the term once its lock is free (`apply` is not run) |
-   * | `write-started`, `write-result` | it comes from the context that speaks for the term it names |
+   * | `write-ready`, `write-result` | it comes from the context that speaks for the term it names |
    * | `data-received`, `data-sent`, `error` | its sender speaks for a term that holds the port or is still being waited for |
+   * | `write-request`, `write-approval` | always: they speak for the tab that issued a write, not for a term. The tab holding the port takes an approval only from the context that issued the write, which it knows and the terms do not (ADR-0013) |
    * | anything else | always: it says nothing about the port |
    */
   authorize(message: ProtocolMessage, apply: () => void): void {
@@ -123,7 +124,7 @@ export class OwnerTerms {
         this.#heardReleased(message.term, message.from);
         return;
 
-      case 'write-started':
+      case 'write-ready':
       case 'write-result':
         if (message.term !== undefined && this.#isFrom(message.term, message.from)) {
           apply();

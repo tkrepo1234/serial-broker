@@ -38,14 +38,22 @@ export function validMessages(): Record<ProtocolMessageType, Record<string, unkn
       requestId: 'w-1',
       payload: new Uint8Array([1]),
       term: 't-1',
-      remainingMs: 5_000,
     },
-    'write-started': {
+    'write-ready': {
       ...BASE,
-      type: 'write-started',
+      type: 'write-ready',
       configName: 'Reader',
       requestId: 'w-1',
       term: 't-1',
+    },
+    'write-approval': {
+      ...BASE,
+      to: 'c-2',
+      type: 'write-approval',
+      configName: 'Reader',
+      requestId: 'w-1',
+      term: 't-1',
+      approved: true,
     },
     'write-result': {
       ...BASE,

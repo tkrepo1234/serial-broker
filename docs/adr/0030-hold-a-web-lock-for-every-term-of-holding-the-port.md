@@ -6,8 +6,9 @@
 ## Context
 
 [ADR-0013](./0013-write-ordering-and-delivery-semantics.md) lets the tab that issued a write decide
-its fate: not repeatable once the tab holding the port reports `write-started`, settled by
-`write-result`, and - when that tab is gone - failed if it had started, handed on if it had not.
+its fate: not repeatable once it has let the tab holding the port begin it (originally: once that tab
+reported `write-started`), settled by `write-result`, and - when that tab is gone - failed if it had
+started, handed on if it had not.
 Everything depends on knowing when the tab holding the port is gone and when its last word has
 arrived.
 
@@ -42,9 +43,10 @@ configuration name comes last, because it is the only part that may contain a `/
 - **The term lock is taken inside the election.** The ownership lock's callback takes the term's
   lock before the context counts as the owner; a term lock the browser refuses lets the ownership
   lock go too, and both are requested again. No tab holds the ownership lock without a term.
-- **Messages name their term.** `owner-claimed`, `owner-released`, `status` and `write-started`
-  carry the sender's term; `owner-claimed` and `status` carry its `maxTabs`. A `write-request`
-  names the term it is **addressed** to, and only the tab holding that term writes it.
+- **Messages name their term.** `owner-claimed`, `owner-released`, `status` and `write-ready`
+  (originally `write-started`) carry the sender's term; `owner-claimed` and `status` carry its
+  `maxTabs`. A `write-request` names the term it is **addressed** to, and only the tab holding that
+  term writes it.
 - **A term ends cleanly in a fixed order.** The holder closes the port, waits until every write it
   performed has been answered (bounded by `writeTimeoutMs`), queues a second request of its own on
   the term's lock - the **goodbye request** - sends `owner-released` as the term's last message,
@@ -68,7 +70,7 @@ From that, four rules:
 4. **`maxTabs` is believed because it is part of the lock's name.**
 
 **One table decides who may say what** (`OwnerTerms.authorize()`): claims and statuses once their
-term's lock is held; `write-started` and `write-result` only from the term the write was addressed to
+term's lock is held; `write-ready` and `write-result` only from the term the write was addressed to
 and the context speaking for it; `data-received`, `data-sent` and `error` only from a context
 speaking for a term this tab knows of. A tab that has just joined knows no term until the status it
 asked for arrives, so device data reaching it in that window is dropped, logged once per
@@ -131,10 +133,12 @@ about the term: the tab forgets it, and the next message naming it is checked af
 
 ### Risks and mitigations
 
-- **A word from a crashed holder that arrives after the browser freed its lock is too late.** A tab
-  that crashes between handing bytes to the device and its `write-started` arriving leaves a write
-  that looks unstarted; it is handed on and may reach the device twice. The window is the transit of
-  one message against the teardown of a crashed renderer.
+- **A word from a crashed holder that arrives after the browser freed its lock is too late.** Until
+  2026-09-15 that let a write look unstarted whose `write-started` a crash delayed: it was handed on
+  and could reach the device twice. Since the holder asks the issuing tab before it begins, and that
+  tab counts what it let begin as begun, a late word no longer changes whether a write began
+  ([ADR-0013](./0013-write-ordering-and-delivery-semantics.md)); only a late result is lost, and the
+  write is `OWNER_LOST_DURING_WRITE`.
 - **A script of the origin can take Web Locks.** It can hold a lock named for a term it invented, or
   queue on a real term's lock so that tabs wait for a goodbye that never comes - a delay, never an
   end. A script that takes locks can already keep every tab away from the device.

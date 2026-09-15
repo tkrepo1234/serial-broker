@@ -485,10 +485,9 @@ function decodeChecked(raw: unknown): ProtocolMessage {
         requestId: read.identifier('requestId') as RequestId,
         payload: read.payload(),
         term: read.identifier('term') as TermId,
-        remainingMs: read.duration('remainingMs'),
       };
 
-    case 'write-started':
+    case 'write-ready':
       return {
         type,
         v,
@@ -497,6 +496,18 @@ function decodeChecked(raw: unknown): ProtocolMessage {
         configName: read.configName(),
         requestId: read.identifier('requestId') as RequestId,
         term: read.identifier('term') as TermId,
+      };
+
+    case 'write-approval':
+      return {
+        type,
+        v,
+        from,
+        to,
+        configName: read.configName(),
+        requestId: read.identifier('requestId') as RequestId,
+        term: read.identifier('term') as TermId,
+        approved: read.boolean('approved'),
       };
 
     case 'write-result': {

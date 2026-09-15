@@ -286,10 +286,11 @@ bytes is summarised in [Write outcomes](guarantees.md#write-outcomes).
 : **Arises** in two ways, told apart by `context`:
 
 - The whole `send()` — waiting for a connection, reaching the tab holding the port, waiting there
-  behind other writes, and the device taking the bytes — took longer than
-  `connection.writeTimeoutMs`. **Context:** `started`: `false` if the write never began, so the
-  device received nothing and never will; `true` if it had begun and may still complete after the
-  rejection.
+  behind other writes, and the device taking the bytes — took longer than the issuing tab's
+  `connection.writeTimeoutMs`. **Context:** `started`: `false` if the write had not begun, so the
+  device received nothing and never will — the tab holding the port begins no write without the
+  issuing tab's approval, which that tab no longer gives; `true` if the issuing tab had let it
+  begin, so it may still complete after the rejection.
 - The device did not take a chunk within `connection.writeTimeoutMs`, typically because of flow
   control or a device that has stopped answering. **Context:** `bytesWritten` of `byteLength`. The
   connection stays open and the chunk stays in flight (ADR-0038); the writes behind it are not begun
@@ -318,19 +319,18 @@ port, does.
 
 `NOT_CONNECTED`
 : **Not delivered to the application.** It is how the tab holding the port hands a write back when
-its connection was lost between accepting the write and handing it to the device: nothing was
-written, and the tab that issued the write sends it again once the port is open. A write that finds
+its connection was lost, or it let go of the port, between accepting the write and handing it to the
+device: nothing was written, and the tab that issued the write sends it again once the port is open. A write that finds
 no connection until its deadline fails with `WRITE_TIMEOUT` instead. The code appears in logs and in
 diagnostics only.
 **Do:** nothing.
 
 `OWNER_LOST_DURING_WRITE`
-: **Arises** when the tab holding the port went away while the write was being written. Whether the
-device received the bytes, some of them, or none, cannot be known, and serial-broker never repeats
-such a write. It is decided as soon as that tab has provably said its last word: at its goodbye when
-it closed, and when the browser frees its lock when it crashed. There is no grace period. The one
-case in which a write may reach the device twice instead is described under
-[Write outcomes](guarantees.md#write-outcomes).
+: **Arises** when the tab holding the port went away after the issuing tab had let it begin the write.
+Whether the device received the bytes, some of them, or none, cannot be known, and serial-broker
+never repeats such a write. It is decided as soon as that tab has provably said its last word: at its
+goodbye when it closed, and when the browser frees its lock when it crashed. There is no grace
+period.
 **Context:** `byteLength`.
 **Do:** repeat the command only if doing so is harmless for the device, or after checking its state.
 See [Commands that must not run twice](examples/advanced.md#commands-that-must-not-run-twice).

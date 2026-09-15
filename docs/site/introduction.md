@@ -45,17 +45,17 @@ production line.
 
 ## Features
 
-| Feature                        | What it gives you                                                                                                              |
-| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------ |
-| **Shared port**                | Every tab reads and writes. A write reaches the device at most once, with [one crash exception](guarantees.md#write-outcomes). |
-| **Failover**                   | The port moves to another tab when the tab holding it goes away, however it goes away.                                         |
-| **Reconnection**               | Bounded exponential backoff with jitter, cut short when the browser reports the device back; or none, if you say so.           |
-| **Remembered devices**         | The browser keeps the permission; serial-broker keeps the configuration and the device the user chose.                         |
-| **Received data, collected**   | What the device sends is delivered once the line is quiet, the same in every tab; text is decoded on request.                  |
-| **Text and binary**            | Strings are sent as UTF-8, bytes pass through untouched.                                                                       |
-| **Errors that say what to do** | One error type with a stable code, structured context and a remediation sentence, rebuilt faithfully in every tab.             |
-| **Fallback message bus**       | Works without `SharedWorker`, over a `BroadcastChannel`, for instance under a strict content security policy.                  |
-| **Diagnostics**                | A separate entry point and a debugging surface show which tab holds each port and what it is doing.                            |
+| Feature                        | What it gives you                                                                                                    |
+| ------------------------------ | -------------------------------------------------------------------------------------------------------------------- |
+| **Shared port**                | Every tab reads and writes. A write reaches the device [at most once](guarantees.md#write-outcomes).                 |
+| **Failover**                   | The port moves to another tab when the tab holding it goes away, however it goes away.                               |
+| **Reconnection**               | Bounded exponential backoff with jitter, cut short when the browser reports the device back; or none, if you say so. |
+| **Remembered devices**         | The browser keeps the permission; serial-broker keeps the configuration and the device the user chose.               |
+| **Received data, collected**   | What the device sends is delivered once the line is quiet, the same in every tab; text is decoded on request.        |
+| **Text and binary**            | Strings are sent as UTF-8, bytes pass through untouched.                                                             |
+| **Errors that say what to do** | One error type with a stable code, structured context and a remediation sentence, rebuilt faithfully in every tab.   |
+| **Fallback message bus**       | Works without `SharedWorker`, over a `BroadcastChannel`, for instance under a strict content security policy.        |
+| **Diagnostics**                | A separate entry point and a debugging surface show which tab holds each port and what it is doing.                  |
 
 ## What it deliberately does not do
 

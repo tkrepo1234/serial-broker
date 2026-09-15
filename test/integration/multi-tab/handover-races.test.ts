@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
+import { SerialBrokerErrorCode } from '../../../src/core/error-codes.js';
 import { SerialBrokerStatus } from '../../../src/core/types.js';
 import { ownerLockName } from '../../../src/protocol/version.js';
-import { BrowserHarness, TRANSPORT_MODES } from '../../harness/browser-harness.js';
+import { BrowserHarness, TRANSPORT_MODES, type VirtualTab } from '../../harness/browser-harness.js';
 import { READER, READER_OPTIONS } from '../../harness/devices.js';
+import type { FakeDevice } from '../../harness/fake-serial.js';
 
 /**
  * Messages from the tab that held the port and from the tab that holds it now come from different
@@ -61,14 +63,30 @@ describe.each(TRANSPORT_MODES)('a handover heard out of order (%s)', (transport)
     expect(device.written).toHaveLength(1);
   });
 
-  it('writes once a write the former holder performed, when its claim arrives before any word of it', async () => {
-    const { harness, device, first, busy } = await threeTabs();
-
-    // Everything the first tab says about the write is late, even that it began.
-    busy.hold(first.client.clientId);
+  /**
+   * Lets the first tab begin the busy tab's write, then holds everything the first tab says after
+   * that: the write is taken by the device, and its result is late.
+   */
+  async function writtenWithItsResultLate(
+    harness: BrowserHarness,
+    device: FakeDevice,
+    busy: ReturnType<BrowserHarness['openBusyTab']>,
+    first: VirtualTab,
+  ): Promise<{ readonly outcome: Promise<unknown> }> {
+    device.pauseWrites();
     const outcome = outcomeOf(busy.client.send('Reader', 'PING'));
     await harness.settle();
+    busy.hold(first.client.clientId);
+    device.resumeWrites();
+    await harness.settle();
     expect(device.writtenText()).toBe('PING');
+    // Wrapped: an async function returning the promise itself would wait for it to settle.
+    return { outcome };
+  }
+
+  it('writes once a write the former holder performed, when its claim arrives before the result', async () => {
+    const { harness, device, first, busy } = await threeTabs();
+    const { outcome } = await writtenWithItsResultLate(harness, device, busy, first);
 
     await first.close();
     await harness.advance(0);
@@ -81,11 +99,7 @@ describe.each(TRANSPORT_MODES)('a handover heard out of order (%s)', (transport)
 
   it('writes once a write a crashed holder performed, when its words arrive before its lock is freed', async () => {
     const { harness, device, first, busy } = await threeTabs();
-
-    busy.hold(first.client.clientId);
-    const outcome = outcomeOf(busy.client.send('Reader', 'PING'));
-    await harness.settle();
-    expect(device.writtenText()).toBe('PING');
+    const { outcome } = await writtenWithItsResultLate(harness, device, busy, first);
 
     // The tab crashes, and its words arrive while the browser is still tearing it down - before
     // the busy tab is granted the lock of its term, which is what ends the term (ADR-0030).
@@ -97,24 +111,60 @@ describe.each(TRANSPORT_MODES)('a handover heard out of order (%s)', (transport)
     expect(device.written).toHaveLength(1);
   });
 
-  it('hands on a write whose only word arrives after the browser has freed a crashed holder`s lock', async () => {
+  it('never repeats a write a crashed holder was let begin, whose result arrives after its lock is freed', async () => {
     const { harness, device, first, busy } = await threeTabs();
+    const { outcome } = await writtenWithItsResultLate(harness, device, busy, first);
+
+    // The busy tab let the first tab begin the write, so it knows the write may have reached the
+    // device, whatever has arrived of the rest (ADR-0013).
+    await first.kill();
+    busy.deliverHeld();
+    await harness.advance(0);
+
+    expect(await outcome).toMatchObject({ code: SerialBrokerErrorCode.OWNER_LOST_DURING_WRITE });
+    expect(device.written).toHaveLength(1);
+  });
+
+  it('hands on, and writes once, a write whose question arrives only after the browser freed a crashed holder`s lock', async () => {
+    const { harness, device, first, busy } = await threeTabs();
+
+    // The first tab asks whether it may begin, and the question is late: it begins nothing.
+    busy.hold(first.client.clientId);
+    const outcome = outcomeOf(busy.client.send('Reader', 'PING'));
+    await harness.settle();
+    expect(device.written).toHaveLength(0);
+
+    // Its term ends with nothing let begin, so the write is handed to the next tab - not a repeat.
+    // The question that arrives afterwards names an ended term and is answered no.
+    await first.kill();
+    await harness.advance(0);
+    busy.deliverHeld();
+    await harness.advance(0);
+
+    expect(await outcome).toBe('resolved');
+    expect(device.written).toHaveLength(1);
+  });
+
+  it('hands a write waiting for its issuer`s answer on at once when the holder closes, and writes it once', async () => {
+    const { harness, device, first, second, busy } = await threeTabs();
 
     busy.hold(first.client.clientId);
     const outcome = outcomeOf(busy.client.send('Reader', 'PING'));
     await harness.settle();
-    expect(device.writtenText()).toBe('PING');
 
-    // What no library can decide, and what the lock cannot decide either: the crashed tab wrote
-    // this and said so, but nothing of that had arrived when the browser freed its lock. The write
-    // looks like one that never reached it, and is handed to the next tab - which writes it again.
-    // The tab that crashes has to be writing at that very moment for this to happen (ADR-0030).
-    await first.kill();
+    // The clock does not move: closing does not wait for an answer that may never come. The write
+    // has not begun, and goes back to its issuer to be handed on.
+    await first.close();
+    await harness.advance(0);
+    expect(harness.locks.holderOf(ownerLockName('Reader'))).toBe(second.id);
+    expect(device.written).toHaveLength(0);
+
+    // The first tab's question arrives late, then that it did not write it, then its goodbye.
     busy.deliverHeld();
-    await harness.settle();
+    await harness.advance(0);
 
     expect(await outcome).toBe('resolved');
-    expect(device.written).toHaveLength(2);
+    expect(device.written).toHaveLength(1);
   });
 
   it('keeps the new holder`s status when the former holder`s owner-released arrives late', async () => {

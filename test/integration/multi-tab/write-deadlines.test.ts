@@ -137,3 +137,124 @@ describe.each(TRANSPORT_MODES)(
     }
   },
 );
+
+/**
+ * The tab holding the port begins no write another tab issued without asking that tab first, and
+ * that tab lets it begin only while it has not given the write up (ADR-0013). The decision is taken in
+ * one turn of the issuer's event loop, so no delay on the way - a busy main thread, a machine asleep,
+ * an answer crossing the deadline - makes `started: false` untrue.
+ */
+describe.each(TRANSPORT_MODES)(
+  'the tab that issued a write decides whether it begins (%s)',
+  (transport) => {
+    function withTimeout(writeTimeoutMs: number | undefined) {
+      return writeTimeoutMs === undefined
+        ? READER_OPTIONS
+        : { ...READER_OPTIONS, connection: { writeTimeoutMs } };
+    }
+
+    /** A tab holding the port whose incoming messages can be held back, and a tab that writes. */
+    async function busyHolder(writeTimeoutMs?: number) {
+      const harness = new BrowserHarness({ transport });
+      const device = harness.serial.addDevice(READER.vendorId, READER.productId);
+      harness.serial.grant(device);
+      const holder = harness.openBusyTab();
+      await holder.client.setup('Reader', withTimeout(writeTimeoutMs));
+      await harness.settle();
+      const issuer = harness.openTab();
+      await issuer.setup('Reader', withTimeout(writeTimeoutMs));
+      await harness.settle();
+      return { harness, device, holder, issuer };
+    }
+
+    /** A tab holding the port, and a tab that writes whose incoming messages can be held back. */
+    async function busyIssuer(issuerTimeoutMs?: number) {
+      const harness = new BrowserHarness({ transport });
+      const device = harness.serial.addDevice(READER.vendorId, READER.productId);
+      harness.serial.grant(device);
+      const holder = harness.openTab();
+      await holder.setup('Reader', READER_OPTIONS);
+      const issuer = harness.openBusyTab();
+      await issuer.client.setup('Reader', withTimeout(issuerTimeoutMs));
+      await harness.settle();
+      return { harness, device, holder, issuer };
+    }
+
+    it('is never begun after its issuer gave up, when the request waited 4 s before the tab holding the port could handle it', async () => {
+      const { harness, device, holder, issuer } = await busyHolder(3_000);
+
+      // The holder's main thread is busy for 4 s with the request waiting; the issuer gives up at 3 s.
+      holder.hold(issuer.client.clientId);
+      const late = outcomeOf(issuer.client.send('Reader', 'LATE'));
+      await harness.settle();
+      await harness.advance(4_000);
+      expect(await late).toMatchObject(NOT_STARTED);
+
+      // Handled now, with its whole writeTimeoutMs still ahead of it at the port: the issuer says no.
+      holder.deliverHeld();
+      await harness.advance(0);
+      await harness.advance(10_000);
+      expect(device.written).toHaveLength(0);
+
+      // Nothing is left holding the port's queue.
+      const next = outcomeOf(issuer.client.send('Reader', 'NEXT'));
+      await harness.advance(0);
+      expect(await next).toBe('resolved');
+      expect(device.writtenText()).toBe('NEXT');
+    });
+
+    it('is written once, and reported as started, when its issuer let it begin just before its deadline', async () => {
+      const { harness, device, holder, issuer } = await busyIssuer(2_000);
+
+      // The question of the tab holding the port waits in the busy issuer until 1 ms before its deadline.
+      device.pauseWrites();
+      issuer.hold(holder.client.clientId);
+      const outcome = outcomeOf(issuer.client.send('Reader', 'PING'));
+      await harness.settle();
+      await harness.advance(1_999);
+      expect(device.written).toHaveLength(0);
+      issuer.deliverHeld();
+      await harness.settle();
+
+      // The deadline passes before the device has taken the write: it was let begin, so it is started.
+      await harness.advance(1);
+      expect(await outcome).toMatchObject({
+        code: SerialBrokerErrorCode.WRITE_TIMEOUT,
+        context: { started: true },
+      });
+      device.resumeWrites();
+      await harness.advance(0);
+      await harness.advance(10_000);
+
+      expect(device.writtenText()).toBe('PING');
+      expect(device.written).toHaveLength(1);
+    });
+
+    for (const ending of ['closes', 'crashes'] as const) {
+      it(`is never written when its issuer ${ending} before answering, and the port's queue goes on`, async () => {
+        const { harness, device, holder, issuer } = await busyIssuer();
+
+        issuer.hold(holder.client.clientId);
+        void outcomeOf(issuer.client.send('Reader', 'ORPHAN'));
+        await harness.settle();
+        if (ending === 'closes') {
+          await issuer.client.dispose();
+          harness.forgetTab('busy');
+        } else {
+          harness.destroyTab('busy', issuer.client.clientId);
+        }
+        await harness.settle();
+
+        // Queued behind the question, which the holder waits on for its own writeTimeoutMs of 5 s.
+        await harness.advance(1_000);
+        const next = outcomeOf(holder.client.send('Reader', 'NEXT'));
+        await harness.advance(3_900);
+        expect(device.written).toHaveLength(0);
+        await harness.advance(100);
+
+        expect(await next).toBe('resolved');
+        expect(device.writtenText()).toBe('NEXT');
+      });
+    }
+  },
+);

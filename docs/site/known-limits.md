@@ -35,14 +35,6 @@ reaches the tab holding the port first is written first.
 across tabs in the application, for example with a Web Lock of its own; see
 [Order and interleaving](guarantees.md#order-and-interleaving).
 
-## At-most-once has one exception
-
-A tab holding the port that crashes in the moment between handing a write to the device and
-reporting that it began can make that write reach the device twice. The case is described under
-[Write outcomes](guarantees.md#write-outcomes).
-
-**What to do:** for commands that must never run twice, give them an identifier the device checks.
-
 ## Tabs on different versions do not share
 
 Tabs that run different protocol versions of serial-broker do not coordinate: each group tries to
