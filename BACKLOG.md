@@ -4,6 +4,63 @@ Work that is agreed but not yet started. Ordered by when it becomes relevant, no
 
 ---
 
+## Release readiness (Tim, 2026-09-15)
+
+**No tag until Tim says so.** The code base is brought into order first and the release is made
+ready; the version and the date go into the changelog when Tim decides.
+
+- [x] The changelog's Unreleased section reads as the net change since `v0.1.0-alpha.1`, with an
+      Upgrading section, every statement checked against the tag and `main`.
+- [x] The release workflow runs all of CI before it releases, marks only pre-release versions as
+      pre-releases, and has a dry run (`workflow_dispatch`) that uploads notes and package; the dry
+      run passed on 2026-09-15.
+- [x] Every step of `docs/manual-test-plan.md` names the suite that runs it; steps 4, 11, 12, 16
+      and 19 were added to the emulator suite. What stays by hand: 1, 2, 4a, 7, 18, 22's display,
+      26, 29's hidden tab, and unplugging a physical adapter once.
+- [x] A second pass over every test file (1 410 → 1 345 tests).
+- [x] A documentation drift check against the code, and a cold-read usability test of ten industrial
+      use cases built from the documentation alone (below).
+- [ ] At release: move Unreleased into `## [x.y.z] - date`, bump `package.json`, run the manual steps
+      that stay by hand against a physical adapter, then tag. Tim's call.
+
+## Usability findings of the cold read (2026-09-15)
+
+Three reviewers built ten use cases - a weighing display, a tare command, choosing a device, an
+exclusive press control, no automatic reconnect, changing the adapter, a support diagnostics page,
+a deployment without a bundler, logging for support and a binary protocol - from the documentation
+alone. Their notes were kept in the session scratchpad; what they found is decided here.
+
+Done in the same round:
+
+- `connection.autoReconnect: false` no longer reconnects through a handover, and `isRetryable` says
+  whether the library is recovering (ADR-0010).
+- `requestAccess(name, { chooseAgain: true })` chooses a different device in auto mode (ADR-0036).
+- Found while answering the reviewers' questions: a write rejected with `started: false` could still
+  be written when tabs ran different `writeTimeoutMs`, or when the request reached the tab holding
+  the port late. The tab holding the port now asks the issuing tab before it begins a write from it
+  (protocol version 14, ADR-0013), which also closes the crash exception to at-most-once.
+- The Arduino suite's first test could not open COM3 on 2026-09-15 evening while a program outside
+  the browser held the port (Web Serial alone failed too); recorded in the manual test plan. Run the
+  Arduino suite again with the port free before the release.
+- Documentation: deploying on a web server (files, a strict CSP with the import map, cache headers,
+  a checklist), one import-map specifier, operator stations (every window watches, one operates),
+  the framing and request/answer examples fixed, and every contradiction the reviewers logged.
+
+Not now, each a candidate for after the release:
+
+- A request/answer helper (`request(name, data, { answer, timeoutMs })`) with cross-tab exclusivity,
+  and a bounded line splitter as a library export instead of example code.
+- Diagnostics that name a tab in human terms (path, title, visibility, an application label) and
+  keep a short error history per configuration.
+- `logPayloads` switchable at run time and applied by whichever tab holds the port.
+- A `VERSION` export and a version marker in the worker script.
+- A marker on `ReceiveEvent` that bytes were lost before it (after a handover or a reconnect).
+- A reason on each status change (device lost, handover, released).
+- A `forgetAll()` for decommissioning a workstation.
+- An exclusive-control mode in the library (one window sends, every window receives).
+
+---
+
 ## Decided on 2026-09-14
 
 Tim's answers to the open questions, so that the work below needs no further input. Where an item
@@ -46,12 +103,12 @@ production line, and errors that say what to do.
 Done on 2026-09-14 (ADR-0036, protocol version 9): `device` omitted or `{ auto: true }` takes the
 device from the chosen port, `{ nonUsb: true }` is the new kind for ports without a USB identity,
 `getStatus()` reports `deviceKind`, and the debugging surface's **Choose a device…** uses the mode.
-An auto-mode configuration waits for the user even when exactly one port is granted. Left open:
-
-- The real-browser suite and the Arduino hardware tests do not exercise auto mode yet, and
-  `docs/manual-test-plan.md` has no auto-mode scenario.
-- The example applications still pass `device` explicitly (mostly `{ any: true }`); several could
-  drop it and show the automatic mode instead.
+An auto-mode configuration waits for the user even when exactly one port is granted. Since
+2026-09-15 the real-browser suite runs auto mode (`device-lifecycle.spec.ts`: the picker, a second tab
+adopting the device, a later visit opening it unasked), step 4a of the manual test plan is the
+debugging surface's auto-mode flow, and the OpenUI5 example's Reader runs in auto mode. The hardware
+suites seed a permission and cannot answer a picker, so they keep explicit devices; the other
+examples keep `{ any: true }`, which a first page needs.
 
 The original request, for the record:
 
@@ -359,8 +416,9 @@ What the implementers left open:
 - **Releasing a configuration while the device holds a write cannot close the port** - the platform
   keeps it until the page goes (ADR-0038). Measured with usbip-win2 only; whether a physical
   USB-serial adapter's driver ends such a write is unverified.
-- The emulator spec does not cover steps 10 (a tab killed from the task manager), 16 (backoff while
-  unplugged, two minutes) and 18-19 (permission revoked); 16 could be driven from the emulator.
+- ~~The emulator spec does not cover steps 10, 16 and 18-19.~~ Since 2026-09-15 it covers 4, 11, 12,
+  16 and 19; step 10's crash path runs in the stand-in suite (the renderer killed over CDP) and in
+  the emulator's step 24. Step 18, a permission revoked in the site settings, stays by hand.
 - The seeded serial permission is Windows-only (device instance ID); macOS and Linux store vendor,
   product and serial number. CI exercises Chromium only.
 - ~~The 64 KiB hardware round trip takes a quarter of an hour on the Arduino.~~ Removed on 2026-09-15;
@@ -410,7 +468,8 @@ chapters in Markdown (MyST), the API reference generated from TSDoc, Python in `
 | Done                                                                | Still to do                                            |
 | ------------------------------------------------------------------- | ------------------------------------------------------ |
 | Site skeleton, full outline, generated API reference                | Completing TSDoc where the generated reference is thin |
-| Introduction, Installing, Quickstart                                | A CI step that builds the site; hosting                |
+| Introduction, Installing, First connection                          | Hosting (GitHub Pages, once the repository is public)  |
+| The CI job `docs` builds the site and uploads it as an artifact     |                                                        |
 | How shared ports behave (the core chapter)                          |                                                        |
 | Examples in all four tiers, type-checked by `npm run typecheck`     |                                                        |
 | Configuration, Errors, Diagnostics, Internals                       |                                                        |

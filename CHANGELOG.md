@@ -15,7 +15,7 @@ The first release verified against real hardware - an Arduino echo board and the
 emulator attached by usbip-win2 - in Microsoft Edge on Windows. Still before 1.0: a minor version
 may break the API, and every break is listed below.
 
-**Wire protocol version 13** (7 in 0.1.0-alpha.1). Tabs of this build and tabs of an earlier one do
+**Wire protocol version 14** (7 in 0.1.0-alpha.1). Tabs of this build and tabs of an earlier one do
 not share a worker, a lock or a bus; they detect each other and report `PROTOCOL_VERSION_MISMATCH`.
 Remembered configurations moved from **storage version 1 to 2** and are not migrated.
 
@@ -106,12 +106,15 @@ Remembered configurations moved from **storage version 1 to 2** and are not migr
 
 ### Changed
 
-- **Breaking:** wire protocol version 13 and storage version 2; see Upgrading.
+- **Breaking:** wire protocol version 14 and storage version 2; see Upgrading.
 - **Breaking:** the option `persist` is `remember`, and received data is collected by default.
 - **Breaking:** `SerialBrokerOptions.device` is optional; `SerialBrokerStatusSnapshot` has the key
   `deviceKind` and reports `vendorId`/`productId` only for `'usb'`; `EffectiveSettings.device` is the
   full `DeviceFilter` union; the context of `DEVICE_MISMATCH` gains `expectedDevice`.
 - **Breaking:** a new `onStatusChange` listener receives the current status once.
+- **`WRITE_TIMEOUT` with `started: true` means the issuing tab let the write begin**, and each tab's
+  writes are timed by its own `connection.writeTimeoutMs`; the tab holding the port waits at most its
+  own `writeTimeoutMs` for its queue and the approval together. Tabs may set it differently.
 - **`setup()` retries a `failed` configuration** in whichever tab it is called (ADR-0010), and
   **`requestAccess()` is allowed in any participating tab**: the tab holding the port looks for the
   granted port again, in auto mode with the device chosen there (ADR-0036).
@@ -151,6 +154,15 @@ Remembered configurations moved from **storage version 1 to 2** and are not migr
 
 ### Fixed
 
+- **A write rejected with `WRITE_TIMEOUT` and `started: false` is never written afterwards.** It
+  could be: when the tab holding the port had a longer `writeTimeoutMs`, when the write reached that
+  tab part way through its time, or when its request waited before that tab could handle it. The
+  tab holding the port now asks the issuing tab before it begins a write from it, and the issuing tab
+  agrees only while it has not given the write up (ADR-0013).
+- **A write is never written twice when the tab holding the port crashes just after beginning it.**
+  Such a write could be handed on to the next tab and written again - the one exception the alpha
+  documented to at-most-once. A write the issuing tab approved counts as begun, so a crash reports
+  `OWNER_LOST_DURING_WRITE` instead of handing it on (ADR-0013, ADR-0030).
 - **The tabs recover within about half a second when a crash takes the `SharedWorker` with it** -
   as the crash of the tab that started the worker does - where the alpha's heartbeats needed 45 to
   60 seconds to notice the dead worker (browser benchmark `handover/crash`, `everyTab` median 0.4 s).
@@ -174,8 +186,9 @@ Remembered configurations moved from **storage version 1 to 2** and are not migr
 
 ### Internals
 
-- **Message types 18 → 15**: `heartbeat`, `attach`, `detach` and `goodbye` are gone, `worker-log`
-  is new. `hello` carries every configuration a tab takes part in and is sent again when that
+- **Message types 18 → 16**: `heartbeat`, `attach`, `detach` and `goodbye` are gone; `worker-log`
+  is new, and `write-started` is replaced by `write-ready` and `write-approval`, one more round trip
+  for a write from another tab (logged as `supervisor.write-not-approved` when refused). `hello` carries every configuration a tab takes part in and is sent again when that
   changes; `welcome` names the worker; `owner-claimed` carries `maxTabs`; `status` carries the
   device; `status-request` carries `retry` and the chosen `device`. The `'owner'` target,
   `Transport.setOwnership` and `ownedConfigNames` are gone (ADR-0006).
