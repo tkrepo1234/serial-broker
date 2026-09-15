@@ -130,8 +130,11 @@ export class PortSupervisor {
   readonly #unanswered = new Map<Promise<void>, number>();
   #unansweredBytes = 0;
   readonly #once: OnceLog;
-  /** Resolved when {@link stop} begins: a write waiting for its issuer's answer stops waiting. */
-  readonly #stopRequested = createDeferred<boolean>();
+  /**
+   * Ends the wait of the write asking its issuer whether it may begin, while one does: only the write
+   * next in the queue asks, so there is at most one. {@link stop} ends it at once.
+   */
+  readonly #answerWaits = new Set<() => void>();
   /** Incremented on every connection attempt, so a stale async continuation can be ignored. */
   #generation = 0;
   /** When the scheduled reconnect is due, while one is scheduled. Diagnostics only. */
@@ -216,7 +219,9 @@ export class PortSupervisor {
   async #stop(): Promise<void> {
     // A write waiting for its issuer's answer has not begun, and never will here: it goes back at
     // once, rather than holding the close for as long as the answer may take.
-    this.#stopRequested.resolve(false);
+    for (const stopWaiting of [...this.#answerWaits]) {
+      stopWaiting();
+    }
     this.#generation += 1;
     const previous = this.#state;
     if (previous.kind === 'open') {
@@ -624,19 +629,26 @@ export class PortSupervisor {
       return answer;
     }
     const clock = this.environment.clock;
-    let timer: TimerHandle | undefined;
-    const unanswered = new Promise<boolean>((resolve) => {
-      timer = clock.setTimer(
-        () => {
-          resolve(false);
-        },
-        Math.max(0, withinMs),
-      );
-    });
-    return Promise.race([answer, unanswered, this.#stopRequested.promise]).finally(() => {
-      if (timer !== undefined) {
-        clock.clearTimer(timer);
-      }
+    const outcome = createDeferred<boolean>();
+    // Ended by whichever comes first: the answer, this tab's deadline, or `stop()`. Each wait
+    // registers with `stop()` for its own duration only - racing a promise that lives as long as the
+    // supervisor would attach one reaction per write to it, and keep every one of them.
+    const stopWaiting = (): void => {
+      outcome.resolve(false);
+    };
+    this.#answerWaits.add(stopWaiting);
+    const timer = clock.setTimer(stopWaiting, Math.max(0, withinMs));
+    answer.then(
+      (isApproved) => {
+        outcome.resolve(isApproved);
+      },
+      () => {
+        outcome.resolve(false);
+      },
+    );
+    return outcome.promise.finally(() => {
+      this.#answerWaits.delete(stopWaiting);
+      clock.clearTimer(timer);
     });
   }
 
