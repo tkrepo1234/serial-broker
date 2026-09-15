@@ -75,3 +75,20 @@ port either; the browser frees it only when the page goes away.
 **What to do:** show `WRITE_TIMEOUT` while the status is `open` as "the device does not respond",
 and check `flowControl`. The [diagnostics entry point](diagnostics.md#the-diagnostics-entry-point)
 reports `stalledWriteSince` for such a write.
+
+## A worker that hangs after answering is not noticed
+
+The tabs learn that the `SharedWorker` has ended when the browser lets go of its Web Lock
+(ADR-0041), at once and without a timer. A worker that keeps running but stops passing messages on -
+a script stuck in a loop - still holds its lock, so no tab notices. Writes from tabs that do not hold
+the port then end in `WRITE_TIMEOUT`, and what the device sends reaches only the tab holding the
+port, until the page is reloaded. Only a worker that never answers when a tab connects is caught, by
+the handshake deadline.
+
+## Messages on their way when the bus changes are lost
+
+When a tab moves to a new worker, or to a `BroadcastChannel` because the worker script failed, what
+was on its way through the old bus is not repeated: data the device sent and status messages of that
+moment reach no tab. Each tab restates its status on the new bus, and a write that had not started
+is sent again once the port is reported `open` - it never reached the device, so this is not a
+repeat.
