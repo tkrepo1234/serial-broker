@@ -29,7 +29,7 @@ import { FakeSerialRegistry } from './fake-serial.js';
  * misbehave in a browser - but close enough that every backoff delay rounds to the full delay, so
  * a schedule stays a sequence of round numbers a test can name.
  */
-export const JITTER_DRAW = 1 - Number.EPSILON;
+const JITTER_DRAW = 1 - Number.EPSILON;
 
 /** Everything a test wants to observe about one simulated tab. */
 export interface RecordedEvents {

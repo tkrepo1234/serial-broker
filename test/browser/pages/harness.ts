@@ -35,14 +35,12 @@ export interface HarnessLogRecord {
 export interface PageHarness {
   setup(name: string, options: SerialBrokerOptions): Promise<void>;
   release(name: string, forgetDevice?: boolean): Promise<void>;
-  dispose(): Promise<void>;
-  requestAccess(name: string): Promise<boolean>;
   /**
    * Points the page's "Choose device" button at a configuration.
    *
    * The port picker needs transient activation, which `page.evaluate()` does not have and
-   * `page.click()` does, so that path runs through the button rather than through
-   * {@link PageHarness.requestAccess}.
+   * `page.click()` does, so asking for access runs through the button rather than through an
+   * evaluation.
    */
   armAccessRequest(name: string): void;
   /** How the last click on that button ended: `granted`, `dismissed` or `error:<code>`. */
@@ -252,12 +250,6 @@ export function installHarness(
     },
     release: async (name, forgetDevice) => {
       await api.release(name, { forgetDevice: forgetDevice ?? false });
-    },
-    dispose: async () => {
-      await api.dispose();
-    },
-    requestAccess: async (name) => {
-      return await api.requestAccess(name);
     },
     armAccessRequest: (name) => {
       accessRequestName = name;

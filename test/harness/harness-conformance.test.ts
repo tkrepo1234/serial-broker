@@ -9,7 +9,7 @@ import { PROTOCOL_VERSION, workerLockName } from '../../src/protocol/version.js'
 
 import { BrowserHarness, TRANSPORT_MODES } from './browser-harness.js';
 import { READER, READER_OPTIONS } from './devices.js';
-import { FakeWorkerHost } from './fake-bus.js';
+import { FakeBroadcastHub, FakeWorkerHost } from './fake-bus.js';
 import { FakeClock, flushMicrotasks } from './fake-clock.js';
 import { FakeLockManager } from './fake-locks.js';
 import { FakeSerialRegistry } from './fake-serial.js';
@@ -195,19 +195,41 @@ describe('FakeLockManager', () => {
     expect(locks.holdersOf(LOCK)).toEqual(['a', 'b']);
   });
 
-  it('answers null to an exclusive ifAvailable request while a shared lock is held', async () => {
+  it.each(['shared', 'exclusive'] as const)(
+    'passes null to an exclusive ifAvailable request while a %s lock is held',
+    async (mode) => {
+      const locks = new FakeLockManager();
+      let observed: unknown = 'not called';
+      void locks.forContext('a').request(LOCK, { mode }, async () => {
+        await new Promise(() => undefined);
+      });
+      await flushMicrotasks();
+
+      await locks.forContext('b').request(LOCK, { ifAvailable: true }, async (lock) => {
+        observed = lock;
+      });
+
+      expect(observed).toBeNull();
+    },
+  );
+
+  it('lists what is held and what waits, with the context of each, as query() does', async () => {
     const locks = new FakeLockManager();
-    let observed: unknown = 'not called';
-    void locks.forContext('a').request(LOCK, { mode: 'shared' }, async () => {
+    void locks.forContext('a').request(LOCK, {}, async () => {
       await new Promise(() => undefined);
     });
     await flushMicrotasks();
+    void locks.forContext('b').request(LOCK, { mode: 'shared' }, async () => undefined);
+    await flushMicrotasks();
 
-    await locks.forContext('b').request(LOCK, { ifAvailable: true }, async (lock) => {
-      observed = lock;
+    const snapshot = await locks.forContext('c').query?.();
+
+    // A tab tells a holder that let go cleanly from one that crashed by the request the holder
+    // queued (ADR-0030), and a diagnostics observer lists both.
+    expect(snapshot).toEqual({
+      held: [{ name: LOCK, mode: 'exclusive', clientId: 'a' }],
+      pending: [{ name: LOCK, mode: 'shared', clientId: 'b' }],
     });
-
-    expect(observed).toBeNull();
   });
 
   it('queues a shared request behind an exclusive holder, and grants it on release', async () => {
@@ -263,22 +285,6 @@ describe('FakeLockManager', () => {
     locks.killContext('a');
 
     expect(locks.holdersOf(LOCK)).toEqual([]);
-  });
-
-  it('passes null to an ifAvailable request when the lock is taken', async () => {
-    const locks = new FakeLockManager();
-    let observed: unknown = 'not called';
-
-    void locks.forContext('a').request(LOCK, {}, async () => {
-      await new Promise(() => undefined);
-    });
-    await flushMicrotasks();
-
-    await locks.forContext('b').request(LOCK, { ifAvailable: true }, async (lock) => {
-      observed = lock;
-    });
-
-    expect(observed).toBeNull();
   });
 });
 
@@ -772,6 +778,32 @@ describe('FakeSerialRegistry', () => {
     await registry.forContext('tab1').requestPort();
 
     expect(await registry.forContext('tab2').getPorts()).toHaveLength(1);
+  });
+});
+
+describe('FakeBroadcastHub', () => {
+  it('delivers a clone to every other channel of the name, and nothing back to the sender', async () => {
+    const hub = new FakeBroadcastHub();
+    const heard: string[] = [];
+    const listen = (name: string, context: string) => {
+      const channel = hub.create(name, context);
+      channel.addEventListener('message', (event) => {
+        heard.push(`${context}: ${(event.data as { text: string }).text}`);
+      });
+      return channel;
+    };
+    const sender = listen('bus', 'a');
+    listen('bus', 'b');
+    listen('another bus', 'c');
+    const message = { text: 'as posted' };
+
+    sender.postMessage(message);
+    message.text = 'changed afterwards';
+    await flushMicrotasks();
+
+    // A BroadcastChannel never delivers to the context that posted, which the library relies on
+    // not to hear its own messages twice.
+    expect(heard).toEqual(['b: as posted']);
   });
 });
 

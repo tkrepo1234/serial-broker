@@ -55,11 +55,6 @@ export class FakeMessagePort implements MessagePortLike {
     this.#listeners.set(type, listeners);
   }
 
-  /** How many listeners are registered for an event type. */
-  listenerCount(type: 'message' | 'messageerror'): number {
-    return this.#listeners.get(type)?.length ?? 0;
-  }
-
   /** Dispatches `raw` as a `message` event, as if the other end had posted it. */
   deliver(raw: unknown): void {
     for (const listener of this.#listeners.get('message') ?? []) {

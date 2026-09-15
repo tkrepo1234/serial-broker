@@ -175,13 +175,6 @@ export class Tab {
     );
   }
 
-  async status(name: string): Promise<string> {
-    return await this.page.evaluate(
-      (configName) => (window as unknown as HarnessWindow).harness.status(configName),
-      name,
-    );
-  }
-
   async waitForStatus(name: string, status: string, timeout = 20_000): Promise<void> {
     await this.page.waitForFunction(
       ([configName, wanted]) =>
@@ -196,15 +189,6 @@ export class Tab {
       ([configName, wanted]) =>
         (window as unknown as HarnessWindow).harness.receivedText(configName).includes(wanted),
       [name, text] as const,
-      { timeout },
-    );
-  }
-
-  async waitForReceivedBytes(name: string, byteCount: number, timeout = 20_000): Promise<void> {
-    await this.page.waitForFunction(
-      ([configName, wanted]) =>
-        (window as unknown as HarnessWindow).harness.receivedByteCount(configName) >= wanted,
-      [name, byteCount] as const,
       { timeout },
     );
   }
@@ -236,14 +220,6 @@ export class Tab {
   async receiveEventCount(name: string): Promise<number> {
     return await this.page.evaluate(
       (configName) => (window as unknown as HarnessWindow).harness.receiveEventCount(configName),
-      name,
-    );
-  }
-
-  async receivedPatternLength(name: string): Promise<number> {
-    return await this.page.evaluate(
-      (configName) =>
-        (window as unknown as HarnessWindow).harness.receivedPatternLength(configName),
       name,
     );
   }
