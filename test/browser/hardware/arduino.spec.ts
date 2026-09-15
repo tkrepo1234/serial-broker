@@ -24,7 +24,12 @@ import { expect, test as base, type BrowserContext } from '@playwright/test';
 
 import { echoConfiguration, Tab } from '../support/tab.js';
 
-import { holderOf, launchWithSerialPermission, occurrences } from './support/hardware-context.js';
+import {
+  holderOf,
+  launchWithSerialPermission,
+  occurrences,
+  recordTabHistories,
+} from './support/hardware-context.js';
 
 /** The device under test: an Arduino with an echo sketch. */
 const ARDUINO = { vendorId: 0x2341, productId: 0x0078 } as const;
@@ -49,6 +54,12 @@ const test = base.extend<{ hardware: BrowserContext }>({
     const context = await launchWithSerialPermission(testInfo, ARDUINO, PORT_NAME);
 
     await use(context);
+
+    // What each tab went through is the first thing to look at when a scenario fails, and it is
+    // gone once the context closes.
+    if (testInfo.status !== testInfo.expectedStatus) {
+      await recordTabHistories(context, testInfo, CONFIGURATION);
+    }
 
     // Every page and the browser itself go away here, which is what frees the port for the next
     // test. Nothing else on this machine may use it in between.

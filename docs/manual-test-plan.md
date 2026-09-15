@@ -419,3 +419,16 @@ protocol version 13. **15 tests green** in 1.7 minutes, four of them new:
   another, stays at `awaiting-permission`: the browser no longer has the permission.
 
 The stand-in browser suite passed alongside (9 tests).
+
+### 2026-09-15, evening — the Arduino suite: the port busy outside the browser
+
+Arduino on COM3, same machine and browser. **6 of 7 tests green, three runs alike**: every time, the
+first test (`echoes what a single tab sends`) never reached `open`. Its tab's history showed eight
+attempts, each `open-failed` with `DEVICE_DISCONNECTED`, while later tests in new browsers opened the
+same port. A probe with Web Serial alone - no library - could not open COM3 either: 113 attempts over
+a minute, each `NetworkError: Failed to open serial port`. So something outside the browser held the
+port; an `adb.exe` of the Arduino tooling had been started on the machine shortly before. Not a
+library defect. The emulator suite (15 tests) passed at the same time.
+
+The hardware suites now write each tab's statuses, error codes and log records next to a failed
+test's results, which is what told this apart.

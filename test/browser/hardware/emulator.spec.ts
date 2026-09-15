@@ -22,7 +22,12 @@ import type { SerialBrokerOptions } from '../../../src/core/types.js';
 import { echoConfiguration, Tab } from '../support/tab.js';
 
 import { EMULATED_DEVICE, EmulatorProcess } from './support/emulator-process.js';
-import { holderOf, launchWithSerialPermission, occurrences } from './support/hardware-context.js';
+import {
+  holderOf,
+  launchWithSerialPermission,
+  occurrences,
+  recordTabHistories,
+} from './support/hardware-context.js';
 
 const CONFIGURATION = 'Emulated';
 
@@ -52,29 +57,7 @@ const test = base.extend<{ hardware: BrowserContext }, { emulator: EmulatorProce
     // What the device saw, and what each tab went through, are the first things to look at when a
     // scenario fails - and the tabs' side is gone once the context closes.
     if (testInfo.status !== testInfo.expectedStatus) {
-      for (const [index, page] of context.pages().entries()) {
-        const history = await page
-          .evaluate(() => {
-            const { harness } = window as unknown as {
-              harness?: {
-                statuses(name: string): readonly string[];
-                errorCodes(): readonly string[];
-                logRecords(): unknown;
-              };
-            };
-            return {
-              statuses: harness?.statuses('Emulated'),
-              errors: harness?.errorCodes(),
-              log: harness?.logRecords(),
-            };
-          })
-          .catch((error: unknown) => String(error));
-        // As files: a reporter shortens what it prints, and a long history is the point.
-        await writeFile(
-          testInfo.outputPath(`tab-${String(index)}.json`),
-          JSON.stringify(history, undefined, 2),
-        );
-      }
+      await recordTabHistories(context, testInfo, CONFIGURATION);
       await writeFile(testInfo.outputPath('emulator.log'), emulator.logSince(mark));
     }
     await context.close();

@@ -6,6 +6,8 @@
  * do, not in how the browser gets the port. See ADR-0035.
  */
 
+import { writeFile } from 'node:fs/promises';
+
 import { chromium, expect, type BrowserContext, type TestInfo } from '@playwright/test';
 
 import type { Tab } from '../../support/tab.js';
@@ -83,6 +85,46 @@ export async function holderOf(
       expect(holders, 'exactly one tab holds the port').toHaveLength(1);
     }
     await new Promise((resolve) => setTimeout(resolve, 250));
+  }
+}
+
+/**
+ * Writes what each tab of a failed test went through - its statuses, the error codes it was told
+ * and the library's log - next to the test's results.
+ *
+ * Called before the context closes, which takes the tabs' side with it. As files, because a
+ * reporter shortens what it prints, and a long history is the point.
+ */
+export async function recordTabHistories(
+  context: BrowserContext,
+  testInfo: TestInfo,
+  configuration: string,
+): Promise<void> {
+  for (const [index, page] of context.pages().entries()) {
+    // A persistent context starts with a blank page of its own, which never loads the harness.
+    if (page.url() === 'about:blank') {
+      continue;
+    }
+    const history = await page
+      .evaluate((name) => {
+        const { harness } = window as unknown as {
+          harness?: {
+            statuses(name: string): readonly string[];
+            errorCodes(): readonly string[];
+            logRecords(): unknown;
+          };
+        };
+        return {
+          statuses: harness?.statuses(name),
+          errors: harness?.errorCodes(),
+          log: harness?.logRecords(),
+        };
+      }, configuration)
+      .catch((error: unknown) => String(error));
+    await writeFile(
+      testInfo.outputPath(`tab-${String(index)}.json`),
+      JSON.stringify(history, undefined, 2),
+    );
   }
 }
 
