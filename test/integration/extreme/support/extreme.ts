@@ -55,7 +55,7 @@ export const SIZES = {
   largestPayloadTabs: sizeFromEnvironment('SERIAL_BROKER_EXTREME_LARGEST_PAYLOAD_TABS', 4),
   /** Setup and release cycles. */
   cycles: sizeFromEnvironment('SERIAL_BROKER_EXTREME_CYCLES', 1_000),
-  /** Simulated days of heartbeats and sweeps. */
+  /** Simulated idle days. */
   days: sizeFromEnvironment('SERIAL_BROKER_EXTREME_DAYS', 7),
   /** Tabs kept alive through those days. */
   longLivedTabs: sizeFromEnvironment('SERIAL_BROKER_EXTREME_LONG_LIVED_TABS', 10),
@@ -94,7 +94,7 @@ export interface Footprint {
   readonly arrayBufferMiB: number;
   /** Timers scheduled on the library's clock. */
   readonly timers: number;
-  /** Timers scheduled on the bus's clock: heartbeats and the worker's sweep. */
+  /** Timers scheduled on the bus's clock: the deadline of a worker's handshake. */
   readonly busTimers: number;
   /** `connect` and `disconnect` listeners on `navigator.serial`, over every tab. */
   readonly deviceListeners: number;
@@ -119,8 +119,8 @@ export type StateFootprint = Omit<Footprint, 'heapMiB' | 'arrayBufferMiB'>;
  * The most messages a scenario's load may cost, worked out from the load before it runs.
  *
  * The bus is deterministic, so a count is the same on every run and a budget can be close to it:
- * what it catches is amplification - a message per chunk that becomes two, a reply to every
- * heartbeat that goes to every tab, watchers that cost messages. Each scenario states its budget
+ * what it catches is amplification - a message per chunk that becomes two, an answer to one tab
+ * that goes to every tab, watchers that cost messages. Each scenario states its budget
  * as a formula of what it does, with the measured count below it.
  */
 export interface MessageBudget {
@@ -152,7 +152,7 @@ export interface ScenarioResult {
  * A browser harness that measures itself.
  *
  * What crossed the bus is read from the bus's own meter (`FakeBus.meter`), which counts on the
- * wire - heartbeats and handshakes included, which the transports exchange below the client -
+ * wire - handshakes included, which the transports exchange below the client -
  * because that is where a browser pays for a message: every delivery is a structured clone into
  * another context.
  */

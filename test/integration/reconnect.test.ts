@@ -25,19 +25,7 @@ describe('reconnect supervision', () => {
     return { harness, device, tab };
   }
 
-  it('reopens the port automatically when the device comes back', async () => {
-    const { harness, device, tab } = await connectedTab();
-
-    harness.serial.unplug(device);
-    await harness.settle();
-    harness.serial.plug(device);
-    await harness.settle();
-
-    expect(tab.client.getStatus('Reader').status).toBe(SerialBrokerStatus.Open);
-    expect(device.openCount).toBe(2);
-  });
-
-  it('resumes receiving data after a power cycle, with no application action', async () => {
+  it('reopens the port and resumes receiving after a power cycle, with no application action', async () => {
     const { harness, device, tab } = await connectedTab();
 
     device.emit('BEFORE');
@@ -53,6 +41,8 @@ describe('reconnect supervision', () => {
     device.emit('AFTER');
     await harness.settle();
 
+    expect(tab.client.getStatus('Reader').status).toBe(SerialBrokerStatus.Open);
+    expect(device.openCount).toBe(2);
     expect(tab.receivedText('Reader')).toBe('BEFOREAFTER');
   });
 

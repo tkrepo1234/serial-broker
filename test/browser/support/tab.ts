@@ -175,13 +175,6 @@ export class Tab {
     );
   }
 
-  async status(name: string): Promise<string> {
-    return await this.page.evaluate(
-      (configName) => (window as unknown as HarnessWindow).harness.status(configName),
-      name,
-    );
-  }
-
   async waitForStatus(name: string, status: string, timeout = 20_000): Promise<void> {
     await this.page.waitForFunction(
       ([configName, wanted]) =>
@@ -196,15 +189,6 @@ export class Tab {
       ([configName, wanted]) =>
         (window as unknown as HarnessWindow).harness.receivedText(configName).includes(wanted),
       [name, text] as const,
-      { timeout },
-    );
-  }
-
-  async waitForReceivedBytes(name: string, byteCount: number, timeout = 20_000): Promise<void> {
-    await this.page.waitForFunction(
-      ([configName, wanted]) =>
-        (window as unknown as HarnessWindow).harness.receivedByteCount(configName) >= wanted,
-      [name, byteCount] as const,
       { timeout },
     );
   }
@@ -236,14 +220,6 @@ export class Tab {
   async receiveEventCount(name: string): Promise<number> {
     return await this.page.evaluate(
       (configName) => (window as unknown as HarnessWindow).harness.receiveEventCount(configName),
-      name,
-    );
-  }
-
-  async receivedPatternLength(name: string): Promise<number> {
-    return await this.page.evaluate(
-      (configName) =>
-        (window as unknown as HarnessWindow).harness.receivedPatternLength(configName),
       name,
     );
   }
@@ -464,7 +440,7 @@ export async function sharedWorkersOf(tab: Tab): Promise<readonly SharedWorkerTa
  * Terminates every shared worker of this tab's context, and says which ones went.
  *
  * What step 29 of the manual test plan does from `chrome://inspect/#workers`: the broker is gone
- * with nothing of ours told about it, so the tabs have to notice by themselves (ADR-0021).
+ * with nothing of ours told about it, so the tabs have to notice by themselves (ADR-0041).
  * Killing it outright rather than crashing a renderer and hoping the worker lived there - which
  * Chromium is free to arrange either way.
  */

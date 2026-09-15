@@ -12,7 +12,7 @@ import { recordingLogger } from '../../harness/recording-logger.js';
  * A worker script that was not deployed, or is served from the wrong path (ADR-0007).
  *
  * The browser still creates the `SharedWorker` and reports the failure only afterwards - by which
- * time each tab has announced itself, attached, and one of them has claimed the port. These
+ * time each tab has said hello, and one of them has claimed the port. These
  * scenarios check that the tabs then coordinate over `BroadcastChannel` as if they had started
  * there.
  */

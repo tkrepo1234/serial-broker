@@ -48,14 +48,19 @@ describe('releasing a configuration', () => {
 });
 
 describe('asking for a device that is already connected', () => {
-  it('leaves the working connection alone', async () => {
+  it('leaves the working connection alone, in the tab holding the port and in another', async () => {
     const { harness, device, tab } = await connectedTab();
+    const peer = harness.openTab();
+    await peer.setup('Reader', READER_OPTIONS);
 
     harness.serial.pickerQueue.push(device);
     await expect(tab.client.requestAccess('Reader')).resolves.toBe(true);
+    // The port is open, so the other tab has nothing to ask the user for.
+    await expect(peer.client.requestAccess('Reader')).resolves.toBe(true);
     await harness.settle();
 
     expect(tab.client.getStatus('Reader').status).toBe(SerialBrokerStatus.Open);
+    expect(peer.client.getStatus('Reader').status).toBe(SerialBrokerStatus.Open);
     expect(device.openCount).toBe(1);
     expect(tab.recordFor('Reader').errors).toHaveLength(0);
   });
@@ -121,7 +126,7 @@ describe('a killed tab', () => {
 });
 
 describe('a mixed deployment', () => {
-  it('is reported once per foreign protocol version, not once per message', async () => {
+  it('is reported once per foreign protocol version, not once per message, with what to do', async () => {
     const harness = new BrowserHarness({ transport: 'broadcastchannel' });
     const tab = harness.openTab();
     await tab.setup('Reader', READER_OPTIONS);
@@ -137,6 +142,8 @@ describe('a mixed deployment', () => {
         (event) => event.error.code === SerialBrokerErrorCode.PROTOCOL_VERSION_MISMATCH,
       );
     expect(mismatches).toHaveLength(1);
+    // A tab left open across a deployment that changed the protocol: only a reload joins them.
+    expect(mismatches[0]?.error.remediation).toContain('reload every tab');
   });
 });
 

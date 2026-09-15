@@ -6,7 +6,7 @@ import { SerialBrokerErrorCode } from '../../src/core/error-codes.js';
 import { describeUnknown, isSerializedError, SerialBrokerError } from '../../src/core/errors.js';
 import { LOCK_RETRY_DELAY_MS } from '../../src/core/held-lock.js';
 import { NOOP_LOGGER, ScopedLogger } from '../../src/core/logger.js';
-import { normalizeConfiguration, validateName } from '../../src/core/validation.js';
+import { normalizeConfiguration } from '../../src/core/validation.js';
 import type { KeyValueStorage } from '../../src/environment/environment.js';
 import {
   ConfigurationStore,
@@ -34,20 +34,6 @@ describe('text encoding labels', () => {
     await harness.settle();
 
     expect(new TextDecoder().decode(device.written[0])).toBe('PING');
-    expect(
-      normalizeConfiguration('x', { ...READER_OPTIONS, encoding: { encoding: 'Latin1' } }),
-    ).toMatchObject({ encoding: { encoding: 'windows-1252' } });
-  });
-});
-
-describe('configuration names', () => {
-  it('rejects C1 control characters and unpaired surrogates, which would corrupt lock names', () => {
-    for (const name of ['a\u0085b', 'a\uD800', '\uDC00a', 'a\uDC00\uD800']) {
-      expect(() => validateName(name)).toThrow(
-        expect.objectContaining({ code: SerialBrokerErrorCode.INVALID_ARGUMENT }),
-      );
-    }
-    expect(validateName('Scale 🎚️')).toBe('Scale 🎚️');
   });
 });
 

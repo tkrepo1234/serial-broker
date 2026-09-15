@@ -44,15 +44,20 @@ describe('validateName', () => {
     expect(argumentOf(() => validateName('x'.repeat(129)))).toBe('name');
   });
 
-  it('rejects control characters', () => {
+  it('rejects control characters and unpaired surrogates', () => {
     // The name ends up in a lock name, a storage key and every log record; a newline in any
     // of those is a corruption waiting to be debugged by someone else.
-    expect(argumentOf(() => validateName(`Reader${String.fromCharCode(10)}`))).toBe('name');
-    expect(argumentOf(() => validateName(String.fromCharCode(0)))).toBe('name');
+    for (const name of ['Reader\n', '\u0000', 'a\u0085b', 'a\uD800', '\uDC00a', 'a\uDC00\uD800']) {
+      expect(
+        argumentOf(() => validateName(name)),
+        JSON.stringify(name),
+      ).toBe('name');
+    }
   });
 
   it('accepts non-ASCII names', () => {
     expect(validateName('Kartenleser-Süd')).toBe('Kartenleser-Süd');
+    expect(validateName('Scale 🎚️')).toBe('Scale 🎚️');
   });
 });
 
@@ -97,6 +102,8 @@ describe('normalizeConfiguration', () => {
     ).toBe('options.connection.jitter');
   });
 
+  // A string is never coerced into a number: a typo in an application's configuration would
+  // silently open a port at the wrong baud rate, which presents as a device that returns garbage.
   it.each([
     ['a string baud rate', { ...VALID, serial: { baudRate: '9600' } }],
     ['a fractional baud rate', { ...VALID, serial: { baudRate: 9600.5 } }],
@@ -111,23 +118,6 @@ describe('normalizeConfiguration', () => {
     ['null options', null],
   ])('rejects %s', (_label, options) => {
     expect(() => normalizeConfiguration('Reader', options)).toThrow(SerialBrokerError);
-  });
-
-  it('never coerces a string into a number', () => {
-    // Coercion here would mean a typo in an application's configuration silently opening a
-    // port at the wrong baud rate, which presents as a device that returns garbage.
-    expect(() =>
-      normalizeConfiguration('Reader', { ...VALID, serial: { baudRate: '9600' } }),
-    ).toThrow(SerialBrokerError);
-  });
-
-  it('accepts Infinity for maxAttempts, which JSON cannot represent', () => {
-    const config = normalizeConfiguration('Reader', {
-      ...VALID,
-      connection: { maxAttempts: Number.POSITIVE_INFINITY },
-    });
-
-    expect(config.connection.maxAttempts).toBe(Number.POSITIVE_INFINITY);
   });
 
   it.each([
@@ -169,7 +159,9 @@ describe('normalizeConfiguration', () => {
     ).toBe('options.device.any');
   });
 
-  it('describes a rejected encoding label like any other invalid argument', () => {
+  it('rejects an encoding the browser cannot provide, like any other invalid argument', () => {
+    // Checked here rather than at first use, where it would surface as a RangeError from
+    // inside the owning tab's read loop, long after the mistake was made.
     try {
       normalizeConfiguration('Reader', { ...VALID, encoding: { encoding: 'utf-99' } });
       expect.unreachable();
@@ -189,16 +181,6 @@ describe('normalizeConfiguration', () => {
     const config = normalizeConfiguration('Reader', { ...VALID, encoding: { encoding: 'Latin1' } });
 
     expect(config.encoding.encoding).toBe('windows-1252');
-  });
-
-  it('rejects an encoding the browser cannot provide', () => {
-    // Checked here rather than at first use, where it would surface as a RangeError from
-    // inside the owning tab's read loop, long after the mistake was made.
-    const failure = () =>
-      normalizeConfiguration('Reader', { ...VALID, encoding: { encoding: 'utf-99' } });
-
-    expect(failure).toThrow(SerialBrokerError);
-    expect(failure).toThrow(/encoding/);
   });
 
   it('reports the invalid-argument code for every rejection', () => {

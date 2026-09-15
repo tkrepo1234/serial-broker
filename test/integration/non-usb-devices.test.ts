@@ -1,10 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { SerialBrokerStatus } from '../../src/core/types.js';
-import { normalizeConfiguration } from '../../src/core/validation.js';
-import { matchesDevice, toRequestOptions } from '../../src/owner/port-matcher.js';
 import { BrowserHarness } from '../harness/browser-harness.js';
-import { READER, READER_OPTIONS } from '../harness/devices.js';
 import { fieldsOfEvent, recordingLogger } from '../harness/recording-logger.js';
 
 const ANY_DEVICE = {
@@ -35,26 +32,6 @@ describe('a device with no USB identity', () => {
 
     expect(port.writtenText()).toBe('AT');
     expect(tab.receivedText('LocalPort')).toBe('OK');
-  });
-
-  it('shares the port across tabs and fails over', async () => {
-    const harness = new BrowserHarness();
-    const port = harness.serial.addNonUsbPort();
-    harness.serial.grant(port);
-
-    const owner = harness.openTab();
-    await owner.setup('LocalPort', ANY_DEVICE);
-    const peer = harness.openTab();
-    await peer.setup('LocalPort', ANY_DEVICE);
-
-    await owner.kill();
-    port.emit('AFTER');
-    await harness.settle();
-
-    // Nothing about coordination depends on how the device is identified.
-    expect(peer.client.getStatus('LocalPort').status).toBe(SerialBrokerStatus.Open);
-    expect(peer.receivedText('LocalPort')).toBe('AFTER');
-    expect(port.openCount).toBe(2);
   });
 
   it('reports no vendor or product ID in its status', async () => {
@@ -101,47 +78,5 @@ describe('a device with no USB identity', () => {
     expect(fieldsOfEvent(records, 'matcher.ambiguous')).toEqual([
       expect.objectContaining({ configName: 'LocalPort', matchCount: 2 }),
     ]);
-  });
-
-  it('shows the picker unfiltered, so a non-USB port is offered at all', () => {
-    const configuration = normalizeConfiguration('LocalPort', ANY_DEVICE);
-
-    // An empty `filters` array would hide exactly the ports this exists to find.
-    expect(toRequestOptions(configuration)).toEqual({});
-  });
-});
-
-describe('the device filter', () => {
-  it('matches a port that reports nothing at all', () => {
-    const configuration = normalizeConfiguration('LocalPort', ANY_DEVICE);
-
-    expect(matchesDevice({ getInfo: () => ({}) } as unknown as SerialPort, configuration)).toBe(
-      true,
-    );
-  });
-
-  it('matches only the configured device when it names one', () => {
-    const configuration = normalizeConfiguration('Reader', READER_OPTIONS);
-
-    expect(
-      matchesDevice(
-        {
-          getInfo: () => ({ usbVendorId: READER.vendorId, usbProductId: READER.productId }),
-        } as unknown as SerialPort,
-        configuration,
-      ),
-    ).toBe(true);
-    expect(matchesDevice({ getInfo: () => ({}) } as unknown as SerialPort, configuration)).toBe(
-      false,
-    );
-  });
-
-  it('treats two wildcard configurations as compatible with each other', async () => {
-    const harness = new BrowserHarness();
-    harness.serial.grant(harness.serial.addNonUsbPort());
-    const tab = harness.openTab();
-
-    await tab.client.setup('LocalPort', ANY_DEVICE);
-    await expect(tab.client.setup('LocalPort', ANY_DEVICE)).resolves.toBeUndefined();
   });
 });

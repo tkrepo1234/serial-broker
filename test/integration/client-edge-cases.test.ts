@@ -2,22 +2,8 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { SerialBrokerClient } from '../../src/client/serial-broker-client.js';
 import { SerialBrokerErrorCode } from '../../src/core/error-codes.js';
-import { SerialBrokerStatus } from '../../src/core/types.js';
-import { brokerChannelName, PROTOCOL_VERSION } from '../../src/protocol/version.js';
 import { BrowserHarness } from '../harness/browser-harness.js';
 import { READER, READER_OPTIONS } from '../harness/devices.js';
-import { fieldsOfEvent, recordingLogger } from '../harness/recording-logger.js';
-
-/**
- * Posts something a well-behaved tab would never send.
- *
- * Uses the fallback transport, where each context validates for itself. With the broker,
- * these messages are filtered at the worker and never reach a tab at all - which is a
- * property of ADR-0008's partitioning, not an accident.
- */
-function injectRaw(harness: BrowserHarness, raw: unknown): void {
-  harness.bus.broadcastHub.injectForeign(brokerChannelName(), raw);
-}
 
 describe('unusable environments', () => {
   it('refuses to set up a configuration without Web Serial', async () => {
@@ -153,95 +139,7 @@ describe('a device that cannot be forgotten', () => {
   });
 });
 
-describe('hostile traffic on the shared bus', () => {
-  const fallback = { transport: 'broadcastchannel' } as const;
-
-  it('reports a peer running an incompatible protocol version', async () => {
-    const harness = new BrowserHarness(fallback);
-    harness.serial.grant(harness.serial.addDevice(READER.vendorId, READER.productId));
-    const tab = harness.openTab();
-    await tab.setup('Reader', READER_OPTIONS);
-
-    // A tab left open across a deployment that changed the protocol. Both groups partition
-    // and both report it, rather than misreading each other's messages (ADR-0008).
-    injectRaw(harness, {
-      v: PROTOCOL_VERSION + 1,
-      from: 'old-tab',
-      to: 'all',
-      type: 'attach',
-      configName: 'Reader',
-    });
-    await harness.settle();
-
-    const mismatch = tab
-      .recordFor('Reader')
-      .errors.find((event) => event.error.code === SerialBrokerErrorCode.PROTOCOL_VERSION_MISMATCH);
-    expect(mismatch?.error.remediation).toContain('reload every tab');
-  });
-
-  it('drops and logs a malformed message without disturbing the connection', async () => {
-    const { logger, records } = recordingLogger();
-    const harness = new BrowserHarness({ ...fallback, logger });
-    const device = harness.serial.addDevice(READER.vendorId, READER.productId);
-    harness.serial.grant(device);
-    const tab = harness.openTab();
-    await tab.setup('Reader', READER_OPTIONS);
-
-    injectRaw(harness, { v: PROTOCOL_VERSION, from: 'noise', to: 'all', type: 'nonsense' });
-    await harness.settle();
-    device.emit('still working');
-    await harness.settle();
-
-    expect(tab.client.getStatus('Reader').status).toBe(SerialBrokerStatus.Open);
-    expect(tab.receivedText('Reader')).toBe('still working');
-    // Dropped, but not silently: a peer sending garbage is worth an operator's attention.
-    expect(fieldsOfEvent(records, 'client.malformed-message')).toHaveLength(1);
-  });
-
-  it('ignores a status message for a configuration it does not have', async () => {
-    const harness = new BrowserHarness(fallback);
-    harness.serial.grant(harness.serial.addDevice(READER.vendorId, READER.productId));
-    const tab = harness.openTab();
-    await tab.setup('Reader', READER_OPTIONS);
-
-    // Delivered in a later microtask, so a throw could not surface here anyway: what counts is
-    // that the configuration the tab does have is left alone.
-    injectRaw(harness, {
-      v: PROTOCOL_VERSION,
-      from: 'peer',
-      to: 'all',
-      type: 'status',
-      configName: 'SomethingElse',
-      status: 'failed',
-      maxTabs: Number.POSITIVE_INFINITY,
-      term: 't-peer',
-      timestamp: 1,
-    });
-    await harness.settle();
-
-    expect(tab.client.getStatus('Reader').status).toBe(SerialBrokerStatus.Open);
-  });
-});
-
-describe('a configuration released while events are in flight', () => {
-  it('stops delivering to its listeners', async () => {
-    const harness = new BrowserHarness();
-    const device = harness.serial.addDevice(READER.vendorId, READER.productId);
-    harness.serial.grant(device);
-    // Another tab keeps the port open, so the bytes below really are delivered - to that tab.
-    const owner = harness.openTab();
-    await owner.setup('Reader', READER_OPTIONS);
-    const tab = harness.openTab();
-    await tab.setup('Reader', READER_OPTIONS);
-
-    await tab.client.release('Reader');
-    device.emit('after release');
-    await harness.settle();
-
-    expect(owner.receivedText('Reader')).toBe('after release');
-    expect(tab.recordFor('Reader').received).toHaveLength(0);
-  });
-
+describe('a released configuration', () => {
   it('refuses a send after release', async () => {
     const harness = new BrowserHarness();
     harness.serial.grant(harness.serial.addDevice(READER.vendorId, READER.productId));

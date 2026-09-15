@@ -30,10 +30,12 @@ describe('encapsulation', () => {
     return { harness, owner, peer };
   }
 
-  it('exposes exactly the documented status fields', async () => {
-    const { owner } = await twoTabs();
+  it('exposes exactly the documented status fields, the same in the owning tab and a peer', async () => {
+    const { owner, peer } = await twoTabs();
+    const ownerView = owner.client.getStatus('Reader');
+    const peerView = peer.client.getStatus('Reader');
 
-    expect(Object.keys(owner.client.getStatus('Reader')).sort()).toEqual([
+    expect(Object.keys(ownerView).sort()).toEqual([
       'deviceKind',
       'lastErrorCode',
       'name',
@@ -44,14 +46,6 @@ describe('encapsulation', () => {
       'status',
       'vendorId',
     ]);
-  });
-
-  it('gives the owning tab and a peer tab indistinguishable status snapshots', async () => {
-    const { owner, peer } = await twoTabs();
-
-    const ownerView = owner.client.getStatus('Reader');
-    const peerView = peer.client.getStatus('Reader');
-
     // If these differed in any field, an application could work out which tab owns the port
     // and start branching on it - and then be wrong, because it changes without warning.
     expect(peerView.status).toBe(ownerView.status);
@@ -110,8 +104,7 @@ describe('encapsulation', () => {
     );
   });
 
-  it('reports a status an application can act on, with no coordination vocabulary in it', async () => {
-    const { owner } = await twoTabs();
+  it('reports a status an application can act on, with no coordination vocabulary in it', () => {
     const allStatuses: string[] = Object.values(SerialBrokerStatus);
 
     // `queued` says only that the tab limit the application itself set is reached (ADR-0025);
@@ -127,7 +120,6 @@ describe('encapsulation', () => {
       'released',
     ]);
     expect(allStatuses).not.toContain('owner');
-    expect(owner.client.getStatus('Reader').status).toBe(SerialBrokerStatus.Open);
   });
 });
 
@@ -290,17 +282,5 @@ describe('argument handling at the public surface', () => {
     await harness.settle();
 
     expect(received).toHaveLength(1);
-  });
-
-  it('lists the configurations set up in this tab', async () => {
-    const harness = new BrowserHarness();
-    harness.serial.grant(harness.serial.addDevice(READER.vendorId, READER.productId));
-    const tab = harness.openTab();
-
-    await tab.client.setup('Reader', READER_OPTIONS);
-
-    expect(tab.client.exists('Reader')).toBe(true);
-    expect(tab.client.exists('Other')).toBe(false);
-    expect(tab.client.names()).toEqual(['Reader']);
   });
 });

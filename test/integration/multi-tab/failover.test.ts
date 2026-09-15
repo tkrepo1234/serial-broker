@@ -12,8 +12,8 @@ import { READER, READER_OPTIONS } from '../../harness/devices.js';
  *
  * This is the hardest thing the library does and the reason ownership is a Web Lock rather
  * than an agreement between tabs (ADR-0005). The abrupt cases matter most: a tab killed by
- * the process manager runs no unload handler, sends no goodbye, and releases nothing on its
- * own - only the browser releasing its lock makes recovery possible.
+ * the process manager runs no unload handler, sends no `owner-released`, and releases nothing on
+ * its own - only the browser releasing its lock makes recovery possible.
  */
 describe.each(TRANSPORT_MODES)('ownership failover (%s)', (transport) => {
   async function twoTabsSharingAPort(): Promise<{
@@ -34,47 +34,26 @@ describe.each(TRANSPORT_MODES)('ownership failover (%s)', (transport) => {
     return { harness, device, owner, peer };
   }
 
-  it('promotes the remaining tab when the owning tab is closed gracefully', async () => {
-    const { harness, device, owner, peer } = await twoTabsSharingAPort();
+  // Killed: no unload handler, no owner-released, no close - a crashed renderer. Everything that
+  // follows has to come from the browser releasing the lock.
+  it.each(['closed gracefully', 'killed without warning'] as const)(
+    'promotes the remaining tab, which receives and writes, when the owning tab is %s',
+    async (ending) => {
+      const { harness, device, owner, peer } = await twoTabsSharingAPort();
 
-    await owner.close();
+      await (ending === 'closed gracefully' ? owner.close() : owner.kill());
+      device.emit('AFTER-FAILOVER');
+      await harness.settle();
+      await peer.client.send('Reader', 'STILL-HERE');
+      await harness.settle();
 
-    expect(harness.locks.holderOf(ownerLockName('Reader'))).toBe(peer.id);
-    expect(peer.client.getStatus('Reader').status).toBe(SerialBrokerStatus.Open);
-    expect(device.openCount).toBe(2);
-  });
-
-  it('promotes the remaining tab when the owning tab is killed without warning', async () => {
-    const { harness, device, owner, peer } = await twoTabsSharingAPort();
-
-    // No unload handler, no goodbye, no close: a crashed renderer. Everything that follows
-    // has to come from the browser releasing the lock.
-    await owner.kill();
-
-    expect(harness.locks.holderOf(ownerLockName('Reader'))).toBe(peer.id);
-    expect(peer.client.getStatus('Reader').status).toBe(SerialBrokerStatus.Open);
-    expect(device.openCount).toBe(2);
-  });
-
-  it('keeps delivering data to the surviving tab after a failover', async () => {
-    const { harness, device, owner, peer } = await twoTabsSharingAPort();
-
-    await owner.kill();
-    device.emit('AFTER-FAILOVER');
-    await harness.settle();
-
-    expect(peer.receivedText('Reader')).toBe('AFTER-FAILOVER');
-  });
-
-  it('accepts writes from the surviving tab after a failover', async () => {
-    const { harness, device, owner, peer } = await twoTabsSharingAPort();
-
-    await owner.kill();
-    await peer.client.send('Reader', 'STILL-HERE');
-    await harness.settle();
-
-    expect(device.writtenText()).toBe('STILL-HERE');
-  });
+      expect(harness.locks.holderOf(ownerLockName('Reader'))).toBe(peer.id);
+      expect(peer.client.getStatus('Reader').status).toBe(SerialBrokerStatus.Open);
+      expect(device.openCount).toBe(2);
+      expect(peer.receivedText('Reader')).toBe('AFTER-FAILOVER');
+      expect(device.writtenText()).toBe('STILL-HERE');
+    },
+  );
 
   it('delivers a write to the new owner exactly once when the old one dies before it arrives', async () => {
     const { harness, device, owner, peer } = await twoTabsSharingAPort();
@@ -108,7 +87,7 @@ describe.each(TRANSPORT_MODES)('ownership failover (%s)', (transport) => {
     expect(device.written).toHaveLength(1);
   });
 
-  it('never repeats a write that had already begun when the owner died', async () => {
+  it('fails a write the owner had begun as soon as the browser frees its lock, and never repeats it', async () => {
     const { harness, device, owner, peer } = await twoTabsSharingAPort();
 
     // The owner reports `write-started` and then vanishes. Whether the device received the
@@ -116,52 +95,24 @@ describe.each(TRANSPORT_MODES)('ownership failover (%s)', (transport) => {
     // no retry. Repeating a command to industrial hardware is the one thing this library
     // must never do (ADR-0013).
     device.faults.hangOnWrite = true;
-    // The handler is attached immediately: the rejection arrives during `kill`, and a promise
-    // whose handler is attached a tick later shows up as an unhandled rejection.
-    const outcome = peer.client.send('Reader', 'DANGEROUS').catch((reason: unknown) => reason);
-    await harness.settle();
-
-    await owner.kill();
-
-    expect(await outcome).toMatchObject({
-      code: SerialBrokerErrorCode.OWNER_LOST_DURING_WRITE,
-    });
-    expect(device.written).toHaveLength(0);
-  });
-
-  it('fails a write a crashed owner began as soon as the browser frees the lock of its term', async () => {
-    const { harness, device, owner, peer } = await twoTabsSharingAPort();
-
-    device.faults.hangOnWrite = true;
     let outcome: unknown = 'pending';
     void peer.client.send('Reader', 'DANGEROUS').then(
       () => (outcome = 'resolved'),
       (reason: unknown) => (outcome = reason),
     );
     await harness.settle();
-    expect(outcome).toBe('pending');
+    const beforeTheCrash = outcome;
 
     // No waiting and no timer: the term is over the moment the browser frees its lock, which it
-    // does as it tears the crashed tab down (ADR-0030).
+    // does as it tears the crashed tab down (ADR-0030). The clock does not move.
     await owner.kill();
 
-    // The clock has not moved between the crash and the answer: nothing waits for a grace period
-    // any more.
+    expect(beforeTheCrash).toBe('pending');
+    expect(outcome).toBeInstanceOf(SerialBrokerError);
     expect(outcome).toMatchObject({ code: SerialBrokerErrorCode.OWNER_LOST_DURING_WRITE });
+    // Whether to send it again is the application's decision, and the error says so.
+    expect((outcome as SerialBrokerError).remediation).toContain('idempotent');
     expect(device.written).toHaveLength(0);
-  });
-
-  it('explains what to do when a write is lost with the owner', async () => {
-    const { harness, device, owner, peer } = await twoTabsSharingAPort();
-
-    device.faults.hangOnWrite = true;
-    const outcome = peer.client.send('Reader', 'X').catch((reason: unknown) => reason);
-    await harness.settle();
-    await owner.kill();
-
-    const error = await outcome;
-    expect(error).toBeInstanceOf(SerialBrokerError);
-    expect((error as SerialBrokerError).remediation).toContain('idempotent');
   });
 
   it('leaves no owner when the last tab goes, and elects one when a tab returns', async () => {

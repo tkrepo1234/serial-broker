@@ -110,18 +110,6 @@ describe('UsbipServer', () => {
     expect([...echoed]).toEqual([0x48, 0x49, 0x0a]);
   });
 
-  it('reassembles a command that arrives split across TCP segments', async () => {
-    const client = await importDevice();
-    const command = submitCommand({ seqnum: 4, direction: 'out', endpoint: 2, data: [1, 2, 3] });
-
-    client.write(command.subarray(0, 20));
-    client.write(command.subarray(20, 50));
-    client.write(command.subarray(50));
-    const reply = replyHeader(await client.read(48));
-
-    expect(reply).toMatchObject({ seqnum: 4, status: 0, actualLength: 3 });
-  });
-
   it('answers an unlink of a pending read with ECONNRESET and never completes that read', async () => {
     const client = await importDevice();
 
@@ -265,12 +253,13 @@ describe('UsbipServer', () => {
     );
   });
 
-  it('reassembles a large write that arrives in many small pieces, and answers it once', async () => {
+  it('reassembles a large write that arrives in many small pieces, its header split too, and answers it once', async () => {
     const client = await importDevice();
     const data = Array.from({ length: 64 * 1024 }, (_, index) => index & 0xff);
     const command = submitCommand({ seqnum: 9, direction: 'out', endpoint: 2, data });
 
-    for (let offset = 0; offset < command.length; offset += 1000) {
+    client.write(command.subarray(0, 20));
+    for (let offset = 20; offset < command.length; offset += 1000) {
       client.write(command.subarray(offset, offset + 1000));
     }
     const reply = replyHeader(await client.read(48));

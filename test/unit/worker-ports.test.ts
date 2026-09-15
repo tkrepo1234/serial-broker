@@ -108,10 +108,13 @@ describe('WorkerPorts', () => {
     const mallory = connect();
 
     world.ports.receive(mallory, probe('mallory'));
+    const beforeHello = typesPosted(bob);
+    join(world, 'mallory', mallory);
+    world.ports.receive(mallory, probe('mallory'));
 
     // A tab's first message is always hello (ADR-0024); one that is not comes from something else.
-    expect(typesPosted(bob)).toEqual([]);
-    expect(fieldsOfEvent(world.records, 'broker.connect')).toHaveLength(1);
+    expect(beforeHello).toEqual([]);
+    expect(typesPosted(bob)).toEqual(['status-request']);
   });
 
   it('refuses a message that names another sender than its port said hello as', () => {
@@ -158,32 +161,30 @@ describe('WorkerPorts', () => {
     const alice = join(world, 'alice');
     const bob = join(world, 'bob');
     await flushMicrotasks();
-    expect(fieldsOfEvent(world.records, 'broker.disconnect')).toEqual([]);
+    world.ports.receive(bob, probe('bob'));
+    const whileHeld = typesPosted(alice);
 
     // Alice's tab died, closed or was discarded: whichever, the browser lets go of her lock.
     world.locks.killContext('alice');
     await flushMicrotasks();
     world.ports.receive(bob, probe('bob'));
 
-    expect(typesPosted(alice)).toEqual([]);
-    expect(fieldsOfEvent(world.records, 'broker.disconnect')).toEqual([
-      expect.objectContaining({ clientId: 'alice' }),
-    ]);
+    expect(whileHeld).toEqual(['status-request']);
+    expect(typesPosted(alice)).toEqual(['status-request']);
   });
 
   it('forgets at once an identity no context holds a lock for', async () => {
     const world = createWorld();
     const bob = join(world, 'bob');
+    const alice = join(world, 'alice');
     const mallory = connect();
 
     world.ports.receive(mallory, hello('nobody', ['Reader']));
     await flushMicrotasks();
     world.ports.receive(bob, probe('bob'));
 
+    expect(typesPosted(alice)).toEqual(['status-request']);
     expect(typesPosted(mallory)).toEqual(['welcome']);
-    expect(fieldsOfEvent(world.records, 'broker.disconnect')).toEqual([
-      expect.objectContaining({ clientId: 'nobody' }),
-    ]);
   });
 
   it('stops waiting on the contexts once disposed', () => {

@@ -109,7 +109,7 @@ describe.skipIf(!IS_EXTREME).each(TRANSPORT_MODES)(
                 if (owner < 0) {
                   throw new Error(`No live tab holds the port (holder: ${String(holder)})`);
                 }
-                // The owner dies now, with no goodbye, and the device takes writes again. Its own
+                // The owner dies now, releasing nothing, and the device takes writes again. Its own
                 // outstanding writes die with it: in a browser nobody is left to settle them, and
                 // the harness cannot stop its code from settling them anyway, so they are set aside.
                 const [killed] = tabs.splice(owner, 1);

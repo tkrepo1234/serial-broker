@@ -29,7 +29,7 @@ import { FakeSerialRegistry } from './fake-serial.js';
  * misbehave in a browser - but close enough that every backoff delay rounds to the full delay, so
  * a schedule stays a sequence of round numbers a test can name.
  */
-export const JITTER_DRAW = 1 - Number.EPSILON;
+const JITTER_DRAW = 1 - Number.EPSILON;
 
 /** Everything a test wants to observe about one simulated tab. */
 export interface RecordedEvents {
@@ -149,7 +149,7 @@ export class VirtualTab {
    * Destroys this tab with no chance to clean up.
    *
    * A crashed renderer, an out-of-memory kill, a hard power-off. No disposer runs, no
-   * `goodbye` is sent, and the port stays "open" from the device's point of view until the
+   * `owner-released` is sent, and the port stays "open" from the device's point of view until the
    * browser tears the context down. Recovery has to come entirely from the lock being
    * released - which is the single most important behaviour in the library (ADR-0005).
    */

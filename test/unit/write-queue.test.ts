@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { WriteQueue } from '../../src/owner/write-queue.js';
 import { flushMicrotasks } from '../harness/fake-clock.js';
@@ -19,6 +19,61 @@ function heldJob(events: string[], name: string) {
   };
   return { job, finish: () => finish() };
 }
+
+describe('WriteQueue', () => {
+  it('runs jobs one after another, never overlapping', async () => {
+    const queue = new WriteQueue();
+    const events: string[] = [];
+
+    const first = enqueue(queue, async () => {
+      events.push('first:start');
+      await Promise.resolve();
+      events.push('first:end');
+    });
+    const second = enqueue(queue, async () => {
+      events.push('second:start');
+      await Promise.resolve();
+      events.push('second:end');
+    });
+    await Promise.all([first, second]);
+
+    // Interleaving here means two commands reaching the device byte by byte, which for a
+    // command-oriented device means neither of them.
+    expect(events).toEqual(['first:start', 'first:end', 'second:start', 'second:end']);
+  });
+
+  it('keeps running after a job fails, and reports the failure only to its caller', async () => {
+    const queue = new WriteQueue();
+    const after = vi.fn();
+
+    const failing = enqueue(queue, async () => {
+      await Promise.resolve();
+      throw new Error('the device refused');
+    });
+    const next = enqueue(queue, async () => {
+      after();
+      await Promise.resolve();
+      return 'ok';
+    });
+
+    await expect(failing).rejects.toThrow('the device refused');
+    await expect(next).resolves.toBe('ok');
+    expect(after).toHaveBeenCalledOnce();
+  });
+
+  it('tracks how much work is outstanding, and drains when nothing is', async () => {
+    const queue = new WriteQueue();
+
+    const job = enqueue(queue, async () => {
+      await Promise.resolve();
+    });
+    expect(queue.depth).toBe(1);
+
+    await job;
+    await queue.drain();
+    expect(queue.depth).toBe(0);
+  });
+});
 
 /**
  * Withdrawing a write that waits at the port (ADR-0013): a write whose issuer has stopped waiting is
@@ -125,13 +180,5 @@ describe('WriteQueue withdrawal', () => {
     expect(events).toContain('later:start');
     expect(events).not.toContain('later:end');
     later.finish();
-  });
-
-  it('drains at once when nothing is queued', async () => {
-    const queue = new WriteQueue();
-
-    await queue.drain();
-
-    expect(queue.depth).toBe(0);
   });
 });

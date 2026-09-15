@@ -8,7 +8,6 @@ import { SerialBrokerErrorCode } from '../../src/core/error-codes.js';
 import { SerialBrokerError } from '../../src/core/errors.js';
 import { NOOP_LOGGER, ScopedLogger } from '../../src/core/logger.js';
 import type { Logger } from '../../src/core/types.js';
-import { WriteQueue } from '../../src/owner/write-queue.js';
 import { FakeClock, flushMicrotasks } from '../harness/fake-clock.js';
 import { recordingLogger } from '../harness/recording-logger.js';
 
@@ -191,74 +190,6 @@ describe('withDeadline', () => {
     // would surface in the application's console as an error it can do nothing about - and the
     // test runner fails the run on an unhandled rejection.
     expect(error.code).toBe(SerialBrokerErrorCode.OPEN_TIMEOUT);
-  });
-});
-
-function enqueue<T>(queue: WriteQueue, job: () => Promise<T>): Promise<T> {
-  return queue.enqueueWithdrawable(job).promise;
-}
-
-describe('WriteQueue', () => {
-  it('runs jobs one after another, never overlapping', async () => {
-    const queue = new WriteQueue();
-    const events: string[] = [];
-
-    const first = enqueue(queue, async () => {
-      events.push('first:start');
-      await Promise.resolve();
-      events.push('first:end');
-    });
-    const second = enqueue(queue, async () => {
-      events.push('second:start');
-      await Promise.resolve();
-      events.push('second:end');
-    });
-    await Promise.all([first, second]);
-
-    // Interleaving here means two commands reaching the device byte by byte, which for a
-    // command-oriented device means neither of them.
-    expect(events).toEqual(['first:start', 'first:end', 'second:start', 'second:end']);
-  });
-
-  it('keeps running after a job fails', async () => {
-    const queue = new WriteQueue();
-    const after = vi.fn();
-
-    const failing = enqueue(queue, async () => {
-      await Promise.resolve();
-      throw new Error('the device refused');
-    });
-    const next = enqueue(queue, async () => {
-      after();
-      await Promise.resolve();
-    });
-
-    await expect(failing).rejects.toThrow('the device refused');
-    await next;
-    expect(after).toHaveBeenCalledOnce();
-  });
-
-  it('reports a failure only to the caller that submitted it', async () => {
-    const queue = new WriteQueue();
-
-    const failing = enqueue(queue, () => Promise.reject(new Error('mine')));
-    const other = enqueue(queue, () => Promise.resolve('ok'));
-
-    await expect(failing).rejects.toThrow('mine');
-    await expect(other).resolves.toBe('ok');
-  });
-
-  it('tracks how much work is outstanding', async () => {
-    const queue = new WriteQueue();
-
-    const job = enqueue(queue, async () => {
-      await Promise.resolve();
-    });
-    expect(queue.depth).toBe(1);
-
-    await job;
-    await queue.drain();
-    expect(queue.depth).toBe(0);
   });
 });
 

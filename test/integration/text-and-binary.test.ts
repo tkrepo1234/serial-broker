@@ -31,34 +31,19 @@ describe('sending', () => {
     expect([...device.writtenBytes()]).toEqual([...new TextEncoder().encode('STATUS?')]);
   });
 
-  it('sends raw bytes untouched', async () => {
-    const { harness, device, tab } = await connectedTab();
-
-    await tab.client.send('Reader', new Uint8Array([0x02, 0x41, 0x03]));
-    await harness.settle();
-
-    expect([...device.writtenBytes()]).toEqual([0x02, 0x41, 0x03]);
-  });
-
-  it('accepts an ArrayBuffer', async () => {
-    const { harness, device, tab } = await connectedTab();
-
-    await tab.client.send('Reader', new Uint8Array([1, 2]).buffer);
-    await harness.settle();
-
-    expect([...device.writtenBytes()]).toEqual([1, 2]);
-  });
-
-  it('sends only the bytes a view spans', async () => {
-    const { harness, device, tab } = await connectedTab();
-    const backing = new Uint8Array([9, 9, 1, 2, 9, 9]);
-
-    await tab.client.send('Reader', backing.subarray(2, 4));
-    await harness.settle();
-
+  it.each([
+    ['raw bytes untouched', new Uint8Array([0x02, 0x41, 0x03]), [0x02, 0x41, 0x03]],
+    ['an ArrayBuffer', new Uint8Array([1, 2]).buffer, [1, 2]],
     // A view carries an offset and a length. Sending its whole backing buffer would put four
     // bytes of somebody else's data on the wire.
-    expect([...device.writtenBytes()]).toEqual([1, 2]);
+    ['only the bytes a view spans', new Uint8Array([9, 9, 1, 2, 9, 9]).subarray(2, 4), [1, 2]],
+  ] as const)('sends %s', async (_label, payload, expected) => {
+    const { harness, device, tab } = await connectedTab();
+
+    await tab.client.send('Reader', payload);
+    await harness.settle();
+
+    expect([...device.writtenBytes()]).toEqual(expected);
   });
 
   it('chunks a large payload, in order and complete', async () => {
@@ -127,22 +112,16 @@ describe('receiving', () => {
     expect([...(tab.recordFor('Reader').received[1]?.data ?? [])]).toEqual([4]);
   });
 
-  it('omits text when decoding is not enabled', async () => {
-    const { harness, device, tab } = await connectedTab();
+  it.each([
+    [false, undefined],
+    [true, 'hello'],
+  ])('decodes text only when decodeText is %s', async (decodeText, expected) => {
+    const { harness, device, tab } = await connectedTab({ encoding: { decodeText } });
 
     device.emit('hello');
     await harness.settle();
 
-    expect(tab.recordFor('Reader').received[0]?.text).toBeUndefined();
-  });
-
-  it('decodes text when asked to', async () => {
-    const { harness, device, tab } = await connectedTab({ encoding: { decodeText: true } });
-
-    device.emit('hello');
-    await harness.settle();
-
-    expect(tab.recordFor('Reader').received[0]?.text).toBe('hello');
+    expect(tab.recordFor('Reader').received[0]?.text).toBe(expected);
   });
 
   it('decodes a multi-byte character split across two chunks', async () => {
