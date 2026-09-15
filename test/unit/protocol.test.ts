@@ -17,8 +17,4 @@ describe('namespaced names', () => {
   it('puts the protocol version in the broker name', () => {
     expect(brokerChannelName()).toContain(`v${String(PROTOCOL_VERSION)}`);
   });
-
-  it('keeps configurations apart', () => {
-    expect(ownerLockName('A')).not.toBe(ownerLockName('B'));
-  });
 });

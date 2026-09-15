@@ -126,12 +126,6 @@ afterEach(() => {
 });
 
 describe('isSupported', () => {
-  it('is true when the platform has everything the library needs', () => {
-    stubBrowser();
-
-    expect(isSupported()).toBe(true);
-  });
-
   it('is false without Web Serial', () => {
     stubBrowser({ hasSerial: false });
 
@@ -152,45 +146,51 @@ describe('isSupported', () => {
     expect(isSupported()).toBe(false);
   });
 
-  it('is true with a SharedWorker and no BroadcastChannel', () => {
-    stubBrowser({ broadcastChannel: false });
+  it.each([
+    {
+      platform: 'a SharedWorker and a BroadcastChannel',
+      sharedWorker: 'working',
+      broadcastChannel: true,
+      supported: true,
+    },
+    {
+      platform: 'a SharedWorker and no BroadcastChannel',
+      sharedWorker: 'working',
+      broadcastChannel: false,
+      supported: true,
+    },
+    {
+      platform: 'a BroadcastChannel and no SharedWorker',
+      sharedWorker: 'absent',
+      broadcastChannel: true,
+      supported: true,
+    },
+    {
+      platform: 'neither SharedWorker nor BroadcastChannel',
+      sharedWorker: 'absent',
+      broadcastChannel: false,
+      supported: false,
+    },
+  ] as const)(
+    'is $supported with $platform, exactly where a message bus can be built',
+    ({ sharedWorker, broadcastChannel, supported }) => {
+      stubBrowser({ sharedWorker, broadcastChannel });
+      const build = (): unknown =>
+        createBrowserEnvironment({ workerUrl: 'https://example.test/w.js' }).createTransport(
+          transportRequest(),
+        );
 
-    // Only the version announcement and the fallback need the channel, and both are optional.
-    expect(isSupported()).toBe(true);
-  });
-
-  it('is true with a BroadcastChannel and no SharedWorker', () => {
-    stubBrowser({ sharedWorker: 'absent' });
-
-    expect(isSupported()).toBe(true);
-  });
-
-  it('is false with neither SharedWorker nor BroadcastChannel', () => {
-    stubBrowser({ sharedWorker: 'absent', broadcastChannel: false });
-
-    expect(isSupported()).toBe(false);
-  });
-
-  it('is true only where a message bus can be built', () => {
-    for (const sharedWorker of ['working', 'absent'] as const) {
-      for (const broadcastChannel of [true, false]) {
-        stubBrowser({ sharedWorker, broadcastChannel });
-        const build = (): unknown =>
-          createBrowserEnvironment({ workerUrl: 'https://example.test/w.js' }).createTransport(
-            transportRequest(),
-          );
-
-        if (isSupported()) {
-          expect(build).not.toThrow();
-        } else {
-          expect(build).toThrow(
-            expect.objectContaining({ code: SerialBrokerErrorCode.TRANSPORT_UNAVAILABLE }),
-          );
-        }
-        vi.unstubAllGlobals();
+      // Only the version announcement and the fallback need the channel, and both are optional.
+      expect(isSupported()).toBe(supported);
+      if (supported) {
+        expect(build).not.toThrow();
+      } else {
+        expect(build).toThrow(
+          expect.objectContaining({ code: SerialBrokerErrorCode.TRANSPORT_UNAVAILABLE }),
+        );
       }
-    }
-  });
+    },
+  );
 });
 
 describe('createBrowserEnvironment', () => {
@@ -243,14 +243,19 @@ describe('createBrowserEnvironment', () => {
     expect(transport.kind).toBe('sharedworker');
   });
 
-  it('falls back to BroadcastChannel when SharedWorker is absent', () => {
+  it('falls back to BroadcastChannel when SharedWorker is absent, and says so in the log', () => {
     stubBrowser({ sharedWorker: 'absent' });
+    const { logger, records } = recordingLogger();
+
+    const transport = createBrowserEnvironment().createTransport(
+      recordTransportRequest('c-1' as ClientId, logger).request,
+    );
 
     // Chrome for Android has no SharedWorker but does have Web Serial. Failing there would
     // mean no device access at all, for a coordination detail the fallback handles (ADR-0007).
-    expect(createBrowserEnvironment().createTransport(transportRequest()).kind).toBe(
-      'broadcastchannel',
-    );
+    // The selection is automatic, and reported in the tab's own log.
+    expect(transport.kind).toBe('broadcastchannel');
+    expect(fieldsOfEvent(records, 'environment.transport-fallback')).toHaveLength(1);
   });
 
   it('falls back when constructing a SharedWorker throws', () => {
@@ -262,35 +267,17 @@ describe('createBrowserEnvironment', () => {
     );
   });
 
-  it('says in the log that it fell back because SharedWorker is absent', () => {
-    stubBrowser({ sharedWorker: 'absent' });
-    const { logger, records } = recordingLogger();
+  it.each(['absent', 'throwing'] as const)(
+    'refuses to fall back when SharedWorker was demanded and is %s',
+    (sharedWorker) => {
+      stubBrowser({ sharedWorker });
 
-    createBrowserEnvironment().createTransport(
-      recordTransportRequest('c-1' as ClientId, logger).request,
-    );
-
-    // The selection is automatic, and reported, whatever made it (ADR-0007) - in the tab's own log,
-    // where the record carries the tab's clientId.
-    expect(fieldsOfEvent(records, 'environment.transport-fallback')).toHaveLength(1);
-  });
-
-  it('refuses to fall back when SharedWorker was demanded and the platform has none', () => {
-    stubBrowser({ sharedWorker: 'absent' });
-
-    // `transport: 'sharedworker'` never uses the channel; it exists to make a missing worker loud.
-    expect(() =>
-      createBrowserEnvironment({ transport: 'sharedworker' }).createTransport(transportRequest()),
-    ).toThrow(expect.objectContaining({ code: SerialBrokerErrorCode.BROKER_UNAVAILABLE }));
-  });
-
-  it('reports a failure instead of falling back when a transport was demanded', () => {
-    stubBrowser({ sharedWorker: 'throwing' });
-
-    expect(() =>
-      createBrowserEnvironment({ transport: 'sharedworker' }).createTransport(transportRequest()),
-    ).toThrow(expect.objectContaining({ code: SerialBrokerErrorCode.BROKER_UNAVAILABLE }));
-  });
+      // `transport: 'sharedworker'` never uses the channel; it exists to make a missing worker loud.
+      expect(() =>
+        createBrowserEnvironment({ transport: 'sharedworker' }).createTransport(transportRequest()),
+      ).toThrow(expect.objectContaining({ code: SerialBrokerErrorCode.BROKER_UNAVAILABLE }));
+    },
+  );
 
   it('uses BroadcastChannel when it is demanded', () => {
     stubBrowser();
@@ -331,14 +318,6 @@ describe('createBrowserEnvironment', () => {
 
     expect(transport.kind).toBe('sharedworker');
     expect(transportErrors).toHaveLength(1);
-  });
-
-  it('reports that no transport is available when neither exists', () => {
-    stubBrowser({ sharedWorker: 'absent', broadcastChannel: false });
-
-    expect(() => createBrowserEnvironment().createTransport(transportRequest())).toThrow(
-      expect.objectContaining({ code: SerialBrokerErrorCode.TRANSPORT_UNAVAILABLE }),
-    );
   });
 
   it('degrades to in-memory storage rather than failing when localStorage throws', () => {

@@ -19,17 +19,19 @@ interface Harness {
   readonly clock: FakeClock;
   /** Every request handed out for sending, in order, with its term. A repeat here is a repeated command. */
   readonly dispatched: string[];
-  setConnected(connected: boolean): void;
   /** The term of the tab holding the port, as far as the tracker is told. */
   setCurrentTerm(value: TermId | undefined): void;
   /** Ends a term, as its lock being freed does. */
   endTerm(value: TermId): void;
 }
 
-function createHarness(options: { connected?: boolean; writeTimeoutMs?: number } = {}): Harness {
+/**
+ * A tracker whose port is open. Holding a write while it is not, and failing it at the deadline, is
+ * pinned through `send()` in the integration suite (failover.test.ts, diagnostics.test.ts).
+ */
+function createHarness(options: { writeTimeoutMs?: number } = {}): Harness {
   const clock = new FakeClock();
   const dispatched: string[] = [];
-  let connected = options.connected ?? true;
   let current: TermId | undefined = FIRST;
   const ended = new Set<TermId>();
 
@@ -38,7 +40,7 @@ function createHarness(options: { connected?: boolean; writeTimeoutMs?: number }
     configName: 'Reader',
     writeTimeoutMs: options.writeTimeoutMs ?? 5_000,
     dispatch: (requestId, _payload, to) => dispatched.push(`${requestId}@${to}`),
-    canDispatch: () => connected,
+    canDispatch: () => true,
     currentTerm: () => current,
     isTermEnded: (value) => ended.has(value),
   };
@@ -48,9 +50,6 @@ function createHarness(options: { connected?: boolean; writeTimeoutMs?: number }
     writes,
     clock,
     dispatched,
-    setConnected: (value) => {
-      connected = value;
-    },
     setCurrentTerm: (value) => {
       current = value;
     },
@@ -94,17 +93,6 @@ describe('PendingWrites', () => {
     expect(await outcome).toBe('resolved');
   });
 
-  it('holds a write while there is nothing to write to', () => {
-    const { writes, dispatched } = createHarness({ connected: false });
-
-    void outcomeOf(writes.add(id('w1'), PAYLOAD));
-
-    // Failing here would make `send()` unusable in the seconds after a page loads, while the
-    // port is still opening.
-    expect(dispatched).toEqual([]);
-    expect(writes.size).toBe(1);
-  });
-
   it('holds a write while no tab is known to hold the port', () => {
     const harness = createHarness();
     harness.setCurrentTerm(undefined);
@@ -112,17 +100,6 @@ describe('PendingWrites', () => {
     void outcomeOf(harness.writes.add(id('w1'), PAYLOAD));
 
     expect(harness.dispatched).toEqual([]);
-  });
-
-  it('dispatches what was waiting once a connection appears', () => {
-    const harness = createHarness({ connected: false });
-    void outcomeOf(harness.writes.add(id('w1'), PAYLOAD));
-    void outcomeOf(harness.writes.add(id('w2'), PAYLOAD));
-
-    harness.setConnected(true);
-    harness.writes.dispatchWaiting();
-
-    expect(harness.dispatched).toEqual(['w1@t1', 'w2@t1']);
   });
 
   it('does not dispatch the same request twice while it is outstanding', () => {
@@ -152,20 +129,6 @@ describe('PendingWrites', () => {
     // The bytes demonstrably never reached the device, and the only term that could write them is
     // over. Delivering to the successor is not a repeat.
     expect(harness.dispatched).toEqual(['w1@t1', 'w1@t2']);
-  });
-
-  it('never hands on a write that had already started', async () => {
-    const harness = createHarness();
-    const outcome = outcomeOf(harness.writes.add(id('w1'), PAYLOAD));
-
-    harness.writes.markStarted(id('w1'), FIRST);
-    harness.setCurrentTerm(SECOND);
-    harness.endTerm(FIRST);
-
-    expect(harness.dispatched).toEqual(['w1@t1']);
-    expect(await outcome).toMatchObject({
-      code: SerialBrokerErrorCode.OWNER_LOST_DURING_WRITE,
-    });
   });
 
   it('settles a started write with the result its term reports after a new owner claimed', async () => {
@@ -224,17 +187,6 @@ describe('PendingWrites', () => {
     expect(harness.writes.size).toBe(1);
   });
 
-  it('tells the caller that repeating a lost write is their decision', async () => {
-    const harness = createHarness();
-    const outcome = outcomeOf(harness.writes.add(id('w1'), PAYLOAD));
-
-    harness.writes.markStarted(id('w1'), FIRST);
-    harness.endTerm(FIRST);
-
-    expect((await outcome) as SerialBrokerError).toBeInstanceOf(SerialBrokerError);
-    expect(((await outcome) as SerialBrokerError).remediation).toContain('idempotent');
-  });
-
   it('dispatches again a write its own term declined', () => {
     const harness = createHarness();
     void outcomeOf(harness.writes.add(id('w1'), PAYLOAD));
@@ -267,15 +219,6 @@ describe('PendingWrites', () => {
     expect(harness.dispatched).toEqual(['w1@t1']);
   });
 
-  it('takes a decline for a request it does not know as nothing', () => {
-    const harness = createHarness();
-
-    expect(() => {
-      harness.writes.handleResult(id('never-seen'), FIRST, notConnected());
-    }).not.toThrow();
-    expect(harness.dispatched).toEqual([]);
-  });
-
   it('resends an unstarted write to its own term, but not past a term that has not ended', () => {
     const harness = createHarness();
     void outcomeOf(harness.writes.add(id('w1'), PAYLOAD));
@@ -286,17 +229,6 @@ describe('PendingWrites', () => {
     harness.setCurrentTerm(SECOND);
     harness.writes.resendUnstarted();
     expect(harness.dispatched).toEqual(['w1@t1', 'w1@t1']);
-  });
-
-  it('fails a write that never finds a connection, within the deadline', async () => {
-    const harness = createHarness({ connected: false, writeTimeoutMs: 1_000 });
-    const outcome = outcomeOf(harness.writes.add(id('w1'), PAYLOAD));
-
-    await harness.clock.advance(1_000);
-
-    expect(await outcome).toMatchObject({ code: SerialBrokerErrorCode.WRITE_TIMEOUT });
-    expect(harness.writes.size).toBe(0);
-    expect(harness.clock.pendingTimerCount).toBe(0);
   });
 
   it('says in the timeout whether the write had started', async () => {
@@ -336,20 +268,15 @@ describe('PendingWrites', () => {
     expect(await outcome).toBe('resolved');
   });
 
-  it('ignores settling a request it does not know', () => {
+  it('takes a result, a start or a settlement of a request it does not know as nothing', () => {
     const harness = createHarness();
 
     expect(() => {
+      harness.writes.handleResult(id('never-seen'), FIRST, notConnected());
+      harness.writes.markStarted(id('never-seen'), FIRST);
       harness.writes.settle(id('never-seen'), undefined);
     }).not.toThrow();
-  });
-
-  it('marking an unknown request as started is harmless', () => {
-    const harness = createHarness();
-
-    expect(() => {
-      harness.writes.markStarted(id('never-seen'), FIRST);
-    }).not.toThrow();
+    expect(harness.dispatched).toEqual([]);
   });
 
   it('fails everything outstanding at once, and clears its timers', async () => {

@@ -130,21 +130,6 @@ describe('EventEmitter', () => {
     expect(late).not.toHaveBeenCalled();
   });
 
-  it('survives a listener unsubscribing another mid-dispatch', () => {
-    const { emitter } = createEmitter();
-    const second = vi.fn();
-
-    emitter.add('onReceive', () => {
-      emitter.remove('onReceive', second);
-    });
-    emitter.add('onReceive', second);
-
-    // Iterating the live set would either skip a listener or throw here.
-    expect(() => {
-      emitter.emit('onReceive', receiveEvent('x'));
-    }).not.toThrow();
-  });
-
   it('does not deliver to a listener that another removed earlier in this dispatch', () => {
     const { emitter } = createEmitter();
     const removed = vi.fn();

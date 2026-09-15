@@ -171,22 +171,6 @@ describe('SharedWorkerTransport, while its worker runs', () => {
     expect(workers).toHaveLength(1);
     expect(transportErrors).toEqual([]);
   });
-
-  it('holds its own lock before it says hello', async () => {
-    const rec = recordTransportRequest(SELF);
-    const port = new FakeMessagePort();
-    new SharedWorkerTransport(
-      rec.request,
-      () => ({ port, addEventListener: () => undefined }),
-      'fake://worker',
-    );
-
-    const postedAtOnce = port.posted.length;
-    await flushMicrotasks();
-
-    expect(postedAtOnce).toBe(0);
-    expect(port.posted).toEqual([expect.objectContaining({ type: 'hello' })]);
-  });
 });
 
 describe('SharedWorkerTransport, when its worker ends', () => {

@@ -34,6 +34,17 @@ function device(filter: unknown) {
 }
 
 describe('matchesDevice', () => {
+  it('matches every port for an any-port filter, and only the named device for USB IDs', () => {
+    const any = device({ any: true });
+    const usb = device(USB);
+
+    expect(matchesDevice(bareport, any)).toBe(true);
+    expect(matchesDevice(usbPort, any)).toBe(true);
+    expect(matchesDevice(usbPort, usb)).toBe(true);
+    expect(matchesDevice(otherUsbPort, usb)).toBe(false);
+    expect(matchesDevice(bareport, usb)).toBe(false);
+  });
+
   it('matches only ports without a USB identity for a non-USB filter', () => {
     const configuration = device({ nonUsb: true });
 
@@ -104,8 +115,10 @@ describe('toRequestOptions', () => {
     expect(toRequestOptions(device({ auto: true, resolved: { nonUsb: true } }))).toEqual({});
   });
 
-  it('opens the picker unfiltered for a non-USB filter, which no filter could describe', () => {
+  it('opens the picker unfiltered for a non-USB or any-port filter, which no filter could describe', () => {
+    // An empty `filters` array would hide exactly the ports these exist to find.
     expect(toRequestOptions(device({ nonUsb: true }))).toEqual({});
+    expect(toRequestOptions(device({ any: true }))).toEqual({});
   });
 });
 

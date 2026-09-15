@@ -63,10 +63,7 @@ describe('decode matrix', () => {
     },
   );
 
-  it.each(TYPES)('names the message type when a %s is malformed', (type) => {
-    if (REQUIRED_FIELDS[type].length === 0) {
-      return;
-    }
+  it.each(TYPES)('names the missing field when a %s is malformed', (type) => {
     const message = { ...VALID[type] };
     delete message[REQUIRED_FIELDS[type][0] as string];
 

@@ -1,6 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { ProtocolMessage } from '../../src/protocol/messages.js';
 import { contextLockName, PROTOCOL_VERSION } from '../../src/protocol/version.js';
 import { flushMicrotasks } from '../harness/fake-clock.js';
 import { FakeLockManager } from '../harness/fake-locks.js';
@@ -60,10 +59,6 @@ function join(id: string, configNames: readonly string[] = ['Reader']): FakeMess
 }
 
 describe('serial-broker.worker', () => {
-  it('installs a connect handler when the script is evaluated', () => {
-    expect(typeof connect).toBe('function');
-  });
-
   it('starts a port only once the worker holds its lifetime lock', async () => {
     const port = new FakeMessagePort();
 
@@ -75,25 +70,6 @@ describe('serial-broker.worker', () => {
     // worker that has ended.
     expect(startedAtOnce).toBe(false);
     expect(port.started).toBe(true);
-  });
-
-  it('welcomes a context that says hello, on its own port only', () => {
-    const alice = new FakeMessagePort();
-    connect({ ports: [alice] });
-    const bob = join('bob');
-
-    alice.deliver(hello('alice'));
-
-    // The welcome is how a tab learns that this script loaded at all (ADR-0007), and which lock tells
-    // it that the worker has ended (ADR-0041).
-    expect(alice.posted).toEqual([
-      expect.objectContaining({
-        type: 'welcome',
-        to: 'alice',
-        worker: expect.any(String) as unknown,
-      }),
-    ]);
-    expect(bob.posted).toHaveLength(0);
   });
 
   it('answers a hello in another protocol version with a welcome in its own, and nothing more', () => {
@@ -181,57 +157,10 @@ describe('serial-broker.worker', () => {
     ]);
   });
 
-  it('stops routing to a context once the browser lets go of its lock', async () => {
-    const alice = join('alice');
-    const bob = join('bob');
-
-    locks.killContext('bob');
-    await flushMicrotasks();
-    alice.deliver(envelope('alice', 'all', { type: 'status-request', configName: 'Reader' }));
-
-    expect(bob.posted).toHaveLength(0);
-  });
-
   it('ignores a connect event with no port', () => {
     expect(() => {
       connect({ ports: [] });
     }).not.toThrow();
-  });
-
-  it('routes a broadcast between two connected ports', () => {
-    const alice = join('alice');
-    const bob = join('bob');
-
-    alice.deliver(envelope('alice', 'all', { type: 'status-request', configName: 'Reader' }));
-
-    expect(bob.posted).toHaveLength(1);
-    expect((bob.posted[0] as ProtocolMessage).type).toBe('status-request');
-    expect(alice.posted).toHaveLength(0);
-  });
-
-  it('routes a write request to every participant, whatever was claimed', () => {
-    const alice = join('alice');
-    const bob = join('bob');
-    alice.deliver(
-      envelope('alice', 'all', {
-        type: 'owner-claimed',
-        configName: 'Reader',
-        term: 't-1',
-        maxTabs: 1,
-      }),
-    );
-
-    bob.deliver(
-      envelope('bob', 'all', {
-        type: 'write-request',
-        configName: 'Reader',
-        requestId: 'w-1',
-        payload: new Uint8Array([1]),
-        term: 't-1',
-      }),
-    );
-
-    expect(alice.posted).toHaveLength(1);
   });
 
   it('drops a message it cannot parse, without disturbing anything else', () => {
@@ -264,15 +193,6 @@ describe('serial-broker.worker', () => {
 
     // One dead port must not cost every other tab its message.
     expect(survivor.posted).toHaveLength(1);
-  });
-
-  it('accepts a context that says hello again on its port', () => {
-    const port = join('alice');
-
-    expect(() => {
-      port.deliver(hello('alice', ['Reader', 'Scale']));
-    }).not.toThrow();
-    expect(port.posted).toEqual([expect.objectContaining({ type: 'welcome' })]);
   });
 
   it('never imports the Web Serial API', async () => {

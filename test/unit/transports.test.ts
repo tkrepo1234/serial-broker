@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 import {
   BroadcastChannelTransport,
@@ -321,6 +321,16 @@ describe('BroadcastChannelTransport', () => {
     expect(messages).toHaveLength(0);
   });
 
+  it('reports a message it cannot parse instead of delivering it', () => {
+    const { transport, deliver, messages, decodeFailures } = create();
+    transport.attach('Reader');
+
+    deliver('not a message');
+
+    expect(decodeFailures).toHaveLength(1);
+    expect(messages).toHaveLength(0);
+  });
+
   it('ignores its own message, should the channel ever echo one back', () => {
     const { transport, deliver, messages } = create();
     transport.attach('Reader');
@@ -363,43 +373,6 @@ describe('BroadcastChannelTransport', () => {
 
     expect(transport.kind).toBe('broadcastchannel');
     expect(transport.clientId).toBe(SELF);
-  });
-});
-
-describe('both transports', () => {
-  it('report a decode failure rather than delivering an unparsable message', () => {
-    const rec = recordTransportRequest(SELF);
-    const listeners = new Map<string, (event: never) => void>();
-    const channel = {
-      postMessage: () => undefined,
-      close: () => undefined,
-      addEventListener: (type: string, listener: (event: never) => void) => {
-        listeners.set(type, listener);
-      },
-    } as unknown as BroadcastChannelLike;
-
-    new BroadcastChannelTransport(rec.request, () => channel);
-    listeners.get('message')?.({ data: 'not a message' } as never);
-
-    expect(rec.decodeFailures).toHaveLength(1);
-    expect(rec.messages).toHaveLength(0);
-  });
-
-  it('never throw out of a message handler', () => {
-    const rec = recordTransportRequest(SELF);
-    const listeners = new Map<string, (event: never) => void>();
-    const channel = {
-      postMessage: () => undefined,
-      close: () => undefined,
-      addEventListener: (type: string, listener: (event: never) => void) => {
-        listeners.set(type, listener);
-      },
-    } as unknown as BroadcastChannelLike;
-    Object.assign(rec.request, { onMessage: vi.fn() });
-
-    new BroadcastChannelTransport(rec.request, () => channel);
-
-    expect(() => listeners.get('message')?.({ data: null } as never)).not.toThrow();
   });
 });
 
