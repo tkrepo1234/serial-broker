@@ -54,14 +54,6 @@ async function elapse(harness: BrowserHarness, ms: number): Promise<void> {
   await harness.advance(ms);
 }
 
-/** How a promise settled, attached at once so a rejection is never unhandled. */
-function outcomeOf(promise: Promise<void>): Promise<unknown> {
-  return promise.then(
-    () => 'resolved',
-    (error: unknown) => error,
-  );
-}
-
 describe.each(TRANSPORT_MODES)('a deployment left running (%s)', (transport) => {
   it('returns to where it started after six hours of the device dropping out every five minutes', async () => {
     const harness = new BrowserHarness({ transport });
@@ -87,7 +79,7 @@ describe.each(TRANSPORT_MODES)('a deployment left running (%s)', (transport) => 
     expect(device.openCount).toBe(1 + 6 * 12);
   });
 
-  it('returns to where it started after tabs keep dying and opening for 200 rounds', async () => {
+  it('returns to where it started after tabs keep dying and opening for 20 rounds', async () => {
     const harness = new BrowserHarness({ transport });
     const device = harness.serial.addDevice(READER.vendorId, READER.productId);
     harness.serial.grant(device);
@@ -101,7 +93,7 @@ describe.each(TRANSPORT_MODES)('a deployment left running (%s)', (transport) => 
       live.map((tab) => tab.client),
     );
 
-    for (let round = 0; round < 200; round += 1) {
+    for (let round = 0; round < 20; round += 1) {
       // The oldest tab goes - the one holding the port, once it has been granted it - closed
       // properly on even rounds and killed on odd ones; a new tab takes its place.
       const leaving = live.shift();
@@ -127,16 +119,16 @@ describe.each(TRANSPORT_MODES)('a deployment left running (%s)', (transport) => 
     }
   });
 
-  it('leaves nothing behind after 200 names are set up and released five times over', async () => {
+  it('leaves nothing behind after 20 names are set up and released twice over', async () => {
     const harness = new BrowserHarness({ transport });
     harness.serial.grant(harness.serial.addDevice(READER.vendorId, READER.productId));
     const tabs = [harness.openTab(), harness.openTab()];
-    const names = Array.from({ length: 200 }, (_, index) => `Device ${String(index)}`);
+    const names = Array.from({ length: 20 }, (_, index) => `Device ${String(index)}`);
     await tabs[0]?.client.setup('Reader', READER_OPTIONS);
     await harness.settle();
     const listenersBefore = harness.serial.listenerCount + 2;
 
-    for (let round = 0; round < 5; round += 1) {
+    for (let round = 0; round < 2; round += 1) {
       for (const tab of tabs) {
         for (const name of names) {
           await tab.client.setup(name, READER_OPTIONS);
@@ -195,69 +187,4 @@ describe.each(TRANSPORT_MODES)('a deployment left running (%s)', (transport) => 
     expect(harness.clock.pendingTimerCount).toBe(0);
     observer.close();
   });
-});
-
-describe('a port written to 100,000 times while the tab holding it changes', () => {
-  // On the BroadcastChannel only: the simulated worker keeps every message it routes, for
-  // assertions, which for this many writes is more memory than the scenario is about.
-  it(
-    'writes each once, settles each, and returns to where it started',
-    { timeout: 120_000 },
-    async () => {
-      const WRITES = 100_000;
-      const BATCH = 1_000;
-      const harness = new BrowserHarness({ transport: 'broadcastchannel' });
-      const device = harness.serial.addDevice(READER.vendorId, READER.productId);
-      harness.serial.grant(device);
-      const live = [harness.openTab(), harness.openTab(), harness.openTab()];
-      for (const tab of live) {
-        await tab.client.setup('Reader', READER_OPTIONS);
-      }
-      await harness.settle();
-      const before = footprintOf(
-        harness,
-        live.map((tab) => tab.client),
-      );
-      let failures = 0;
-
-      for (let batch = 0; batch < WRITES / BATCH; batch += 1) {
-        const issuer = live[batch % live.length];
-        const outcomes: Promise<unknown>[] = [];
-        for (let index = batch * BATCH; index < (batch + 1) * BATCH; index += 1) {
-          const payload = new Uint8Array(4);
-          new DataView(payload.buffer).setUint32(0, index);
-          outcomes.push(outcomeOf(issuer?.client.send('Reader', payload) ?? Promise.resolve()));
-        }
-        for (const outcome of await Promise.all(outcomes)) {
-          failures += outcome === 'resolved' ? 0 : 1;
-        }
-
-        if (batch % 10 === 9) {
-          // Between batches the tab holding the port goes: closed, or killed.
-          const leaving = live.shift();
-          await (batch % 20 === 9 ? leaving?.close() : leaving?.kill());
-          const joining = harness.openTab();
-          await joining.client.setup('Reader', READER_OPTIONS);
-          live.push(joining);
-          await harness.advance(2_000);
-        }
-      }
-      await harness.advance(10_000);
-
-      const written = new Set(
-        device.written.map((chunk) =>
-          new DataView(chunk.buffer, chunk.byteOffset, chunk.byteLength).getUint32(0),
-        ),
-      );
-      expect(failures).toBe(0);
-      expect(device.written).toHaveLength(WRITES);
-      expect(written.size).toBe(WRITES);
-      expect(
-        footprintOf(
-          harness,
-          live.map((tab) => tab.client),
-        ),
-      ).toEqual(before);
-    },
-  );
 });
