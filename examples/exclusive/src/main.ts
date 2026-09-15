@@ -50,7 +50,7 @@ const OPTIONS: SerialBrokerOptions = {
   // This page sets the configuration up on every load itself, so nothing needs remembering
   // between visits. An application that lets the user configure devices keeps the default and
   // calls `SerialBroker.restore()` on start.
-  persist: false,
+  remember: false,
 };
 
 // --- What each status means to the user -------------------------------------------------------

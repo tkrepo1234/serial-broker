@@ -106,9 +106,9 @@ configuration too. Every one of these examples releases before it sets up again:
 _Fixed:_ Configuration and the `setup()` TSDoc say so. _Proposal:_
 [P2](#p2-setup-starts-a-failed-configuration-again).
 
-**U10. Does a second `setup()` with only `persist` changed apply it?** `multi-tab-dashboard`. "Other
+**U10. Does a second `setup()` with only `remember` changed apply it?** `multi-tab-dashboard`. "Other
 options passed to a second `setup()` in the same tab are ignored" answered it, but only for a
-reader who takes `persist` as one of them. _Fixed:_ the sentence names `persist`.
+reader who takes `remember` as one of them. _Fixed:_ the sentence names `remember`.
 
 **U11. With `maxTabs`, is the first tab's first status `queued` or `idle`?** `exclusive`. The
 documentation described `queued` only for a tab beyond the limit; a page that logs transitions
@@ -211,7 +211,7 @@ Each removes a step that the API forces. None is implemented here; P1 was implem
 ### P1. Auto mode takes the remembered device in `setup()`
 
 **Status: done, 2026-09-15.** Implemented as proposed, and recorded as an amendment to ADR-0036. An
-explicit device, a `resolved` passed to `setup()` and `persist: false` take nothing remembered,
+explicit device, a `resolved` passed to `setup()` and `remember: false` take nothing remembered,
 and only a remembered auto-mode resolution is taken. The documentation fixes for U3 are reverted.
 
 **Problem.** U3. A configuration in auto mode forgets its device on every visit that calls `setup()`

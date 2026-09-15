@@ -15,7 +15,7 @@ export interface BrokerHost {
    * Only the difference of two readings is ever used, never a reading on its own: no participant
    * may fall silent because the system clock was set forward (ADR-0032).
    */
-  now(): number;
+  monotonicNow(): number;
 }
 
 /** Per-configuration bookkeeping. Deliberately almost nothing. */
@@ -67,7 +67,7 @@ export class Broker {
   /** Registers a newly connected participant. */
   handleConnect(clientId: ClientId): void {
     this.#clients.add(clientId);
-    this.#lastHeardFrom.set(clientId, this.host.now());
+    this.#lastHeardFrom.set(clientId, this.host.monotonicNow());
     this.host.logger.debug('participant connected', { clientId, event: 'broker.connect' });
   }
 
@@ -101,7 +101,7 @@ export class Broker {
   /** Routes one decoded message from `clientId`. */
   handleMessage(clientId: ClientId, message: ProtocolMessage): void {
     this.#clients.add(clientId);
-    this.#lastHeardFrom.set(clientId, this.host.now());
+    this.#lastHeardFrom.set(clientId, this.host.monotonicNow());
 
     switch (message.type) {
       case 'hello':
@@ -167,7 +167,7 @@ export class Broker {
    * @returns The participants forgotten, so the host can drop what it keeps for them.
    */
   forgetSilent(timeoutMs: number): ClientId[] {
-    const now = this.host.now();
+    const now = this.host.monotonicNow();
     const silent = [...this.#lastHeardFrom]
       .filter(([, heardAt]) => now - heardAt >= timeoutMs)
       .map(([clientId]) => clientId);

@@ -2,8 +2,9 @@ import {
   DEFAULT_CONNECTION_SETTINGS,
   DEFAULT_ENCODING_SETTINGS,
   DEFAULT_MAX_TABS,
+  DEFAULT_RECEIVE_SETTINGS,
   DEFAULT_SERIAL_SETTINGS,
-  DEFAULT_PERSIST,
+  DEFAULT_REMEMBER,
 } from '../../src/core/defaults.js';
 import type { EffectiveSettings } from '../../src/core/diagnostics.js';
 import { SerialBrokerError } from '../../src/core/errors.js';
@@ -19,11 +20,13 @@ import { formatUsbId } from './format.js';
  * and a second, subtly different opinion in the page would hide exactly that.
  */
 
-/** A connection setting's name. */
-type ConnectionField = keyof ConnectionSettings;
+/** A connection setting typed into a text field; `autoReconnect` is a checkbox of its own. */
+type ConnectionField = Exclude<keyof ConnectionSettings, 'autoReconnect'>;
 
-/** Every connection setting, in the order the library documents them. */
-const CONNECTION_FIELDS = Object.keys(DEFAULT_CONNECTION_SETTINGS) as ConnectionField[];
+/** Every connection setting typed into a text field, in the order the library documents them. */
+const CONNECTION_FIELDS = (
+  Object.keys(DEFAULT_CONNECTION_SETTINGS) as (keyof ConnectionSettings)[]
+).filter((field): field is ConnectionField => field !== 'autoReconnect');
 
 /** How the form names the device: the device list's non-preset entries (ADR-0036). */
 export type DeviceKindChoice = 'auto' | 'usb' | 'non-usb' | 'any';
@@ -47,9 +50,13 @@ export interface SetupFormValues {
   readonly bufferSize: string;
   readonly flowControl: string;
   readonly connection: Readonly<Record<ConnectionField, string>>;
+  readonly autoReconnect: boolean;
+  /** `receive.idleMs` and `receive.maxWaitMs`, as typed. */
+  readonly receiveIdleMs: string;
+  readonly receiveMaxWaitMs: string;
   readonly encoding: string;
   readonly decodeText: boolean;
-  readonly persist: boolean;
+  readonly remember: boolean;
   /** How many tabs may use the configuration at once: a number, `Infinity`, or blank. */
   readonly maxTabs: string;
 }
@@ -87,10 +94,13 @@ export function defaultFormValues(): SetupFormValues {
     bufferSize: '',
     flowControl: '',
     connection: blankConnection(),
+    autoReconnect: DEFAULT_CONNECTION_SETTINGS.autoReconnect,
+    receiveIdleMs: '',
+    receiveMaxWaitMs: '',
     encoding: '',
     // A checkbox cannot be left blank, so it starts at the library's default instead.
     decodeText: DEFAULT_ENCODING_SETTINGS.decodeText,
-    persist: DEFAULT_PERSIST,
+    remember: DEFAULT_REMEMBER,
     maxTabs: '',
   };
 }
@@ -110,6 +120,8 @@ export function defaultPlaceholders(): Readonly<Record<string, string>> {
   for (const field of CONNECTION_FIELDS) {
     placeholders[`connection.${field}`] = String(DEFAULT_CONNECTION_SETTINGS[field]);
   }
+  placeholders['receive.idleMs'] = String(DEFAULT_RECEIVE_SETTINGS.idleMs);
+  placeholders['receive.maxWaitMs'] = String(DEFAULT_RECEIVE_SETTINGS.maxWaitMs);
   placeholders['encoding'] = DEFAULT_ENCODING_SETTINGS.encoding;
   placeholders['maxTabs'] = String(DEFAULT_MAX_TABS);
   return placeholders;
@@ -152,9 +164,12 @@ export function formValuesFor(name: string, settings: EffectiveSettings): SetupF
     bufferSize: String(serial.bufferSize),
     flowControl: serial.flowControl,
     connection: connectionText,
+    autoReconnect: connection.autoReconnect,
+    receiveIdleMs: String(settings.receive.idleMs),
+    receiveMaxWaitMs: String(settings.receive.maxWaitMs),
     encoding: encoding.encoding,
     decodeText: encoding.decodeText,
-    persist: settings.persist,
+    remember: settings.remember,
     maxTabs: String(settings.maxTabs),
   };
 }
@@ -230,7 +245,7 @@ function deviceOptionFor(values: SetupFormValues): Record<string, unknown> {
  * @returns Options that have **not** been validated. Pass them to `setup()` and show what it says.
  */
 export function buildSetupOptions(values: SetupFormValues): Record<string, unknown> {
-  const connection: Record<string, number> = {};
+  const connection: Record<string, number | boolean> = { autoReconnect: values.autoReconnect };
   for (const field of CONNECTION_FIELDS) {
     const text = values.connection[field].trim();
     if (text !== '') {
@@ -249,8 +264,12 @@ export function buildSetupOptions(values: SetupFormValues): Record<string, unkno
       ...optionalText('flowControl', values.flowControl),
     },
     connection,
+    receive: {
+      ...optionalNumber('idleMs', values.receiveIdleMs),
+      ...optionalNumber('maxWaitMs', values.receiveMaxWaitMs),
+    },
     encoding: { ...optionalText('encoding', values.encoding), decodeText: values.decodeText },
-    persist: values.persist,
+    remember: values.remember,
     ...optionalNumber('maxTabs', values.maxTabs),
   };
 }
@@ -286,8 +305,9 @@ export function rejectedField(error: unknown): string | undefined {
     case 'encoding':
       return field;
     case 'connection':
-      return field === undefined ? undefined : `connection.${field}`;
-    case 'persist':
+    case 'receive':
+      return field === undefined ? undefined : `${group}.${field}`;
+    case 'remember':
     case 'maxTabs':
       return group;
     default:
@@ -315,9 +335,12 @@ export function readSetupForm(form: HTMLFormElement): SetupFormValues {
     bufferSize: textField(form, 'bufferSize'),
     flowControl: textField(form, 'flowControl'),
     connection,
+    autoReconnect: checkbox(form, 'connection.autoReconnect').checked,
+    receiveIdleMs: textField(form, 'receive.idleMs'),
+    receiveMaxWaitMs: textField(form, 'receive.maxWaitMs'),
     encoding: textField(form, 'encoding'),
     decodeText: checkbox(form, 'decodeText').checked,
-    persist: checkbox(form, 'persist').checked,
+    remember: checkbox(form, 'remember').checked,
     maxTabs: textField(form, 'maxTabs'),
   };
 }
@@ -340,9 +363,12 @@ export function writeSetupForm(form: HTMLFormElement, values: SetupFormValues): 
   for (const field of CONNECTION_FIELDS) {
     set(`connection.${field}`, values.connection[field]);
   }
+  checkbox(form, 'connection.autoReconnect').checked = values.autoReconnect;
+  set('receive.idleMs', values.receiveIdleMs);
+  set('receive.maxWaitMs', values.receiveMaxWaitMs);
   set('encoding', values.encoding);
   checkbox(form, 'decodeText').checked = values.decodeText;
-  checkbox(form, 'persist').checked = values.persist;
+  checkbox(form, 'remember').checked = values.remember;
   set('maxTabs', values.maxTabs);
 }
 

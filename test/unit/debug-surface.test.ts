@@ -232,7 +232,7 @@ describe('debugging surface: configurations', () => {
       serial: { baudRate: 19_200, parity: 'odd', stopBits: 2 },
       connection: { maxDelayMs: 1_000 },
       encoding: { decodeText: false },
-      persist: false,
+      remember: false,
     });
 
     expect(normalizeConfiguration('Scale', describeSettings(running))).toEqual(running);
@@ -246,7 +246,7 @@ describe('debugging surface: new and edited configurations', () => {
       serial: { baudRate: 19_200, parity: 'odd', stopBits: 2, flowControl: 'hardware' },
       connection: { maxDelayMs: 1_000 },
       encoding: { decodeText: false, encoding: 'windows-1252' },
-      persist: false,
+      remember: false,
     });
 
     const values = formValuesFor('Scale', describeSettings(running));
@@ -288,10 +288,11 @@ describe('debugging surface: new and edited configurations', () => {
       // Auto mode by default: the device comes from the port the user chooses (ADR-0036).
       device: { auto: true },
       serial: { baudRate: 9600 },
-      connection: {},
       // A checkbox cannot be left blank, so it starts at the library's default.
+      connection: { autoReconnect: true },
+      receive: {},
       encoding: { decodeText: DEFAULT_ENCODING_SETTINGS.decodeText },
-      persist: true,
+      remember: true,
     });
     expect(buildSetupOptions({ ...defaultFormValues(), maxTabs: '  ' })).not.toHaveProperty(
       'maxTabs',

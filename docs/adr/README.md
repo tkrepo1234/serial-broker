@@ -10,7 +10,7 @@ because of a decision references it in a comment (`// See ADR-0005.`).
 | #                                                                        | Title                                                                               | Status                                  |
 | ------------------------------------------------------------------------ | ----------------------------------------------------------------------------------- | --------------------------------------- |
 | [0001](./0001-record-architecture-decisions.md)                          | Record architecture decisions                                                       | Accepted                                |
-| [0002](./0002-scope-transport-only.md)                                   | Wrap the transport only, no protocol layer                                          | Accepted                                |
+| [0002](./0002-scope-transport-only.md)                                   | Wrap the transport only, no protocol layer                                          | Superseded in part by 0039              |
 | [0003](./0003-typescript-and-toolchain.md)                               | TypeScript, Vitest, tsup, ESLint and Prettier                                       | Accepted                                |
 | [0004](./0004-port-ownership-lives-in-a-window.md)                       | The physical port is owned by a window, not by the worker                           | Accepted                                |
 | [0005](./0005-owner-election-via-web-locks.md)                           | Elect the port owner with the Web Locks API                                         | Accepted                                |
@@ -18,7 +18,7 @@ because of a decision references it in a comment (`// See ADR-0005.`).
 | [0007](./0007-broadcastchannel-fallback-transport.md)                    | Fall back to BroadcastChannel when SharedWorker is unavailable                      | Amended by 0024                         |
 | [0008](./0008-wire-protocol-and-versioning.md)                           | Version the wire protocol independently                                             | Amended by 0023, 0024                   |
 | [0009](./0009-device-identity-and-permission-persistence.md)             | Identify devices by USB IDs, persist configuration, rely on browser permission      | Amended by 0016, 0022, 0027, 0033, 0036 |
-| [0010](./0010-reconnect-supervision-and-backoff.md)                      | Supervise the connection with bounded exponential backoff                           | Accepted                                |
+| [0010](./0010-reconnect-supervision-and-backoff.md)                      | Supervise the connection with bounded exponential backoff                           | Accepted, amended                       |
 | [0011](./0011-encapsulation-boundary.md)                                 | Expose nothing about the coordination mechanism                                     | Amended by 0018, 0025                   |
 | [0012](./0012-error-model.md)                                            | One error type, stable codes, mandatory remediation                                 | Accepted                                |
 | [0013](./0013-write-ordering-and-delivery-semantics.md)                  | Per-participant write ordering with at-most-once delivery                           | Amended by 0026, 0030, 0031             |
@@ -47,3 +47,4 @@ because of a decision references it in a comment (`// See ADR-0005.`).
 | [0036](./0036-take-the-device-identity-from-the-chosen-port.md)          | Take the device identity from the port the user chooses                             | Accepted                                |
 | [0037](./0037-measure-performance-against-expectations-written-first.md) | Measure performance against expectations written first                              | Accepted                                |
 | [0038](./0038-leave-a-write-the-device-has-not-taken-in-flight.md)       | Leave a write the device has not taken in flight                                    | Accepted                                |
+| [0039](./0039-collect-received-bytes-until-the-line-is-quiet.md)         | Collect received bytes until the line is quiet                                      | Accepted                                |

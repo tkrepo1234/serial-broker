@@ -55,7 +55,7 @@ describe('isParticipantDiagnostics', () => {
     ['with a device that has neither IDs nor any', [...CONFIGURATION, 'settings', 'device'], {}],
     ['with a NaN setting', [...CONFIGURATION, 'settings', 'connection', 'factor'], Number.NaN],
     ['with a text setting that is a number', [...CONFIGURATION, 'settings', 'serial', 'parity'], 0],
-    ['with no persist flag', [...CONFIGURATION, 'settings', 'persist'], REMOVE],
+    ['with no remember flag', [...CONFIGURATION, 'settings', 'remember'], REMOVE],
     ['with no tab limit', [...CONFIGURATION, 'settings', 'maxTabs'], REMOVE],
     ['with a missing listener count', [...CONFIGURATION, 'listeners', 'onSend'], REMOVE],
     ['with a fractional pending count', [...CONFIGURATION, 'pendingWrites', 'total'], 0.5],

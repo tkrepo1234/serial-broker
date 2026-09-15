@@ -11,13 +11,23 @@ coordinate with each other. See
 
 ## [Unreleased]
 
-**Wire protocol version 9.** Tabs of this build and tabs of an earlier one do not share a worker,
+**Wire protocol version 10.** Tabs of this build and tabs of an earlier one do not share a worker,
 a lock or a bus; they detect each other and report `PROTOCOL_VERSION_MISMATCH`. Reload every tab
 of an application after deploying it. Configurations remembered by an earlier build are not
 migrated (see below).
 
 ### Added
 
+- **Received bytes are collected until the line is quiet** (ADR-0039). A device that answers byte
+  by byte - writing `1234
+` to the Arduino echo port gave six `onReceive` events - now produces
+  one event in every tab. `receive.idleMs` (default 50 ms, `0` for every chunk as it is read) and
+  `receive.maxWaitMs` (default 500 ms) set when a delivery ends; the tab holding the port collects,
+  and its settings apply everywhere. The debugging surface offers both under _Receiving_.
+- **`connection.autoReconnect`** (default `true`): with `false`, a lost connection or failed attempt
+  ends in `failed` and nothing is retried, not even when the device is plugged in again, until the
+  application sets the configuration up again (ADR-0010, amended). The debugging surface shows
+  _Reconnect automatically_ next to _Remember across reloads_, outside the folded options.
 - `test/browser/hardware/emulator.spec.ts` runs the library in a real browser against the USB/IP
   emulator attached by usbip-win2, with `SERIAL_BROKER_HARDWARE=emulator`. The spec starts and
   drives the emulator itself - unplug and plug, a hung device, one byte per read, an owner killed
@@ -125,6 +135,13 @@ migrated (see below).
 
 ### Changed
 
+- **`persist` is now `remember`**, the word the debugging surface and the documentation already
+  used. Remembered configurations need no migration: an entry written with `persist` is read with
+  the default, `remember: true`. Diagnostics reports carry `remember`, `receive` and
+  `connection.autoReconnect`, hence protocol version 10.
+- **`setup()` with the same options starts a `failed` configuration again** in the tab holding the
+  port (ADR-0010, amended), so a "try again" button needs no `release()` first. A working
+  configuration is still left alone.
 - **A write the device does not take in time no longer ends the connection** (ADR-0038). `send()`
   still rejects with `WRITE_TIMEOUT`, but the chunk stays in flight and holds the write queue: the
   writes behind it are not begun and fail at their deadline with `started: false`, and writing

@@ -91,7 +91,7 @@ describe.each(TRANSPORT_MODES)('diagnostics observer (%s)', (transport) => {
         device: READER,
         serial: { baudRate: 9600, dataBits: 8, stopBits: 1, parity: 'none' },
         connection: { writeTimeoutMs: 5_000, maxAttempts: Number.POSITIVE_INFINITY },
-        persist: true,
+        remember: true,
       },
     });
     expect(reportOf(snapshot, peer)).toMatchObject({

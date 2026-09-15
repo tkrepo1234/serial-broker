@@ -1,4 +1,9 @@
-import type { ConnectionSettings, EncodingSettings, SerialSettings } from './types.js';
+import type {
+  ConnectionSettings,
+  EncodingSettings,
+  ReceiveSettings,
+  SerialSettings,
+} from './types.js';
 
 /** Effective serial settings, with every optional field resolved. */
 export type NormalizedSerialSettings = Required<SerialSettings>;
@@ -8,6 +13,9 @@ export type NormalizedConnectionSettings = Required<ConnectionSettings>;
 
 /** Effective encoding settings, with every optional field resolved. */
 export type NormalizedEncodingSettings = Required<EncodingSettings>;
+
+/** Effective receive settings, with every optional field resolved. */
+export type NormalizedReceiveSettings = Required<ReceiveSettings>;
 
 /** What auto mode resolves to: a USB identity, or the absence of one (ADR-0036). */
 export type ResolvedDevice =
@@ -52,7 +60,8 @@ export interface NormalizedConfiguration {
   readonly serial: NormalizedSerialSettings;
   readonly connection: NormalizedConnectionSettings;
   readonly encoding: NormalizedEncodingSettings;
-  readonly persist: boolean;
+  readonly receive: NormalizedReceiveSettings;
+  readonly remember: boolean;
   /** How many tabs may use the configuration at once; `Infinity` for no limit (ADR-0025). */
   readonly maxTabs: number;
 }
@@ -77,6 +86,17 @@ export const DEFAULT_CONNECTION_SETTINGS: NormalizedConnectionSettings = {
   openTimeoutMs: 10_000,
   writeTimeoutMs: 5_000,
   maxWriteChunkBytes: 4_096,
+  autoReconnect: true,
+};
+
+/**
+ * Defaults for {@link ReceiveSettings}. See ADR-0039: 50 ms of silence joins a device answering
+ * byte by byte, even a slow microcontroller echoing about 80 bytes a second, and is too short
+ * for a person to notice; 500 ms bounds the wait on a line that never pauses.
+ */
+export const DEFAULT_RECEIVE_SETTINGS: NormalizedReceiveSettings = {
+  idleMs: 50,
+  maxWaitMs: 500,
 };
 
 /** Defaults for {@link EncodingSettings}. See ADR-0015. */
@@ -85,8 +105,8 @@ export const DEFAULT_ENCODING_SETTINGS: NormalizedEncodingSettings = {
   decodeText: false,
 };
 
-/** Default for {@link SerialBrokerOptions.persist}: remembered, so `restore()` brings it back. */
-export const DEFAULT_PERSIST = true;
+/** Default for {@link SerialBrokerOptions.remember}: remembered, so `restore()` brings it back. */
+export const DEFAULT_REMEMBER = true;
 
 /** Default for {@link SerialBrokerOptions.maxTabs}: no limit. */
 export const DEFAULT_MAX_TABS = Number.POSITIVE_INFINITY;

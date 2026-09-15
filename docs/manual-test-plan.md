@@ -164,7 +164,7 @@ The checklist exercises on real hardware what the scenario matrix in
 Steps 1 and the `awaiting-permission` half of 2 were confirmed in the 2026-09-12 browser run;
 they are left unticked because the checklist is about a run **with** hardware.
 
-- [ ] **1.** Click _New configuration_, enter the device's IDs, click _Set up_. The card shows
+- [ ] **1.** Click _New configuration_, enter the device's IDs, click _Create and connect_. The card shows
       `awaiting-permission` and _Choose device…_.
 - [ ] **2.** Click _Choose device…_. Chrome shows its port picker, filtered to the configured
       device. Pick it: status becomes `open`.
@@ -373,3 +373,16 @@ Not covered here: steps 1–2, 4, 4a and 18–19 (the picker and site settings),
 the task manager), 16 (two minutes of backoff), 25–29 (their browser tests run against the
 stand-in) and 26 (Android). Nor the electrical path: an emulated device proves the software stack,
 not a UART.
+
+### 2026-09-15, later — the same machine: receiving, reconnecting, the Arduino again
+
+Against the build with ADR-0039 (received bytes collected until the line is quiet) and protocol
+version 10, both hardware suites at once, each device on its own COM port.
+
+- **Arduino on COM3, 7 tests green** (the 64 KiB round trip skipped as usual). New: writing
+  `1234
+` to the echo sketch, which returns the bytes one at a time, now arrives as **one**
+  `onReceive` event - before, it was six (Tim's report of 2026-09-15).
+- **Emulator on COM4, 11 tests green**, among them the same check with `chunk 1`, where every read
+  returns a single byte, and step 21 with `receive.idleMs: 0`, so that the decoder still has to join
+  the pieces of a character.

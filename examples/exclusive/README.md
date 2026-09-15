@@ -231,7 +231,7 @@ the copy-and-configure route the openui5 example takes.
 stand-in's loopback device matches it too. An application names its device by USB ids; the
 comment at the option says so.
 
-**`persist: false`.** The page sets the configuration up on every load itself, so remembering it
+**`remember: false`.** The page sets the configuration up on every load itself, so remembering it
 would add nothing to what the page shows and would leave an entry in `localStorage` behind. An
 application that lets the user configure devices keeps the default and calls `restore()`.
 

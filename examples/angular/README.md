@@ -320,7 +320,7 @@ library accepts a write in any status and waits up to `connection.writeTimeoutMs
 that says the port is not open, a disabled button says the same thing sooner. Release is offered
 while the configuration is in use, _Start again_ once it is not - never both.
 
-**`persist: false`.** The application sets the configuration up on every load itself, so remembering
+**`remember: false`.** The application sets the configuration up on every load itself, so remembering
 it for `SerialBroker.restore()` would add nothing and would leave an entry in `localStorage`
 behind.
 

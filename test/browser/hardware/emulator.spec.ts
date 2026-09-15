@@ -215,7 +215,8 @@ test.describe('the USB/IP emulator, attached by usbip-win2', () => {
     hardware,
     emulator,
   }) => {
-    const [tab] = await connectedTabs(hardware, 1);
+    // Every read on its own, so that the decoder, not the collecting, has to join the pieces.
+    const [tab] = await connectedTabs(hardware, 1, { receive: { idleMs: 0 } });
     const text = 'Grüße, 温度 - Grüße, 温度';
 
     await emulator.run('chunk 1', /reads capped at 1 bytes/);
@@ -224,6 +225,20 @@ test.describe('the USB/IP emulator, attached by usbip-win2', () => {
     // One byte per read: every multi-byte character arrives in pieces.
     await tab?.waitForReceivedText(CONFIGURATION, text);
     expect(await tab?.receivedText(CONFIGURATION)).toBe(text);
+  });
+
+  test('delivers an answer read one byte at a time as one event (ADR-0039)', async ({
+    hardware,
+    emulator,
+  }) => {
+    const [tab] = await connectedTabs(hardware, 1);
+
+    await emulator.run('chunk 1', /reads capped at 1 bytes/);
+    await tab?.send(CONFIGURATION, '1234\r\n');
+
+    await tab?.waitForReceivedText(CONFIGURATION, '1234\r\n');
+    await tab?.page.waitForTimeout(300);
+    expect(await tab?.receiveEventCount(CONFIGURATION)).toBe(1);
   });
 
   test('echoes 64 KiB of every byte value, in order (steps 20, 22)', async ({ hardware }) => {

@@ -138,7 +138,7 @@ export class ConfigurationStore {
    * written for nothing is an index another tab's concurrent write could be lost to.
    */
   save(configuration: NormalizedConfiguration): void {
-    if (!configuration.persist) {
+    if (!configuration.remember) {
       this.remove(configuration.name);
       return;
     }
@@ -475,6 +475,6 @@ function toStorable(configuration: NormalizedConfiguration): unknown {
     // `Infinity` does not survive JSON either; omitted, the default applies, which is the same.
     maxTabs: options.maxTabs === Number.POSITIVE_INFINITY ? undefined : options.maxTabs,
     // Only a persisted configuration is ever stored, so this is always `true`.
-    persist: true,
+    remember: true,
   };
 }

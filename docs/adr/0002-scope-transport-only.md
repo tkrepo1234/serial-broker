@@ -1,6 +1,7 @@
 # ADR-0002: Wrap the transport only, no protocol layer
 
-- **Status:** Accepted
+- **Status:** Accepted; its "no buffering, no timing heuristics" is superseded by
+  [ADR-0039](./0039-collect-received-bytes-until-the-line-is-quiet.md)
 - **Date:** 2026-09-12
 
 ## Context

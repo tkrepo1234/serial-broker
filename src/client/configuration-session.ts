@@ -297,6 +297,18 @@ export class ConfigurationSession {
    * Pending writes are rejected rather than left hanging: the application asked for the
    * configuration to go away, and a promise that never settles is the worst possible answer.
    */
+  /**
+   * Tries again where the connection gave up: in the tab holding the port, whose supervisor did.
+   *
+   * A tab that withdrew over a different tab limit stays withdrawn; so does a tab that does not
+   * hold the port, whose status is the holding tab's to change.
+   */
+  retry(): void {
+    if (this.#withdrawal === undefined) {
+      this.#supervisor?.retry();
+    }
+  }
+
   async release(): Promise<void> {
     if (this.#isReleased) {
       return;

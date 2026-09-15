@@ -299,3 +299,4 @@ and the [Performance](performance.md) chapter records the results [ADR-0037].
 | 0036 | Take the device identity from the port the user chooses                             |
 | 0037 | Measure performance against expectations written first                              |
 | 0038 | Leave a write the device has not taken in flight                                    |
+| 0039 | Collect received bytes until the line is quiet                                      |

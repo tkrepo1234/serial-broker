@@ -149,7 +149,7 @@ describe('remembered configurations', () => {
     remember(harness.storage, { Reader: { device: READER, serial: { baudRate: 9600 } } });
     const tab = harness.openTab();
 
-    await tab.setup('Reader', { ...READER_OPTIONS, persist: false });
+    await tab.setup('Reader', { ...READER_OPTIONS, remember: false });
     await tab.close();
 
     await expect(harness.openTab().client.restore()).resolves.toEqual([]);

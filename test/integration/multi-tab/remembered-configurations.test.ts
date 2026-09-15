@@ -7,7 +7,7 @@ import { READER, READER_OPTIONS } from '../../harness/devices.js';
 
 /**
  * A remembered configuration is one entry for the whole origin, and it is forgotten only when no
- * tab runs it with `persist: true` any more (ADR-0027).
+ * tab runs it with `remember: true` any more (ADR-0027).
  */
 
 describe.each(TRANSPORT_MODES)(
@@ -118,12 +118,12 @@ describe.each(TRANSPORT_MODES)(
       expect(await restoredByANewTab(harness)).toEqual(['Reader']);
     });
 
-    it('is not forgotten by a tab that runs the same name without persist', async () => {
+    it('is not forgotten by a tab that runs the same name without remember', async () => {
       const harness = harnessWithDevice();
       const remembering = harness.openTab();
       await remembering.setup('Reader', READER_OPTIONS);
       const transient = harness.openTab();
-      await transient.setup('Reader', { ...READER_OPTIONS, persist: false });
+      await transient.setup('Reader', { ...READER_OPTIONS, remember: false });
       await harness.settle();
       expect(await restoredByANewTab(harness)).toEqual(['Reader']);
 

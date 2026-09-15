@@ -71,6 +71,8 @@ export interface PageHarness {
   /** The text received, concatenated. Needs `encoding.decodeText`. */
   receivedText(name: string): string;
   receivedByteCount(name: string): number;
+  /** How many `onReceive` events arrived. */
+  receiveEventCount(name: string): number;
   /**
    * The longest unbroken run of the pattern that has arrived, in bytes.
    *
@@ -135,6 +137,7 @@ interface Collected {
   statuses: string[];
   text: string;
   byteCount: number;
+  receiveEvents: number;
   patternSeed: number;
   patternRun: number;
   patternLongestRun: number;
@@ -200,6 +203,7 @@ export function installHarness(
         statuses: [],
         text: '',
         byteCount: 0,
+        receiveEvents: 0,
         patternSeed: 0,
         patternRun: 0,
         patternLongestRun: 0,
@@ -231,6 +235,7 @@ export function installHarness(
           entry.patternLongestRun = Math.max(entry.patternLongestRun, entry.patternRun);
         }
         entry.byteCount += event.data.byteLength;
+        entry.receiveEvents += 1;
       });
       api.subscribe(name, 'onSend', (event) => {
         entry.sends.push({ origin: event.origin, byteLength: event.data.byteLength });
@@ -288,12 +293,14 @@ export function installHarness(
     statuses: (name) => [...collect(name).statuses],
     receivedText: (name) => collect(name).text,
     receivedByteCount: (name) => collect(name).byteCount,
+    receiveEventCount: (name) => collect(name).receiveEvents,
     receivedPatternLength: (name) => collect(name).patternLongestRun,
     sends: (name) => [...collect(name).sends],
     clearReceived: (name) => {
       const entry = collect(name);
       entry.text = '';
       entry.byteCount = 0;
+      entry.receiveEvents = 0;
       entry.patternRun = 0;
       entry.patternLongestRun = 0;
     },
@@ -341,6 +348,7 @@ export function installHarness(
       entry.statuses.length = 0;
       entry.text = '';
       entry.byteCount = 0;
+      entry.receiveEvents = 0;
       entry.patternRun = 0;
       entry.patternLongestRun = 0;
       entry.sends.length = 0;

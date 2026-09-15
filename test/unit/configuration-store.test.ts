@@ -95,7 +95,7 @@ describe('ConfigurationStore', () => {
   it('writes nothing for a configuration that is not remembered and never was', () => {
     const { store, entries, writes } = createStore();
 
-    store.save(normalizeConfiguration('constructor', { ...OPTIONS, persist: false }));
+    store.save(normalizeConfiguration('constructor', { ...OPTIONS, remember: false }));
 
     expect(writes).toEqual([]);
     expect(entries.size).toBe(0);
@@ -318,7 +318,7 @@ describe('ConfigurationStore', () => {
 
     // A configuration that is not to be remembered removes what an earlier setup left - and in a
     // sandboxed iframe there is nothing to remove and nothing that can be read to find out.
-    store.save(normalizeConfiguration('Reader', { ...OPTIONS, persist: false }));
+    store.save(normalizeConfiguration('Reader', { ...OPTIONS, remember: false }));
 
     expect(reported.map((error) => error.code)).toEqual([
       SerialBrokerErrorCode.STORAGE_UNAVAILABLE,

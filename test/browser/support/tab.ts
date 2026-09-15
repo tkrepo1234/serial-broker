@@ -52,7 +52,7 @@ export function echoConfiguration(
     device: STAND_IN_DEVICE,
     serial: { baudRate: 9600 },
     encoding: { decodeText: true },
-    persist: false,
+    remember: false,
     ...overrides,
   };
 }
@@ -229,6 +229,13 @@ export class Tab {
   async receivedByteCount(name: string): Promise<number> {
     return await this.page.evaluate(
       (configName) => (window as unknown as HarnessWindow).harness.receivedByteCount(configName),
+      name,
+    );
+  }
+
+  async receiveEventCount(name: string): Promise<number> {
+    return await this.page.evaluate(
+      (configName) => (window as unknown as HarnessWindow).harness.receiveEventCount(configName),
       name,
     );
   }

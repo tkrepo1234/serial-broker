@@ -431,7 +431,7 @@ describe('what a later visit in auto mode takes from the remembered entry', () =
     expect(rememberedEntry(harness.storage, 'Reader')).toMatchObject({ device: { auto: true } });
   });
 
-  it('takes nothing for a configuration set up with persist: false', async () => {
+  it('takes nothing for a configuration set up with remember: false', async () => {
     const harness = new BrowserHarness();
     harness.serial.grant(harness.serial.addDevice(READER.vendorId, READER.productId));
     remember(harness.storage, {
@@ -439,7 +439,7 @@ describe('what a later visit in auto mode takes from the remembered entry', () =
     });
 
     const tab = harness.openTab();
-    await tab.setup('Reader', { ...AUTO, persist: false });
+    await tab.setup('Reader', { ...AUTO, remember: false });
     await harness.settle();
 
     expect(tab.client.getStatus('Reader').status).toBe(SerialBrokerStatus.AwaitingPermission);

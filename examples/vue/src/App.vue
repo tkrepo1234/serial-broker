@@ -30,7 +30,7 @@ const {
   // Deliver event.text next to the raw bytes.
   encoding: { decodeText: true },
   // This page sets the configuration up on every load itself; nothing to remember between visits.
-  persist: false,
+  remember: false,
 });
 
 const presentation = computed(() => presentStatus(status.value));

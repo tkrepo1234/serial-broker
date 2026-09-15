@@ -334,7 +334,7 @@
         <dd>
           Stops using the configuration in this page. Other tabs carry on; if this page held the
           port, another tab takes it over. Once no other page of this origin runs it with
-          <code>persist</code>, your application's included, it is also removed from what this
+          <code>remember</code>, your application's included, it is also removed from what this
           browser remembers. The browser keeps its permission for the device, so connecting again
           needs no prompt.
         </dd>
@@ -584,6 +584,16 @@
           </div>
         </div>
 
+        <div class="row checks">
+          <label class="check"
+            ><input type="checkbox" name="remember" /> Remember across reloads</label
+          >
+          <label class="check"
+            ><input type="checkbox" name="connection.autoReconnect" /> Reconnect
+            automatically</label
+          >
+        </div>
+
         <details class="more">
           <summary data-part="moreSummary">More options — leave blank for the default</summary>
           <h3 class="group">
@@ -699,7 +709,28 @@
             </div>
           </div>
           <h3 class="group">
-            Text and memory
+            Receiving
+            <button
+              type="button"
+              class="help"
+              popovertarget="help-receive"
+              aria-label="About receiving"
+            >
+              ?
+            </button>
+          </h3>
+          <div class="grid">
+            <div>
+              <label for="receiveIdleMs">Quiet time before delivery (ms)</label>
+              <input id="receiveIdleMs" name="receive.idleMs" />
+            </div>
+            <div>
+              <label for="receiveMaxWaitMs">Longest wait (ms)</label>
+              <input id="receiveMaxWaitMs" name="receive.maxWaitMs" />
+            </div>
+          </div>
+          <h3 class="group">
+            Text
             <button
               type="button"
               class="help"
@@ -717,9 +748,6 @@
           </div>
           <div class="row checks">
             <label class="check"><input type="checkbox" name="decodeText" /> Decode text</label>
-            <label class="check"
-              ><input type="checkbox" name="persist" /> Remember across reloads</label
-            >
           </div>
           <h3 class="group">
             Sharing
@@ -746,6 +774,16 @@
           <button data-part="submit" type="submit">Create and connect</button>
         </div>
       </form>
+      <div id="help-receive" class="help-text" popover>
+        <h3>Receiving</h3>
+        <p>
+          A device often sends an answer in pieces: an echo returns every byte on its own. The tab
+          holding the port collects what arrives until the line has been quiet for the
+          <b>quiet time</b>, and delivers it as one piece — <code>1234\r\n</code> instead of six.
+          <b>0</b> delivers every piece as it is read. The <b>longest wait</b> bounds a line that
+          never goes quiet.
+        </p>
+      </div>
       <div id="help-device" class="help-text" popover>
         <h3>Device</h3>
         <p>

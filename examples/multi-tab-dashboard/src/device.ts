@@ -34,9 +34,9 @@ export const WORKER_URL: string = workerUrl;
  * device: { vendorId: 0x1a86, productId: 0x7523 } // a CH340 adapter
  * ```
  *
- * `persist` is left out on purpose: the page decides it, from the "remember" checkbox.
+ * `remember` is left out on purpose: the page decides it, from the "remember" checkbox.
  */
-export const DEVICE_OPTIONS: Omit<SerialBrokerOptions, 'persist'> = {
+export const DEVICE_OPTIONS: Omit<SerialBrokerOptions, 'remember'> = {
   device: { any: true },
   serial: { baudRate: 9600 },
   encoding: { decodeText: true },
@@ -72,10 +72,10 @@ export async function startDevice(remember: boolean): Promise<'restored' | 'set-
  *
  * A configuration another visit remembered with settings this version of the application no
  * longer uses would be a `CONFIGURATION_CONFLICT`. It is replaced rather than left to fail the
- * start: `persist` alone never conflicts, so this only happens after the options above change.
+ * start: `remember` alone never conflicts, so this only happens after the options above change.
  */
 export async function setUpDevice(remember: boolean): Promise<void> {
-  const options: SerialBrokerOptions = { ...DEVICE_OPTIONS, persist: remember };
+  const options: SerialBrokerOptions = { ...DEVICE_OPTIONS, remember: remember };
   try {
     await SerialBroker.setup(DEVICE_NAME, options);
   } catch (error) {
@@ -105,7 +105,7 @@ export async function releaseDevice(forgetDevice = false): Promise<void> {
 /**
  * Changes whether the configuration is remembered.
  *
- * A repeated `setup()` with only `persist` changed is a no-op - the library treats the options as
+ * A repeated `setup()` with only `remember` changed is a no-op - the library treats the options as
  * equivalent - so the configuration is released and set up again. The status passes through
  * `released` and comes back; other tabs are not affected.
  */

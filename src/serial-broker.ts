@@ -62,7 +62,7 @@ export interface SerialBrokerApi {
    * by the other tabs that set the name up in auto mode (ADR-0036). On a later visit this call
    * takes the device from the configuration remembered under the same name, so it reconnects
    * without a prompt, like an explicit one, whether or not `restore()` ran first. A `device` passed
-   * here, or `resolved`, wins over what is remembered; so does `persist: false`, which uses nothing
+   * here, or `resolved`, wins over what is remembered; so does `remember: false`, which uses nothing
    * remembered.
    *
    * Calling this again with the same name and equivalent options is a no-op, so it is safe to

@@ -284,7 +284,7 @@ cannot start over a setup still under way.
 does not apply; a disabled one suggests a state the user could reach. _Send_ is the exception,
 because the input next to it stays useful while the port reopens.
 
-**`persist: false`.** The component sets the configuration up on every load itself, so remembering
+**`remember: false`.** The component sets the configuration up on every load itself, so remembering
 it would add nothing and leave an entry in `localStorage` behind. An application whose users
 configure devices keeps the default and calls `SerialBroker.restore()`.
 

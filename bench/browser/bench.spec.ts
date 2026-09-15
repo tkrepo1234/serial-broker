@@ -45,7 +45,7 @@ const NAME = 'Reader';
 const OPTIONS: SerialBrokerOptions = {
   device: STAND_IN_DEVICE,
   serial: { baudRate: 9600 },
-  persist: false,
+  remember: false,
 };
 type Transport = ScenarioResult['transport'];
 const TRANSPORTS: readonly Transport[] = ['sharedworker', 'broadcastchannel'];

@@ -110,7 +110,10 @@ test.describe('a port shared across tabs', () => {
     // no factor, so the boundary walks through every offset of the phrase and `ü`, `ß`, `温`
     // and `度` are each split between two reads. A decoder that starts afresh on every read
     // answers with U+FFFD instead.
-    const options = echoConfiguration({ serial: { baudRate: 9600, bufferSize: 8 } });
+    const options = echoConfiguration({
+      serial: { baudRate: 9600, bufferSize: 8 },
+      receive: { idleMs: 0 },
+    });
     for (const tab of tabs) {
       await tab.setup('Echo', options);
       await tab.waitForStatus('Echo', 'open');

@@ -179,6 +179,41 @@ export interface ConnectionSettings {
   readonly writeTimeoutMs?: number;
   /** Largest chunk handed to the device in one `write()`. @defaultValue 4096 */
   readonly maxWriteChunkBytes?: number;
+  /**
+   * Reconnect by itself after the connection is lost, and try the next attempt when one fails.
+   *
+   * With `false`, a lost connection or a failed attempt ends in the status `failed`, with the error
+   * reported, and nothing is tried again - not even when the device is plugged in again - until
+   * the application calls `setup()` for the configuration again. See ADR-0010.
+   *
+   * @defaultValue true
+   */
+  readonly autoReconnect?: boolean;
+}
+
+/**
+ * How what the device sends is collected before `onReceive` delivers it.
+ *
+ * A read returns whatever the driver has at that moment, so a device that answers byte by byte
+ * produces one event per byte. The tab holding the port collects the bytes until the line has
+ * been quiet for `idleMs`, and delivers them as one event. Its settings apply to every tab.
+ * See ADR-0039.
+ */
+export interface ReceiveSettings {
+  /**
+   * How long the line has to be quiet before what was collected is delivered, in milliseconds.
+   * `0` delivers every chunk as it is read, the way the Web Serial API returns it.
+   *
+   * @defaultValue 50
+   */
+  readonly idleMs?: number;
+  /**
+   * The longest a delivery waits after its first byte, in milliseconds, however busy the line
+   * stays. A device that never pauses is still delivered at this pace.
+   *
+   * @defaultValue 500
+   */
+  readonly maxWaitMs?: number;
 }
 
 /**
@@ -215,13 +250,15 @@ export interface SerialBrokerOptions {
   readonly serial: SerialSettings;
   /** Reconnect and timeout behaviour. */
   readonly connection?: ConnectionSettings;
+  /** How received bytes are collected into `onReceive` events. */
+  readonly receive?: ReceiveSettings;
   /** Text encoding and decoding. */
   readonly encoding?: EncodingSettings;
   /**
    * Persist this configuration so it is restored after a reload.
    * @defaultValue true
    */
-  readonly persist?: boolean;
+  readonly remember?: boolean;
   /**
    * How many tabs of this origin may use the configuration at the same time, the tab holding the
    * port included: an integer from 1 to 100, or `Infinity`.

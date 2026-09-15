@@ -514,6 +514,12 @@ function activity(configuration: ConfigurationDiagnostics, now: number): string 
       // Not "queued", which is a tab's status: these are writes waiting at the port.
       parts.push(`${plural(connection.queuedWrites, 'write')} at the port`);
     }
+    if (connection.stalledWriteSince !== undefined) {
+      // The status still says `open`: this is the only place a device that stopped taking data shows.
+      parts.push(
+        `write stuck at the device (${formatRelative(connection.stalledWriteSince, now)})`,
+      );
+    }
   }
   const pending = configuration.pendingWrites;
   if (pending.total > 0) {
@@ -544,6 +550,7 @@ function settingGroups(settings: EffectiveSettings): HTMLElement[] {
     [
       'Reconnecting',
       [
+        ['Reconnect automatically', formatValue(connection.autoReconnect)],
         ['First retry delay', ms(connection.initialDelayMs)],
         ['Backoff factor', formatValue(connection.factor)],
         ['Max retry delay', ms(connection.maxDelayMs)],
@@ -561,11 +568,18 @@ function settingGroups(settings: EffectiveSettings): HTMLElement[] {
       ],
     ],
     [
+      'Receiving',
+      [
+        ['Quiet time before delivery', ms(settings.receive.idleMs)],
+        ['Longest wait', ms(settings.receive.maxWaitMs)],
+      ],
+    ],
+    [
       'Text and memory',
       [
         ['Text encoding', encoding.encoding],
         ['Decode text', formatValue(encoding.decodeText)],
-        ['Remember across reloads', formatValue(settings.persist)],
+        ['Remember across reloads', formatValue(settings.remember)],
       ],
     ],
     ['Sharing', [['Tab limit', formatValue(settings.maxTabs)]]],

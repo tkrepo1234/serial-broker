@@ -271,7 +271,7 @@ button that cannot be pressed says the same thing sooner than a `WRITE_TIMEOUT` 
 reach; an absent one says the step does not apply. Send is the exception, because the input next to
 it stays useful.
 
-**`persist: false`.** The page sets the configuration up on every load itself, so remembering it
+**`remember: false`.** The page sets the configuration up on every load itself, so remembering it
 would add nothing and leave an entry in `localStorage` behind. An application whose devices the user
 configures keeps the default and calls `SerialBroker.restore()`.
 

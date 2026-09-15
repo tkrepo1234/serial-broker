@@ -40,7 +40,7 @@ function createWorld(): World {
   const time = { now: 0 };
   const ports = new WorkerPorts<FakeMessagePort>({
     logger: new ScopedLogger(logger, {}),
-    now: () => time.now,
+    monotonicNow: () => time.now,
   });
   return { ports, records, time };
 }
@@ -326,7 +326,7 @@ describe('WorkerPorts', () => {
   it('holds a record it forwards to one budget, so that no tab refuses it', () => {
     const forwarded: unknown[] = [];
     const forwarder = new RecordForwarder({
-      now: () => 0,
+      monotonicNow: () => 0,
       forward: (level, message, fields) => {
         forwarded.push({
           v: PROTOCOL_VERSION,
