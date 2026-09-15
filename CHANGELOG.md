@@ -76,12 +76,16 @@ Remembered configurations moved from **storage version 1 to 2** and are not migr
   `worker.message-error`, each once per key, with `clientId` and `reportedBy`.
 - The debugging surface's **Choose a device…** sets a configuration up in auto mode and opens the
   picker in the same click, and the page carries a strict `Content-Security-Policy` (ADR-0019).
+  _Choose device…_ is offered in every tab using a configuration that waits for permission, not only
+  in the tab holding the port.
 - **Nine example applications**, each with a README and a Playwright smoke test against a Web Serial
   stand-in: `minimal`, `multi-tab-dashboard`, `exclusive`, `no-bundler`, `openui5`, `react`, `vue`,
   `svelte` and `angular` (`npm run test:examples`, in CI).
 - **Test suites beyond the in-process one:** the built package in a real browser on every CI run
   (`npm run test:browser`, ADR-0035); opt-in hardware runs against an Arduino and the USB/IP emulator
-  (`SERIAL_BROKER_HARDWARE=arduino|emulator`); an opt-in extreme-usage suite
+  (`SERIAL_BROKER_HARDWARE=arduino|emulator`) that name the manual test plan's steps they run - on
+  the emulator, unplugging, a hung device, a write held while its owner crashes, the backoff while
+  the device stays away and forgetting the device among them; an opt-in extreme-usage suite
   (`npm run test:extreme`) in-process and in 20 Edge pages, with results in `RESULTS.md`.
 - **Benchmarks** judged against expectations written down first (`npm run bench`,
   `npm run bench:browser`, ADR-0037), with build sizes, in a new Performance chapter.
