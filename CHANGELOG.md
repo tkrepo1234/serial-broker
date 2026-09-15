@@ -135,6 +135,13 @@ migrated (see below).
 
 ### Changed
 
+- The test suites are smaller and no weaker: no two tests pin the same behaviour, log wording is no
+  longer asserted where an event name or error field is the contract, and every row of the scenario
+  matrix is still covered - rows 11 and 13 now with two real tabs each. The in-process suite went
+  from 1 390 tests in 6.6 s to 1 354 in 3.1 s, and the test and spec files from 23 288 lines to
+  22 335 (plus the 200 of `examples/smoke-support.ts`, the steps the examples' smoke tests now
+  share). Four slow browser and hardware tests that faster suites cover are gone, among them the
+  Arduino's quarter-hour 64 KiB round trip; `SERIAL_BROKER_HARDWARE_LARGE` no longer does anything.
 - **`persist` is now `remember`**, the word the debugging surface and the documentation already
   used. Remembered configurations need no migration: an entry written with `persist` is read with
   the default, `remember: true`. Diagnostics reports carry `remember`, `receive` and
