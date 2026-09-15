@@ -134,25 +134,41 @@ $env:SERIAL_BROKER_HARDWARE='arduino'; npm run test:browser -- test/browser/hard
 The 64 KiB round trip is no longer part of this suite: it took a quarter of an hour on the board,
 and `emulator.spec.ts` covers it (steps 20, 22).
 
-What they cover of the checklist below:
+The emulator's suite runs the same way with `SERIAL_BROKER_HARDWARE=emulator` and
+`test/browser/hardware/emulator.spec.ts`; it starts and drives the emulator itself.
 
-| Step                                           | Where                                                        |
-| ---------------------------------------------- | ------------------------------------------------------------ |
-| 3, 5, 6, 9                                     | in a browser against the stand-in, **and** on hardware       |
-| 8 (one `SharedWorker` for the origin)          | in a browser, counted in Chromium's target list              |
-| 13–15, 20, 21                                  | in a browser against the stand-in                            |
-| 20 again, with 5 000 and 65 536 bytes          | on hardware                                                  |
-| 25, repeating 5, 6, 9 and 13 over the fallback | in a browser                                                 |
-| 28                                             | in a browser                                                 |
-| 29, except the hidden-tab repeat               | in a browser: the worker terminated, each tab reporting once |
+What they cover of the checklist below, step by step:
 
-Step 21 is covered with reads of 8 bytes against a 15-byte phrase, so every multi-byte character
-is cut in half by a read boundary; the checklist step still exists because a real line splits
-where it likes.
+| Step                             | Where it runs                                                                                      |
+| -------------------------------- | -------------------------------------------------------------------------------------------------- |
+| 1, 4a (the debugging surface)    | **by hand**                                                                                        |
+| 2 (the port picker)              | a real click in a browser against the stand-in; Chromium's own picker **by hand**                  |
+| 3, 5, 6                          | in a browser against the stand-in, on the Arduino and on the emulator                              |
+| 4 (reload, no prompt)            | on the emulator: the reloaded page restores the configuration and opens the port                   |
+| 7 (a tab in the background)      | **by hand**                                                                                        |
+| 8 (one `SharedWorker`)           | in a browser, counted in Chromium's target list                                                    |
+| 9                                | in a browser against the stand-in, on the Arduino and on the emulator                              |
+| 10 (a killed tab)                | in a browser, the renderer killed over CDP - the same path as the task manager's _End process_     |
+| 11, 12                           | on the emulator: handed on until one tab is left, then a new tab after the last                    |
+| 13–15                            | in a browser against the stand-in, and on the emulator (`unplug`, `plug`)                          |
+| 16 (backoff while unplugged)     | on the emulator: the delays grow to the cap, and plugging in cuts the wait short                   |
+| 17 (a device that takes nothing) | on the emulator (`hang`): a short write resolves, a long one fails with `WRITE_TIMEOUT`, port open |
+| 18 (permission revoked)          | **by hand**, in the site settings                                                                  |
+| 19 (forget the device)           | on the emulator: after `release(name, { forgetDevice: true })` the status is `awaiting-permission` |
+| 20                               | in a browser; 5 000 bytes on the Arduino; 65 536 bytes of every value on the emulator              |
+| 21                               | in a browser (reads of 8 bytes) and on the emulator (`chunk 1`, one byte per read)                 |
+| 22 (hex in the send box)         | the bytes on the emulator; the debugging surface's hex display **by hand**                         |
+| 23 (no payload in the log)       | in-process (`test/integration/diagnostics.test.ts`)                                                |
+| 24                               | on the emulator: the holder crashed while the device holds the write                               |
+| 25                               | in a browser, repeating 5, 6, 9 and 13 over the fallback                                           |
+| 26 (Chrome for Android)          | **by hand**, with a device and an OTG adapter                                                      |
+| 27 (worker script answers 404)   | in-process (`test/integration/multi-tab/worker-script-fallback.test.ts`)                           |
+| 28                               | in a browser                                                                                       |
+| 29                               | in a browser: the worker terminated, each tab reporting once; the hidden-tab repeat **by hand**    |
 
-What stays here, because it needs hands or a machine nobody has in CI: the port picker and site
-settings (steps 1, 2, 18, 19), a device physically unplugged (13–17), killing a tab from the
-browser's task manager (10), Chrome for Android (26), and everything about the debugging surface.
+So a release run by hand comes down to steps 1, 2, 4a, 7, 18, 22's display, 26 and 29's hidden
+tab, plus unplugging a physical adapter (13–16) once, since the emulator proves the software path
+and not the electrical one.
 
 ## Checklist
 
@@ -385,3 +401,20 @@ version 10, both hardware suites at once, each device on its own COM port.
 - **Emulator on COM4, 11 tests green**, among them the same check with `chunk 1`, where every read
   returns a single byte, and step 21 with `receive.idleMs: 0`, so that the decoder still has to join
   the pieces of a character.
+
+### 2026-09-15, evening — the emulator suite extended to steps 4, 11, 12, 14, 16 and 19
+
+Same machine, Edge 153.0.4234.32 (headless), usbip-win2 0.9.8.0, the emulator on COM4, against
+protocol version 13. **15 tests green** in 1.7 minutes, four of them new:
+
+- **Step 4** — the page is reloaded; `restore()` alone brings the configuration back and the port
+  opens with no prompt, and the echo works.
+- **Steps 11, 12** — three tabs; the tab holding the port is closed until one is left, each successor
+  echoing; then the last is closed too, and a new tab restores the configuration and connects.
+- **Steps 14, 16** — unplugged, the scheduled reconnect delays grow from 0 through 250 ms, 500 ms …
+  until one reaches half the 30-second cap; plugged in during that wait, the tab is `open` again well
+  before the wait would have ended.
+- **Step 19** — after `release(name, { forgetDevice: true })` a new `setup()`, in the same tab and in
+  another, stays at `awaiting-permission`: the browser no longer has the permission.
+
+The stand-in browser suite passed alongside (9 tests).
