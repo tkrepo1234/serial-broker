@@ -101,30 +101,42 @@ describe.each(TRANSPORT_MODES)('sharing one port across tabs (%s)', (transport) 
     expect(late.client.getStatus('CardReader').status).toBe(SerialBrokerStatus.Open);
   });
 
-  it('keeps two configurations on two devices independent', async () => {
+  it('keeps two configurations on two devices apart in both directions, used from the same two tabs', async () => {
     const harness = new BrowserHarness({ transport });
     const reader = harness.serial.addDevice(READER.vendorId, READER.productId);
     const scale = harness.serial.addDevice(0x0403, 0x6001);
     harness.serial.grant(reader);
     harness.serial.grant(scale);
-
-    const tab = harness.openTab();
-    await tab.setup('CardReader', READER_OPTIONS);
-    await tab.setup('Scale', {
+    const scaleOptions = {
       device: { vendorId: 0x0403, productId: 0x6001 },
       serial: { baudRate: 19200 },
       receive: { idleMs: 0 },
-    });
+    };
+    const first = harness.openTab();
+    const second = harness.openTab();
+    for (const tab of [first, second]) {
+      await tab.setup('CardReader', READER_OPTIONS);
+      await tab.setup('Scale', scaleOptions);
+    }
 
-    await tab.client.send('CardReader', 'A');
-    await tab.client.send('Scale', 'B');
+    // Each tab writes to both configurations, one of which it does not hold the port of.
+    await first.client.send('CardReader', 'R1');
+    await second.client.send('Scale', 'S2');
+    await second.client.send('CardReader', 'R2');
+    await first.client.send('Scale', 'S1');
     reader.emit('from-reader');
     scale.emit('from-scale');
     await harness.settle();
 
-    expect(reader.writtenText()).toBe('A');
-    expect(scale.writtenText()).toBe('B');
-    expect(tab.receivedText('CardReader')).toBe('from-reader');
-    expect(tab.receivedText('Scale')).toBe('from-scale');
+    expect(reader.writtenText()).toBe('R1R2');
+    expect(scale.writtenText()).toBe('S2S1');
+    for (const tab of [first, second]) {
+      expect(tab.receivedText('CardReader')).toBe('from-reader');
+      expect(tab.receivedText('Scale')).toBe('from-scale');
+      expect(tab.recordFor('CardReader').sent.map((event) => event.data.byteLength)).toEqual([
+        2, 2,
+      ]);
+      expect(tab.recordFor('Scale').sent.map((event) => event.data.byteLength)).toEqual([2, 2]);
+    }
   });
 });
