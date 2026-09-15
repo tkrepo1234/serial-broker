@@ -55,7 +55,7 @@ up no configuration, requests no Web Lock, and never answers for a port.
 - **The wire protocol goes to version 2**, for the two new messages. The broker delivers a
   `diagnostics-request` to every connected context, attached to a configuration or not; the
   `BroadcastChannel` fallback already delivers configuration-less broadcasts to everyone. A
-  report is validated in full on arrival, like every other message.
+  report is validated in full on arrival, like every other message (amended below).
 
 ADR-0011 is amended, not superseded: its boundary stands for the application-facing API, and
 this record adds the one deliberate exception and the reason it is an exception.
@@ -107,5 +107,16 @@ this record adds the one deliberate exception and the reason it is an exception.
 - `test/integration/multi-tab/diagnostics-observer.test.ts`, on both transports: reports from
   every tab with roles and settings, the owner's connection state, pending writes, listener
   counts, lock listing, streamed events — and that observing never changes who owns the port.
-- `test/unit/decode-diagnostics.test.ts` and the decode matrix: every malformed report is rejected.
+- `test/unit/decode-diagnostics.test.ts` and the decode matrix: a report that cannot be filed is
+  rejected (see the amendment below).
 - `test/integration/encapsulation.test.ts`: the main entry point exports nothing diagnostic.
+
+## Amendment (2026-09-15): a report is filed, not validated in full
+
+A report used to be checked field by field on arrival, in some 150 lines that repeated its type. It
+is only ever displayed, and the decoder already holds it to its structure budget: a tree of plain
+values of bounded size. So only what files it is checked now - the sender, its transport, version and
+time, and that its configurations are a list of named entries. Below that, a report says what its
+context sent, which may be a build that reports differently, and what displays it reads it
+defensively: the debugging surface leaves the other tabs' reports out until the next collection when
+one cannot be shown. A collection keeps the contexts it has heard from in a set.

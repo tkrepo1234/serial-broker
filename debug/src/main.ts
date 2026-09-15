@@ -415,7 +415,24 @@ async function refresh(): Promise<void> {
   render();
 }
 
+/**
+ * Shows everything, and leaves the other tabs' reports out if they cannot be shown.
+ *
+ * A report from another tab is checked only as far as filing it needs (ADR-0018, amended): one from a
+ * build that reports differently, or from a script of the origin, can lack a field the page reads.
+ * It costs the view of the other tabs until the next collection, never the page.
+ */
 function render(): void {
+  try {
+    renderPage();
+  } catch (error) {
+    logFailure('show the reports of the other tabs', error);
+    snapshot = undefined;
+    renderPage();
+  }
+}
+
+function renderPage(): void {
   const now = Date.now();
   const views = buildConfigurationViews({
     thisTab: client?.diagnostics(),

@@ -62,8 +62,10 @@ sends, and in its diagnostics report.
 ### What such a script cannot do
 
 - **Break a tab or the worker with what it posts.** Every decoder is total: it never throws,
-  whatever it is handed, and accepts nothing that is not a complete, well-typed message. A seeded
-  fuzz test holds the message, report, announcement and handshake decoders to that.
+  whatever it is handed, and accepts nothing that is not a complete, well-typed message - a
+  diagnostics report is typed only as far as filing it needs, and read defensively below that
+  (ADR-0018). A seeded fuzz test holds the message, report, announcement and handshake decoders to
+  that.
 - **Make a tab or the worker hold, or pass on, anything of any size.** Every field is bounded (see
   [Limits](#limits)). An accepted message is rebuilt from the fields its type declares, so nothing a
   sender adds travels further - not to the application, and not into the copy the broker makes for
