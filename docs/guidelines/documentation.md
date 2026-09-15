@@ -8,15 +8,15 @@ short sentences, no marketing language, no "simply"/"just"/"obviously".
 
 ## Layers
 
-| Artefact                 | Audience                                        | Rule                                                                                                          |
-| ------------------------ | ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
-| **TSDoc in source**      | Developers via IDE and generated API docs       | Every exported symbol.                                                                                        |
-| **README.md**            | Someone deciding whether to use this            | Working example within the first screen.                                                                      |
-| **docs/architecture.md** | Someone modifying the library                   | Explains the mechanism, not the API.                                                                          |
-| **docs/adr/**            | Future maintainers asking "why is it like this" | One decision per record, immutable once accepted.                                                             |
-| **CHANGELOG.md**         | Upgraders                                       | Keep a Changelog format, every user-visible change.                                                           |
-| **docs/site/**           | Application developers                          | Chapters and examples, built by `npm run docs`, which fails on any warning; the example code is type-checked. |
-| **debug/**               | Someone operating or testing a deployment       | Ships in `dist/debug/`; type-checked and linted.                                                              |
+| Artefact                   | Audience                                        | Rule                                                                                                          |
+| -------------------------- | ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| **TSDoc in source**        | Developers via IDE and generated API docs       | Every exported symbol.                                                                                        |
+| **README.md**              | Someone deciding whether to use this            | Working example within the first screen.                                                                      |
+| **docs/site/internals.md** | Someone modifying the library                   | Explains the mechanism, not the API.                                                                          |
+| **docs/adr/**              | Future maintainers asking "why is it like this" | One decision per record, immutable once accepted.                                                             |
+| **CHANGELOG.md**           | Upgraders                                       | Keep a Changelog format, every user-visible change.                                                           |
+| **docs/site/**             | Application developers                          | Chapters and examples, built by `npm run docs`, which fails on any warning; the example code is type-checked. |
+| **debug/**                 | Someone operating or testing a deployment       | Ships in `dist/debug/`; type-checked and linted.                                                              |
 
 ## TSDoc rules
 
@@ -42,8 +42,8 @@ Every exported symbol carries a doc comment with:
  *
  * @param name - The configuration name passed to {@link SerialBrokerApi.setup}.
  * @param data - Text, encoded as UTF-8, or raw bytes. Nothing is appended.
- * @returns A promise that resolves once the bytes have been handed to the device - not once
- *   the device has acted on them, which a serial port cannot report.
+ * @returns A promise that resolves once the browser has taken the bytes for the port - not once
+ *   the device has received them, which Web Serial does not report.
  * @throws A {@link SerialBrokerError} with code `UNKNOWN_CONFIGURATION` if `name` is not set
  *   up in this tab, `INVALID_ARGUMENT` for a string while an encoding other than UTF-8 is
  *   configured, `WRITE_TIMEOUT` if no connection took the write within
