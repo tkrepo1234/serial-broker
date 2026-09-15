@@ -1,5 +1,5 @@
 import { describeUnknown, isAbortError } from '../core/errors.js';
-import type { ScopedLogger } from '../core/logger.js';
+import { OnceLog, type ScopedLogger } from '../core/logger.js';
 import type { LockManagerLike } from '../environment/environment.js';
 import type { ClientId, TermId } from '../protocol/messages.js';
 import { termLockName } from '../protocol/version.js';
@@ -88,11 +88,12 @@ export class OwnerTerms {
   /** Every term heard of, oldest first: a `Map` iterates in insertion order. */
   readonly #terms = new Map<TermId, KnownTerm>();
   #current: TermId | undefined;
-  #hasLoggedRefusal = false;
-  #hasLoggedFlood = false;
+  readonly #once: OnceLog;
   #isDisposed = false;
 
-  constructor(private readonly host: OwnerTermsHost) {}
+  constructor(private readonly host: OwnerTermsHost) {
+    this.#once = new OnceLog(host.logger);
+  }
 
   /** The term of the tab holding the port, as far as this tab has believed; `undefined` if none. */
   get current(): TermId | undefined {
@@ -448,22 +449,16 @@ export class OwnerTerms {
   }
 
   #logRefusal(claim: TermClaim): void {
-    if (this.#hasLoggedRefusal) {
-      return;
-    }
-    this.#hasLoggedRefusal = true;
-    this.host.logger.warn(
+    this.#once.warn(
+      'refusal',
       'ignored a message naming a term of holding the port that nobody holds; further ones are ignored without a record',
       { configName: this.host.configName, event: 'session.term-not-held', term: claim.term },
     );
   }
 
   #logFlood(claim: TermClaim): void {
-    if (this.#hasLoggedFlood) {
-      return;
-    }
-    this.#hasLoggedFlood = true;
-    this.host.logger.warn(
+    this.#once.warn(
+      'flood',
       'dropped messages naming more terms of holding the port than are checked at once; further ones are dropped without a record',
       {
         configName: this.host.configName,

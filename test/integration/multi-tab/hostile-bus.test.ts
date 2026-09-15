@@ -5,7 +5,6 @@ import { SerialBrokerError } from '../../../src/core/errors.js';
 import { SerialBrokerStatus } from '../../../src/core/types.js';
 import {
   DIAGNOSTICS_ANSWER_RATE,
-  MALFORMED_MESSAGE_WARNING_RATE,
   REMOTE_ERROR_RATE,
   STATUS_ANSWER_RATE,
 } from '../../../src/protocol/limits.js';
@@ -383,7 +382,7 @@ describe('a script of the origin that floods the bus with well-formed messages',
     expect(fieldsOfEvent(records, 'session.remote-errors-dropped')).toHaveLength(2);
   });
 
-  it('is logged only as often as the rate for malformed messages allows, and the drop once', async () => {
+  it('is logged once per context, however many malformed messages arrive', async () => {
     const { harness, device, other, records } = await twoTabs('broadcastchannel');
 
     for (let round = 0; round < 200; round += 1) {
@@ -397,11 +396,8 @@ describe('a script of the origin that floods the bus with well-formed messages',
     device.emit('REAL');
     await harness.settle();
 
-    expect(fieldsOfEvent(records, 'client.malformed-message').length).toBeLessThanOrEqual(
-      2 * MALFORMED_MESSAGE_WARNING_RATE.burst,
-    );
-    // One record per context says that the rest go unlogged, and nothing else changes.
-    expect(fieldsOfEvent(records, 'client.malformed-messages-unlogged')).toHaveLength(2);
+    // One record per context, and nothing else changes.
+    expect(fieldsOfEvent(records, 'client.malformed-message')).toHaveLength(2);
     expect(other.receivedText('Reader')).toBe('REAL');
   });
 });

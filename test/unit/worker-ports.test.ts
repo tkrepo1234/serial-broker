@@ -256,7 +256,7 @@ describe('WorkerPorts', () => {
     expect(typesPosted(claimedAgain)).toEqual(['welcome']);
     expect(typesPosted(asAlice)).toEqual([]);
     expect(fieldsOfEvent(world.records, 'worker.limit-exceeded')).toEqual([
-      expect.objectContaining({ limit: 'MAX_BOUND_IDENTITIES', limitValue: MAX_BOUND_IDENTITIES }),
+      expect.objectContaining({ limit: 'MAX_BOUND_IDENTITIES' }),
     ]);
   });
 
@@ -417,7 +417,7 @@ describe('WorkerPorts', () => {
     world.ports.receive(late, hello('late'));
     expect(typesPosted(late)).toEqual([]);
     expect(fieldsOfEvent(world.records, 'worker.limit-exceeded')).toEqual([
-      expect.objectContaining({ limit: 'MAX_PARTICIPANTS', limitValue: MAX_PARTICIPANTS }),
+      expect.objectContaining({ limit: 'MAX_PARTICIPANTS' }),
     ]);
 
     // Its port keeps its identity, so its next heartbeat gets in once there is room.

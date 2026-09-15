@@ -12,18 +12,18 @@ import {
   SerialBrokerError,
   withTimestamp,
 } from '../core/errors.js';
-import type { ScopedLogger } from '../core/logger.js';
+import { OnceLog, type ScopedLogger } from '../core/logger.js';
 import type { Unsubscribe } from '../core/types.js';
 import { invalidArgument, validateName } from '../core/validation.js';
 import type { LockInfoLike, SerialBrokerEnvironment } from '../environment/environment.js';
 import { describeDecodeFailure } from '../protocol/decode.js';
 import {
-  LimitWarnings,
   MAX_REPORT_CHARACTERS,
   MAX_REPORT_CHARACTERS_PER_COLLECTION,
   MAX_REPORT_VALUES,
   MAX_REPORTS_PER_COLLECTION,
   structureCharacters,
+  warnLimitExceeded,
 } from '../protocol/limits.js';
 import type { ClientId, ProtocolMessage, RequestId } from '../protocol/messages.js';
 import { PROTOCOL_VERSION } from '../protocol/version.js';
@@ -39,6 +39,8 @@ import type { Transport } from './transport/transport.js';
  * hand.
  */
 export const DEFAULT_COLLECT_WINDOW_MS = 500;
+
+const LIMIT_EVENT = 'diagnostics.limit-exceeded';
 
 /** Every lock this library takes carries this prefix. See `protocol/version.ts`. */
 const LOCK_NAME_PREFIX = 'serial-broker/';
@@ -72,7 +74,7 @@ export class DiagnosticsObserver {
   readonly #transport: Transport;
   readonly #collections = new Map<RequestId, Collection>();
   /** Reports beyond what one collection keeps, logged once (ADR-0031). */
-  readonly #reportsDropped: LimitWarnings;
+  readonly #once: OnceLog;
   readonly #watchers = new Map<string, Set<(event: ObservedEvent) => void>>();
   #isClosed = false;
 
@@ -86,7 +88,7 @@ export class DiagnosticsObserver {
     this.#environment = environment;
     this.#clientId = environment.newId('d') as ClientId;
     this.#logger = environment.logger.child({ clientId: this.#clientId, role: 'observer' });
-    this.#reportsDropped = new LimitWarnings(this.#logger, 'diagnostics.limit-exceeded');
+    this.#once = new OnceLog(this.#logger);
     this.#transport = environment.createTransport({
       clientId: this.#clientId,
       onMessage: (message) => {
@@ -254,7 +256,7 @@ export class DiagnosticsObserver {
           // Every report is kept until the window closes, and each may be a megabyte
           // (`MAX_REPORT_CHARACTERS`). A request id is broadcast, so anything on the bus can
           // answer one - as many times as it invents client ids (ADR-0031).
-          this.#reportsDropped.exceeded('MAX_REPORTS_PER_COLLECTION', {
+          warnLimitExceeded(this.#once, LIMIT_EVENT, 'MAX_REPORTS_PER_COLLECTION', {
             requestId: message.requestId,
           });
           return;
@@ -266,7 +268,7 @@ export class DiagnosticsObserver {
           characters: MAX_REPORT_CHARACTERS,
         });
         if (collection.characters + characters > MAX_REPORT_CHARACTERS_PER_COLLECTION) {
-          this.#reportsDropped.exceeded('MAX_REPORT_CHARACTERS_PER_COLLECTION', {
+          warnLimitExceeded(this.#once, LIMIT_EVENT, 'MAX_REPORT_CHARACTERS_PER_COLLECTION', {
             requestId: message.requestId,
           });
           return;

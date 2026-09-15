@@ -1,6 +1,6 @@
-import type { ScopedLogger } from '../core/logger.js';
+import { OnceLog, type ScopedLogger } from '../core/logger.js';
 import { welcomeFor } from '../protocol/handshake.js';
-import { LimitWarnings, MAX_CONFIGURATIONS } from '../protocol/limits.js';
+import { MAX_CONFIGURATIONS, warnLimitExceeded } from '../protocol/limits.js';
 import { configNameOf, type ClientId, type ProtocolMessage } from '../protocol/messages.js';
 
 /** What the broker needs from whichever transport is hosting it. */
@@ -53,10 +53,10 @@ export class Broker {
   readonly #clients = new Set<ClientId>();
   /** When each participant last sent anything. Any message counts, not only heartbeats. */
   readonly #lastHeardFrom = new Map<ClientId, number>();
-  readonly #limits: LimitWarnings;
+  readonly #once: OnceLog;
 
   constructor(private readonly host: BrokerHost) {
-    this.#limits = new LimitWarnings(host.logger, 'broker.limit-exceeded');
+    this.#once = new OnceLog(host.logger);
   }
 
   /** Number of participants the broker knows. For tests: the worker script has no use for it. */
@@ -202,7 +202,7 @@ export class Broker {
     let state = this.#configurations.get(configName);
     if (state === undefined) {
       if (this.#configurations.size >= MAX_CONFIGURATIONS) {
-        this.#limits.exceeded('MAX_CONFIGURATIONS');
+        warnLimitExceeded(this.#once, 'broker.limit-exceeded', 'MAX_CONFIGURATIONS');
         return undefined;
       }
       state = { participants: new Set(), owner: undefined };

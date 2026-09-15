@@ -10,13 +10,12 @@ import {
 } from '../../src/client/transport/shared-worker-transport.js';
 import { SerialBrokerErrorCode } from '../../src/core/error-codes.js';
 import { SerialBrokerError } from '../../src/core/errors.js';
-import { ScopedLogger } from '../../src/core/logger.js';
+import { OnceLog, ScopedLogger } from '../../src/core/logger.js';
 import { decodeAnnouncement } from '../../src/protocol/announcement.js';
 import { decodeMessage, describeDecodeFailure } from '../../src/protocol/decode.js';
 import { helloSenderOf } from '../../src/protocol/handshake.js';
 import {
   exceedsStructureBudget,
-  LimitWarnings,
   MAX_CONFIG_NAME_LENGTH,
   MAX_CONFIGURATIONS,
   MAX_HEARTBEAT_CONFIGURATIONS,
@@ -25,8 +24,8 @@ import {
   MAX_LOG_RECORD_VALUES,
   MAX_PAYLOAD_BYTES,
   MAX_REPORT_VALUES,
-  MAX_REPORTED_CONFIGURATIONS,
   MAX_TEXT_LENGTH,
+  warnLimitExceeded,
 } from '../../src/protocol/limits.js';
 import type { ClientId, ProtocolMessage } from '../../src/protocol/messages.js';
 import { PROTOCOL_VERSION } from '../../src/protocol/version.js';
@@ -210,22 +209,6 @@ describe('decodeMessage within its limits', () => {
     }).toJSON();
 
     expect(failureOf({ ...validMessages().error, error })).toBe('accepted');
-  });
-
-  it('refuses a diagnostics report describing more configurations than a tab can take part in', () => {
-    const report = sampleReport();
-    const configuration = report.configurations[0];
-    // Copied in full: a value shared between two configurations would be refused for that alone.
-    const tooMany = {
-      ...report,
-      configurations: Array.from({ length: MAX_REPORTED_CONFIGURATIONS + 1 }, () =>
-        structuredClone(configuration),
-      ),
-    };
-
-    expect(failureOf({ ...validMessages()['diagnostics-report'], report: tooMany })).toEqual(
-      exceeding('diagnostics-report', 'report', 'MAX_REPORTED_CONFIGURATIONS'),
-    );
   });
 
   it('refuses a diagnostics report made of more values than MAX_REPORT_VALUES', () => {
@@ -447,14 +430,16 @@ describe('exceedsStructureBudget', () => {
   });
 });
 
-describe('LimitWarnings', () => {
+describe('warnLimitExceeded', () => {
   it('logs each limit the first time it is exceeded, at warn, and never again', () => {
     const { logger, records } = recordingLogger();
-    const warnings = new LimitWarnings(new ScopedLogger(logger, {}), 'test.limit-exceeded');
+    const once = new OnceLog(new ScopedLogger(logger, {}));
 
     for (let round = 0; round < 3; round += 1) {
-      warnings.exceeded('MAX_PAYLOAD_BYTES', { messageType: 'data-received' });
-      warnings.exceeded('MAX_TEXT_LENGTH');
+      warnLimitExceeded(once, 'test.limit-exceeded', 'MAX_PAYLOAD_BYTES', {
+        messageType: 'data-received',
+      });
+      warnLimitExceeded(once, 'test.limit-exceeded', 'MAX_TEXT_LENGTH');
     }
 
     expect(records.map(([level, , fields]) => [level, fields['limit']])).toEqual([
@@ -463,7 +448,6 @@ describe('LimitWarnings', () => {
     ]);
     expect(records[0]?.[2]).toMatchObject({
       event: 'test.limit-exceeded',
-      limitValue: MAX_PAYLOAD_BYTES,
       messageType: 'data-received',
     });
   });
@@ -552,7 +536,7 @@ describe('Broker within MAX_CONFIGURATIONS', () => {
     broker.handleMessage(alice, message(alice, { type: 'status-request', configName: 'Overflow' }));
     expect(delivered).toEqual([]);
     expect(fieldsOfEvent(records, 'broker.limit-exceeded')).toEqual([
-      expect.objectContaining({ limit: 'MAX_CONFIGURATIONS', limitValue: MAX_CONFIGURATIONS }),
+      expect.objectContaining({ limit: 'MAX_CONFIGURATIONS' }),
     ]);
 
     broker.handleMessage(alice, message(alice, { type: 'detach', configName: 'c-0' }));

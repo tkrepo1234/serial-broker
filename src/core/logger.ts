@@ -52,3 +52,24 @@ export class ScopedLogger {
     }
   }
 }
+
+/**
+ * Writes a warning the first time each key comes up, and never again for that key.
+ *
+ * What a broken or hostile sender causes, it causes again and again: a record per occurrence would
+ * make the log what grows without bound. Keys are drawn from a fixed set - event names, limit names,
+ * refusal reasons - so the keys remembered are bounded as well.
+ */
+export class OnceLog {
+  readonly #seen = new Set<string>();
+
+  constructor(private readonly logger: ScopedLogger) {}
+
+  warn(key: string, message: string, fields: LogFields): void {
+    if (this.#seen.has(key)) {
+      return;
+    }
+    this.#seen.add(key);
+    this.logger.warn(message, fields);
+  }
+}

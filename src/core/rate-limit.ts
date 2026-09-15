@@ -1,5 +1,4 @@
 import type { Clock } from './clock.js';
-import type { ScopedLogger } from './logger.js';
 
 /**
  * How often something coming from the bus may make a context work (ADR-0031).
@@ -22,27 +21,16 @@ export interface RateLimit {
  * joins, every tab answering one diagnostics request - and a flood is what a hostile or broken
  * sender looks like. A bucket lets the first through untouched and bounds the second.
  *
- * What is dropped is logged **once** per limiter, as the size limits are (`protocol/limits.ts`):
- * a flood would otherwise become a flood of log records.
- *
  * The allowance is measured on the monotonic clock (`clock.monotonicNow()`, ADR-0032), so setting
  * the system time neither refills it at once nor freezes it.
  */
 export class RateLimiter {
   #tokens: number;
   #refilledAt: number;
-  #hasLoggedDrop = false;
 
-  /**
-   * @param event - The documented event name of the record written when something is dropped.
-   * @param what - What is being dropped, for that record's message.
-   */
   constructor(
     private readonly limit: RateLimit,
     private readonly clock: Clock,
-    private readonly logger: ScopedLogger,
-    private readonly event: string,
-    private readonly what: string,
   ) {
     this.#tokens = limit.burst;
     this.#refilledAt = clock.monotonicNow();
@@ -52,12 +40,11 @@ export class RateLimiter {
    * Takes one from the allowance.
    *
    * @returns `true` when there was one to take. `false` means the caller must drop what it was
-   *   about to do; the first drop is logged.
+   *   about to do.
    */
   take(): boolean {
     this.#refill();
     if (this.#tokens < 1) {
-      this.#logOnce();
       return false;
     }
     this.#tokens -= 1;
@@ -80,21 +67,6 @@ export class RateLimiter {
     this.#tokens = Math.min(
       this.limit.burst,
       this.#tokens + (elapsedMs / 1_000) * this.limit.perSecond,
-    );
-  }
-
-  #logOnce(): void {
-    if (this.#hasLoggedDrop) {
-      return;
-    }
-    this.#hasLoggedDrop = true;
-    this.logger.warn(
-      `dropped ${this.what} beyond the rate limit; further ones are dropped without a record`,
-      {
-        event: this.event,
-        burst: this.limit.burst,
-        perSecond: this.limit.perSecond,
-      },
     );
   }
 }

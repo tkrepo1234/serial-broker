@@ -1,6 +1,7 @@
 import { MAX_CONFIG_NAME_LENGTH } from '../core/defaults.js';
-import type { ScopedLogger } from '../core/logger.js';
+import type { OnceLog } from '../core/logger.js';
 import type { RateLimit } from '../core/rate-limit.js';
+import type { LogFields } from '../core/types.js';
 
 /**
  * How much the bus may make a context hold, however hostile the sender.
@@ -13,7 +14,7 @@ import type { RateLimit } from '../core/rate-limit.js';
  *
  * Every limit is far above what this library sends itself, so that nothing legitimate reaches one.
  * What exceeds a limit is dropped, and logged once per context at `warn` (see
- * {@link LimitWarnings}), never reported per message: a flood would otherwise become a flood of
+ * {@link warnLimitExceeded}), never reported per message: a flood would otherwise become a flood of
  * log records.
  */
 
@@ -78,17 +79,13 @@ export const MAX_ERROR_VALUES = 256;
 export const MAX_ERROR_CHARACTERS = 64 * 1024;
 
 /**
- * The most configurations one diagnostics report may describe: as many as a heartbeat may name.
- */
-export const MAX_REPORTED_CONFIGURATIONS = MAX_HEARTBEAT_CONFIGURATIONS;
-
-/**
- * The most values a diagnostics report may be made of: 64 for each configuration it may describe.
+ * The most values a diagnostics report may be made of: 64 for each configuration a heartbeat may
+ * name.
  *
  * A configuration's report has about 45 values - its settings, listener counts, pending writes and
  * connection. A report is kept in the snapshot an observer returns.
  */
-export const MAX_REPORT_VALUES = 64 * MAX_REPORTED_CONFIGURATIONS;
+export const MAX_REPORT_VALUES = 64 * MAX_HEARTBEAT_CONFIGURATIONS;
 
 /**
  * The most characters a diagnostics report may hold in all its strings together: 1 MiB.
@@ -209,15 +206,6 @@ export const STATUS_ANSWER_RATE: RateLimit = { burst: 32, perSecond: 32 };
 export const DIAGNOSTICS_ANSWER_RATE: RateLimit = { burst: 8, perSecond: 4 };
 
 /**
- * How often a malformed message is logged (ADR-0031).
- *
- * One record per dropped message turns a flood of nonsense into a flood in the application's log,
- * which is where an operator has to find the real fault. The burst is enough to recognise a broken
- * sender; beyond it the messages are still dropped, silently.
- */
-export const MALFORMED_MESSAGE_WARNING_RATE: RateLimit = { burst: 16, perSecond: 2 };
-
-/**
  * How often errors from other tabs are delivered to an application's `onError` (ADR-0031).
  *
  * Errors of a connection reach every tab (ADR-0012), and a reconnecting device produces one every
@@ -225,67 +213,25 @@ export const MALFORMED_MESSAGE_WARNING_RATE: RateLimit = { burst: 16, perSecond:
  */
 export const REMOTE_ERROR_RATE: RateLimit = { burst: 32, perSecond: 8 };
 
-/** The value of every limit, by name, as it appears in a log record. */
-export const LIMITS = {
-  MAX_IDENTIFIER_LENGTH,
-  MAX_CONFIG_NAME_LENGTH,
-  MAX_PAYLOAD_BYTES,
-  MAX_TEXT_LENGTH,
-  MAX_HEARTBEAT_CONFIGURATIONS,
-  MAX_ERROR_VALUES,
-  MAX_ERROR_CHARACTERS,
-  MAX_REPORTED_CONFIGURATIONS,
-  MAX_REPORT_VALUES,
-  MAX_REPORT_CHARACTERS,
-  MAX_PARTICIPANTS,
-  MAX_PORTS_PER_PARTICIPANT,
-  MAX_CONFIGURATIONS,
-  MAX_BOUND_IDENTITIES,
-  MAX_LOG_RECORD_VALUES,
-  MAX_LOG_RECORD_CHARACTERS,
-  MAX_REPORTS_PER_COLLECTION,
-  MAX_REPORT_CHARACTERS_PER_COLLECTION,
-  MAX_WAITING_WRITES,
-  MAX_WAITING_WRITE_BYTES,
-} as const;
-
-/** The name of one limit. */
-export type LimitName = keyof typeof LIMITS;
-
 /**
- * Logs each limit the first time something exceeds it, and never again.
+ * Records that something exceeded `limit` (named as the constant is): once per limit, at `warn`.
  *
- * Something that exceeds a limit is dropped every time. It is logged only once per context, because
- * a hostile sender repeats itself, and a warning per message would make the log what grows without
- * bound. The record names the limit and its value, so an operator can tell a bug from an attack.
+ * Something that exceeds a limit is dropped every time, and a hostile sender repeats itself.
+ *
+ * @param event - The documented event name, such as `transport.limit-exceeded`.
+ * @param fields - What was dropped: the message type and the field, never the value itself.
  */
-export class LimitWarnings {
-  readonly #reported = new Set<LimitName>();
-
-  /**
-   * @param logger - Where the warning goes.
-   * @param event - The documented event name, such as `transport.limit-exceeded`.
-   */
-  constructor(
-    private readonly logger: ScopedLogger,
-    private readonly event: string,
-  ) {}
-
-  /**
-   * Reports that something exceeded `limit`: at `warn` the first time, and silently afterwards.
-   *
-   * @param fields - What was dropped: the message type and the field, never the value itself.
-   */
-  exceeded(limit: LimitName, fields: Readonly<Record<string, unknown>> = {}): void {
-    if (this.#reported.has(limit)) {
-      return;
-    }
-    this.#reported.add(limit);
-    this.logger.warn(
-      `dropped what exceeds ${limit}; further excesses of this limit are dropped without a record`,
-      { ...fields, event: this.event, limit, limitValue: LIMITS[limit] },
-    );
-  }
+export function warnLimitExceeded(
+  once: OnceLog,
+  event: string,
+  limit: string,
+  fields: LogFields = {},
+): void {
+  once.warn(
+    limit,
+    `dropped what exceeds ${limit}; further excesses of this limit are dropped without a record`,
+    { ...fields, event, limit },
+  );
 }
 
 /** A bound on a nested structure: how many values, and how many characters and bytes in total. */

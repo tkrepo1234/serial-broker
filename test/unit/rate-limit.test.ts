@@ -1,35 +1,20 @@
 import { describe, expect, it } from 'vitest';
 
-import { ScopedLogger } from '../../src/core/logger.js';
 import { RateLimiter, type RateLimit } from '../../src/core/rate-limit.js';
 import { FakeClock } from '../harness/fake-clock.js';
-import { fieldsOfEvent, recordingLogger } from '../harness/recording-logger.js';
 
 const LIMIT: RateLimit = { burst: 4, perSecond: 2 };
 
-function createLimiter(limit: RateLimit = LIMIT): {
-  limiter: RateLimiter;
-  clock: FakeClock;
-  records: ReturnType<typeof recordingLogger>['records'];
-} {
+function createLimiter(limit: RateLimit = LIMIT): { limiter: RateLimiter; clock: FakeClock } {
   const clock = new FakeClock();
-  const { logger, records } = recordingLogger();
-  const limiter = new RateLimiter(
-    limit,
-    clock,
-    new ScopedLogger(logger, {}),
-    'test.dropped',
-    'messages',
-  );
-  return { limiter, clock, records };
+  return { limiter: new RateLimiter(limit, clock), clock };
 }
 
 /**
  * The bound on how often the bus may make a context work (ADR-0031).
  *
  * A burst is what legitimate use looks like; a flood is what a broken or hostile sender looks
- * like. What is dropped is logged once, because a record per dropped message only moves the flood
- * into the log an operator has to read.
+ * like.
  */
 describe('RateLimiter', () => {
   it('allows a burst, and nothing beyond it until the allowance comes back', async () => {
@@ -63,18 +48,6 @@ describe('RateLimiter', () => {
     const allowed = [0, 1, 2, 3, 4].map(() => limiter.take());
 
     expect(allowed).toEqual([true, true, true, true, false]);
-  });
-
-  it('logs the first drop and no other', () => {
-    const { limiter, records } = createLimiter();
-
-    for (let round = 0; round < 100; round += 1) {
-      limiter.take();
-    }
-
-    expect(fieldsOfEvent(records, 'test.dropped')).toEqual([
-      { event: 'test.dropped', burst: LIMIT.burst, perSecond: LIMIT.perSecond },
-    ]);
   });
 
   it('is unmoved by the system clock: set back it still refills, set forward it refills no faster', async () => {

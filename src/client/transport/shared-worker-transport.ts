@@ -1,9 +1,10 @@
 import type { TimerHandle } from '../../core/clock.js';
 import { DisposalStack } from '../../core/disposable.js';
 import { describeUnknown } from '../../core/errors.js';
+import { OnceLog } from '../../core/logger.js';
 import { decodeMessage } from '../../protocol/decode.js';
 import { HEARTBEAT_INTERVAL_MS, MAX_UNANSWERED_HEARTBEATS } from '../../protocol/heartbeat.js';
-import { LimitWarnings } from '../../protocol/limits.js';
+import { warnLimitExceeded } from '../../protocol/limits.js';
 import { BROKER_ID, type ProtocolMessage, type WorkerLogMessage } from '../../protocol/messages.js';
 import { brokerChannelName, PROTOCOL_VERSION } from '../../protocol/version.js';
 
@@ -99,7 +100,7 @@ export class SharedWorkerTransport implements Transport {
    */
   #isOtherVersion = false;
   #heartbeat: TimerHandle | undefined;
-  readonly #limits: LimitWarnings;
+  readonly #once: OnceLog;
   /**
    * What this transport proves its identity to the worker with, in every `hello` it sends.
    *
@@ -124,7 +125,7 @@ export class SharedWorkerTransport implements Transport {
     this.#url = url;
     this.#startup = startup;
     this.#secret = request.newSecret();
-    this.#limits = new LimitWarnings(request.logger, 'transport.limit-exceeded');
+    this.#once = new OnceLog(request.logger);
 
     this.#port = this.#connect();
     this.#disposal.add(() => {
@@ -383,7 +384,7 @@ export class SharedWorkerTransport implements Transport {
     if (!result.ok && result.failure.reason === 'limit-exceeded') {
       // A broker of this build passes on nothing beyond the limits, so this is another build's, or a
       // broker's bug. Logged once, not reported per message, and never taken for another version.
-      this.#limits.exceeded(result.failure.limit, {
+      warnLimitExceeded(this.#once, 'transport.limit-exceeded', result.failure.limit, {
         messageType: result.failure.type,
         field: result.failure.field,
       });

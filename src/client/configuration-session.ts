@@ -11,7 +11,7 @@ import { describeSettings, type ConfigurationDiagnostics } from '../core/diagnos
 import { EventEmitter } from '../core/emitter.js';
 import { SerialBrokerErrorCode } from '../core/error-codes.js';
 import { deserializeError, SerialBrokerError } from '../core/errors.js';
-import type { ScopedLogger } from '../core/logger.js';
+import { OnceLog, type ScopedLogger } from '../core/logger.js';
 import { RateLimiter } from '../core/rate-limit.js';
 import {
   SerialBrokerStatus,
@@ -97,10 +97,8 @@ export class ConfigurationSession {
   readonly #unreported = new Set<Promise<void>>();
   /** How many payload bytes those writes hold, so that the queue is bounded in both (ADR-0031). */
   #waitingWriteBytes = 0;
-  /** A write refused because the port's queue was full has been logged. */
-  #hasLoggedQueueFull = false;
-  /** Device data dropped from a context speaking for no term this tab knows has been logged. */
-  #hasLoggedDataWithoutTerm = false;
+  /** What this session records once only: what a flood of messages would repeat. */
+  readonly #once: OnceLog;
   /** How often this context answers `status-request`, and the answer a flood is coalesced into. */
   readonly #statusAnswers: RateLimiter;
   #delayedStatusAnswer: TimerHandle | undefined;
@@ -214,20 +212,9 @@ export class ConfigurationSession {
       },
     });
 
-    this.#statusAnswers = new RateLimiter(
-      STATUS_ANSWER_RATE,
-      environment.clock,
-      logger,
-      'session.status-answers-throttled',
-      'answers to status-request',
-    );
-    this.#remoteErrors = new RateLimiter(
-      REMOTE_ERROR_RATE,
-      environment.clock,
-      logger,
-      'session.remote-errors-dropped',
-      "other contexts' errors",
-    );
+    this.#once = new OnceLog(logger);
+    this.#statusAnswers = new RateLimiter(STATUS_ANSWER_RATE, environment.clock);
+    this.#remoteErrors = new RateLimiter(REMOTE_ERROR_RATE, environment.clock);
 
     this.#slot = Number.isFinite(configuration.maxTabs)
       ? new TabSlot(
@@ -671,6 +658,11 @@ export class ConfigurationSession {
 
       case 'error':
         if (!this.#remoteErrors.take()) {
+          this.#once.warn(
+            'remote-errors',
+            "dropped other contexts' errors beyond the rate limit; further ones are dropped without a record",
+            { event: 'session.remote-errors-dropped' },
+          );
           return;
         }
         this.#emitError(deserializeError(message.error), { broadcast: false });
@@ -1047,11 +1039,8 @@ export class ConfigurationSession {
    * device streams starts with what comes after it (`docs/site/shared-ports.md`).
    */
   #logDataWithoutTerm(type: 'data-received' | 'data-sent', from: ClientId): void {
-    if (this.#hasLoggedDataWithoutTerm) {
-      return;
-    }
-    this.#hasLoggedDataWithoutTerm = true;
-    this.logger.warn(
+    this.#once.warn(
+      'data-without-a-term',
       'dropped device data from a context that speaks for no term of holding the port; further ones are dropped without a record',
       {
         configName: this.#configuration.name,
@@ -1064,20 +1053,18 @@ export class ConfigurationSession {
 
   /** The error for a write refused because this port already holds as many as it keeps. */
   #queueFull(requestId: RequestId, byteLength: number): SerialBrokerError {
-    if (!this.#hasLoggedQueueFull) {
-      this.#hasLoggedQueueFull = true;
-      this.logger.warn(
-        'refused a write because the port already holds as many as it keeps; further ones are refused without a record',
-        {
-          configName: this.#configuration.name,
-          event: 'session.write-queue-full',
-          waiting: this.#unreported.size,
-          waitingBytes: this.#waitingWriteBytes,
-          maxWaiting: MAX_WAITING_WRITES,
-          maxWaitingBytes: MAX_WAITING_WRITE_BYTES,
-        },
-      );
-    }
+    this.#once.warn(
+      'write-queue-full',
+      'refused a write because the port already holds as many as it keeps; further ones are refused without a record',
+      {
+        configName: this.#configuration.name,
+        event: 'session.write-queue-full',
+        waiting: this.#unreported.size,
+        waitingBytes: this.#waitingWriteBytes,
+        maxWaiting: MAX_WAITING_WRITES,
+        maxWaitingBytes: MAX_WAITING_WRITE_BYTES,
+      },
+    );
     return new SerialBrokerError(
       SerialBrokerErrorCode.WRITE_QUEUE_FULL,
       'The tab holding the port already has as many writes waiting as it keeps',
@@ -1242,6 +1229,11 @@ export class ConfigurationSession {
       this.#broadcastStatus(this.#status);
       return;
     }
+    this.#once.warn(
+      'status-answers',
+      'answers to status-request beyond the rate limit are coalesced; further ones without a record',
+      { event: 'session.status-answers-throttled' },
+    );
     if (this.#delayedStatusAnswer !== undefined) {
       return;
     }

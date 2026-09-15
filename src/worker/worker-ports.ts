@@ -1,13 +1,13 @@
-import { ScopedLogger } from '../core/logger.js';
+import { OnceLog, ScopedLogger } from '../core/logger.js';
 import type { LogFields, Logger } from '../core/types.js';
 import { decodeMessage, describeDecodeFailure, type DecodeFailure } from '../protocol/decode.js';
 import { helloSenderOf, welcomeFor } from '../protocol/handshake.js';
 import { SILENT_PARTICIPANT_TIMEOUT_MS } from '../protocol/heartbeat.js';
 import {
-  LimitWarnings,
   MAX_BOUND_IDENTITIES,
   MAX_PARTICIPANTS,
   MAX_PORTS_PER_PARTICIPANT,
+  warnLimitExceeded,
 } from '../protocol/limits.js';
 import {
   BROKER_ID,
@@ -98,8 +98,7 @@ export class WorkerPorts<Port extends WorkerPort> {
    * oldest binding of an identity with no port left is forgotten.
    */
   readonly #secrets = new Map<ClientId, string>();
-  readonly #limits: LimitWarnings;
-  readonly #reportedRefusals = new Set<Refusal>();
+  readonly #once: OnceLog;
   readonly #forwarder: RecordForwarder;
   /** The worker's own logger, which also forwards its warnings to the tabs (ADR-0029). */
   readonly #logger: ScopedLogger;
@@ -124,7 +123,7 @@ export class WorkerPorts<Port extends WorkerPort> {
       },
     });
     this.#logger = new ScopedLogger(this.#forwarder.wrap(sinkOf(host.logger)), {});
-    this.#limits = new LimitWarnings(this.#logger, 'worker.limit-exceeded');
+    this.#once = new OnceLog(this.#logger);
     this.#broker = new Broker({
       deliver: (clientId, message) => {
         this.#deliver(clientId, message);
@@ -279,7 +278,7 @@ export class WorkerPorts<Port extends WorkerPort> {
     if (this.#secrets.size <= MAX_BOUND_IDENTITIES) {
       return;
     }
-    this.#limits.exceeded('MAX_BOUND_IDENTITIES');
+    warnLimitExceeded(this.#once, 'worker.limit-exceeded', 'MAX_BOUND_IDENTITIES');
     for (const clientId of this.#secrets.keys()) {
       if (this.#secrets.size <= MAX_BOUND_IDENTITIES) {
         return;
@@ -318,14 +317,16 @@ export class WorkerPorts<Port extends WorkerPort> {
     let ports = this.#ports.get(clientId);
     if (ports === undefined) {
       if (this.#ports.size >= MAX_PARTICIPANTS) {
-        this.#limits.exceeded('MAX_PARTICIPANTS');
+        warnLimitExceeded(this.#once, 'worker.limit-exceeded', 'MAX_PARTICIPANTS');
         return false;
       }
       ports = new Map();
       this.#ports.set(clientId, ports);
       this.#broker.handleConnect(clientId);
     } else if (!ports.has(port) && ports.size >= MAX_PORTS_PER_PARTICIPANT) {
-      this.#limits.exceeded('MAX_PORTS_PER_PARTICIPANT', { clientId });
+      warnLimitExceeded(this.#once, 'worker.limit-exceeded', 'MAX_PORTS_PER_PARTICIPANT', {
+        clientId,
+      });
       return false;
     }
     ports.set(port, this.host.monotonicNow());
@@ -388,7 +389,7 @@ export class WorkerPorts<Port extends WorkerPort> {
     }
 
     if (failure.reason === 'limit-exceeded') {
-      this.#limits.exceeded(failure.limit, {
+      warnLimitExceeded(this.#once, 'worker.limit-exceeded', failure.limit, {
         clientId: this.#identities.get(port),
         messageType: failure.type,
         field: failure.field,
@@ -407,11 +408,7 @@ export class WorkerPorts<Port extends WorkerPort> {
 
   /** Drops a message its port may not send; logged once per reason, as a sender repeats itself. */
   #refuse(refusal: Refusal, port: Port, message: ProtocolMessage): void {
-    if (this.#reportedRefusals.has(refusal)) {
-      return;
-    }
-    this.#reportedRefusals.add(refusal);
-    this.#logger.warn(REFUSAL_MESSAGES[refusal], {
+    this.#once.warn(refusal, REFUSAL_MESSAGES[refusal], {
       clientId: this.#identities.get(port),
       event: 'worker.message-refused',
       reason: refusal,

@@ -1,6 +1,7 @@
 import { DisposalStack } from '../../core/disposable.js';
+import { OnceLog } from '../../core/logger.js';
 import { decodeMessage } from '../../protocol/decode.js';
-import { LimitWarnings } from '../../protocol/limits.js';
+import { warnLimitExceeded } from '../../protocol/limits.js';
 import {
   configNameOf,
   type ProtocolMessage,
@@ -58,12 +59,12 @@ export class BroadcastChannelTransport implements Transport {
   readonly #request: TransportRequest;
   readonly #attached = new Set<string>();
   readonly #owned = new Set<string>();
-  readonly #limits: LimitWarnings;
+  readonly #once: OnceLog;
 
   constructor(request: TransportRequest, createChannel: BroadcastChannelFactory) {
     this.clientId = request.clientId;
     this.#request = request;
-    this.#limits = new LimitWarnings(request.logger, 'transport.limit-exceeded');
+    this.#once = new OnceLog(request.logger);
     this.#channel = createChannel(brokerChannelName());
 
     this.#channel.addEventListener('message', (event: { readonly data: unknown }) => {
@@ -133,7 +134,7 @@ export class BroadcastChannelTransport implements Transport {
     if (!result.ok) {
       if (result.failure.reason === 'limit-exceeded') {
         // Logged once, not reported per message: a sender that exceeds a limit repeats itself.
-        this.#limits.exceeded(result.failure.limit, {
+        warnLimitExceeded(this.#once, 'transport.limit-exceeded', result.failure.limit, {
           messageType: result.failure.type,
           field: result.failure.field,
         });

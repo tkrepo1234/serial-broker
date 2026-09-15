@@ -5,7 +5,7 @@ import { DisposalStack } from '../core/disposable.js';
 import { SerialBrokerErrorCode } from '../core/error-codes.js';
 import { describeUnknown, SerialBrokerError, withTimestamp } from '../core/errors.js';
 import { HeldLock } from '../core/held-lock.js';
-import type { ScopedLogger } from '../core/logger.js';
+import { OnceLog, type ScopedLogger } from '../core/logger.js';
 import { RateLimiter } from '../core/rate-limit.js';
 import type {
   ReleaseOptions,
@@ -31,11 +31,7 @@ import {
   versionAnnouncement,
 } from '../protocol/announcement.js';
 import { describeDecodeFailure, type DecodeFailure } from '../protocol/decode.js';
-import {
-  DIAGNOSTICS_ANSWER_RATE,
-  MALFORMED_MESSAGE_WARNING_RATE,
-  MAX_PAYLOAD_BYTES,
-} from '../protocol/limits.js';
+import { DIAGNOSTICS_ANSWER_RATE, MAX_PAYLOAD_BYTES } from '../protocol/limits.js';
 import {
   configNameOf,
   type ClientId,
@@ -101,10 +97,8 @@ export class SerialBrokerClient {
   readonly #unheardErrors: SerialBrokerError[] = [];
   /** Peer protocol versions already reported: a mixed deployment is reported once per version. */
   readonly #reportedPeerVersions = new Set<unknown>();
-  /** {@link MAX_UNHEARD_ERRORS} was exceeded and logged. */
-  #hasDroppedUnheardErrors = false;
-  /** {@link MAX_REPORTED_PEER_VERSIONS} was reached and logged. */
-  #hasReachedPeerVersionLimit = false;
+  /** What this context records once only. */
+  readonly #once: OnceLog;
   readonly #store: ConfigurationStore;
   /**
    * The holds that tell other tabs this one still runs a remembered configuration, by name
@@ -116,8 +110,6 @@ export class SerialBrokerClient {
   readonly #logger: ScopedLogger;
   /** How often this context answers `diagnostics-request` (ADR-0031). */
   readonly #diagnosticsAnswers: RateLimiter;
-  /** How often a malformed message is logged (ADR-0031). */
-  readonly #malformedWarnings: RateLimiter;
 
   #transport: Transport | undefined;
   #isDisposed = false;
@@ -126,20 +118,8 @@ export class SerialBrokerClient {
     this.#clientId = environment.newId('c') as ClientId;
     this.#logger = environment.logger.child({ clientId: this.#clientId });
 
-    this.#diagnosticsAnswers = new RateLimiter(
-      DIAGNOSTICS_ANSWER_RATE,
-      environment.clock,
-      this.#logger,
-      'client.diagnostics-answers-dropped',
-      'diagnostics requests',
-    );
-    this.#malformedWarnings = new RateLimiter(
-      MALFORMED_MESSAGE_WARNING_RATE,
-      environment.clock,
-      this.#logger,
-      'client.malformed-messages-unlogged',
-      'records of malformed messages',
-    );
+    this.#once = new OnceLog(this.#logger);
+    this.#diagnosticsAnswers = new RateLimiter(DIAGNOSTICS_ANSWER_RATE, environment.clock);
 
     this.#store = new ConfigurationStore(
       environment.storage,
@@ -795,7 +775,15 @@ export class SerialBrokerClient {
    */
   #answerDiagnostics(observer: ClientId, requestId: RequestId): void {
     const report = this.diagnostics();
-    if (report === undefined || !this.#diagnosticsAnswers.take()) {
+    if (report === undefined) {
+      return;
+    }
+    if (!this.#diagnosticsAnswers.take()) {
+      this.#once.warn(
+        'diagnostics-answers',
+        'dropped diagnostics requests beyond the rate limit; further ones are dropped without a record',
+        { event: 'client.diagnostics-answers-dropped' },
+      );
       return;
     }
     this.#transport?.send({
@@ -816,12 +804,9 @@ export class SerialBrokerClient {
       return;
     }
 
-    if (!this.#malformedWarnings.take()) {
-      // Dropped either way; only the record is rationed, so that a flood of nonsense does not
-      // become a flood in the application's log (ADR-0031).
-      return;
-    }
-    this.#logger.warn('dropped a malformed message', {
+    // Recorded once for each way a message can be malformed, so that a flood of nonsense does not
+    // become a flood in the application's log (ADR-0031).
+    this.#once.warn(`malformed:${failure.reason}`, 'dropped a malformed message', {
       event: 'client.malformed-message',
       reason: description,
     });
@@ -838,17 +823,15 @@ export class SerialBrokerClient {
       return;
     }
     if (this.#reportedPeerVersions.size >= MAX_REPORTED_PEER_VERSIONS) {
-      if (!this.#hasReachedPeerVersionLimit) {
-        this.#hasReachedPeerVersionLimit = true;
-        this.#logger.warn(
-          'heard of more protocol versions than are reported; further ones are not',
-          {
-            event: 'client.peer-versions-limit',
-            limit: MAX_REPORTED_PEER_VERSIONS,
-            theirVersion: describeUnknown(theirVersion),
-          },
-        );
-      }
+      this.#once.warn(
+        'peer-versions',
+        'heard of more protocol versions than are reported; further ones are not',
+        {
+          event: 'client.peer-versions-limit',
+          limit: MAX_REPORTED_PEER_VERSIONS,
+          theirVersion: describeUnknown(theirVersion),
+        },
+      );
       return;
     }
     this.#reportedPeerVersions.add(theirVersion);
@@ -875,13 +858,10 @@ export class SerialBrokerClient {
       this.#unheardErrors.push(error);
       if (this.#unheardErrors.length > MAX_UNHEARD_ERRORS) {
         this.#unheardErrors.shift();
-        if (!this.#hasDroppedUnheardErrors) {
-          this.#hasDroppedUnheardErrors = true;
-          this.#logger.warn('dropped the oldest error nobody listened for', {
-            event: 'client.unheard-errors-dropped',
-            limit: MAX_UNHEARD_ERRORS,
-          });
-        }
+        this.#once.warn('unheard-errors', 'dropped the oldest error nobody listened for', {
+          event: 'client.unheard-errors-dropped',
+          limit: MAX_UNHEARD_ERRORS,
+        });
       }
     }
   }
