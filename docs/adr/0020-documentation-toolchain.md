@@ -30,7 +30,9 @@ Three things had to be settled first:
   in the source comments, not in the site.
 - **Python lives in a virtual environment at `docs/.venv`**, created from pinned
   `docs/site/requirements.txt`, so the repository itself does not depend on Python.
-  `npm run docs` runs typedoc and then Sphinx.
+  `npm run docs` runs typedoc and then Sphinx, and fails on any warning.
+- **CI builds the site** in a job of its own, with the same virtual environment, and keeps the built
+  HTML as an artefact.
 
 ## Alternatives considered
 
@@ -49,17 +51,19 @@ Three things had to be settled first:
 
 - The reference cannot disagree with the code it documents.
 - Writing documentation stays Markdown throughout.
+- A broken page or cross-reference fails the build on push, not only locally.
 
 ### Negative
 
 - Building the site needs Python and a one-time `pip install`. Nothing else in the repository does.
 - The reference is only as good as the TSDoc comments; completing them is part of the work.
 
-### Risks and mitigations
-
-- **CI does not build the site yet.** A broken page is found locally, not on push. Adding a Python
-  step to CI is part of finishing the documentation.
-
 ## Verification
 
-`npm run docs` builds `docs/site/_build/html/` from a clean checkout with the environment created.
+`npm run docs` builds `docs/site/_build/html/` from a clean checkout with the environment created;
+the `docs` job in `.github/workflows/ci.yml` runs it on every push.
+
+## History
+
+- 2026-09-13: Accepted, with the site not yet built in CI.
+- 2026-09-15: CI builds the site (recorded; the job already existed).

@@ -17,13 +17,15 @@ departure will eventually leave a configuration with no owner and no way to noti
 
 ## Decision
 
-Ownership is the
-[Web Locks API](https://w3c.github.io/web-locks/) lock named
-`serial-broker/owner/<protocolVersion>/<configurationName>`, held in `exclusive` mode for as
+Ownership is the [Web Locks API](https://w3c.github.io/web-locks/) lock named
+`serial-broker/owner/v<protocol version>/<configuration name>`, held in `exclusive` mode for as
 long as the window is the owner.
 
 - A window becomes the owner by being granted that lock, and holds it by keeping the lock
-  callback's promise pending.
+  callback's promise pending. Inside the callback it takes the lock of its term of holding the
+  port before it counts as the owner; a term lock the browser refuses lets the ownership lock go
+  too, and both are requested again
+  ([ADR-0030](./0030-hold-a-web-lock-for-every-term-of-holding-the-port.md)).
 - A window relinquishes ownership by resolving that promise — after closing the port.
 - When the owning window dies, **the browser releases the lock** as part of tearing down the
   context, and the longest-waiting window is granted it. Failover needs no timeout, no
@@ -35,16 +37,18 @@ long as the window is the owner.
   ([ADR-0008](./0008-wire-protocol-and-versioning.md)).
 
 Web Locks are same-origin scoped and cover every window, tab, iframe and worker of that
-origin — the exact scope of the problem.
+origin — the exact scope of the problem. The same property carries the tab limit
+([ADR-0025](./0025-limit-the-tabs-using-a-configuration.md)), the remembered configurations
+([ADR-0033](./0033-one-storage-key-per-configuration.md)) and liveness on the bus
+([ADR-0041](./0041-tell-liveness-through-web-locks.md)).
 
 ## Alternatives considered
 
-- **Heartbeats in the SharedWorker.** The worker sees a port disconnect when a tab dies, which
-  is a genuine signal, and it was the first design. Rejected as the _primary_ mechanism: it
-  depends on the worker being alive and on choosing a timeout, and it cannot prevent a
+- **Heartbeats in the SharedWorker.** The first design. Rejected as the mechanism for ownership:
+  it depends on the worker being alive and on choosing a timeout, and it cannot prevent a
   split-brain window between "worker thinks A is dead" and "A is actually still writing". A
-  browser-enforced exclusive lock has neither problem. The worker's view of disconnects is
-  still used, but only to update _presence_, never to grant ownership.
+  browser-enforced exclusive lock has neither problem. Presence on the bus later moved to Web
+  Locks as well (ADR-0041).
 - **`localStorage` lease with expiry timestamps.** The classic pre-Web-Locks approach.
   Requires clock agreement between tabs, has a documented race on `storage` event delivery,
   and a stalled tab can renew a lease it should have lost. Rejected.
@@ -68,8 +72,16 @@ origin — the exact scope of the problem.
 - A long-lived pending lock request per configuration per tab. Negligible, but it means the
   request must be aborted (via `AbortSignal`) when a configuration is released, or the tab
   would take ownership of something it no longer cares about.
+- A script of the origin can take Web Locks too, and so hold a configuration's ownership lock.
+  `SECURITY.md` lists what that allows; it cannot make two tabs open the device.
 
 ## Verification
 
-Scenario matrix rows 5, 6, 7 and 16; the harness implements Web Locks FIFO semantics and
-abrupt context death, and has its own conformance tests.
+Scenario matrix rows 5, 6, 7 and 16; `test/unit/election.test.ts`; the harness implements Web
+Locks FIFO semantics and abrupt context death, and has its own conformance tests.
+
+## History
+
+- 2026-09-12: Accepted.
+- 2026-09-15: The term lock is taken inside the election (ADR-0030); the lock name written with its
+  `v` prefix, as the code has it.

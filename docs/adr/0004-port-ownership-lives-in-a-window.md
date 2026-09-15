@@ -26,8 +26,10 @@ The physical port is opened and held by **one window at a time**, called the **o
 ([ADR-0005](./0005-owner-election-via-web-locks.md)) and moves automatically when the owning
 window goes away.
 
-Every participant — owner or not — sees the same events and can issue writes; writes from
-non-owners are routed to the owner, which performs the actual `writer.write()`.
+Every participant — owner or not — sees the same events and can issue writes. A write from
+another tab crosses the bus to the configuration's participants, and only the tab holding the
+port in the term the write is addressed to performs the actual `writer.write()`
+([ADR-0030](./0030-hold-a-web-lock-for-every-term-of-holding-the-port.md)).
 
 ## Alternatives considered
 
@@ -57,10 +59,16 @@ non-owners are routed to the owner, which performs the actual `writer.write()`.
   a transfer always includes a reopen, with a brief gap in which no read is in flight. This
   gap is reported as `reconnecting`, never hidden.
 - Data that arrives during the transfer gap can be lost — the device is talking to nobody.
-  This is a property of the platform, documented in the README, and the reason
+  This is a property of the platform, documented, and the reason
   [ADR-0013](./0013-write-ordering-and-delivery-semantics.md) promises _at-most-once_
   delivery rather than exactly-once.
 
 ## Verification
 
 Scenario matrix rows 5, 6 and 7 in [testing.md](../guidelines/testing.md).
+
+## History
+
+- 2026-09-12: Accepted.
+- 2026-09-15: Writes from other tabs are no longer routed to the owner but performed by the holder
+  of the addressed term (ADR-0006, ADR-0030).

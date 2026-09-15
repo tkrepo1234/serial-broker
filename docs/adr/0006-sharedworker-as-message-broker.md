@@ -1,101 +1,150 @@
 # ADR-0006: Use a SharedWorker as the message broker
 
-- **Status:** Accepted, amended by [ADR-0028](./0028-bind-an-identity-on-the-worker-to-a-secret.md) and
-  [ADR-0029](./0029-forward-the-workers-records-to-the-tabs.md)
+- **Status:** Accepted
 - **Date:** 2026-09-12
 
 ## Context
 
 Every participant must see every received chunk, every write performed by any participant, and
-every status change — in the same order, with no duplicates. Writes from non-owning
-participants must reach the owner and be acknowledged back to their originator.
+every status change, in the same order. Writes from tabs that do not hold the port must reach the
+tab that does, and their outcome must come back to their originator. Ownership is already solved by
+Web Locks ([ADR-0005](./0005-owner-election-via-web-locks.md)); what remains is a bus.
 
-Ownership is already solved by Web Locks ([ADR-0005](./0005-owner-election-via-web-locks.md)).
-What remains is routing.
+`SharedWorker` is not universally available even where Web Serial is. It is absent on Chrome for
+Android, it can be disabled by enterprise policy, and a worker whose script URL cannot be resolved -
+because of an unusual bundler setup, a strict `script-src`, or a worker file copied to the wrong
+path - is still created: the browser reports the failure afterwards, as an `error` event.
+
+Every script of the origin can reach the bus as well, under any identity it writes into a message
+(`SECURITY.md`). Integrity cannot rest on who a message says it is from.
 
 ## Decision
 
-A `SharedWorker` acts as the **broker**: a single, long-lived context that holds a
-`MessagePort` to every participant and routes messages between them.
+The bus is an interface, `Transport`, with two implementations. Selection is automatic and can be
+forced with `configure({ transport: 'sharedworker' | 'broadcastchannel' | 'auto' })`.
 
-Its responsibilities are deliberately narrow:
+**`SharedWorkerTransport`, the default.** A `SharedWorker` runs the **broker**: one long-lived
+context holding a `MessagePort` to every participant. Its job is deliberately narrow:
 
-1. Track which contexts are interested in which configuration.
-2. Resolve the three delivery targets a message can carry: `all` (every participant of a
-   configuration except the sender), `owner` (whoever currently holds the port), and a
-   specific participant.
-3. Forget contexts that have gone away.
+1. Track which contexts take part in which configuration. A tab's `hello` names every configuration
+   it takes part in and is sent again whenever that changes; the broker takes each for the whole of
+   the tab's participation.
+2. Resolve two delivery targets: `all` participants of a configuration except the sender, and one
+   participant.
 
-It explicitly does **not**: touch the port, decide who the owner is, hold or replay writes,
-interpret payloads, or persist anything. Its cached notion of who the owner is exists purely
-for routing and is never an authority - the Web Lock is
-([ADR-0005](./0005-owner-election-via-web-locks.md)). If the cache is stale, a write is
-delivered to a context that has just stopped being the owner, and that context rejects it;
-this is a normal, harmless occurrence during a handover.
+It does **not** touch the port, decide or even know who owns it, hold or replay writes, interpret
+payloads, or persist anything. What is meant for the tab holding the port - a `write-request`, a
+`status-request` - is addressed to `all`, and only the tab holding the term it names acts on it
+([ADR-0030](./0030-hold-a-web-lock-for-every-term-of-holding-the-port.md)). A claim of ownership
+the broker believed would be one any script could forge.
 
-The write lifecycle - holding a write while ownership is in transit, and deciding what a write
-that was in flight when the owner died means - lives in the context that **issued** the write,
-not in the broker ([ADR-0013](./0013-write-ordering-and-delivery-semantics.md)). That context
-is the only one that knows whether repeating its command is safe, and keeping the decision
-there means it works identically under both transports and survives the broker itself dying.
+The worker keeps each port to one identity, which is cheap and keeps one port from speaking for
+many contexts (`WorkerPorts`): a port's first message must be `hello` and names the identity it
+speaks as; a message before it, one in another sender's name, or a `hello` as the broker itself is
+dropped. An identity may have several ports, and each receives what is addressed to it. Participants
+and ports per participant are bounded (`MAX_PARTICIPANTS`, `MAX_PORTS_PER_PARTICIPANT`). How the
+worker learns that a tab has gone, and a tab that the worker has, is
+[ADR-0041](./0041-tell-liveness-through-web-locks.md).
+
+The worker script is resolved via `new URL('./serial-broker.worker.js', import.meta.url)` and can be
+overridden with `configure({ workerUrl })`.
+
+**`BroadcastChannelTransport`, the fallback.** Every message goes to every context of the origin, and
+each receiver applies only what is addressed to it: `all` for a configuration it takes part in, and
+its own identity. Messages meant for or written by a broker (`hello`, `welcome`, `worker-log`) are
+dropped. No broker instance is needed, because the envelope carries everything routing depends on.
+
+**Falling back.** In `auto` mode the worker transport is wrapped in a `FallbackTransport`. Until the
+broker's `welcome` proves the script runs, it moves to `BroadcastChannel` when:
+
+- the worker reports an error (`worker-script-failed`),
+- a message in another protocol version arrives on the worker's port
+  (`worker-other-protocol-version`, [ADR-0008](./0008-wire-protocol-and-versioning.md)), or
+- no `welcome` has arrived within the handshake deadline of 45 seconds (`worker-not-answering`).
+
+Nothing the tab sent before that reached anyone, and nothing is sent again. The new bus is told what
+the tab takes part in, and the client restates itself as after reaching a new worker: the tab holding
+the port its status, every other tab a request for it. Write requests are handed on once the holder
+restates `open`, and the holder recognises a request it has already accepted
+([ADR-0013](./0013-write-ordering-and-delivery-semantics.md)). The switch is logged as
+`environment.transport-fallback` with the reason. After the `welcome` nothing moves.
+`transport: 'sharedworker'` never falls back; on a worker of another protocol version it stops using
+workers until the page is reloaded (ADR-0008).
+
+The write lifecycle lives in the context that **issued** the write, not in the broker (ADR-0013).
+Together with ownership by Web Lock, that is what makes the fallback a change of delivery mechanism
+and nothing else.
 
 ## Alternatives considered
 
-- **`BroadcastChannel` only, no worker.** Genuinely simpler - with Web Locks doing election
-  and each sender owning its own write lifecycle, a broker is not strictly required. Rejected
-  as the default because a broadcast bus puts every message in front of every tab and leaves
-  the filtering to each receiver: a write result intended for one originator is seen by all,
-  a payload is cloned once per tab rather than once, and a tab that is merely listening still
-  pays to decode traffic addressed elsewhere. A broker makes delivery point-to-point, which is
-  both cheaper and easier to reason about. It remains the fallback
-  ([ADR-0007](./0007-broadcastchannel-fallback-transport.md)).
+- **`BroadcastChannel` only, no worker.** Simpler, and not strictly less correct. Rejected as the
+  default because a broadcast bus puts every message in front of every tab of the origin, clones
+  each payload once per tab, and makes a tab that merely listens pay to decode traffic for other
+  configurations. It remains the fallback.
 - **`localStorage` events as the bus.** Serialises everything through strings, fires only in
-  _other_ tabs, has no ordering guarantee across storage partitions, and is a well-known
-  source of subtle bugs. Rejected.
-- **A `SharedWorker` that also elects the owner by observing port disconnects.** See
-  ADR-0005: presence is not mutual exclusion.
+  _other_ tabs, has no ordering guarantee, and is a well-known source of subtle bugs.
+- **A broker that routes to the owner.** What this record first decided: the broker kept the tab
+  that last sent `owner-claimed` and delivered what was meant for the owner to it alone. The broker
+  could not ask the Web Lock, so it believed the claim, and any script of the origin could claim a
+  configuration and receive every other tab's writes, which then timed out. Having the worker check
+  the term's lock would cost it an asynchronous lock request per claim, and `BroadcastChannel`
+  would still deliver to all.
+- **Bind each identity on the worker to a secret sent in `hello`.** Decided on 2026-09-14 and
+  removed on 2026-09-15. It kept a script from connecting as a tab whose identity it heard, but not
+  from claiming the port under its own identity; it held on the `SharedWorker` only; and it cost a
+  secret source, a binding table with its own bound and two refusal reasons. A script of the origin
+  can call the library itself, so an identity on the bus was never what integrity rested on.
+- **A worker that elects the owner by observing port disconnects.** Presence is not mutual
+  exclusion (ADR-0005).
+- **No fallback; throw `SHARED_WORKER_UNAVAILABLE`.** Honest and simple, but an application that
+  cannot open a port at all on Android is a worse outcome than one on a slower bus.
+- **Fall back to "every tab opens its own port".** Violates the entire premise.
+- **Replay what was sent before the `welcome` into the fallback.** What the fallback did until
+  2026-09-15, bounded at 1000 messages. Restating what the other tabs need to know is smaller and
+  needs no record; what is lost is traffic sent in the moments before the switch.
+- **Fall back only on a timeout.** A slow network would switch tabs whose worker was merely late,
+  splitting them from tabs whose worker arrived.
 
 ## Consequences
 
 ### Positive
 
-- One authoritative routing point: ordering and de-duplication are trivial to reason about.
-- Presence is exact: a closed message port tells the broker immediately that a participant is
-  gone, with no heartbeat and no timeout to tune.
-- The broker holds no state worth losing: if it were restarted, participants re-announce
-  themselves on their next message and nothing has to be recovered.
+- The library works wherever Web Serial works. The `Transport` seam is also the seam the tests
+  inject, so the fallback is not a second-class code path.
+- Nothing the broker does depends on believing a message: a forged `owner-claimed` diverts no write
+  and delays none.
+- The broker holds no state that has to be recovered: a new worker learns everything from each
+  tab's `hello`.
 
 ### Negative
 
-- A `SharedWorker` needs a script URL, which makes bundling the library harder than a
-  single-file drop-in: a `Blob` URL cannot be used, because each tab would produce a
-  _different_ URL and therefore a different, unshared worker. The library resolves the worker
-  via `new URL('./serial-broker.worker.js', import.meta.url)` and allows an explicit override
-  through `configure({ workerUrl })`. This is documented prominently.
-- Not available in every context (see ADR-0007), hence the fallback.
+- Every participant receives, and structurally clones, each write request of its configuration.
+  Write requests are small next to the traffic every participant receives anyway.
+- A script of the origin can say `hello` under a tab's identity and receive what is addressed to that
+  tab alone - a write's progress and result, which it could read on the configuration's traffic in
+  any case. It cannot take the tab's messages away: ports of one identity are served side by side.
+- A `SharedWorker` needs a script URL, so a `Blob` URL cannot be used: each tab would produce a
+  different URL and so a different, unshared worker.
+- Two transports to maintain and test. Mitigated by running the multi-context scenario matrix
+  against both.
+- One partition remains: a script that fails to load in one tab but loads in another - a transient
+  network error rather than a missing file - leaves the two tabs on different buses. Ownership is
+  still the Web Lock, so only one opens the device; reloading the other tab resolves it.
 
 ## Verification
 
-Scenario matrix rows 3, 4, 7, 11, 12; the harness implements a real multi-context message
-graph with controllable delivery order.
+`test/unit/broker.test.ts`, `test/unit/worker-ports.test.ts`, `test/unit/transports.test.ts` and
+`test/unit/fallback-transport.test.ts`; `test/integration/multi-tab/worker-script-fallback.test.ts`
+and `test/integration/multi-tab/hostile-bus.test.ts` (a forged claim diverts no write; a `hello` in a
+tab's name leaves it connected); the multi-context suite is parameterised over both transports, and
+`test/browser/transports.spec.ts` runs the fallback in a real browser.
 
-## Amendment (2026-09-13): two consequences that did not hold
+## History
 
-Two positive consequences above were wrong, and are corrected here rather than rewritten.
-
-- "A closed message port tells the broker immediately that a participant is gone." A `MessagePort`
-  has no close event. The broker learns that a tab died only when its heartbeats stop
-  ([ADR-0021](./0021-forget-silent-participants.md)).
-- "If it were restarted, participants re-announce themselves on their next message." Nothing made
-  an open tab notice a restart: a port to a dead worker delivers and reports nothing, and no
-  transport started a worker again. Since ADR-0021's amendment the broker answers heartbeats, and a
-  tab whose heartbeats go unanswered starts a new worker and restores its participation and
-  ownership with a heartbeat. The broker still holds nothing that has to be recovered; what is lost
-  is the traffic between its death and the tabs reconnecting.
-
-## Amendment (2026-09-15): the vocabulary a tab speaks to the broker
-
-`attach`, `detach`, `heartbeat` and `goodbye` are gone. A tab's `hello` names every configuration
-it takes part in and is sent again whenever that changes, and the broker takes each for the whole of
-the tab's participation. A tab and the worker learn that the other has gone from Web Locks, not from
-messages ([ADR-0041](./0041-tell-liveness-through-web-locks.md)).
+- 2026-09-12: Accepted - broker routing to `all`, `owner` or one participant; `BroadcastChannel`
+  fallback when `SharedWorker` is missing or throws (ADR-0007).
+- 2026-09-13: Fallback when the worker script fails to load, replaying what was sent (ADR-0007).
+- 2026-09-14: Identity on the worker bound to a secret (ADR-0028).
+- 2026-09-15: The broker routes to all participants and tracks no owner; the secret is removed
+  (ADR-0040). The fallback restates instead of replaying; `attach`, `detach`, `heartbeat` and
+  `goodbye` folded into `hello` (ADR-0041). ADR-0007 and ADR-0040 folded in.

@@ -82,8 +82,7 @@ inside an `onReceive` handler must not corrupt state. Event dispatch therefore i
   retain or mutate what it receives.
 - Never assume a `read()` returns a complete logical message. Framing is explicitly **not**
   this library's job (see [ADR-0002](../adr/0002-scope-transport-only.md)); received bytes are
-  collected until the line is quiet ([ADR-0039](../adr/0039-collect-received-bytes-until-the-line-is-quiet.md)),
-  and the boundaries of a delivery carry no meaning.
+  collected until the line is quiet, and the boundaries of a delivery carry no meaning.
 
 ### Forbidden patterns
 

@@ -2,251 +2,159 @@
 
 - **Status:** Accepted
 - **Date:** 2026-09-14
-- **Amends:** ADR-0009 (device identity), ADR-0016 (the device filter), ADR-0034 (the debugging
-  surface's _Choose a device…_), ADR-0033 (what the stored entry holds)
 
 ## Context
 
-A configuration has always had to name its device before anything could happen: USB vendor and
-product IDs (ADR-0009), or `{ any: true }` for a port that reports none (ADR-0016). Both are
-things a developer who has just plugged a device in does not have, and things an operator on a
-shop floor should never have to type. The browser knows them - it shows the ports in its own
-picker, and `SerialPort.getInfo()` reports the IDs once a port is chosen - but only after the
-choice, which needs a user gesture.
+A configuration has to find its port again on every visit. Two things persist for that, in
+different places:
 
-ADR-0034 worked around this in the debugging surface alone: the page opened the picker itself,
-read the chosen port, and derived a `setup()` call from it. That put the derivation in a page
-rather than in the library, so every application that wants the same first-run experience would
-have to write it again; and the configuration it produced was an ordinary explicit one, so a
-port chosen in one tab said nothing to the other tabs of the configuration.
+1. **The permission** to use a particular physical port. It is owned by the browser: an application
+   cannot grant, store or forge it. `Serial.requestPort()` prompts the user and, once granted,
+   `Serial.getPorts()` returns that port on later visits without a prompt. The grant is per origin
+   and revocable by the user at any time.
+2. **What identifies the device**, which is ours to decide. `SerialPort` objects are not
+   serialisable and expose no stable identifier. The only identifying information is
+   `SerialPort.getInfo()`, which for a USB device yields `usbVendorId` and `usbProductId` - a device
+   _type_, not an instance - and for anything else reports neither: a built-in RS-232 interface on
+   an industrial PC, a virtual COM port, a Bluetooth serial port.
 
-Tim asked for the rule to be the library's: vendor and product ID must always be optional, and a
-configuration set up without them takes its identity from the port the user chooses.
+Vendor and product IDs are also what a developer who has just plugged a device in does not have,
+and what an operator on a shop floor should never have to type. The browser shows the ports in its
+own picker, but only after a choice, which needs a user gesture. Tim asked for the IDs to be always
+optional, with a configuration set up without them taking its identity from the port the user
+chooses.
 
 ## Decision
 
-**A configuration is set up explicitly or in auto mode.** `device` becomes optional in
-`SerialBrokerOptions`. Omitted, or `{ auto: true }`, is auto mode; `{ vendorId, productId }` and
-`{ any: true }` stay the explicit modes, joined by a third, `{ nonUsb: true }`, which matches only
-ports that report no USB identity. Passing two shapes at once is `INVALID_ARGUMENT`, as before.
-An empty object is not auto mode: it names the USB shape without its IDs, and is rejected as it
-always was.
+**The device filter has four shapes.** `device` in `SerialBrokerOptions`:
 
-**In auto mode, the port the user chooses decides the device.** `setup()` reports
-`awaiting-permission` until `requestAccess()` opens the picker with no filter. The chosen port's
-`getInfo()` resolves the configuration: to `{ vendorId, productId }` when it reports both USB
-IDs, and to `{ nonUsb: true }` otherwise - a port with exactly one of the two IDs counts as having
-none, as ADR-0034 decided, because no filter could find it again by half an identity. From then
-on the configuration matches ports, filters its picker and describes itself exactly as the
-explicit filter it resolved to would; it remains in auto mode, with the resolution beside the
-mode: `{ kind: 'auto', resolved }` internally, `{ auto: true, resolved: { … } }` wherever the
-options are written out.
+- `{ vendorId, productId }` - a USB device of that type;
+- `{ nonUsb: true }` - only ports that report no USB identity (a port reporting just one of the two
+  IDs counts as having none);
+- `{ any: true }` - whatever the user granted, whatever it reports;
+- omitted, or `{ auto: true }` - **auto mode**: the port the user chooses decides.
 
-**Until the user has chosen, an auto-mode configuration matches no granted port, even when
-exactly one is granted.** Considered and rejected: connecting to the single granted port without
-asking. It would save one click in the common case, and it would be a guess in every other: the
-one port may have been granted for another configuration of the origin, or for another
-application on the same origin, and auto mode promises the device the user chose, not the device
-that happened to be there. The click it would save is also no longer needed where it mattered
-most - see the next decision.
+Passing two shapes at once, or an empty object, is `INVALID_ARGUMENT`. Internally the filter is a
+discriminated union, so no code can read a vendor ID from a configuration that has none.
 
-**`requestAccess()` may be called before the tab holds the port.** It was refused with
-`PERMISSION_REQUIRED` in any tab that did not hold the port, because only the holder can act on
-the choice. That was too strict by one case: a tab that has just called `setup()` and does not
-yet know whether anyone holds the port, because the ownership election is one lock round trip
-away. Such a tab may open the picker at once, in the same gesture that set the configuration up.
-The choice is kept and used the moment the tab holds the port; if it turns out that another tab
-holds it, the holder's device is adopted when its status arrives (below), and the choice, being a
-browser permission, is not lost either way. A tab that knows another tab holds the port - it has
-heard its claim or its status, or it is `queued` - is refused as before.
+**Finding the port.** On `setup()` the tab holding the port calls `getPorts()` and opens the first
+granted port its filter matches - no prompt, no gesture. When none matches, the status is
+`awaiting-permission`, and the application calls `requestAccess(name)` **from a user gesture**; the
+picker is filtered by the USB IDs where the filter has them, and unfiltered otherwise, because an
+empty filter list would hide exactly the ports `nonUsb`, `any` and auto mode exist for.
+
+**Auto mode resolves.** Until the user has chosen, an auto-mode configuration matches no granted
+port, even when exactly one is granted. `requestAccess()` resolves it from the chosen port's
+`getInfo()`: to `{ vendorId, productId }` when both IDs are reported, to `{ nonUsb: true }`
+otherwise. From then on it matches, filters its picker and describes itself as that filter, and it
+stays in auto mode with the resolution beside it: `{ auto: true, resolved: { … } }` wherever the
+options are written out. An application may pass `resolved` itself.
+
+**`requestAccess()` may be called before the tab holds the port** - in the same gesture that set the
+configuration up, while the election is one lock round trip away. The choice is used once the tab
+holds the port; if another tab turns out to hold it, the holder's device is adopted. A tab that
+knows another tab holds the port, or is `queued`, is refused with `PERMISSION_REQUIRED`.
 
 **The resolution is remembered, reported and shared.**
 
-- _Remembered_: the stored entry (ADR-0033) is still exactly what `setup()` accepts, and the
-  `device` written into it is `{ auto: true, resolved: { … } }`. `restore()` and a later visit
-  therefore reconnect to the chosen device without a prompt, as an explicit configuration would,
-  while the restored configuration is still in auto mode. A stored auto entry with no resolution
-  stays auto, and waits for the user again. An application may pass `resolved` itself to seed a
-  resolution.
-- _Reported_: `getStatus()` gains `deviceKind`: `'usb'`, `'non-usb'`, `'any'`, or `'auto'` for a
-  configuration in auto mode that has not resolved. `vendorId` and `productId` are set only for
-  `'usb'`, so a non-USB resolution shows as `deviceKind: 'non-usb'` with both undefined. The
-  diagnostics report and the debugging surface show the device in effect the same way.
-- _Shared_: the `status` message carries `device` - the holder's device in effect, by kind, with
-  the two IDs for a USB one - and the protocol version becomes 9. A tab set up in auto mode adopts
-  a `usb` or `non-usb` device it hears from the tab holding the port, replacing whatever it had
-  resolved to itself: **the tab holding the port decides**, as it does for the tab limit
-  (ADR-0025). It then matches, filters its picker and remembers that device as if it had chosen
-  it. A holder that is itself waiting (`auto`), or that accepts any port (`any`), hands on nothing:
-  `any` is not a device, and a tab that adopted it could no longer resolve. A tab set up explicitly
-  adopts nothing.
+- _Remembered:_ the stored entry ([ADR-0033](./0033-one-storage-key-per-configuration.md)) keeps
+  `{ auto: true, resolved }`. `setup()` of an unresolved auto-mode configuration with
+  `remember: true` starts from a remembered auto-mode resolution of the same name, logged as
+  `session.device-resolved` with `source: 'remembered'`, so a later visit reconnects without a
+  prompt; so does `restore()`. What the call says wins, an explicit remembered device is never
+  turned into a resolution, and `remember: false` takes nothing. Saving an unresolved auto-mode
+  configuration keeps a resolution the stored entry already holds.
+- _Reported:_ `getStatus()` has `deviceKind`: `'usb'`, `'non-usb'`, `'any'`, or `'auto'` while
+  unresolved; `vendorId` and `productId` are set only for `'usb'`.
+- _Shared:_ the `status` message carries the holder's device in effect. A tab in auto mode adopts a
+  `usb` or `non-usb` device it hears from the tab holding the port: **the tab holding the port
+  decides**, as for the tab limit ([ADR-0025](./0025-limit-the-tabs-using-a-configuration.md)). A
+  holder that waits (`auto`) or accepts any port (`any`) hands on nothing, and an explicitly set up
+  tab adopts nothing. A status is believed only while its term's Web Lock is held
+  ([ADR-0030](./0030-hold-a-web-lock-for-every-term-of-holding-the-port.md)).
 
-  A status is believed only while the term's Web Lock is held, and that lock is named after the
-  term, the sender and the tab limit (ADR-0030). A script of the origin can therefore not make a
-  tab adopt a device by posting a status in its own name, or for a term nobody holds. On the
-  `BroadcastChannel` it can post one in the holder's name, for the holder's live term - exactly as
-  it can already state any _status_ for that term - and that is believed, for the device as for
-  the status. What it gains is nothing it did not have: the tab would open a device only among
-  those the user has granted to this origin, and a script of the origin can open every one of them
-  itself (SECURITY.md). On the `SharedWorker` a `hello` binds the identity to a secret (ADR-0028),
-  so the holder's name cannot be used at all.
+**Conflict rules within a tab** (`isDeviceCompatible`): auto never conflicts with auto; an unresolved
+auto filter conflicts with nothing; a resolved one counts as its resolution; two explicit filters
+conflict unless equal in kind and IDs, `nonUsb` and `any` being distinct kinds. Between tabs, devices
+are not compared: the documentation says to pass the same options for a name in every tab.
 
-**Conflict rules.** Within one tab, `setup()` for a name already set up compares the two devices
-(`isDeviceCompatible`):
-
-- auto mode never conflicts with auto mode, whatever either has resolved to - both say "the device
-  the tab holding the port chose", and the session already running keeps its resolution;
-- an auto-mode filter that has not resolved conflicts with nothing: it has committed to nothing,
-  and the second `setup()` is a no-op like any compatible one, so an explicit device passed then
-  is not taken up;
-- an auto-mode filter that has resolved counts as the device it resolved to: an explicit filter
-  equal to it is compatible, anything else is `CONFIGURATION_CONFLICT`;
-- two explicit filters conflict as before, `nonUsb` being its own kind: two `nonUsb` filters are
-  compatible, `nonUsb` and `any` are not.
-
-Between tabs, serial-broker compares devices no more than it did. Tab A resolved to device X and
-tab B set up explicitly with device Y report no conflict: B keeps Y, opens Y when it holds the
-port, and A - being in auto mode - adopts Y then. This is the situation two explicit tabs with
-different devices have always been in, and the documentation says, as it did, to pass the same
-options for a name in every tab.
-
-**The debugging surface's _Choose a device…_ is this mode.** The page no longer opens the picker
-itself or derives anything from the chosen port. The action opens the setup dialog with the device
-fields hidden - a name and the line settings are all it asks for - and _Connect_ sets the
-configuration up in auto mode and calls `requestAccess()` in that click, which is what the fourth
-decision exists for. A dismissed picker releases the configuration again, so nothing waits for a
-device nobody chose and nothing is remembered. _New configuration_ keeps the device list, with
-_Automatic (from the chosen device)_ as its default entry beside the presets, _Other USB device_,
-_Port without USB identity_ and _Any port_; editing a resolved configuration keeps its resolution,
-so changing a baud rate does not ask for the device again.
+**Releasing.** `release(name)` stops using a configuration and forgets its remembered entry under
+the rule of ADR-0033; it does not revoke the browser permission, so the next `setup()` is still
+prompt-free. `release(name, { forgetDevice: true })` also calls `SerialPort.forget()` where the
+browser supports it. To choose a different device in auto mode, release the configuration.
 
 ## Alternatives considered
 
-- **Turn a resolved auto-mode configuration into the explicit one it resolved to.** Smaller: no
-  `resolved`, no auto-mode conflict rule. But a restored configuration would then be explicit, and
-  a tab that restored X would keep X when the holder is later re-chosen to Y in another tab - the
-  tabs of one name diverging, with the stored entry agreeing with the holder and not with them.
-  Keeping the mode makes every auto-mode tab follow the holder, which is the property that makes
-  "choose it once, in any tab" true.
-- **Resolve the device from the `any` filter's first granted port.** That is what `any` does, and
-  it is the wrong answer for the same reason the single-granted-port shortcut is: the first
-  granted port is not a choice.
-- **Share the choice through a message of its own, from the tab that chose to the holder.** The
-  holder would then act on a device a message named, which is what ADR-0030 removed for terms and
-  limits; and a script of the origin could redirect the holder to another granted device. The
-  holder decides, and tells; nobody tells the holder.
-- **Keep the page's own derivation (ADR-0034) and add auto mode beside it.** Two paths to the same
-  outcome, one of them in a page. The page's version also produced an explicit configuration,
-  losing the sharing.
-- **Let `requestAccess()` open the picker in every tab, holder or not.** A tab that knows another
-  tab holds the port would take a choice nobody can act on until the holder goes away, and would
-  contradict the holder meanwhile. The one case that needs the picker before ownership is settled
-  is the one that is allowed.
-- **`{ vendorId, productId, auto: true }` as the resolved shape.** It reads as two shapes at once,
-  which is exactly what validation rejects; `resolved` keeps the mode and the device apart.
+- **Persist a serialised port handle, or match on a port index or `getPorts()` order.** A port is
+  neither serialisable nor identifiable across sessions, and the order is not specified as stable;
+  a port appearing would silently repoint a configuration at another device.
+- **Prompt automatically during `setup()`.** `requestPort()` requires transient user activation, and
+  `setup()` typically runs during page initialisation; the resulting `SecurityError` would look like
+  a library bug. `awaiting-permission` makes the constraint explicit.
+- **Match on serial number.** `getInfo()` exposes none.
+- **Optional IDs on the USB filter** (`{ vendorId?, productId? }`), or an `acceptAnyDevice` flag
+  beside it. A typo would silently turn a specific filter into a wildcard; the discriminant makes
+  the mistake unrepresentable.
+- **Connect to the single granted port in auto mode without asking.** It saves one click and is a
+  guess in every other case: the port may have been granted for another configuration or
+  application of the origin.
+- **Turn a resolved auto-mode configuration into the explicit one it resolved to.** Tabs of one name
+  would diverge once the holder is re-chosen elsewhere; keeping the mode makes every auto-mode tab
+  follow the holder.
+- **Share the choice through a message from the choosing tab to the holder.** The holder would act on
+  a device a message named, which a script of the origin could forge. The holder decides and tells.
+- **Derive the configuration in the debugging surface.** What the page did before this decision
+  ([ADR-0019](./0019-ship-the-debugging-surface.md)); every application would have to write it again,
+  and the result was not shared between tabs.
+- **Let only `restore()` read a remembered resolution.** The path the Quickstart teaches, `setup()`,
+  then asked the user on every visit and saved over the choice.
 
 ## Consequences
 
 ### Positive
 
-- `setup(name, { serial })` is a complete configuration. The first connection needs no vendor ID,
-  product ID or device type, in the library and not only in its debugging surface.
-- A device chosen once, in any tab, is the device of every tab of the configuration, now and on
-  the next visit.
-- A port with no USB identity is handled without anyone knowing that `any` or `nonUsb` exist.
-- `setup()` and `requestAccess()` can be one click, which is how a "Connect" button wants to work.
+- `setup(name, { serial })` is a complete configuration; the first connection needs no IDs.
+- A device chosen once, in any tab, is the device of every auto-mode tab of the configuration, now
+  and on the next visit, and `setup()` plus `requestAccess()` can be one click.
+- Ports without a USB identity - industrial PCs, virtual and Bluetooth ports - are supported.
+- Reopening after a reload, a crash or a device power cycle is automatic, and no secret, handle or
+  permission is stored by the library.
 
 ### Negative
 
-- The protocol version is 9 and the stored `device` may carry `resolved`; tabs and stored entries
-  of earlier builds do not federate or restore (before 1.0, as CONTRIBUTING.md says).
-- A configuration in auto mode that no user has chosen a port for waits forever, however many
-  ports are granted. That is the decision, and `deviceKind: 'auto'` says so.
-- A tab that chose a port before learning that another tab holds the configuration has its choice
-  overridden by the holder's device. The permission it obtained stays with the browser.
-- `getStatus()` has one more field, and `SerialBrokerStatusSnapshot` one more documented key.
+- Two identical devices on one machine cannot be addressed separately, and an `any` filter cannot
+  tell two granted ports apart: the first is used and a warning logged.
+- An auto-mode configuration no user has chosen a port for waits forever, however many ports are
+  granted; `deviceKind: 'auto'` says so.
+- A tab that chose before learning another tab holds the configuration has its choice overridden by
+  the holder's device; the permission stays with the browser.
+- A user revoking the permission turns an automatic reconnect into `awaiting-permission`.
 
 ### Risks and mitigations
 
-- **A resolution adopted from a forged status on the `BroadcastChannel`.** Discussed above: no more
-  than a script of the origin can do directly, and impossible on the `SharedWorker` transport.
-- **Two auto-mode tabs choosing different ports before either holds the port.** The holder's
-  choice wins and the other tab follows; both choices are granted permissions, and the losing one
-  is simply not used. Tested.
-- **An application that relied on `device` being required.** Its `setup()` calls carry a device
-  and are unchanged; a call that forgot it used to fail with `INVALID_ARGUMENT` and now waits for
-  the user, which `deviceKind: 'auto'` and the `awaiting-permission` status make visible.
+- **A device adopted from a forged status.** A script of the origin can post a status in the holder's
+  name for the holder's live term, on either transport, and have its device believed - as it can
+  already state any status for that term. It gains nothing it did not have: the tab opens only
+  devices the user granted to this origin, and a script of the origin can open every one of them
+  itself (SECURITY.md).
+- **Two configurations using `any` on one machine** fight over the same port; the documentation says
+  to use USB filters wherever the devices have IDs.
 
 ## Verification
 
-`test/unit/validation.test.ts` covers the four shapes, the mixtures, `resolved`, the round trip
-through `toSetupOptions()` and the conflict rules; `test/unit/port-matcher.test.ts` the matching
-of every kind, the resolution of USB, bare and half-identified ports, the unfiltered picker and the
-single granted port that is not taken. `test/unit/decode-matrix.test.ts`, `bus-limits.test.ts` and
-`decoder-fuzz.test.ts` hold the `status` message to its new field.
-`test/integration/multi-tab/auto-device.test.ts` covers, in both transport modes where tabs are
-involved: auto mode waiting for the user with one port granted; `requestAccess()` resolving a USB
-and a non-USB port, and being allowed in the same gesture as `setup()`; the resolution stored and
-restored, and an unresolved stored entry restored as waiting; a second tab adopting the device
-the first resolved, filtering its picker by it and opening it when it takes over; the conflict
-rules within a tab; an explicit tab and an auto-mode tab side by side; and two tabs that chose
-differently converging on the holder's device. `test/integration/multi-tab/hostile-bus.test.ts`
-posts a status naming a device in a script's own name and in the holder's name for an invented
-term, and shows that neither is adopted. `test/unit/debug-surface.test.ts` pins the page's part:
-auto mode by default, a resolution kept through the edit dialog, and the summaries.
+`test/unit/validation.test.ts` (the four shapes, mixtures, `resolved`, conflict rules),
+`test/unit/port-matcher.test.ts` (matching of every kind, resolution, the unfiltered picker, the
+single granted port not taken); `test/integration/non-usb-devices.test.ts` and
+`permission-and-persistence.test.ts`; `test/integration/multi-tab/auto-device.test.ts`, in both
+transport modes (resolution, adoption from the holder, remembered and restored resolutions, `setup()`
+on a later visit, conflict rules, two tabs choosing differently); `hostile-bus.test.ts` (a status
+naming a device for an invented term is not adopted); `test/unit/debug-surface.test.ts`.
 
-## Amendment (2026-09-15): `setup()` takes the remembered device
+## History
 
-The decision said that "`restore()` and a later visit" reconnect without a prompt. Only `restore()`
-did. `setup()` never read the remembered configurations, so an auto-mode configuration set up on a
-later visit started unresolved and waited with `awaiting-permission` although its port was granted;
-and it saved itself unresolved, over the entry that held the device, so a `restore()` after it
-waited too. The usability review of 2026-09-14 (finding U3, proposal P1) measured it, and the
-documentation worked around it by calling `restore()` before `setup()`. That workaround is reverted
-with this amendment.
-
-**`setup()` in auto mode starts with the remembered resolution.** When `setup()` creates a
-configuration in auto mode that has not resolved and is set up with `persist: true`, it reads the
-remembered entry of the same name. If that entry is in auto mode and has resolved, the new
-configuration starts resolved to that device, exactly as if the call had passed `resolved`: it finds
-the granted port without a prompt, reports the device, and saves the resolution back. The log
-records it as `session.device-resolved` with `source: 'remembered'`.
-
-- **What the call says wins.** An explicit `device`, or a `resolved` passed to `setup()`, is used as
-  given; nothing remembered is read.
-- **Only an auto-mode resolution is taken.** A remembered entry that names its device explicitly -
-  USB IDs, `{ any: true }` or `{ nonUsb: true }` - is not turned into a resolution. None of them was
-  chosen by the user in auto mode, and the second decision above promises the device the user
-  chose, not one that happens to be named somewhere; `any` is not a device at all. Such an entry
-  stays what it was until the auto-mode configuration saves over it, as any `setup()` of a
-  different shape does.
-- **`persist: false` takes nothing.** A configuration that is not remembered does not use what is
-  remembered either; it forgets the entry, as before (ADR-0027).
-- **The conflict rules are unchanged.** The entry is read only for a name not yet set up in the tab.
-  A second `setup()` is judged against the configuration that runs, so an unresolved auto-mode call
-  still conflicts with nothing, and no remembered device can make it conflict.
-
-**A save does not replace a stored resolution with nothing.** Saving an auto-mode configuration
-that has not resolved keeps the resolution a stored auto-mode entry of the same name holds. With
-`setup()` seeding, this matters only in a race: another tab resolves the name after this tab set it
-up and before this tab's persistence hold is granted and saves again. The other tab's choice is
-kept. Any other save - an explicit device, or a resolution of its own - replaces the entry as
-before.
-
-To choose a different device, release the configuration: the last tab to release it forgets the
-entry (ADR-0027), and the next `setup()` waits for the user. `release({ forgetDevice: true })`
-also revokes the permission.
-
-Considered and rejected: **letting `restore()` stay the only reader.** It made the path the
-Quickstart teaches ask the user again on every visit, and destroy the choice it asked for.
-**Seeding from any remembered device** - an explicit USB entry would, after all, resolve cleanly. It
-would change an auto-mode configuration into a device nobody chose in that mode, which is the guess
-this ADR rejects for the single granted port.
-
-_Verification:_ `test/integration/multi-tab/auto-device.test.ts`, in both transport modes: a later
-visit that calls only `setup()` opens the remembered device without a prompt; the entry it saves
-keeps the resolution; `restore()` after such a `setup()`, and on the visit after it, still
-reconnects; an explicit `setup()` ignores a remembered auto-mode resolution of its name. Beside them:
-entries naming USB IDs, `any` or `nonUsb` are not taken, `persist: false` takes nothing, and a
-`resolved` passed to `setup()` wins. `test/unit/configuration-store.test.ts` covers the quiet
-lookup and the save that keeps a stored resolution.
+- 2026-09-12: USB vendor and product IDs, browser permission, `awaiting-permission` (ADR-0009).
+- 2026-09-12: `{ any: true }` for ports without USB identity (ADR-0016).
+- 2026-09-14: Accepted - `nonUsb`, auto mode, resolution shared through `status`.
+- 2026-09-15: `setup()` takes the remembered resolution; option renamed `remember`; the identity
+  secret no longer protects the holder's name (ADR-0006). ADR-0009 (identity and permission) and
+  ADR-0016 folded in.

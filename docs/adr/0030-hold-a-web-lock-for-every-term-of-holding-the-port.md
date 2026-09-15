@@ -1,187 +1,160 @@
 # ADR-0030: Hold a Web Lock for every term of holding the port
 
-- **Status:** Accepted, amended 2026-09-15
+- **Status:** Accepted
 - **Date:** 2026-09-14
-- **Amends:** ADR-0026, ADR-0025, ADR-0013
 
 ## Context
 
-ADR-0026 made every time of holding a configuration's port a **term** with an identifier, and
-attributes ownership, write and status messages to it. The identifier is only ever a string in a
-message. Two things follow, and both are on the bus, which is open to every script of the origin
-(SECURITY.md):
+[ADR-0013](./0013-write-ordering-and-delivery-semantics.md) lets the tab that issued a write decide
+its fate: not repeatable once the tab holding the port reports `write-started`, settled by
+`write-result`, and - when that tab is gone - failed if it had started, handed on if it had not.
+Everything depends on knowing when the tab holding the port is gone and when its last word has
+arrived.
 
-- **A message could invent a term.** One `owner-claimed` naming a term nobody holds made every tab
-  that does not hold the port take the real holder's term for succeeded, ignore its statuses,
-  address its writes to the invented term and watch them time out - until the port next changed
-  hands. `owner-released` was worse: it ended the named term at once, failing a write that term had
-  begun with `OWNER_LOST_DURING_WRITE` and leaving the tab with no term to write to. A `status` with
-  another `maxTabs` made every tab with a different limit withdraw from the configuration for good
-  (ADR-0025).
-- **A term that was succeeded ended on a timer.** A term whose holder crashed said nothing more, so
-  a tab ended it once `FORMER_OWNER_GRACE_MS` (one second) had passed with no word from it. The
-  second was a guess: too short and a slow message turns into a repeated command, too long and
-  every failover after a crash waits for it. The guess also depended on messages, so a script could
-  keep a dead term alive by sending in its name, or start the wait by claiming a term.
+A new owner's `owner-claimed` proves less than it seems. The ownership lock cannot be granted while
+it is held ([ADR-0005](./0005-owner-election-via-web-locks.md)), so a claim proves that the former
+owner let go of the lock - not that its last messages have arrived. They come from another sender,
+and nothing orders the messages of two senders: not the `BroadcastChannel`, and not a busy main
+thread. Two defects followed, both reproduced: a write that succeeded failed with
+`OWNER_LOST_DURING_WRITE`, and a write reached the device twice, handed to the new owner before the
+former owner's `write-started` arrived.
 
-What both need is a statement about a term that a message cannot make. The browser already makes
-one about ownership: a Web Lock is held or it is not, every context sees the same answer, and the
-browser frees it when the holder dies (ADR-0005). Nothing else in a browser has that property.
-
-Writes were also taken from the wrong source. `write-started` and `write-result` were believed from
-any sender: a script that read a request id off the channel - every `write-request` reaches every
-tab on the `BroadcastChannel` - could resolve a write whose bytes were still queued at the port, or
-mark a write started that nobody was writing, stranding it. And `data-received` was delivered to the
-application from any sender at all.
+The bus is also open to every script of the origin (SECURITY.md). A message could invent a term,
+end a live one, state another tab limit, resolve a write whose bytes were still queued, or deliver
+device data that never arrived. What is needed is a statement about a term that a message cannot
+make. The browser makes one about Web Locks: a lock is held or it is not, every context sees the
+same answer, and the browser frees it when the holder dies.
 
 ## Decision
 
-Every term is a Web Lock, and the tab that holds the port holds it for the whole term:
+**Every time of holding a configuration's port is a term, and every term is a Web Lock**, held by
+the tab holding the port for the whole term:
 
 ```text
 serial-broker/term/v<protocol>/<maxTabs>/<term>/<clientId>/<configName>
 ```
 
 The name carries everything a tab must check before believing what is said in the term's name: the
-term, the context speaking for it, and the tab limit that context runs the configuration with. The
-configuration name comes last, because it is the only one of the four that may contain a `/`.
-`owner-claimed` therefore carries `maxTabs` as `status` does, and the protocol version becomes 8.
+term identifier, created by the tab granted ownership; the context speaking for it; and the tab
+limit that context runs ([ADR-0025](./0025-limit-the-tabs-using-a-configuration.md)). The
+configuration name comes last, because it is the only part that may contain a `/`.
 
-- The tab granted ownership takes the term's lock **before** its first word in the term -
-  `owner-claimed`, the port, every status - and lets it go **after** its last, `owner-released`.
-- Before it lets the lock go, it queues a second request of its own on the same lock: the
-  **goodbye request**. It is granted once the tabs watching the term have looked, and let go again.
-- Every other tab checks the lock with `ifAvailable` when it first hears of a term, and queues for
-  it in `shared` mode to learn when the term is over.
+- **The term lock is taken inside the election.** The ownership lock's callback takes the term's
+  lock before the context counts as the owner; a term lock the browser refuses lets the ownership
+  lock go too, and both are requested again. No tab holds the ownership lock without a term.
+- **Messages name their term.** `owner-claimed`, `owner-released`, `status` and `write-started`
+  carry the sender's term; `owner-claimed` and `status` carry its `maxTabs`. A `write-request`
+  names the term it is **addressed** to, and only the tab holding that term writes it.
+- **A term ends cleanly in a fixed order.** The holder closes the port, waits until every write it
+  performed has been answered (bounded by `writeTimeoutMs`), queues a second request of its own on
+  the term's lock - the **goodbye request** - sends `owner-released` as the term's last message,
+  and lets the lock go.
+- **Every other tab** checks the lock with `ifAvailable` when it first hears of a term, and queues
+  for it in `shared` mode to learn when the term is over.
 
 From that, four rules:
 
 1. **A claim or a status is believed only while the term's lock is held.** A message naming a term,
-   a sender or a tab limit that no held lock names is not about a term of this configuration, and
-   changes nothing. The messages of a term still being checked wait for the answer, in order.
-2. **A term ends when its lock is free** - exactly when the browser frees it, with no grace period
-   and no timer - **unless its holder is letting go cleanly**, which the goodbye request queued on
-   the lock says. Then the term ends at its `owner-released`, the last message it sends, so that
-   everything it said about its writes has arrived first (ADR-0026).
+   a sender or a tab limit that no held lock names changes nothing. Messages of a term still being
+   checked wait for the answer, in order.
+2. **A term ends when its lock is free** - exactly when the browser frees it, with no grace period and
+   no timer - **unless its holder is letting go cleanly**, which the goodbye request queued on the
+   lock says. Then the term ends at its `owner-released`, so that everything it said about its
+   writes has arrived first.
 3. **A goodbye is believed only from the term's own holder, and never before the browser has freed
-   the term's lock.** It is remembered until then, and the two together end the term. Anyone of the
-   origin can queue a request on a term's lock, and no tab can tell such a request from the
-   holder's goodbye request; what a queued request means is therefore only asked of a lock that is
-   free, where a crash leaves nothing queued. So no message ends a term whose holder is still
-   writing to the device.
-4. **`maxTabs` is believed because it is part of the lock's name.** A tab withdraws for a tab limit
-   the tab holding the port demonstrably runs, never for one a message claims.
+   the term's lock.** Anyone of the origin can queue a request on a term's lock, so what a queued
+   request means is only asked of a lock that is free, where a crash leaves nothing queued. No
+   message ends a term whose holder is still writing to the device.
+4. **`maxTabs` is believed because it is part of the lock's name.**
 
-The session takes the same line with the rest of what a term says:
+**One table decides who may say what** (`OwnerTerms.authorize()`): claims and statuses once their
+term's lock is held; `write-started` and `write-result` only from the term the write was addressed to
+and the context speaking for it; `data-received`, `data-sent` and `error` only from a context
+speaking for a term this tab knows of. A tab that has just joined knows no term until the status it
+asked for arrives, so device data reaching it in that window is dropped, logged once per
+configuration (`session.data-without-a-term`).
 
-- `write-started` and `write-result` count only from the term the write was addressed to, and only
-  from the context that speaks for that term. A result from anywhere else concerns a copy that
-  reached the wrong tab, or was forged.
-- `data-received` and `data-sent` are delivered only from a context that speaks for a term this tab
-  knows of - the one holding the port, one still being waited for, or one being checked. A tab that
-  has just joined knows none until the status it asked for arrives, so what reaches it in that
-  window is dropped, with one record per configuration (`session.data-without-a-term`).
+Once a term has ended, a write it began and did not answer fails with `OWNER_LOST_DURING_WRITE`, and
+a write addressed to it that it never began is handed to the term holding the port now. A tab that
+does not hold the addressed term ignores the request, so a former holder sends nothing back; the
+issuer hands the write on once the term has ended.
 
-Two bounds keep a sender from turning the checks into work of its own. A tab checks at most
-`MAX_TERMS_BEING_CHECKED` terms at once; beyond that the **oldest** check gives way to the newest
-claim, because the newest is the one that can be the term holding the port now and a sender
-inventing terms must not be able to keep the real claim from ever being checked. And a check that
-the browser refuses says nothing about the term: the tab forgets it rather than refusing it, so the
-next message naming that term is checked afresh. Only a granted `ifAvailable` request - the
-browser's word that nobody holds the lock - refuses a term.
-
-`FORMER_OWNER_GRACE_MS` and the tracker's timers are gone; `OwnerTerms` now holds lock requests
-instead.
+**One flood bound.** `MAX_TERM_FLOOD` bounds the terms a tab keeps and the messages waiting on one
+term's check. Past it, what is over is forgotten first, then the oldest check, so the newest claim -
+the one that can be the real holder - is always checked. A check the browser refuses says nothing
+about the term: the tab forgets it, and the next message naming it is checked afresh. Only a granted
+`ifAvailable` request refuses a term.
 
 ## Alternatives considered
 
-- **Keep the grace period and only check claims against a lock.** Half the benefit: a crashed
-  holder's term would still end a second late, and the period would still be a guess. The lock says
-  exactly when the term is over, which is the number the guess was approximating.
-- **One lock per term, without the sender and the limit in its name.** A tab would then have to
-  take the sender and the limit from the message itself, which is what the forged `status` with
-  another `maxTabs` abused. Checking a tab-slot lock instead (`serial-broker/tab-slot/...`) proves
-  that _somebody_ runs that limit, not that the tab holding the port does, and costs one request per
-  place - up to a hundred.
-- **`locks.query()` for everything.** The snapshot is stale the moment it is taken, and a query
-  answers only about the moment it ran; a queued request is a standing subscription to the end of a
-  term. Query is used for one thing only: seeing the goodbye request, which is a fact about a queue
-  rather than about a holder.
-- **End a term when its lock is free, in the clean case too.** Simpler, and wrong in the common
-  case: a tab that lets go sends its last results, its goodbye and then frees the lock, and the
-  lock's release can reach another tab before those messages do - the defect ADR-0026 exists to fix.
-- **Let the departing tab hold the lock for a while after its goodbye.** A timer again, and a
-  closing tab - the usual case - has its locks freed by the browser at once anyway.
-- **Sign or authenticate messages.** There is no key a script of the origin could not read, by the
-  first assumption of SECURITY.md.
+- **Keep the claim as the proof, and wait a fixed delay after it.** A clean handover then waits for
+  nothing, and a late message cannot be attributed to the old owner or the new.
+- **Term identifiers without locks, a succeeded term ending after a grace period.** What ADR-0026
+  decided on 2026-09-14: one second without a word. Too short and a slow message becomes a repeated
+  command, too long and every failover waits; and a message could invent a term, or keep a dead one
+  alive.
+- **Order all messages through one sequencer.** The fallback has no broker, and a busy tab does not
+  process queued tasks in a defined order either.
+- **Number the terms.** A new owner cannot know the number of a term it never heard of, and storage
+  shared between tabs is updated asynchronously across processes.
+- **Have the new owner ask the old one what it accepted.** The old one may have crashed, which is the
+  case that matters.
+- **One lock per term, without the sender and the limit in its name.** The tab would take them from
+  the message, which is what a forged `status` with another `maxTabs` abused.
+- **`locks.query()` for everything.** Stale the moment it is taken. Query is used for one thing only:
+  seeing the goodbye request, a fact about a queue rather than a holder.
+- **End a term when its lock is free, in the clean case too.** The lock's release can reach another
+  tab before the holder's last messages do - the defect this record exists to fix.
+- **Sign or authenticate messages.** There is no key a script of the origin could not read.
 
 ## Consequences
 
 ### Positive
 
+- A clean handover no longer fails a write that succeeded, and no longer writes one twice, on either
+  transport.
 - A forged message can no longer end a live term, invent a term, make a tab withdraw over a tab
   limit, resolve or strand a write, or deliver device data that never arrived.
-- The end of a crashed holder's term is exact, and failover no longer waits out a second.
-- No timer decides anything about a term, so a hidden or frozen tab - whose timers run up to a
-  minute late - is no slower to notice than any other.
-- Both transports behave identically, as the locks are not messages (ADR-0007).
+- The end of a crashed holder's term is exact, and no timer decides anything about a term, so a
+  hidden or frozen tab is no slower to notice than any other.
 
 ### Negative
 
-- Becoming the owner costs one lock round trip before the claim goes out.
+- Becoming the owner costs one lock round trip before the claim goes out; the other tabs show
+  `reconnecting` only once the departing owner has closed the port.
 - Each tab keeps one queued lock request per term it has heard of, and one `ifAvailable` request per
   term it checks.
-- A tab that learns of a term only when the browser has already freed its lock refuses the term's
-  messages. It never addressed a write to that term, so nothing is lost - but a status of it is
-  ignored, and the tab waits for the next one.
-- Reading `locks.query()` is now part of a decision. Where a browser does not expose it, a clean end
-  cannot be told from a crash: every term then ends when its lock is free.
+- A tab that learns of a term only after the browser freed its lock ignores the term's messages and
+  waits for the next status.
+- Where a browser does not expose `locks.query()`, a clean end cannot be told from a crash: every
+  term then ends when its lock is free.
 
 ### Risks and mitigations
 
 - **A word from a crashed holder that arrives after the browser freed its lock is too late.** A tab
-  that crashes in the moment between handing bytes to the device and its `write-started` arriving
-  leaves a write that looks like one it never received; it is handed to the next tab and may reach
-  the device twice. ADR-0026 covered a second of such delay and called the rest unknowable; this
-  covers none, in exchange for an exact end. The window is the transit of one message against the
-  teardown of a crashed renderer, and only for a write in flight at that instant.
-- **A script of the origin can take Web Locks**, as SECURITY.md says. It can hold a lock named for a
-  term it invented and have that term believed, or queue an exclusive request on a real term's lock
-  so that tabs wait for a goodbye that never comes - a delay, never an end: that wait begins only
-  once the holder has let the lock go. Both are beyond what a message alone can do, and a script
-  that takes locks can already keep every tab away from the device.
-- **A tab that joins while a device streams misses what arrives before it knows the term.** It is
-  the price of taking device data from the holder of the port alone; the window is one round trip
-  across the bus, and longer where the answer waits for the rate `status-request` is answered at
-  (ADR-0031). A tab that must read a device's whole output has to be open before the port is.
+  that crashes between handing bytes to the device and its `write-started` arriving leaves a write
+  that looks unstarted; it is handed on and may reach the device twice. The window is the transit of
+  one message against the teardown of a crashed renderer.
+- **A script of the origin can take Web Locks.** It can hold a lock named for a term it invented, or
+  queue on a real term's lock so that tabs wait for a goodbye that never comes - a delay, never an
+  end. A script that takes locks can already keep every tab away from the device.
+- **A tab that joins while a device streams misses what arrives before it knows the term** - one
+  round trip across the bus, longer where the answer waits for the status answer rate
+  ([ADR-0031](./0031-bound-and-rate-limit-what-the-bus-can-cost-a-tab.md)).
 
 ## Verification
 
-`test/unit/owner-terms.test.ts` covers the rules against a lock manager: a claim believed only when
-the lock is held, a term kept alive while it is held, the exact end when the holder dies, the wait
-for a goodbye when it does not.
-`test/integration/multi-tab/hostile-bus.test.ts` posts the forged claim, status, goodbye, write
-result and device data as a script of the origin, on the `BroadcastChannel` - including a goodbye
-posted with a request of the script's own queued on the real term's lock, and the chunks a tab
-joining during a flood misses.
-`test/integration/multi-tab/failover.test.ts` and `handover-races.test.ts` cover the exact end after
-a crash and the clean handover heard out of order, in both transport modes;
-`test/unit/pending-writes.test.ts` covers a write started or answered by another term.
+`test/unit/owner-terms.test.ts` covers the rules against a lock manager; `test/unit/pending-writes.test.ts`
+a write started or answered by another term. `test/integration/multi-tab/handover-races.test.ts`
+reproduces both handover defects with messages from the former owner held back, and
+`failover.test.ts` the exact end after a crash, in both transport modes.
+`test/integration/multi-tab/hostile-bus.test.ts` posts forged claims, statuses, goodbyes, write
+results and device data as a script of the origin, including a goodbye with a request of the
+script's own queued on the real term's lock; `session-regressions.test.ts` covers a clean release.
 
-## Amendment (2026-09-15)
+## History
 
-- **The term lock is taken inside the election.** The ownership lock's callback takes the term's
-  lock before the context counts as the owner; a term lock the browser refuses lets the ownership
-  lock go too, and the election requests both again. There is no state in which a tab holds the
-  ownership lock without a term, and no second retry path.
-- **One table decides who may say what.** `OwnerTerms.authorize()` decides for every message:
-  claims and statuses once their term's lock is held, a write's progress and result from the context
-  speaking for its term, device data and errors from a context speaking for a known term. `error`
-  messages were accepted from any sender behind a rate limit; they are gated like device data now.
-- **One flood bound.** `MAX_TERM_FLOOD` bounds the terms a tab keeps and the messages waiting on one
-  term's check. Past it, what is over is forgotten first, then the oldest check, so the newest claim
-  is always checked.
-- **No `NOT_CONNECTED` from a former holder.** A write request goes to every participant and only
-  the tab holding its term acts on it (ADR-0040). A tab that let go of the port is released, and hears
-  nothing more; the issuer hands the write on once the term has ended. The suspected ping-pong of
-  `NOT_CONNECTED` answers during a clean release does not occur (`session-regressions.test.ts`).
+- 2026-09-14: Terms with identifiers and a one-second grace period (ADR-0026); the same day, terms
+  became Web Locks and the grace period was removed.
+- 2026-09-15: Term lock taken inside the election; one authorisation table, errors gated like data;
+  one flood bound; no `NOT_CONNECTED` round trip from a former holder. ADR-0026 folded in.

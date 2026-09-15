@@ -2,137 +2,133 @@
 
 - **Status:** Accepted
 - **Date:** 2026-09-14
-- **Amends:** ADR-0009, ADR-0022
 
 ## Context
 
-ADR-0022 keeps every remembered configuration in one `localStorage` key,
-`serial-broker/configurations/v1`, holding a JSON object of name to options. Every write is a
-read-modify-write of that object: `save()` reads all of them, replaces one, and writes all of them
-back.
+A released port is to be remembered and reused on the next visit without prompting the user again.
+The permission to use the port belongs to the browser and persists on its own
+([ADR-0036](./0036-take-the-device-identity-from-the-chosen-port.md)); the configuration - which
+device, which serial settings - is ours to store, in `localStorage`.
 
-`localStorage` gives no atomicity across that sequence. Each tab works from its renderer's cached
-copy of the area, and a write reaches the other renderers a moment later; the specification's
-storage mutex is implemented by no engine. Two tabs that remember different configurations in the
-same moment therefore both read the object as it was, and the one that writes second writes its own
-stale copy of the other's entry over the newer one — or, for a name it has never seen, drops it
-entirely. It is the classic lost update, and with one key it costs a whole configuration: not a
-field, the entry. A tab that saves while another releases loses the same way.
+Three forces shape how:
 
-Nothing in the library can lock `localStorage`. What it can do is stop tabs from writing each
-other's data at all.
-
-Storage is also the one place where a format from an older version arrives unannounced. Version 1
-and the protocol-versioned keys before it (ADR-0022) are still out there in development setups.
-Before 1.0 nothing is promised about stored data (see the release policy in CONTRIBUTING.md).
+- **The protocol version changes often, the stored format rarely.** A stored entry is the options
+  `setup()` accepts, validated again on every read. Tying the key to the protocol version silently
+  lost every remembered configuration at each protocol change - four times before the first
+  release.
+- **`localStorage` gives no atomicity.** Each tab works from its renderer's cached copy of the
+  area, and a write reaches the other renderers a moment later; the specification's storage mutex
+  is implemented by no engine. With all configurations in one key, two tabs remembering different
+  configurations in the same moment wrote each other's stale copy back - the classic lost update,
+  costing a whole configuration.
+- **An entry belongs to the origin, `release()` to one tab.** A tab that released a configuration
+  while other tabs still ran it took it from all of them: their next reload restored nothing.
 
 ## Decision
 
-Storage version 2 splits the object into one key per configuration, with an index:
+**The stored format has a version of its own**, `STORAGE_SCHEMA_VERSION` in
+`src/storage/configuration-store.ts`, incremented only for a change to what is stored that
+validation on read cannot absorb.
 
-- `serial-broker/configurations/v2/index` — a JSON array of the remembered names.
-- `serial-broker/configurations/v2/entry/<name>` — the options of that one configuration, exactly
-  what `setup()` accepts, as before.
+**One key per configuration, with an index:**
+
+- `serial-broker/configurations/v<storage version>/index` — a JSON array of the remembered names.
+- `serial-broker/configurations/v<storage version>/entry/<name>` — the options of that one
+  configuration, exactly what `setup()` accepts. For an auto-mode configuration the `device`
+  carries its resolution (ADR-0036).
 
 `save()` writes the entry first and adds the name to the index only if the index does not list it
-already. Two tabs saving different configurations write different keys, so neither can touch the
-other's entry; the index is the only key they share, and the only thing at stake there is a name.
-`remove()` takes the name out of the index first and removes the entry once that write has landed.
-A name the index does not list is not stored, so `remove()` does not touch storage for it — which
-also keeps a storage that refuses everything from reporting the same failure twice for one call.
+already. `remove()` takes the name out of the index first and removes the entry once that write has
+landed; a name the index does not list is not touched.
 
-Reads are defensive at both levels. An index that is not valid JSON, or not an array, is removed,
-and `load()` reports it as `STORAGE_CORRUPT`; a save or a removal that finds it removes it just as
-quietly, because `STORAGE_CORRUPT` is a report about reading stored state and a save is not a read
-the application asked for. An index that is partly rubbish keeps the names in it and is written
-back without the rest. A listed name whose entry is unparseable or no longer valid is
-reported as `STORAGE_CORRUPT` with its `configName`, removed, and dropped from the index.
+**Reads are defensive at both levels.** An index that is not valid JSON, or not an array, is
+removed, and `load()` reports it as `STORAGE_CORRUPT`; a save or a removal that finds it removes it
+quietly. An index that is partly rubbish keeps the names in it and is written back without the rest.
+A listed name whose entry is unparseable or invalid is reported as `STORAGE_CORRUPT` with its
+`configName`, removed, and dropped from the index. A listed name with **no** entry is an ordinary
+outcome of the shared index - another tab removed it while this one's copy was stale - so it is
+dropped and logged at `info`, not reported. A name whose entry storage itself refused to read stays
+listed.
 
-A listed name with no entry at all is _not_ reported. With one key per configuration it is an
-ordinary outcome of the shared index: a tab that removes a configuration writes the index and the
-entry as two operations, and a tab whose copy of the index is older re-lists the name in between.
-The name is dropped from the index and logged at `info`; there is nothing the application could
-act on, and reporting it would tell a user a configuration they themselves removed was corrupt.
-A name whose entry could not be read because storage itself refused stays listed, since nothing
-says it is gone.
+**An entry is forgotten only when no tab still runs the configuration with `remember: true`.**
+Every such tab holds the Web Lock `serial-broker/persisted/v<storage version>/<name>` in **shared**
+mode while the configuration is set up there. A tab that forgets the entry - on `release()`,
+`releaseAll()`, or setting the name up with `remember: false` - first lets its own hold go, then
+requests the lock **exclusively with `ifAvailable`**, and removes the entry only inside that lock.
+`dispose()`, what a closing tab does, forgets nothing. A tab saves its entry at `setup()` and again
+once its hold is granted, which also repairs a name lost from the index. The lock carries the storage
+version, not the protocol version, because tabs on different protocol versions share the stored
+entries. `release(name, { forgetDevice: true })` follows the same rule for the entry; the browser
+permission it revokes is the origin's.
 
-Nothing is migrated. Version 1 and the protocol-versioned keys are removed, unread, the first time
-`restore()` runs, so no copy of them lingers in `localStorage`.
-
-`STORAGE_SCHEMA_VERSION` becomes 2, which also moves the persistence lock of ADR-0027 to
-`serial-broker/persisted/v2/<name>` — deliberately: a tab of an older build reads and writes the
-old keys, and must not be counted as a tab running a configuration stored in the new ones.
+**Nothing is migrated.** Keys of an earlier format are neither read nor removed. Before 1.0 nothing
+is promised about stored data (CONTRIBUTING.md).
 
 ## Alternatives considered
 
-- **Keep one key and merge on write.** Re-read the object, merge in the one changed entry, write it
-  back. It is the same read-modify-write; the merge happens on a copy that is already stale.
-- **Keep one key and write it from a Web Lock.** Serialises the tabs, but only against each other:
-  the lock does not make the renderer's cached copy fresh, so the read inside it can still be stale.
-  It would also make every `save()` asynchronous, on a path that runs inside `setup()`.
-- **No index, enumerating the keys.** `Storage` has `length` and `key(n)`, so the entries could be
-  found by prefix and the shared key would disappear entirely. It widens the narrow storage
-  interface of ADR-0014 by two members that every stand-in must then implement faithfully, and it
-  makes a restore scan every key of the origin, including those of the application. The index is
-  one key, written rarely, and a name lost from it is repaired (see below).
-- **One key per configuration without an index.** Nothing could find them.
-- **Migrate version 1 into version 2.** A reader for a format nobody has in production, plus its
-  tests, to save a click in a development setup. Before 1.0 the answer is to say what breaks.
+- **Keep the key tied to the protocol version.** Nothing wrong is ever restored, but the user's
+  configurations are discarded for a reason that concerns them in no way.
+- **An unversioned key.** Leaves no way to tell an old format from a corrupt entry once it changes.
+- **One key, merged on write, or written from a Web Lock.** The merge happens on a copy that is
+  already stale, and a lock does not make the renderer's cached copy fresh either.
+- **No index, enumerating the keys.** Widens the narrow storage interface
+  ([ADR-0014](./0014-dependency-injection-of-the-environment.md)) and makes a restore scan every key
+  of the origin, including the application's.
+- **Migrate earlier formats, or remove their keys on restore.** The first move from protocol-versioned
+  keys was migrated (2026-09-13), and version 1's keys were removed unread (2026-09-14). Both served
+  development setups only, and the removal was dropped with the rest of the reduction.
+- **Put the entry back on the `storage` event.** Leaves a window in which the entry is absent, and
+  nobody puts it back when the other tabs are frozen or the browser closes right after the release.
+- **Ask the broker which tabs are attached.** Unavailable in the fallback, and a round trip to a
+  worker that may have ended.
+- **Keep a list of running tabs in the entry.** A crashed tab never removes itself.
+- **Never forget on `release()`.** `release()` is how an application says a configuration is not
+  wanted any more.
 
 ## Consequences
 
 ### Positive
 
-- Two tabs remembering different configurations can no longer lose each other's entry, which was
-  possible on every save.
-- One unreadable entry costs that configuration alone; the others do not share a key with it any
-  more.
-- A configuration is one key, so what the browser evicts, a developer edits or a script deletes is
-  one configuration.
+- A protocol change no longer costs anyone their remembered configurations.
+- Two tabs remembering different configurations can no longer lose each other's entry, and one
+  unreadable entry costs that configuration alone.
+- Releasing a configuration in one tab no longer costs the other tabs their configuration on
+  reload, and a crashed or closed tab never keeps an entry alive.
 
 ### Negative
 
-- Storage holds one key per configuration plus one, instead of one. `localStorage` keys are cheap;
-  the number of configurations an origin has is small.
-- A name can still be lost from the index when two tabs write it in the same moment — the index is
-  shared, and nothing can change that. It costs a name, not an entry: the entry stays, and the tab
-  that saved it writes its name again as soon as its persistence hold is granted (ADR-0027), which
-  is a round trip to the browser's lock manager later. `save()` writes the index only when the name
-  is missing, so a tab that has nothing to add cannot be the one to lose it.
-- An index that could not be read at all leaves its entries behind, unreadable and unreferenced,
-  until the same names are saved again. So does a `remove()` for a name a concurrent write has
-  already taken out of the index. They are a few hundred bytes of JSON, are never read again — a
-  restore reads the index, not the keyspace — and hold nothing sensitive (SECURITY.md).
-- A configuration that disappears from storage for a reason nothing else notices — a browser
-  evicting one key of an origin, say — is logged and not reported. That case is indistinguishable
-  from the far commoner benign one, and an error the application cannot act on is worse than a log
-  line it can read.
+- A name can still be lost from the index when two tabs write it in the same moment. It costs a name,
+  not an entry, and the tab that saved it lists it again once its hold is granted.
+- An index that could not be read, or a removal racing a write, leaves unreferenced entries behind;
+  so do keys of earlier formats. They are a few hundred bytes of JSON, never read again, and hold
+  nothing sensitive.
+- One more held lock per remembered configuration per tab, the only lock this library takes in
+  shared mode. The options remembered are those of the tab that saved last.
+- A configuration that disappears from storage for a reason nothing else notices is logged, not
+  reported: it cannot be told from the far commoner benign case.
 
 ### Risks and mitigations
 
-- A tab of an older build, open alongside, writes version 1 and has its keys removed by this
-  version's next restore. Their formats are not read anyway, and a mixed pair of builds is a
-  development situation, not a deployed one.
-- The configuration name is now part of a key rather than a value inside one. Names are validated
-  before they reach storage: bounded in length, free of control characters and free of unpaired
-  surrogates. The name is also the last segment, after a fixed one, so no name can be read as a
-  version or as the index key.
+- Where the browser refuses the lock request, the entry is kept rather than removed: a configuration
+  restored once too often can be released again; one forgotten too early is lost.
+- The configuration name is part of a key. Names are validated before they reach storage - bounded,
+  no control characters, no unpaired surrogates - and are the last segment, after a fixed one.
 
 ## Verification
 
-`test/unit/configuration-store.test.ts` holds the proof of the lost update this record removes:
-"does not write another tab's entry back from a stale copy of storage" drives two stores over the
-same entries, one of them reading from a copy taken before the other's write — which is what a
-second renderer sees, and what no shared `Map` can show — and asserts that the newer entry survives
-the stale tab's save. It fails on any design where a save writes keys it did not change. The same
-file covers the index written only when the name is missing, entries of other configurations left
-alone by a removal, a name re-listed by the tab that owns it, a listed name kept when storage itself
-refuses, a listed name with no entry forgotten in silence, an unreadable index not reported from a
-save, one report rather than two when storage refuses a removal, and nothing but an empty index left
-once every configuration is removed.
+`test/unit/configuration-store.test.ts` holds the proof of the lost update: two stores over the same
+entries, one reading from a copy taken before the other's write, and the newer entry survives the
+stale tab's save. `test/integration/storage-schema.test.ts` covers the shape of the keys, an
+unreadable or partly broken index, and a listed name whose entry is gone.
+`test/integration/multi-tab/remembered-configurations.test.ts`, in both transport modes: a release
+while another tab runs the configuration, the last release, a closed and a crashed tab,
+`releaseAll()`, `forgetDevice`, a tab with `remember: false`, and a setup racing a release.
 
-`test/integration/storage-schema.test.ts`: the shape of the keys, a configuration per key with the
-names listed, an unreadable index, an index that is partly rubbish, a listed name whose entry is
-gone, the keys of older formats removed unread, and two tabs setting up different configurations at
-the same moment. `test/integration/hardening-regressions.test.ts`: an invalid entry reported once,
-and a name never listed when its entry could not be written.
+## History
+
+- 2026-09-12: Configurations remembered in one protocol-versioned key (ADR-0009).
+- 2026-09-13: A storage version of its own, migrating the old keys (ADR-0022).
+- 2026-09-14: Remembered while any tab runs it, by a shared lock (ADR-0027); one key per
+  configuration, version 2, older keys removed unread.
+- 2026-09-15: The option is `remember` (was `persist`); older keys are no longer removed. ADR-0022
+  and ADR-0027 folded in.

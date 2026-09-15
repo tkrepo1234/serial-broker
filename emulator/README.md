@@ -13,7 +13,7 @@ The device is a loopback by default — everything written comes straight back, 
 USB-serial adapter whose TX and RX pins are bridged. Unlike an adapter, it can also be unplugged,
 hung mid-write, and made to split its answers, on command, which is what testing this library
 actually needs. Why this approach and not a virtual COM port driver is in
-[ADR-0017](../docs/adr/0017-usbip-device-emulator.md).
+[ADR-0035](../docs/adr/0035-browser-tests-with-playwright.md).
 
 > **Status:** covered by its own tests (`emulator/test/`), which drive it with an independent
 > USB/IP client, and **run against usbip-win2 0.9.8.0 on Windows 11 since 2026-09-15**:
