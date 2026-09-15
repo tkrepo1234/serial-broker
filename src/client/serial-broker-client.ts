@@ -9,6 +9,7 @@ import { OnceLog, type ScopedLogger } from '../core/logger.js';
 import { RateLimiter } from '../core/rate-limit.js';
 import type {
   ReleaseOptions,
+  RequestAccessOptions,
   SendableData,
   SerialBrokerEventMap,
   SerialBrokerEventName,
@@ -19,6 +20,7 @@ import {
   isDeviceCompatible,
   normalizeConfiguration,
   normalizeReleaseOptions,
+  normalizeRequestAccessOptions,
   toSetupOptions,
   validateName,
   invalidArgument,
@@ -552,11 +554,13 @@ export class SerialBrokerClient {
    * @returns `true` if a device is now available, `false` if the user dismissed the picker.
    * @throws A {@link SerialBrokerError} for anything other than a dismissal.
    */
-  async requestAccess(name: unknown): Promise<boolean> {
-    const session = this.#requireSession(this.#validName(name));
+  async requestAccess(name: unknown, options: RequestAccessOptions = {}): Promise<boolean> {
+    const validName = this.#validName(name);
+    const accessOptions = this.#stamped(() => normalizeRequestAccessOptions(options));
+    const session = this.#requireSession(validName);
 
     try {
-      await session.requestAccess();
+      await session.requestAccess(accessOptions);
       return true;
     } catch (error) {
       if (

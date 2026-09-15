@@ -84,7 +84,20 @@ are not compared: the documentation says to pass the same options for a name in 
 **Releasing.** `release(name)` stops using a configuration and forgets its remembered entry under
 the rule of ADR-0033; it does not revoke the browser permission, so the next `setup()` is still
 prompt-free. `release(name, { forgetDevice: true })` also calls `SerialPort.forget()` where the
-browser supports it. To choose a different device in auto mode, release the configuration.
+browser supports it.
+
+**Choosing again** (2026-09-15). `requestAccess(name, { chooseAgain: true })`, in any tab taking part
+in an auto-mode configuration, opens the picker unfiltered although the configuration has resolved,
+and the chosen port's resolution replaces the one before: remembered, and sent with the request to try
+again exactly as a first choice is - the wire format is unchanged. The tab holding the port, having
+adopted a device that differs from its own, switches to it (`PortSupervisor.followDevice()`): a
+connection to a port that is not the device is closed once the writes handed to it are answered, and
+the new device is looked for at once with a fresh attempt counter, from any state, `open` included. A
+request to try again that carries a different device has this effect whoever sends it, so when two
+tabs choose at about the same time, the choice that reaches the holder last wins, and every tab
+follows the holder's status. Dismissing the picker changes nothing. A configuration that names its
+device rejects `chooseAgain` with `INVALID_ARGUMENT`, before the picker opens: its device is the
+application's decision, and it is set up with the other device instead.
 
 ## Alternatives considered
 
@@ -129,8 +142,10 @@ browser supports it. To choose a different device in auto mode, release the conf
   tell two granted ports apart: the first is used and a warning logged.
 - An auto-mode configuration no user has chosen a port for waits forever, however many ports are
   granted; `deviceKind: 'auto'` says so.
-- A tab that chose before learning another tab holds the configuration has its choice overridden by
-  the holder's device; the permission stays with the browser.
+- Two tabs whose users choose different devices at about the same time end on whichever choice
+  reaches the tab holding the port last; the permission for both stays with the browser.
+- Choosing again closes a working connection, and writes queued behind the one in flight wait for
+  the new device.
 - A user revoking the permission turns an automatic reconnect into `awaiting-permission`.
 
 ### Risks and mitigations
@@ -161,3 +176,5 @@ naming a device for an invented term is not adopted); `test/unit/debug-surface.t
 - 2026-09-15: `setup()` takes the remembered resolution; option renamed `remember`; the identity
   secret no longer protects the holder's name (ADR-0006). ADR-0009 (identity and permission) and
   ADR-0016 folded in.
+- 2026-09-15: `requestAccess(name, { chooseAgain: true })` chooses a different device in auto mode;
+  the tab holding the port switches to a different device it adopts, even while open.

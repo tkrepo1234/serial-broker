@@ -15,7 +15,7 @@ import type {
 } from '../environment/environment.js';
 import { MAX_WAITING_WRITE_BYTES, MAX_WAITING_WRITES } from '../protocol/limits.js';
 
-import { findGrantedPort } from './port-matcher.js';
+import { findGrantedPort, matchesDevice } from './port-matcher.js';
 import { ReceiveBuffer } from './receive-buffer.js';
 import { mapOpenError } from './serial-errors.js';
 import { WriteQueue } from './write-queue.js';
@@ -176,10 +176,20 @@ export class PortSupervisor {
    * If no granted port matches the configured device, the status becomes
    * `awaiting-permission` and nothing is retried until `requestAccess()` succeeds or the
    * platform reports a device plugged in - the browser will not show a port picker outside a
-   * user gesture (ADR-0009).
+   * user gesture (ADR-0036).
+   *
+   * @param from - `'failed'` to start without connecting, as the configuration's previous term of
+   *   holding the port ended: in `failed`, which a configuration with `autoReconnect: false` leaves
+   *   only when the application or the user says so (ADR-0010). {@link retry} and
+   *   {@link useGrantedPort} start it then, as they would in the tab that gave up.
    */
-  start(): void {
+  start(from: 'connecting' | 'failed' = 'connecting'): void {
     if (this.#state.kind !== 'idle') {
+      return;
+    }
+    if (from === 'failed') {
+      this.#state = { kind: 'failed' };
+      this.#setStatus(SerialBrokerStatus.Failed);
       return;
     }
     void this.#connect();
@@ -297,6 +307,66 @@ export class PortSupervisor {
     this.#backoff.reset();
     this.#state = { kind: 'idle' };
     await this.#connect();
+  }
+
+  /**
+   * Follows a change of the device in effect: the user of an auto-mode configuration chose a
+   * different port, here or in another tab (ADR-0036).
+   *
+   * A connection to a port that is still the device is left alone. Any other connection is closed -
+   * once the writes handed to it have been answered, as when this tab stops holding the port - and
+   * the new device is looked for at once, with a fresh attempt counter, whatever state the
+   * connection was in: the user has just said which device to use.
+   */
+  async followDevice(): Promise<void> {
+    const current = this.#state;
+    if (current.kind === 'stopped') {
+      return;
+    }
+    if (
+      (current.kind === 'open' || current.kind === 'opening') &&
+      matchesDevice(current.port, { device: this.callbacks.device() })
+    ) {
+      return;
+    }
+
+    // Whatever was under way concerns the old device: an attempt in progress goes stale.
+    this.#generation += 1;
+    this.#openedAt = undefined;
+    this.#nextAttemptAt = undefined;
+    // Device events for the old port no longer concern this connection.
+    this.#foundPort = undefined;
+    this.#foundPortDetached = false;
+    if (current.kind === 'reconnecting') {
+      this.environment.clock.clearTimer(current.timer);
+    } else if (current.kind === 'open') {
+      current.received.flush();
+      this.#trackTeardown(this.#closeAfterWrites(current));
+    } else if (current.kind === 'opening') {
+      this.#trackTeardown(this.#closeWhenOpened(current));
+    }
+
+    this.logger.info('the device changed; closing the old port and looking for the new one', {
+      configName: this.configuration.name,
+      event: 'supervisor.device-changed',
+      previousState: current.kind,
+    });
+    this.#backoff.reset();
+    this.#state = { kind: 'idle' };
+    // The attempt waits for the old port to be closed before it lists the ports.
+    await this.#connect();
+  }
+
+  /**
+   * Closes a connection given up for another device, after the writes handed to it.
+   *
+   * Called while the state still names this connection, and moved on from right after: a write
+   * already at the device completes, and one still queued finds no open connection and is handed on
+   * again once the new device is open, as `NOT_CONNECTED` always is (ADR-0013).
+   */
+  async #closeAfterWrites(state: Extract<ConnectionState, { kind: 'open' }>): Promise<void> {
+    await this.#closeStep(this.#writes.drain(), 'draining writes');
+    await this.#closeConnection(state);
   }
 
   /**
@@ -1195,9 +1265,31 @@ export class PortSupervisor {
     this.callbacks.onStatus(status);
   }
 
+  /**
+   * Reports an error to the context that owns this supervisor, and through it to every tab.
+   *
+   * `isRetryable` says that the library recovers by itself (ADR-0012). A configuration with
+   * `autoReconnect: false` recovers from nothing, so a lost connection or failed attempt it reports
+   * carries `false`, whatever its code - an application skipping retryable errors would otherwise
+   * hide a loss it has to act on.
+   */
   #report(error: SerialBrokerError): void {
-    this.callbacks.onError(error);
+    this.callbacks.onError(
+      error.isRetryable && !this.configuration.connection.autoReconnect ? notRetried(error) : error,
+    );
   }
+}
+
+/** The same error, saying that nothing retries it. */
+function notRetried(error: SerialBrokerError): SerialBrokerError {
+  return new SerialBrokerError(error.code, error.message, {
+    configName: error.configName,
+    context: error.context,
+    remediation: error.remediation,
+    isRetryable: false,
+    timestamp: error.timestamp,
+    cause: error.cause,
+  });
 }
 
 /**

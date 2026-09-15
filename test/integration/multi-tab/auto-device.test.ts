@@ -611,3 +611,140 @@ describe.each(TRANSPORT_MODES)('auto mode across tabs (%s)', (transport) => {
     });
   });
 });
+
+/** Two tabs in auto mode on `device`, chosen in the first, which holds the port. */
+async function twoTabsOn(harness: BrowserHarness, device: FakeDevice) {
+  const first = harness.openTab();
+  await first.setup('Reader', AUTO);
+  harness.serial.pickerQueue.push(device);
+  await first.client.requestAccess('Reader');
+  await harness.settle();
+  const second = harness.openTab();
+  await second.setup('Reader', AUTO);
+  await harness.settle();
+  return { first, second };
+}
+
+describe.each(TRANSPORT_MODES)('choosing a different device in auto mode (%s)', (transport) => {
+  it.each(['holding', 'other'] as const)(
+    'moves every tab to the new device when the %s tab chooses again while open',
+    async (chooser) => {
+      const harness = new BrowserHarness({ transport });
+      const device = harness.serial.addDevice(READER.vendorId, READER.productId);
+      const replacement = harness.serial.addDevice(OTHER.vendorId, OTHER.productId);
+      const tabs = await twoTabsOn(harness, device);
+      expect(tabs.second.client.getStatus('Reader').status).toBe(SerialBrokerStatus.Open);
+
+      const tab = chooser === 'holding' ? tabs.first : tabs.second;
+      harness.serial.pickerQueue.push(replacement);
+      await expect(tab.client.requestAccess('Reader', { chooseAgain: true })).resolves.toBe(true);
+      await harness.settle();
+      await harness.settle();
+
+      expect(replacement.isOpen).toBe(true);
+      expect(device.isOpen).toBe(false);
+      for (const each of [tabs.first, tabs.second]) {
+        expect(each.client.getStatus('Reader')).toMatchObject({
+          status: SerialBrokerStatus.Open,
+          deviceKind: 'usb',
+          vendorId: OTHER.vendorId,
+          productId: OTHER.productId,
+        });
+        expect(each.errorCodes('Reader')).toEqual([]);
+      }
+      expect(rememberedEntry(harness.storage, 'Reader')).toMatchObject({
+        device: { auto: true, resolved: OTHER },
+      });
+
+      // The next tab to hold the port opens the new device too.
+      await tabs.first.close();
+      await harness.settle();
+      expect(tabs.second.client.getStatus('Reader').status).toBe(SerialBrokerStatus.Open);
+      expect(replacement.isOpen).toBe(true);
+    },
+  );
+
+  it('offers every port in the picker, not only the device it resolved to', async () => {
+    const harness = new BrowserHarness({ transport });
+    const device = harness.serial.addDevice(READER.vendorId, READER.productId);
+    const bare = harness.serial.addNonUsbPort();
+    const { first } = await twoTabsOn(harness, device);
+
+    harness.serial.pickerQueue.push(bare);
+    await expect(first.client.requestAccess('Reader', { chooseAgain: true })).resolves.toBe(true);
+    await harness.settle();
+
+    expect(first.client.getStatus('Reader')).toMatchObject({
+      status: SerialBrokerStatus.Open,
+      deviceKind: 'non-usb',
+    });
+    expect(bare.isOpen).toBe(true);
+    expect(device.isOpen).toBe(false);
+  });
+
+  it('changes nothing when the picker is dismissed', async () => {
+    const harness = new BrowserHarness({ transport });
+    const device = harness.serial.addDevice(READER.vendorId, READER.productId);
+    const { first, second } = await twoTabsOn(harness, device);
+    const opened = device.openCount;
+
+    await expect(second.client.requestAccess('Reader', { chooseAgain: true })).resolves.toBe(false);
+    await expect(first.client.requestAccess('Reader', { chooseAgain: true })).resolves.toBe(false);
+    await harness.settle();
+
+    expect(device.openCount).toBe(opened);
+    expect(device.isOpen).toBe(true);
+    for (const tab of [first, second]) {
+      expect(tab.client.getStatus('Reader')).toMatchObject({
+        status: SerialBrokerStatus.Open,
+        vendorId: READER.vendorId,
+      });
+    }
+    expect(rememberedEntry(harness.storage, 'Reader')).toMatchObject({
+      device: { auto: true, resolved: READER },
+    });
+  });
+
+  it('keeps the connection when the same device is chosen again', async () => {
+    const harness = new BrowserHarness({ transport });
+    const device = harness.serial.addDevice(READER.vendorId, READER.productId);
+    const { first } = await twoTabsOn(harness, device);
+    const opened = device.openCount;
+
+    harness.serial.pickerQueue.push(device);
+    await expect(first.client.requestAccess('Reader', { chooseAgain: true })).resolves.toBe(true);
+    await harness.settle();
+
+    expect(device.openCount).toBe(opened);
+    expect(first.client.getStatus('Reader').status).toBe(SerialBrokerStatus.Open);
+  });
+
+  it('is refused for a configuration that names its device', async () => {
+    const harness = new BrowserHarness({ transport });
+    const device = harness.serial.addDevice(READER.vendorId, READER.productId);
+    harness.serial.grant(device);
+    const other = harness.serial.addDevice(OTHER.vendorId, OTHER.productId);
+    const tab = harness.openTab();
+    await tab.setup('Reader', { device: READER, ...AUTO });
+    harness.serial.pickerQueue.push(other);
+
+    await expect(tab.client.requestAccess('Reader', { chooseAgain: true })).rejects.toMatchObject({
+      code: SerialBrokerErrorCode.INVALID_ARGUMENT,
+      message: expect.stringContaining('set it up with the other device') as unknown,
+    });
+    expect(harness.serial.pickerQueue).toEqual([other]);
+    expect(device.isOpen).toBe(true);
+  });
+
+  it('refuses options that are not an object, or a chooseAgain that is not a boolean', async () => {
+    const harness = new BrowserHarness({ transport });
+    const tab = harness.openTab();
+    await tab.setup('Reader', AUTO);
+
+    for (const options of ['yes', { chooseAgain: 'yes' }]) {
+      await expect(tab.client.requestAccess('Reader', options as never)).rejects.toMatchObject({
+        code: SerialBrokerErrorCode.INVALID_ARGUMENT,
+      });
+    }
+  });
+});

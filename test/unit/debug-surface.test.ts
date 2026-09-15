@@ -145,6 +145,31 @@ describe('debugging surface: configurations', () => {
     expect(view?.tabs[0]?.configuration.status).toBe('queued');
   });
 
+  it('offers to choose a different device to every tab of an auto-mode configuration that has one', () => {
+    const settings = sampleReport().configurations[0]!.settings;
+    const withDevice = (device: typeof settings.device): Partial<ConfigurationDiagnostics> => ({
+      settings: { ...settings, device },
+    });
+    const resolved = withDevice({ auto: true, resolved: { vendorId: 0x1a86, productId: 0x7523 } });
+    const viewsOf = (overrides: Partial<ConfigurationDiagnostics>, role: 'owner' | 'participant') =>
+      buildConfigurationViews({
+        thisTab: tab('c-1', { ...overrides, role, status: 'open' }),
+        snapshot: snapshotOf(tab('c-2', { ...overrides, status: 'open' })),
+        remembered: [],
+      })[0]?.actions ?? new Set();
+
+    expect(viewsOf(resolved, 'owner').has('choose-again')).toBe(true);
+    expect(viewsOf(resolved, 'participant').has('choose-again')).toBe(true);
+    expect(viewsOf(withDevice({ auto: true }), 'owner').has('choose-again')).toBe(false);
+    expect(viewsOf({}, 'owner').has('choose-again')).toBe(false);
+    const queued = buildConfigurationViews({
+      thisTab: tab('c-1', { ...resolved, role: 'participant', status: 'queued' }),
+      snapshot: snapshotOf(tab('c-2', resolved)),
+      remembered: [],
+    });
+    expect(queued[0]?.actions.has('choose-again')).toBe(false);
+  });
+
   it("uses this tab's own fresh report over its entry in an older collection, and lists it first", () => {
     const [view] = buildConfigurationViews({
       thisTab: tab('c-9', { role: 'participant', status: 'open', connection: undefined }),

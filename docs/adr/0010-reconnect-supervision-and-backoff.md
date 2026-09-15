@@ -66,8 +66,16 @@ and immediately drops does not produce a tight loop.
 - **`maxAttempts`** ends in `failed` with `RECONNECT_EXHAUSTED`, reported once per participant.
 - **`connection.autoReconnect`** (default `true`). With `false`, a lost connection or failed attempt
   ends in `failed` with its error, nothing is scheduled, and a device plugged in again does not
-  revive it. A configuration that never connected still connects when its device appears: that is
-  the first connection the application asked for.
+  revive it. The errors the supervisor reports for them carry `isRetryable: false`, whatever their
+  code, because nothing retries them ([ADR-0012](./0012-error-model.md)). A configuration that never
+  connected still connects when its device appears: that is the first connection the application
+  asked for.
+- **A handover does not revive a failed configuration.** With `autoReconnect: false`, a tab that
+  takes the port over from a term whose last status it knew was `failed` starts its supervisor in
+  `failed`, without an attempt, and keeps the last error code it knew; the tabs that see such a term
+  end keep `failed` instead of showing `reconnecting`. The session remembers nothing beyond the
+  status it already has. A tab that knows nothing of the failure - the only tab, reloaded - connects
+  when it sets the configuration up: that is the application setting it up.
 - **Leaving `failed`**: a `connect` event (unless `autoReconnect` is `false`), a successful
   `requestAccess()`, or `setup()` with equal options, which starts again with a fresh attempt
   counter in whichever tab it is called - a tab that does not hold the port sends `status-request`
@@ -91,6 +99,11 @@ and immediately drops does not produce a tight loop.
   application should show.
 - **`maxAttempts: 0` to switch reconnecting off.** It would still revive on a `connect` event, and
   it hides a yes-or-no decision in a number.
+- **Remember a failure beyond the tabs that saw it**, in storage or on the bus, so that a reloaded
+  page stays `failed` too. A page that sets a configuration up is the application asking for a
+  connection, and a stored failure would need its own rules for when it is forgotten.
+- **Keep `isRetryable` a property of the code alone.** The documentation's own examples skip
+  retryable errors, and would hide a loss the application has to act on.
 
 ## Consequences
 
@@ -124,3 +137,5 @@ both transport modes.
 - 2026-09-15: `connection.autoReconnect`; `setup()` retries a failed configuration, from any tab.
   Backoff formula stated as implemented (the first retry waits `initialDelayMs`); `listing`
   reported as a state of its own.
+- 2026-09-15: With `autoReconnect: false`, a handover keeps a failed configuration `failed`, and the
+  errors of a lost connection or failed attempt carry `isRetryable: false`.

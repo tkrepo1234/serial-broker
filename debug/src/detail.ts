@@ -33,8 +33,11 @@ export interface DetailHost {
   connect(name: string, settings: EffectiveSettings): void;
   /** Releases it in this page, and with `forgetDevice` revokes the device permission too. */
   disconnect(name: string, forgetDevice: boolean): void;
-  /** Must call `requestAccess` synchronously: the browser only shows the picker in a click. */
-  chooseDevice(name: string): void;
+  /**
+   * Must call `requestAccess` synchronously: the browser only shows the picker in a click. With
+   * `chooseAgain`, an auto-mode configuration lets the user choose a different device.
+   */
+  chooseDevice(name: string, chooseAgain: boolean): void;
   /** Opens the settings dialog for a configuration this page is connected to. */
   edit(name: string, settings: EffectiveSettings): void;
   send(name: string, data: Uint8Array<ArrayBuffer>): void;
@@ -75,6 +78,7 @@ export class ConfigurationDetail {
     readonly menuButton: HTMLButtonElement;
     readonly menu: HTMLElement;
     readonly menuEdit: HTMLButtonElement;
+    readonly menuChooseAgain: HTMLButtonElement;
     readonly tabs: HTMLElement;
     readonly tabsTable: HTMLElement;
     readonly noTabs: HTMLElement;
@@ -120,6 +124,7 @@ export class ConfigurationDetail {
       menuButton: part('menuButton') as HTMLButtonElement,
       menu: part('menu'),
       menuEdit: part('menuEdit') as HTMLButtonElement,
+      menuChooseAgain: part('menuChooseAgain') as HTMLButtonElement,
       tabs: part('tabs'),
       tabsTable: part('tabsTable'),
       noTabs: part('noTabs'),
@@ -174,7 +179,7 @@ export class ConfigurationDetail {
     });
     parts.choose.addEventListener('click', () => {
       this.#clearMessage();
-      host.chooseDevice(name);
+      host.chooseDevice(name, false);
     });
 
     // The button opens the menu the way popovertarget does, which also closes it on a second
@@ -215,6 +220,12 @@ export class ConfigurationDetail {
       }
     };
     parts.menuEdit.addEventListener('click', fromMenu(edit));
+    parts.menuChooseAgain.addEventListener(
+      'click',
+      fromMenu(() => {
+        host.chooseDevice(name, true);
+      }),
+    );
     part('menuDisconnect').addEventListener(
       'click',
       fromMenu(() => {
@@ -276,6 +287,7 @@ export class ConfigurationDetail {
     parts.choose.hidden = !actions.has('choose-device');
     parts.menuButton.hidden = !actions.has('disconnect');
     parts.menuEdit.hidden = !actions.has('edit');
+    parts.menuChooseAgain.hidden = !actions.has('choose-again');
     parts.editSettings.hidden = !actions.has('edit');
     if (parts.menuButton.hidden && parts.menu.matches(':popover-open')) {
       parts.menu.hidePopover();
@@ -448,9 +460,8 @@ function hintFor(view: ConfigurationView, now: number): string {
       view.settings !== undefined &&
       'auto' in view.settings.device &&
       view.settings.device.resolved === undefined;
-    if (owner?.isThisTab !== true) {
-      return 'Waiting for a device. Only the tab that holds the port can open the picker.';
-    }
+    // Any tab taking part may ask: the permission is the origin's, and the tab holding the port
+    // looks again once it is granted (ADR-0036). Queued and withdrawn tabs are answered above.
     return isUnresolved
       ? 'No device chosen yet. Choose it once; the configuration takes its identity from the port and remembers it.'
       : 'No granted port matches this device. Choose it once; the browser remembers it.';

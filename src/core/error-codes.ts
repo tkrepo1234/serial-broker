@@ -184,6 +184,10 @@ export const REMEDIATION: Record<SerialBrokerErrorCode, string> = {
 /**
  * Codes for which the library is already retrying on its own, so the application should
  * reflect the condition in its UI rather than act on it.
+ *
+ * The default of `isRetryable`. With `connection.autoReconnect: false` nothing is retried, and the
+ * errors the tab holding the port reports for a lost connection or a failed attempt carry
+ * `isRetryable: false` instead (ADR-0010).
  */
 export const RETRYABLE_CODES: ReadonlySet<SerialBrokerErrorCode> = new Set([
   SerialBrokerErrorCode.DEVICE_DISCONNECTED,

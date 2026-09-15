@@ -93,6 +93,11 @@ it has none. The choice is remembered with the configuration and shared with eve
 name up without a device. Until the user has chosen, nothing is opened, however many ports the
 browser has granted.
 
+To change the device later — another adapter after a swap on the line — call
+`SerialBroker.requestAccess('Adapter', { chooseAgain: true })` from a click, in any tab. The picker
+shows every port again, and the port chosen replaces the device in every tab and in what is
+remembered; the tab holding the port closes the old one and opens the new one.
+
 When you know the device, name it by its USB IDs instead:
 
 ```ts

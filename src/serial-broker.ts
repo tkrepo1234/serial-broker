@@ -2,6 +2,7 @@ import { SerialBrokerClient } from './client/serial-broker-client.js';
 import { withTimestamp } from './core/errors.js';
 import type {
   ReleaseOptions,
+  RequestAccessOptions,
   SendableData,
   SerialBrokerEventMap,
   SerialBrokerEventName,
@@ -289,13 +290,22 @@ export interface SerialBrokerApi {
    * it - in auto mode with the device chosen here. `setup()` and `requestAccess()` may follow each
    * other in one click.
    *
+   * **Choosing a different device.** With `{ chooseAgain: true }`, a configuration in auto mode opens
+   * the picker unfiltered even though it has a device, and the port the user chooses becomes the
+   * device of every tab, remembered as the first choice was. The tab holding the port closes the old
+   * device and opens the new one, from any tab and while the connection is open. Dismissing the
+   * picker changes nothing.
+   *
    * @param name - The configuration name.
+   * @param options - Whether to choose the device again. Read once, when the call is made.
    * @returns `true` if a device is now available, `false` if the user dismissed the picker - a
    *   decision, not a failure, so it does not throw.
    * @throws A `SerialBrokerError` with code `UNKNOWN_CONFIGURATION`, `USER_GESTURE_REQUIRED` when
    *   called outside a gesture, `DEVICE_MISMATCH` when the chosen port is not the configured
-   *   device, or `PERMISSION_REQUIRED` when this tab is `queued` under `maxTabs` or withdrew from the
-   *   configuration.
+   *   device, `PERMISSION_REQUIRED` when this tab is `queued` under `maxTabs` or withdrew from the
+   *   configuration, or `INVALID_ARGUMENT` for options that are not an object, a `chooseAgain` that
+   *   is not a boolean, or `chooseAgain` for a configuration that names its device - set that one up
+   *   with the other device instead.
    * @example
    * ```ts
    * connectButton.addEventListener('click', async () => {
@@ -303,8 +313,14 @@ export interface SerialBrokerApi {
    *   connectButton.hidden = granted;
    * });
    * ```
+   * @example A different adapter on the line, in auto mode
+   * ```ts
+   * changeDeviceButton.addEventListener('click', () => {
+   *   void SerialBroker.requestAccess('Scale', { chooseAgain: true });
+   * });
+   * ```
    */
-  requestAccess(name: string): Promise<boolean>;
+  requestAccess(name: string, options?: RequestAccessOptions): Promise<boolean>;
 
   /**
    * Sets up every configuration remembered by an earlier visit (`remember`, on by default).
@@ -515,8 +531,8 @@ export const SerialBroker: SerialBrokerApi = {
   },
 
   /** {@inheritDoc SerialBrokerApi.requestAccess} */
-  async requestAccess(name) {
-    return await client().requestAccess(name);
+  async requestAccess(name, options) {
+    return await client().requestAccess(name, options);
   },
 
   /** {@inheritDoc SerialBrokerApi.restore} */
