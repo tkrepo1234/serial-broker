@@ -269,7 +269,8 @@ export class PendingWrites {
    *
    * Everything that term said has arrived, or has been waited for as long as it will be. A write it
    * had begun and not answered is now undecidable and is failed; a write handed to it that it never
-   * began is handed on.
+   * began - so the bytes demonstrably never reached the device - is handed on, which is not a
+   * duplicate.
    */
   handleTermEnded(term: TermId): void {
     for (const pending of [...this.#writes.values()]) {
@@ -286,13 +287,9 @@ export class PendingWrites {
             },
           ),
         );
-      } else if (pending.startedTerm === undefined && pending.addressedTerm === term) {
-        // Never started by the only term that could write it, so the bytes demonstrably never
-        // reached the device - and handing it on is not a duplicate.
-        pending.isDispatched = false;
-        this.#dispatch(pending);
       }
     }
+    this.dispatchWaiting();
   }
 
   /**

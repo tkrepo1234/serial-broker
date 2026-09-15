@@ -6,13 +6,14 @@ import type { NormalizedConfiguration, NormalizedDeviceFilter } from '../core/de
 import type { ConnectionDiagnostics } from '../core/diagnostics.js';
 import { SerialBrokerErrorCode } from '../core/error-codes.js';
 import { describeUnknown, SerialBrokerError } from '../core/errors.js';
-import type { ScopedLogger } from '../core/logger.js';
+import { OnceLog, type ScopedLogger } from '../core/logger.js';
 import { SerialBrokerStatus } from '../core/types.js';
 import type {
   SerialOptionsLike,
   SerialPortLike,
   SerialBrokerEnvironment,
 } from '../environment/environment.js';
+import { MAX_WAITING_WRITE_BYTES, MAX_WAITING_WRITES } from '../protocol/limits.js';
 
 import { findGrantedPort } from './port-matcher.js';
 import { ReceiveBuffer } from './receive-buffer.js';
@@ -122,6 +123,13 @@ export class PortSupervisor {
   #stopping: Promise<void> | undefined;
   readonly #backoff = new BackoffState();
   readonly #writes = new WriteQueue();
+  /**
+   * Every write handed to this port that has not been answered, with its size: queued, being
+   * written, or stalled at the device. What waits here is bounded in both (ADR-0031).
+   */
+  readonly #unanswered = new Map<Promise<void>, number>();
+  #unansweredBytes = 0;
+  readonly #once: OnceLog;
   /** Incremented on every connection attempt, so a stale async continuation can be ignored. */
   #generation = 0;
   /** When the scheduled reconnect is due, while one is scheduled. Diagnostics only. */
@@ -138,7 +146,9 @@ export class PortSupervisor {
     private readonly configuration: NormalizedConfiguration,
     private readonly callbacks: SupervisorCallbacks,
     private readonly logger: ScopedLogger,
-  ) {}
+  ) {
+    this.#once = new OnceLog(logger);
+  }
 
   /**
    * Describes the connection for a diagnostics report (ADR-0018).
@@ -215,7 +225,32 @@ export class PortSupervisor {
     }
 
     await this.#teardown;
+    await this.#answered();
     this.#setStatus(SerialBrokerStatus.Idle);
+  }
+
+  /**
+   * Waits, within `writeTimeoutMs`, until every write handed to this port has been answered.
+   *
+   * The caller says `owner-released` next, which has to follow every answer of the term (ADR-0026).
+   * Each write's own caller heard its outcome first: its reaction was registered before this one. A
+   * write still hanging after that is answered when it ends; its issuer has taken it for lost by then,
+   * which is what it is.
+   */
+  async #answered(): Promise<void> {
+    if (this.#unanswered.size === 0) {
+      return;
+    }
+    try {
+      await withDeadline(Promise.allSettled([...this.#unanswered.keys()]), this.environment.clock, {
+        timeoutMs: this.configuration.connection.writeTimeoutMs,
+        code: SerialBrokerErrorCode.WRITE_TIMEOUT,
+        message: 'Timed out while waiting for writes to be answered',
+        configName: this.configuration.name,
+      });
+    } catch {
+      // See above.
+    }
   }
 
   /**
@@ -280,7 +315,56 @@ export class PortSupervisor {
    *   this point the write is no longer replayable: if this context dies now, whether the
    *   device received the bytes is unknowable. See ADR-0013.
    */
-  async write(payload: Uint8Array, onStarted: () => void): Promise<void> {
+  write(payload: Uint8Array, onStarted: () => void): Promise<void> {
+    const written = this.#write(payload, onStarted);
+    // Settled before its caller hears of it: this reaction was registered first.
+    this.#unanswered.set(written, payload.byteLength);
+    this.#unansweredBytes += payload.byteLength;
+    const answered = (): void => {
+      this.#unanswered.delete(written);
+      this.#unansweredBytes -= payload.byteLength;
+    };
+    written.then(answered, answered);
+    return written;
+  }
+
+  /**
+   * The error for a write that does not fit what this port keeps waiting, or `undefined` if it fits.
+   *
+   * Refusing says that nothing of the write was written, which a write held beyond every bound could
+   * not say (ADR-0031). Asked before a write is accepted, so a write already accepted is never
+   * refused: its bytes may be on their way to the device.
+   */
+  refusalOfWrite(requestId: string, byteLength: number): SerialBrokerError | undefined {
+    const waiting = this.#unanswered.size;
+    const waitingBytes = this.#unansweredBytes;
+    if (waiting < MAX_WAITING_WRITES && waitingBytes + byteLength <= MAX_WAITING_WRITE_BYTES) {
+      return undefined;
+    }
+    this.#once.warn(
+      'write-queue-full',
+      'refused a write because the port already holds as many as it keeps; further ones are refused without a record',
+      {
+        configName: this.configuration.name,
+        event: 'supervisor.write-queue-full',
+        waiting,
+        waitingBytes,
+        maxWaiting: MAX_WAITING_WRITES,
+        maxWaitingBytes: MAX_WAITING_WRITE_BYTES,
+      },
+    );
+    return new SerialBrokerError(
+      SerialBrokerErrorCode.WRITE_QUEUE_FULL,
+      'The tab holding the port already has as many writes waiting as it keeps',
+      {
+        configName: this.configuration.name,
+        context: { requestId, byteLength, waiting, waitingBytes },
+        timestamp: this.environment.clock.now(),
+      },
+    );
+  }
+
+  async #write(payload: Uint8Array, onStarted: () => void): Promise<void> {
     const clock = this.environment.clock;
     const { writeTimeoutMs, maxWriteChunkBytes } = this.configuration.connection;
     const queuedAt = clock.monotonicNow();
@@ -537,6 +621,13 @@ export class PortSupervisor {
 
   // --- Connection lifecycle ---------------------------------------------------------------
 
+  /**
+   * One attempt to connect: find the port, open it, and start reading.
+   *
+   * Every step ends the attempt itself when it cannot go on - with a lost connection, a failed
+   * attempt, a wait for permission - and returns nothing; one that finds the world moved on while it
+   * awaited returns nothing either (`#isStale`).
+   */
   async #connect(): Promise<void> {
     if (this.#state.kind === 'stopped') {
       return;
@@ -551,13 +642,26 @@ export class PortSupervisor {
     this.#state = { kind: 'listing' };
     this.#setStatus(SerialBrokerStatus.Connecting);
 
+    const port = await this.#findPort(generation, attempt);
+    if (port !== undefined && (await this.#open(port, generation, attempt))) {
+      this.#startReading(port, generation, attempt);
+    }
+  }
+
+  /**
+   * Finds the granted port of the configured device, once the lost connection has finished closing.
+   *
+   * @returns `undefined` when the attempt ends here: the listing failed or was refused, the device is
+   *   away, no permission has been granted, or the attempt went stale.
+   */
+  async #findPort(generation: number, attempt: number): Promise<SerialPortLike | undefined> {
     const teardown = this.#teardown;
     if (teardown !== undefined) {
       // Opening before the lost connection has finished closing fails with InvalidStateError:
       // an error about nothing, reported to every tab, and an attempt spent on it.
       await teardown;
       if (this.#isStale(generation)) {
-        return;
+        return undefined;
       }
     }
 
@@ -581,38 +685,14 @@ export class PortSupervisor {
           },
         );
       } catch (error) {
-        if (this.#isStale(generation)) {
-          return;
+        if (!this.#isStale(generation)) {
+          this.#listingFailed(error, attempt);
         }
-        if (
-          error instanceof SerialBrokerError &&
-          error.code === SerialBrokerErrorCode.OPEN_TIMEOUT
-        ) {
-          // A browser that never answers is a failed attempt, like a port that never opens.
-          this.#handleConnectionLoss('listing-timed-out', error);
-          return;
-        }
-        // The browser refuses to list the ports at all - a permissions policy, for instance. That
-        // is not retryable, and another attempt would meet the same refusal (see
-        // {@link #giveUp}).
-        this.#report(
-          new SerialBrokerError(
-            SerialBrokerErrorCode.WEB_SERIAL_UNAVAILABLE,
-            `Could not enumerate serial ports: ${describeUnknown(error)}`,
-            {
-              configName: this.configuration.name,
-              context: { attempt },
-              timestamp: this.environment.clock.now(),
-              cause: error,
-            },
-          ),
-        );
-        this.#giveUp('listing-refused');
-        return;
+        return undefined;
       }
 
       if (this.#isStale(generation)) {
-        return;
+        return undefined;
       }
       // A device plugged in while the list was being taken may be missing from it. Looking again
       // is part of this attempt - not another one counted against `maxAttempts` - rather than a
@@ -634,7 +714,7 @@ export class PortSupervisor {
           },
         ),
       );
-      return;
+      return undefined;
     }
 
     if (port === undefined) {
@@ -643,9 +723,40 @@ export class PortSupervisor {
       // retry.
       this.#state = { kind: 'awaiting-permission' };
       this.#setStatus(SerialBrokerStatus.AwaitingPermission);
+    }
+    return port;
+  }
+
+  /** Ends an attempt whose listing of the granted ports failed. */
+  #listingFailed(error: unknown, attempt: number): void {
+    if (error instanceof SerialBrokerError && error.code === SerialBrokerErrorCode.OPEN_TIMEOUT) {
+      // A browser that never answers is a failed attempt, like a port that never opens.
+      this.#handleConnectionLoss('listing-timed-out', error);
       return;
     }
+    // The browser refuses to list the ports at all - a permissions policy, for instance. That
+    // is not retryable, and another attempt would meet the same refusal (see {@link #giveUp}).
+    this.#report(
+      new SerialBrokerError(
+        SerialBrokerErrorCode.WEB_SERIAL_UNAVAILABLE,
+        `Could not enumerate serial ports: ${describeUnknown(error)}`,
+        {
+          configName: this.configuration.name,
+          context: { attempt },
+          timestamp: this.environment.clock.now(),
+          cause: error,
+        },
+      ),
+    );
+    this.#giveUp('listing-refused');
+  }
 
+  /**
+   * Opens the port found.
+   *
+   * @returns `true` once it is open and the attempt is still current.
+   */
+  async #open(port: SerialPortLike, generation: number, attempt: number): Promise<boolean> {
     this.#foundPort = port;
     this.#foundPortDetached = false;
     const opened = Promise.resolve(port.open(this.#openOptions()));
@@ -663,7 +774,7 @@ export class PortSupervisor {
       });
     } catch (error) {
       if (this.#isStale(generation)) {
-        return;
+        return false;
       }
       const failure = mapOpenError(error, {
         configName: this.configuration.name,
@@ -674,15 +785,16 @@ export class PortSupervisor {
       // `SecurityError` - serial blocked by a permissions policy - is not one: every attempt would
       // meet it again, forever under the default `maxAttempts`.
       this.#handleConnectionLoss('open-failed', failure, failure.isRetryable ? 'retry' : 'give-up');
-      return;
+      return false;
     }
 
-    if (this.#isStale(generation)) {
-      // Ownership or the connection went away while the port was opening. Whatever moved on -
-      // `stop()` or the loss handler - found the attempt in `opening` and closes what it opened.
-      return;
-    }
+    // Ownership or the connection went away while the port was opening. Whatever moved on -
+    // `stop()` or the loss handler - found the attempt in `opening` and closes what it opened.
+    return !this.#isStale(generation);
+  }
 
+  /** Takes the open port's streams and reads until the connection ends. */
+  #startReading(port: SerialPortLike, generation: number, attempt: number): void {
     const readable = port.readable;
     const writable = port.writable;
     if (readable === null || writable === null) {
@@ -706,7 +818,7 @@ export class PortSupervisor {
     const decoder = this.configuration.encoding.decodeText
       ? new TextDecoder(this.configuration.encoding.encoding)
       : undefined;
-    this.#state = {
+    const state: Extract<ConnectionState, { kind: 'open' }> = {
       kind: 'open',
       port,
       reader: readable.getReader(),
@@ -716,6 +828,7 @@ export class PortSupervisor {
         this.#deliver(data, decoder);
       }),
     };
+    this.#state = state;
 
     // The stability window is a duration, so it is measured on the monotonic clock (ADR-0032);
     // `openedAt` is a moment an operator reads, so it is the wall clock.
@@ -730,7 +843,7 @@ export class PortSupervisor {
 
     // Deliberately not awaited: the read loop runs for the life of the connection and ends by
     // calling the loss handler. It never rejects - every failure inside it is handled there.
-    void this.#readUntilClosed(this.#state, generation);
+    void this.#readUntilClosed(state, generation);
   }
 
   /**

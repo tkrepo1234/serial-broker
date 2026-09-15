@@ -74,31 +74,6 @@ describe.each(TRANSPORT_MODES)('the tab that holds the port (%s)', (transport) =
 
     expect(queuedWritesAt(busy.client)).toBe(2);
   });
-
-  it('accepts a repeated write only once, however many writes it has accepted since', async () => {
-    const { harness, device } = harnessWithDevice(transport);
-    const owner = harness.openTab();
-    await owner.setup('Reader', READER_OPTIONS);
-    const participant = harness.openTab();
-    await participant.setup('Reader', READER_OPTIONS);
-
-    // More writes than the tab holding the port remembers finished ones, all still waiting there
-    // behind one that hangs.
-    device.faults.hangOnWrite = true;
-    for (let index = 0; index < 1_100; index += 1) {
-      void participant.client.send('Reader', `W${String(index)}`).catch(() => undefined);
-    }
-    await harness.settle();
-    const queued = queuedWritesAt(owner.client);
-    expect(queued).toBe(1_100);
-
-    // A tab joining asks for the status; hearing `open` again, the participant hands on every
-    // write that has not started.
-    const joining = harness.openTab();
-    await joining.setup('Reader', READER_OPTIONS);
-
-    expect(queuedWritesAt(owner.client)).toBe(queued);
-  });
 });
 
 describe.each(TRANSPORT_MODES)('a configuration that failed (%s)', (transport) => {

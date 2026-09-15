@@ -1,6 +1,5 @@
 import { assertNever } from '../core/assert.js';
 import type { TimerHandle } from '../core/clock.js';
-import { withDeadline } from '../core/deadline.js';
 import {
   effectiveDevice,
   type NormalizedConfiguration,
@@ -29,11 +28,7 @@ import {
 } from '../owner/port-matcher.js';
 import { PortSupervisor } from '../owner/port-supervisor.js';
 import { mapRequestPortError } from '../owner/serial-errors.js';
-import {
-  MAX_WAITING_WRITE_BYTES,
-  MAX_WAITING_WRITES,
-  STATUS_ANSWER_RATE,
-} from '../protocol/limits.js';
+import { STATUS_ANSWER_RATE } from '../protocol/limits.js';
 import type {
   ClientId,
   ProtocolMessage,
@@ -86,14 +81,6 @@ export class ConfigurationSession {
   readonly #terms: OwnerTerms;
   /** This context's term while it holds the port. */
   #term: TermId | undefined;
-  /**
-   * The outcomes of writes performed at this context's port that have not been reported yet.
-   *
-   * Waited for before `owner-released`, which has to be the term's last word (ADR-0026).
-   */
-  readonly #unreported = new Set<Promise<void>>();
-  /** How many payload bytes those writes hold, so that the queue is bounded in both (ADR-0031). */
-  #waitingWriteBytes = 0;
   /** What this session records once only: what a flood of messages would repeat. */
   readonly #once: OnceLog;
   /** How often this context answers `status-request`, and the answer a flood is coalesced into. */
@@ -578,14 +565,6 @@ export class ConfigurationSession {
   /** Acts on a message the terms have believed. */
   #apply(message: ProtocolMessage): void {
     switch (message.type) {
-      case 'owner-claimed':
-        // Proof that the former holder let go of the lock, not that its last words have arrived:
-        // they come from another sender, and its term is waited for (ADR-0026).
-        if (!this.#isReleased) {
-          this.#writes.dispatchWaiting();
-        }
-        return;
-
       case 'write-request':
         this.#performWriteForPeer(message.from, message.requestId, message.payload, message.term);
         return;
@@ -634,6 +613,11 @@ export class ConfigurationSession {
 
       case 'error':
         this.#emitError(deserializeError(message.error), { broadcast: false });
+        return;
+
+      case 'owner-claimed':
+        // Believed, and so the term holding the port (ADR-0026). Waiting writes go to it once it
+        // states `open`: until then there is nothing to write to.
         return;
 
       case 'owner-released':
@@ -764,11 +748,11 @@ export class ConfigurationSession {
       return;
     }
 
-    await supervisor.stop();
     // `owner-released` is the term's last word, and a tab that hears it concludes that a write the
-    // term began and did not answer was lost with it (ADR-0026). So the answers go first: the writes
-    // the port drained have ended, and one still hanging is bounded by its own deadline.
-    await this.#reportsSent();
+    // term began and did not answer was lost with it (ADR-0026). So the answers go first: the
+    // supervisor stops only once every write handed to it has been answered, or has hung for as long
+    // as a write may.
+    await supervisor.stop();
 
     // Queued before the goodbye is sent and before the term's lock is let go: a tab that finds the
     // lock free and this request waiting on it knows that the term's last words are on their way,
@@ -813,24 +797,6 @@ export class ConfigurationSession {
         // A browser that refuses the request only costs the other tabs the difference between this
         // term ending cleanly and its tab having died, which ends it as soon as the lock is free.
       });
-  }
-
-  /** Waits, within `writeTimeoutMs`, until every write performed at the port has been answered. */
-  async #reportsSent(): Promise<void> {
-    if (this.#unreported.size === 0) {
-      return;
-    }
-    try {
-      await withDeadline(Promise.all(this.#unreported), this.environment.clock, {
-        timeoutMs: this.#configuration.connection.writeTimeoutMs,
-        code: SerialBrokerErrorCode.WRITE_TIMEOUT,
-        message: 'Timed out while waiting for writes to be answered',
-        configName: this.#configuration.name,
-      });
-    } catch {
-      // A write still hanging after the port closed. It is answered when it ends; its issuer has
-      // taken it for lost by then, which is what it is.
-    }
   }
 
   // --- Writes ---------------------------------------------------------------------------------
@@ -922,11 +888,11 @@ export class ConfigurationSession {
     report: WriteReport,
   ): void {
     const accepted = this.#acceptedWrites;
-    if (!accepted.isKnown(origin, requestId) && !this.#hasRoomForWrite(payload.byteLength)) {
-      // The queue at this port is full. Refusing says that nothing of this write was written, which
-      // a write held beyond every bound could not say (ADR-0031). A request already accepted is
-      // never refused: its bytes may be on their way to the device.
-      report.finished(this.#queueFull(requestId, payload.byteLength));
+    const refusal = accepted.isKnown(origin, requestId)
+      ? undefined
+      : supervisor.refusalOfWrite(requestId, payload.byteLength);
+    if (refusal !== undefined) {
+      report.finished(refusal);
       return;
     }
 
@@ -939,7 +905,7 @@ export class ConfigurationSession {
       return;
     }
 
-    const reported = supervisor.write(payload, report.started).then(
+    void supervisor.write(payload, report.started).then(
       () => {
         accepted.finish(origin, requestId, undefined);
         // The outcome goes to the issuer before any tab hears `onSend`. A listener may release the
@@ -954,52 +920,6 @@ export class ConfigurationSession {
         const failure = error as SerialBrokerError;
         accepted.finish(origin, requestId, failure);
         report.finished(failure);
-      },
-    );
-    // Kept until answered, so that the term's `owner-released` can follow every answer (ADR-0026),
-    // and so that what waits at this port is counted in both writes and bytes (ADR-0031).
-    this.#unreported.add(reported);
-    this.#waitingWriteBytes += payload.byteLength;
-    void reported.finally(() => {
-      this.#unreported.delete(reported);
-      this.#waitingWriteBytes -= payload.byteLength;
-    });
-  }
-
-  /** `true` while another write of `byteLength` bytes fits in what this port keeps waiting. */
-  #hasRoomForWrite(byteLength: number): boolean {
-    return (
-      this.#unreported.size < MAX_WAITING_WRITES &&
-      this.#waitingWriteBytes + byteLength <= MAX_WAITING_WRITE_BYTES
-    );
-  }
-
-  /** The error for a write refused because this port already holds as many as it keeps. */
-  #queueFull(requestId: RequestId, byteLength: number): SerialBrokerError {
-    this.#once.warn(
-      'write-queue-full',
-      'refused a write because the port already holds as many as it keeps; further ones are refused without a record',
-      {
-        configName: this.#configuration.name,
-        event: 'session.write-queue-full',
-        waiting: this.#unreported.size,
-        waitingBytes: this.#waitingWriteBytes,
-        maxWaiting: MAX_WAITING_WRITES,
-        maxWaitingBytes: MAX_WAITING_WRITE_BYTES,
-      },
-    );
-    return new SerialBrokerError(
-      SerialBrokerErrorCode.WRITE_QUEUE_FULL,
-      'The tab holding the port already has as many writes waiting as it keeps',
-      {
-        configName: this.#configuration.name,
-        context: {
-          requestId,
-          byteLength,
-          waiting: this.#unreported.size,
-          waitingBytes: this.#waitingWriteBytes,
-        },
-        timestamp: this.environment.clock.now(),
       },
     );
   }
