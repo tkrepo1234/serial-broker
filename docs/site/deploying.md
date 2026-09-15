@@ -147,7 +147,7 @@ reports `PROTOCOL_VERSION_MISMATCH`, and with `transport: 'auto'` moves to a `Br
   every release — and tabs still open from before the deploy keep the old worker. If the release
   did not change the protocol version, the old tabs and the new ones wait for the same port but
   are on different workers, and do not see each other; see
-  [Tabs on different message buses](known-limits.md#tabs-on-different-message-buses). Reload every
+  [Tabs on different message buses](known-limits.md#tabs-on-different-message-buses-do-not-see-each-other). Reload every
   tab after each deploy.
 
 Either way, reload the open tabs after deploying a release that changes the protocol; the
