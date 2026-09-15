@@ -52,10 +52,10 @@ export function isSerialBrokerSupported(): boolean {
 }
 
 /**
- * Sets up every configuration a previous visit persisted, without naming them.
+ * Sets up every configuration a previous visit remembered, without naming them.
  *
  * Useful in an application whose devices are configured by the user rather than by the code.
- * A {@link SerialBrokerModel} with `restorePersisted: true` calls this itself.
+ * A {@link SerialBrokerModel} with `restoreRemembered: true` calls this itself.
  *
  * @returns The names that were restored.
  */
