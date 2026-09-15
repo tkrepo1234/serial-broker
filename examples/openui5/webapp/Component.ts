@@ -45,9 +45,9 @@ export default class Component extends UIComponent {
     const reader = new SerialBrokerModel({
       name: 'Reader',
       options: {
-        // Accepts whatever port the user picks: an RS-232 interface or a virtual COM port has no
-        // USB ids to filter on. Prefer the vendor/product filter whenever the device has ids.
-        device: { any: true },
+        // No device named: the configuration takes its device from the port the user picks on
+        // Connect - its USB ids, or none for an RS-232 interface - and remembers it (auto mode).
+        // Unlike `{ any: true }`, it never opens a port on its own, such as the printer's.
         serial: { baudRate: 9600 },
         encoding: { decodeText: true },
       },

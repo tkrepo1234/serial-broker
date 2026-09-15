@@ -566,7 +566,7 @@ function toHex(data: Uint8Array): string {
 function decodeForDisplay(data: Uint8Array): string {
   const text = new TextDecoder('utf-8', { fatal: false }).decode(data);
   // eslint-disable-next-line no-control-regex
-  return /[ --]/u.test(text) ? toHex(data) : text.replace(/\r?\n$/u, '');
+  return /[\x00-\x08\x0e-\x1f]/u.test(text) ? toHex(data) : text.replace(/\r?\n$/u, '');
 }
 
 /** `0x1a86`, or `null` for a configuration that accepts any port. */
