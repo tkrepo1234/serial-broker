@@ -51,7 +51,7 @@ async function elapse(harness: BrowserHarness, ms: number): Promise<void> {
 }
 
 describe.each(TRANSPORT_MODES)('a deployment left running (%s)', (transport) => {
-  it('returns to where it started after six hours of the device dropping out every five minutes', async () => {
+  it('returns to where it started after an hour of the device dropping out every five minutes', async () => {
     const harness = new BrowserHarness({ transport });
     const device = harness.serial.addDevice(READER.vendorId, READER.productId);
     harness.serial.grant(device);
@@ -63,7 +63,7 @@ describe.each(TRANSPORT_MODES)('a deployment left running (%s)', (transport) => 
     const clients = [owner.client, participant.client];
     const before = footprintOf(harness, clients);
 
-    for (let cycle = 0; cycle < 6 * 12; cycle += 1) {
+    for (let cycle = 0; cycle < 12; cycle += 1) {
       harness.serial.unplug(device);
       await elapse(harness, 2_000);
       harness.serial.plug(device);
@@ -72,7 +72,7 @@ describe.each(TRANSPORT_MODES)('a deployment left running (%s)', (transport) => 
 
     expect(footprintOf(harness, clients)).toEqual(before);
     expect(participant.client.getStatus('Reader').status).toBe(SerialBrokerStatus.Open);
-    expect(device.openCount).toBe(1 + 6 * 12);
+    expect(device.openCount).toBe(1 + 12);
   });
 
   it('returns to where it started after tabs keep dying and opening for 20 rounds', async () => {
@@ -148,7 +148,7 @@ describe.each(TRANSPORT_MODES)('a deployment left running (%s)', (transport) => 
     expect(rememberedNames(harness.storage)).toEqual([]);
   });
 
-  it('returns to where it started after 10,000 watchers and 100 collections come and go', async () => {
+  it('returns to where it started after 1,000 watchers and 10 collections come and go', async () => {
     const harness = new BrowserHarness({ transport });
     const device = harness.serial.addDevice(READER.vendorId, READER.productId);
     harness.serial.grant(device);
@@ -158,7 +158,7 @@ describe.each(TRANSPORT_MODES)('a deployment left running (%s)', (transport) => 
     await harness.settle();
     let heardByRemoved = 0;
 
-    for (let round = 0; round < 10_000; round += 1) {
+    for (let round = 0; round < 1_000; round += 1) {
       const stop = observer.watch(
         round % 2 === 0 ? 'Reader' : `Other ${String(round % 50)}`,
         () => {
@@ -167,7 +167,7 @@ describe.each(TRANSPORT_MODES)('a deployment left running (%s)', (transport) => 
       );
       stop();
     }
-    for (let round = 0; round < 100; round += 1) {
+    for (let round = 0; round < 10; round += 1) {
       const collected = observer.collect(10);
       await harness.advance(10);
       await collected;

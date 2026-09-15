@@ -80,10 +80,13 @@ describe.each(TRANSPORT_MODES)('diagnostics observer (%s)', (transport) => {
 
     const snapshot = await collect(harness, observer);
 
-    expect(snapshot.participants).toHaveLength(2);
-    expect(snapshot.participants.every((participant) => participant.transport === transport)).toBe(
-      true,
-    );
+    // On the same transport as the tabs, and each report names the one its tab uses.
+    expect(observer.transportKind).toBe(transport);
+    expect(snapshot.participants.map((participant) => participant.transport)).toEqual([
+      owner.client.transportKind,
+      peer.client.transportKind,
+    ]);
+    expect(owner.client.transportKind).toBe(transport);
     expect(reportOf(snapshot, owner)).toMatchObject({
       role: 'owner',
       status: SerialBrokerStatus.Open,
@@ -324,19 +327,6 @@ describe.each(TRANSPORT_MODES)('diagnostics observer (%s)', (transport) => {
     expect(() => observer.watch('Reader', () => undefined)).toThrow(
       expect.objectContaining({ code: SerialBrokerErrorCode.CONFIGURATION_RELEASED }),
     );
-  });
-
-  it('ends up on the same transport as the tabs, and each report names the one its tab uses', async () => {
-    const { harness, owner, peer } = await twoTabsSharingAPort();
-    const observer = harness.openObserver();
-
-    const snapshot = await collect(harness, observer);
-
-    expect(observer.transportKind).toBe(transport);
-    expect(snapshot.participants.map((participant) => participant.transport)).toEqual([
-      owner.client.transportKind,
-      peer.client.transportKind,
-    ]);
   });
 
   it('never appears among the participants it reports on', async () => {

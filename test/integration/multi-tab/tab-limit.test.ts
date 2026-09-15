@@ -1,11 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
 import { SerialBrokerErrorCode } from '../../../src/core/error-codes.js';
-import { normalizeConfiguration } from '../../../src/core/validation.js';
 import { BrowserHarness, TRANSPORT_MODES } from '../../harness/browser-harness.js';
 import { READER, READER_OPTIONS } from '../../harness/devices.js';
 import type { TransportMode } from '../../harness/fake-bus.js';
-import { rememberedEntry } from '../../harness/stored-configurations.js';
 
 /**
  * Limiting how many tabs use a configuration at once (ADR-0025).
@@ -135,23 +133,11 @@ describe.each(TRANSPORT_MODES)('a tab running a different tab limit (%s)', (tran
   });
 });
 
+/**
+ * The range and default of `maxTabs` are held against the documentation in documentation.test.ts,
+ * and remembering it - no limit included - in configuration-store.test.ts.
+ */
 describe('the maxTabs option', () => {
-  const options = (maxTabs: unknown) => ({ ...READER_OPTIONS, maxTabs });
-
-  it('accepts 1 to 100 and Infinity, and defaults to no limit', () => {
-    expect(normalizeConfiguration('Reader', READER_OPTIONS).maxTabs).toBe(Number.POSITIVE_INFINITY);
-    expect(normalizeConfiguration('Reader', options(1)).maxTabs).toBe(1);
-    expect(normalizeConfiguration('Reader', options(100)).maxTabs).toBe(100);
-    for (const invalid of [0, 1.5, 101, -1, Number.NaN, '2', null]) {
-      expect(() => normalizeConfiguration('Reader', options(invalid))).toThrow(
-        expect.objectContaining({
-          code: SerialBrokerErrorCode.INVALID_ARGUMENT,
-          context: expect.objectContaining({ argumentName: 'options.maxTabs' }) as unknown,
-        }),
-      );
-    }
-  });
-
   it('cannot be changed by a second setup() in the same tab', async () => {
     const harness = new BrowserHarness();
     const tab = harness.openTab();
@@ -162,24 +148,5 @@ describe('the maxTabs option', () => {
     ).rejects.toMatchObject({
       code: SerialBrokerErrorCode.CONFIGURATION_CONFLICT,
     });
-  });
-
-  it('is remembered across a reload, and no limit is stored as no limit', async () => {
-    const harness = new BrowserHarness();
-    const tab = harness.openTab();
-    await tab.setup('Limited', { ...READER_OPTIONS, maxTabs: 2 });
-    await tab.setup('Unlimited', READER_OPTIONS);
-    await tab.close();
-
-    expect(JSON.stringify(rememberedEntry(harness.storage, 'Unlimited'))).not.toContain('null');
-    const reloaded = harness.openTab();
-    await reloaded.client.restore();
-
-    expect(
-      reloaded.client.diagnostics()?.configurations.map((c) => [c.name, c.settings.maxTabs]),
-    ).toEqual([
-      ['Limited', 2],
-      ['Unlimited', Number.POSITIVE_INFINITY],
-    ]);
   });
 });

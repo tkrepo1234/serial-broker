@@ -22,44 +22,29 @@ describe.each(TRANSPORT_MODES)('sharing one port across tabs (%s)', (transport) 
     return { harness, device };
   }
 
-  it('opens the port in the first tab that sets the configuration up', async () => {
-    const { harness, device } = await withGrantedDevice();
-
-    const tab = harness.openTab();
-    await tab.setup('CardReader', READER_OPTIONS);
-
-    expect(tab.client.getStatus('CardReader').status).toBe(SerialBrokerStatus.Open);
-    expect(device.openCount).toBe(1);
-  });
-
-  it('does not open the port a second time when another tab joins', async () => {
-    const { harness, device } = await withGrantedDevice();
-
-    const first = harness.openTab();
-    await first.setup('CardReader', READER_OPTIONS);
-    const second = harness.openTab();
-    await second.setup('CardReader', READER_OPTIONS);
-
-    // A second `open()` on a device another context holds fails with InvalidStateError in
-    // every browser. One open across two tabs is the entire point of the library.
-    expect(device.openCount).toBe(1);
-  });
-
-  it('delivers received data to every tab', async () => {
+  it('opens the port once, in the first tab, and a tab that joins sees it open and hears the data', async () => {
     const { harness, device } = await withGrantedDevice();
     const first = harness.openTab();
     await first.setup('CardReader', READER_OPTIONS);
-    const second = harness.openTab();
-    await second.setup('CardReader', READER_OPTIONS);
+    const openedByTheFirst = first.client.getStatus('CardReader').status;
 
+    const late = harness.openTab();
+    await late.setup('CardReader', READER_OPTIONS);
     device.emit('CARD:1234');
     await harness.settle();
 
+    expect(openedByTheFirst).toBe(SerialBrokerStatus.Open);
+    // A second `open()` on a device another context holds fails with InvalidStateError in
+    // every browser. One open across two tabs is the entire point of the library.
+    expect(device.openCount).toBe(1);
+    // The joining tab never opened anything itself: without the tab holding the port restating
+    // its status, it would sit at `idle` until the next change - possibly hours.
+    expect(late.client.getStatus('CardReader').status).toBe(SerialBrokerStatus.Open);
     expect(first.receivedText('CardReader')).toBe('CARD:1234');
-    expect(second.receivedText('CardReader')).toBe('CARD:1234');
+    expect(late.receivedText('CardReader')).toBe('CARD:1234');
   });
 
-  it('writes from a tab that does not own the port, exactly once', async () => {
+  it('writes from a tab that does not own the port exactly once, and tells every tab who issued it', async () => {
     const { harness, device } = await withGrantedDevice();
     const owner = harness.openTab();
     await owner.setup('CardReader', READER_OPTIONS);
@@ -71,34 +56,8 @@ describe.each(TRANSPORT_MODES)('sharing one port across tabs (%s)', (transport) 
 
     expect(device.writtenText()).toBe('STATUS?');
     expect(device.written).toHaveLength(1);
-  });
-
-  it('tells every tab about a write, and who issued it', async () => {
-    const { harness } = await withGrantedDevice();
-    const owner = harness.openTab();
-    await owner.setup('CardReader', READER_OPTIONS);
-    const other = harness.openTab();
-    await other.setup('CardReader', READER_OPTIONS);
-
-    await other.client.send('CardReader', 'PING');
-    await harness.settle();
-
     expect(other.recordFor('CardReader').sent.map((event) => event.origin)).toEqual(['local']);
     expect(owner.recordFor('CardReader').sent.map((event) => event.origin)).toEqual(['remote']);
-  });
-
-  it('reports the current status to a tab that joins an already-open configuration', async () => {
-    const { harness } = await withGrantedDevice();
-    const first = harness.openTab();
-    await first.setup('CardReader', READER_OPTIONS);
-
-    const late = harness.openTab();
-    await late.setup('CardReader', READER_OPTIONS);
-    await harness.settle();
-
-    // The joining tab never opened anything itself, so without the broker asking the owner to
-    // restate its status this tab would sit at `idle` until the next change - possibly hours.
-    expect(late.client.getStatus('CardReader').status).toBe(SerialBrokerStatus.Open);
   });
 
   it('keeps two configurations on two devices apart in both directions, used from the same two tabs', async () => {

@@ -29,23 +29,19 @@ describe('tabs on the SharedWorker', () => {
     return { harness, device, owner, other };
   }
 
-  it('are forgotten by the worker as soon as a tab that died lets go of its lock', async () => {
-    const { harness, other } = await twoTabs();
-    expect(harness.bus.workerHost.clientCount).toBe(2);
+  it.each(['killed', 'closed'] as const)(
+    'are forgotten by the worker as soon as the browser lets go of the lock of a tab %s',
+    async (ending) => {
+      const { harness, other } = await twoTabs();
+      const before = harness.bus.workerHost.clientCount;
 
-    await other.kill();
+      await (ending === 'killed' ? other.kill() : other.close());
 
-    // No time passes: nothing is timed.
-    expect(harness.bus.workerHost.clientCount).toBe(1);
-  });
-
-  it('are forgotten by the worker as soon as a tab closes', async () => {
-    const { harness, other } = await twoTabs();
-
-    await other.close();
-
-    expect(harness.bus.workerHost.clientCount).toBe(1);
-  });
+      // No time passes: nothing is timed.
+      expect(before).toBe(2);
+      expect(harness.bus.workerHost.clientCount).toBe(1);
+    },
+  );
 
   it('are all kept while they are alive, however long they stay idle, with nothing sent', async () => {
     const { harness, device, other } = await twoTabs();
@@ -61,17 +57,5 @@ describe('tabs on the SharedWorker', () => {
     expect(harness.bus.workerHost.clientCount).toBe(2);
     expect(other.receivedText('Reader')).toBe('STILL HERE');
     expect(other.recordFor('Reader').errors).toEqual([]);
-  });
-
-  it('keep working after the owner died and its successor took over', async () => {
-    const { harness, device, owner, other } = await twoTabs();
-
-    await owner.kill();
-    await harness.settle();
-    await other.client.send('Reader', 'PING');
-    await harness.settle();
-
-    expect(harness.bus.workerHost.clientCount).toBe(1);
-    expect(device.writtenText()).toBe('PING');
   });
 });

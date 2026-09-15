@@ -40,6 +40,25 @@ describe('permission and persistence', () => {
     expect(tab.client.getStatus('Reader').status).toBe(SerialBrokerStatus.Open);
   });
 
+  it('lets a tab that does not hold the port ask for it, and the tab holding it connects', async () => {
+    const harness = new BrowserHarness();
+    const device = harness.serial.addDevice(READER.vendorId, READER.productId);
+    const owner = harness.openTab();
+    await owner.setup('Reader', READER_OPTIONS);
+    const peer = harness.openTab();
+    await peer.setup('Reader', READER_OPTIONS);
+    expect(owner.client.getStatus('Reader').status).toBe(SerialBrokerStatus.AwaitingPermission);
+
+    // The permission is the origin's: granted in this tab, the tab holding the port opens it.
+    harness.serial.pickerQueue.push(device);
+    await expect(peer.client.requestAccess('Reader')).resolves.toBe(true);
+    await harness.settle();
+
+    expect(owner.client.getStatus('Reader').status).toBe(SerialBrokerStatus.Open);
+    expect(peer.client.getStatus('Reader').status).toBe(SerialBrokerStatus.Open);
+    expect(device.isOpen).toBe(true);
+  });
+
   it('reports a dismissed picker as a decision, not a failure', async () => {
     const harness = new BrowserHarness();
     harness.serial.addDevice(READER.vendorId, READER.productId);
@@ -81,26 +100,12 @@ describe('permission and persistence', () => {
     await expect(tab.client.requestAccess('Reader')).resolves.toBe(false);
   });
 
-  it('connects with no prompt on a later visit', async () => {
+  it('restores a persisted configuration in a new tab, with no prompt', async () => {
     const harness = new BrowserHarness();
     const device = harness.serial.addDevice(READER.vendorId, READER.productId);
     harness.serial.grant(device);
     // Would be taken by a picker, had one been shown.
     harness.serial.pickerQueue.push(device);
-
-    const tab = harness.openTab();
-    await tab.setup('Reader', READER_OPTIONS);
-
-    // The permission is the browser's and survives the reload; `getPorts()` returns the
-    // device with no gesture and no picker.
-    expect(tab.client.getStatus('Reader').status).toBe(SerialBrokerStatus.Open);
-    expect(harness.serial.pickerQueue).toEqual([device]);
-  });
-
-  it('restores a persisted configuration in a new tab without being told about it', async () => {
-    const harness = new BrowserHarness();
-    const device = harness.serial.addDevice(READER.vendorId, READER.productId);
-    harness.serial.grant(device);
 
     const first = harness.openTab();
     await first.setup('Reader', READER_OPTIONS);
@@ -110,35 +115,29 @@ describe('permission and persistence', () => {
     const restored = await reloaded.client.restore();
     await harness.settle();
 
+    // The permission is the browser's and survives the reload; `getPorts()` returns the
+    // device with no gesture and no picker.
     expect(restored).toEqual(['Reader']);
     expect(reloaded.client.getStatus('Reader').status).toBe(SerialBrokerStatus.Open);
+    expect(harness.serial.pickerQueue).toEqual([device]);
   });
 
-  it('keeps the browser permission when a configuration is released', async () => {
+  it('keeps the browser permission when a configuration is released, and revokes it only when asked to', async () => {
     const harness = new BrowserHarness();
     const device = harness.serial.addDevice(READER.vendorId, READER.productId);
     harness.serial.grant(device);
-
     const tab = harness.openTab();
     await tab.setup('Reader', READER_OPTIONS);
-    await tab.client.release('Reader');
 
     // Releasing a configuration must not cost the user their grant, or every release would
     // mean another click the next time.
+    await tab.client.release('Reader');
     await tab.setup('Reader', READER_OPTIONS);
-    expect(tab.client.getStatus('Reader').status).toBe(SerialBrokerStatus.Open);
-  });
-
-  it('revokes the browser permission only when asked to', async () => {
-    const harness = new BrowserHarness();
-    const device = harness.serial.addDevice(READER.vendorId, READER.productId);
-    harness.serial.grant(device);
-
-    const tab = harness.openTab();
-    await tab.setup('Reader', READER_OPTIONS);
+    const afterRelease = tab.client.getStatus('Reader').status;
     await tab.client.release('Reader', { forgetDevice: true });
-
     await tab.setup('Reader', READER_OPTIONS);
+
+    expect(afterRelease).toBe(SerialBrokerStatus.Open);
     expect(tab.client.getStatus('Reader').status).toBe(SerialBrokerStatus.AwaitingPermission);
   });
 

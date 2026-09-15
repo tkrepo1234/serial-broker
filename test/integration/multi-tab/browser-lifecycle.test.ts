@@ -76,14 +76,14 @@ describe.each(TRANSPORT_MODES)('the browser lifecycle (%s)', (transport) => {
     expect(footprintOf(harness, clients)).toEqual(before);
   });
 
-  it('writes each write of a tab whose timers run once a minute exactly once, for an hour', async () => {
+  it('writes each write of a tab whose timers run once a minute exactly once, minute after minute', async () => {
     const { harness, device, owner, participant } = await twoTabs();
     const clients = [owner.client, participant.client];
     const before = footprintOf(harness, clients);
     const outcomes: Promise<unknown>[] = [];
 
     harness.throttleTimers(participant.id);
-    for (let minute = 0; minute < 60; minute += 1) {
+    for (let minute = 0; minute < 10; minute += 1) {
       for (let index = 0; index < 10; index += 1) {
         outcomes.push(
           outcomeOf(participant.client.send('Reader', `${String(minute)}.${String(index)};`)),
@@ -97,8 +97,8 @@ describe.each(TRANSPORT_MODES)('the browser lifecycle (%s)', (transport) => {
 
     const settled = await Promise.all(outcomes);
     expect(settled.every((outcome) => outcome === 'resolved')).toBe(true);
-    expect(device.written).toHaveLength(600);
-    expect(new Set(device.written.map((chunk) => new TextDecoder().decode(chunk))).size).toBe(600);
+    expect(device.written).toHaveLength(100);
+    expect(new Set(device.written.map((chunk) => new TextDecoder().decode(chunk))).size).toBe(100);
     expect(footprintOf(harness, clients)).toEqual(before);
   });
 

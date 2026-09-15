@@ -24,27 +24,20 @@ async function connectedTab() {
 }
 
 describe('a configuration that does not reconnect by itself', () => {
-  it('ends in failed when the connection is lost, and tries nothing more', async () => {
+  it('ends in failed when the connection is lost, and stays there when the device comes back', async () => {
     const { harness, device, tab } = await connectedTab();
     expect(tab.client.getStatus('Reader').status).toBe(SerialBrokerStatus.Open);
 
     harness.serial.unplug(device);
     await harness.advance(60_000);
-
-    expect(tab.client.getStatus('Reader').status).toBe(SerialBrokerStatus.Failed);
-    expect(tab.statusTrail('Reader')).not.toContain(SerialBrokerStatus.Reconnecting);
-    expect(tab.errorCodes('Reader')).toEqual([SerialBrokerErrorCode.DEVICE_DISCONNECTED]);
-  });
-
-  it('stays failed when the device is plugged in again', async () => {
-    const { harness, device, tab } = await connectedTab();
-
-    harness.serial.unplug(device);
-    await harness.settle();
+    const whileAway = tab.client.getStatus('Reader').status;
     harness.serial.plug(device);
     await harness.advance(60_000);
 
+    expect(whileAway).toBe(SerialBrokerStatus.Failed);
     expect(tab.client.getStatus('Reader').status).toBe(SerialBrokerStatus.Failed);
+    expect(tab.statusTrail('Reader')).not.toContain(SerialBrokerStatus.Reconnecting);
+    expect(tab.errorCodes('Reader')).toEqual([SerialBrokerErrorCode.DEVICE_DISCONNECTED]);
   });
 
   it('connects again when the application sets it up again, and leaves a working one alone', async () => {

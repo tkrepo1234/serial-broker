@@ -27,7 +27,7 @@ describe('error reporting', () => {
     return { harness, device, tab };
   }
 
-  it('reports a failed write to the caller and to every tab', async () => {
+  it('reports a failed write to the caller, and to every other tab as it was raised', async () => {
     const { harness, device, tab } = await connectedTab();
     const peer = harness.openTab();
     await peer.setup('Reader', READER_OPTIONS);
@@ -39,10 +39,11 @@ describe('error reporting', () => {
     await harness.settle();
 
     // The caller learns because its promise rejected; the other tabs learn because their
-    // device just stopped working too.
-    expect(peer.recordFor('Reader').errors.map((event) => event.error.code)).toContain(
-      SerialBrokerErrorCode.WRITE_FAILED,
-    );
+    // device just stopped working too, with the error rebuilt from what crossed the bus.
+    const remote = peer.recordFor('Reader').errors.at(-1)?.error;
+    expect(remote?.code).toBe(SerialBrokerErrorCode.WRITE_FAILED);
+    expect(remote?.remediation).toContain('bytesWritten');
+    expect(remote?.configName).toBe('Reader');
   });
 
   it('says how many bytes reached the device before a write failed', async () => {
@@ -59,55 +60,24 @@ describe('error reporting', () => {
     });
   });
 
-  it('rebuilds an error raised in another tab faithfully', async () => {
+  it('reports an unplugged device once per tab, as retryable, and keeps its code in the status', async () => {
     const { harness, device, tab } = await connectedTab();
     const peer = harness.openTab();
     await peer.setup('Reader', READER_OPTIONS);
-    device.faults.failWriteWith = 'NetworkError';
-
-    await tab.client.send('Reader', 'x').catch(() => undefined);
-    await harness.settle();
-
-    const remote = peer.recordFor('Reader').errors.at(-1)?.error;
-    expect(remote?.code).toBe(SerialBrokerErrorCode.WRITE_FAILED);
-    expect(remote?.remediation).toContain('bytesWritten');
-    expect(remote?.configName).toBe('Reader');
-  });
-
-  it('reports an error exactly once per tab', async () => {
-    const { harness, device } = await connectedTab();
-    const peer = harness.openTab();
-    await peer.setup('Reader', READER_OPTIONS);
 
     harness.serial.unplug(device);
     await harness.settle();
 
-    const disconnects = peer
-      .recordFor('Reader')
-      .errors.filter((event) => event.error.code === SerialBrokerErrorCode.DEVICE_DISCONNECTED);
-    expect(disconnects).toHaveLength(1);
-  });
-
-  it('keeps the last error code in the status snapshot', async () => {
-    const { harness, device, tab } = await connectedTab();
-
-    harness.serial.unplug(device);
-    await harness.settle();
-
-    expect(tab.client.getStatus('Reader').lastErrorCode).toBe(
-      SerialBrokerErrorCode.DEVICE_DISCONNECTED,
-    );
-  });
-
-  it('marks an error the library is already handling as retryable', async () => {
-    const { harness, device, tab } = await connectedTab();
-
-    harness.serial.unplug(device);
-    await harness.settle();
-
+    for (const each of [tab, peer]) {
+      expect(each.errorCodes('Reader')).toEqual([SerialBrokerErrorCode.DEVICE_DISCONNECTED]);
+    }
+    // The library is already handling it, and says so.
     const error = tab.recordFor('Reader').errors.at(0)?.error;
     expect(error?.isRetryable).toBe(true);
     expect(error?.remediation).toContain('No action required');
+    expect(tab.client.getStatus('Reader').lastErrorCode).toBe(
+      SerialBrokerErrorCode.DEVICE_DISCONNECTED,
+    );
   });
 
   it('rejects a pending write when the configuration is released', async () => {
@@ -156,34 +126,6 @@ describe('error reporting', () => {
     await expect(tab.client.send('Nothing', 'x')).rejects.toMatchObject({
       code: SerialBrokerErrorCode.UNKNOWN_CONFIGURATION,
     });
-  });
-
-  it('lets a tab that does not hold the port ask for it, and the tab holding it connects', async () => {
-    const harness = new BrowserHarness();
-    const device = harness.serial.addDevice(READER.vendorId, READER.productId);
-    const owner = harness.openTab();
-    await owner.setup('Reader', READER_OPTIONS);
-    const peer = harness.openTab();
-    await peer.setup('Reader', READER_OPTIONS);
-    expect(owner.client.getStatus('Reader').status).toBe(SerialBrokerStatus.AwaitingPermission);
-
-    // The permission is the origin's: granted in this tab, the tab holding the port opens it.
-    harness.serial.pickerQueue.push(device);
-    await expect(peer.client.requestAccess('Reader')).resolves.toBe(true);
-    await harness.settle();
-
-    expect(owner.client.getStatus('Reader').status).toBe(SerialBrokerStatus.Open);
-    expect(peer.client.getStatus('Reader').status).toBe(SerialBrokerStatus.Open);
-    expect(device.isOpen).toBe(true);
-  });
-
-  it('does nothing when access is requested for a port that is already open', async () => {
-    const { harness, tab } = await connectedTab();
-    const peer = harness.openTab();
-    await peer.setup('Reader', READER_OPTIONS);
-
-    await expect(peer.client.requestAccess('Reader')).resolves.toBe(true);
-    expect(tab.client.getStatus('Reader').status).toBe(SerialBrokerStatus.Open);
   });
 });
 
@@ -238,7 +180,7 @@ describe('logging', () => {
     }
   });
 
-  it('never puts payload bytes in a record at info or above', async () => {
+  it('records traffic at debug level only, as a byte count with no bytes', async () => {
     const { logger, records } = recordingLogger();
     const harness = new BrowserHarness({ logger });
     const device = harness.serial.addDevice(READER.vendorId, READER.productId);
@@ -258,20 +200,6 @@ describe('logging', () => {
       .join('\n');
     expect(visible).not.toContain('1234');
     expect(visible).not.toContain('5555');
-  });
-
-  it('records traffic at debug level as a byte count, with no bytes', async () => {
-    const { logger, records } = recordingLogger();
-    const harness = new BrowserHarness({ logger });
-    const device = harness.serial.addDevice(READER.vendorId, READER.productId);
-    harness.serial.grant(device);
-    const tab = harness.openTab();
-    await tab.setup('Reader', READER_OPTIONS);
-
-    await tab.client.send('Reader', 'PIN=1234');
-    device.emit('CARD=5555');
-    await harness.settle();
-
     const traffic = records.filter(
       ([, , fields]) =>
         fields.event === 'supervisor.sent' || fields.event === 'supervisor.received',

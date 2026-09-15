@@ -26,32 +26,23 @@ async function twoTabs(transport: TransportMode): Promise<{
 }
 
 describe.each(TRANSPORT_MODES)('a listener that throws (%s)', (transport) => {
-  it('is reported in its own tab, not in the tab holding the port', async () => {
-    const { harness, device, owner, other } = await twoTabs(transport);
-    other.client.subscribe('Reader', 'onReceive', () => {
-      throw new Error('application bug');
-    });
+  it.each(['the tab holding the port', 'another tab'] as const)(
+    'in %s is reported there only, and the others still receive',
+    async (where) => {
+      const { harness, device, owner, other } = await twoTabs(transport);
+      const [throwing, quiet] = where === 'another tab' ? [other, owner] : [owner, other];
+      throwing.client.subscribe('Reader', 'onReceive', () => {
+        throw new Error('application bug');
+      });
 
-    device.emit('x');
-    await harness.settle();
+      device.emit('x');
+      await harness.settle();
 
-    expect(other.errorCodes('Reader')).toContain(SerialBrokerErrorCode.LISTENER_THREW);
-    expect(owner.errorCodes('Reader')).not.toContain(SerialBrokerErrorCode.LISTENER_THREW);
-    expect(other.receivedText('Reader')).toBe('x');
-  });
-
-  it('is reported in the tab holding the port, not in the others', async () => {
-    const { harness, device, owner, other } = await twoTabs(transport);
-    owner.client.subscribe('Reader', 'onReceive', () => {
-      throw new Error('application bug');
-    });
-
-    device.emit('x');
-    await harness.settle();
-
-    // The other tab heard the chunk too, so it had every chance to report something.
-    expect(other.receivedText('Reader')).toBe('x');
-    expect(owner.errorCodes('Reader')).toContain(SerialBrokerErrorCode.LISTENER_THREW);
-    expect(other.errorCodes('Reader')).not.toContain(SerialBrokerErrorCode.LISTENER_THREW);
-  });
+      // Both tabs heard the chunk, so each had every chance to report something.
+      expect(throwing.errorCodes('Reader')).toContain(SerialBrokerErrorCode.LISTENER_THREW);
+      expect(quiet.errorCodes('Reader')).not.toContain(SerialBrokerErrorCode.LISTENER_THREW);
+      expect(throwing.receivedText('Reader')).toBe('x');
+      expect(quiet.receivedText('Reader')).toBe('x');
+    },
+  );
 });
