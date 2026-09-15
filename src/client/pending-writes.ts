@@ -71,6 +71,8 @@ interface PendingWrite {
   readonly requestId: RequestId;
   readonly payload: Uint8Array;
   readonly settled: Signal;
+  /** When it was issued, on the monotonic clock: the moment its `writeTimeoutMs` counts from. */
+  readonly issuedAt: number;
   /**
    * The term that reported beginning to write it, once one has.
    *
@@ -113,8 +115,17 @@ export interface PendingWriteHost {
    *
    * Called only when the tracker has decided it is safe to do so, which is what keeps the
    * at-most-once guarantee in one place.
+   *
+   * `remainingMs` is what is left of the write's deadline at this moment. The tab holding the port
+   * begins the write only within that long of receiving it: after this tab's deadline has run, it
+   * has reported the write as never started (ADR-0013).
    */
-  readonly dispatch: (requestId: RequestId, payload: Uint8Array, term: TermId) => void;
+  readonly dispatch: (
+    requestId: RequestId,
+    payload: Uint8Array,
+    term: TermId,
+    remainingMs: number,
+  ) => void;
   /** `true` when a connection exists to write to. Checked at every dispatch decision. */
   readonly canDispatch: () => boolean;
   /** The term of the tab holding the port, as far as this context has heard. */
@@ -179,6 +190,7 @@ export class PendingWrites {
       requestId,
       payload,
       settled: createSignal(),
+      issuedAt: this.host.clock.monotonicNow(),
       startedTerm: undefined,
       addressedTerm: undefined,
       isDispatched: false,
@@ -382,6 +394,10 @@ export class PendingWrites {
 
     pending.isDispatched = true;
     pending.addressedTerm = term;
-    this.host.dispatch(pending.requestId, pending.payload, term);
+    // A write held here, or handed on again, has spent part of its time already: the tab holding the
+    // port counts only what is left, so it never begins the write after this tab has given up on it.
+    const elapsedMs = this.host.clock.monotonicNow() - pending.issuedAt;
+    const remainingMs = Math.max(0, this.host.writeTimeoutMs - elapsedMs);
+    this.host.dispatch(pending.requestId, pending.payload, term, remainingMs);
   }
 }

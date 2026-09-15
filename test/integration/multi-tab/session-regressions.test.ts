@@ -136,7 +136,11 @@ describe('a write of another tab during a clean release', () => {
     expect(requests).toHaveLength(2);
 
     device.resumeWrites();
-    await harness.advance(5_000);
+    // The release completes and the write is handed on within the first half second. One jump to
+    // 5 s would hand it on only at the moment its issuer's deadline runs out, where it is rightly
+    // not begun (ADR-0013).
+    await harness.advance(500);
+    await harness.advance(4_500);
     await releasing;
     await first;
     await harness.settle();

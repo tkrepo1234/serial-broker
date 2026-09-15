@@ -376,19 +376,22 @@ export class PortSupervisor {
    * another's. Large payloads are chunked, because devices with small receive buffers drop
    * the tail of an oversized write rather than applying back-pressure.
    *
-   * A write that has waited in the queue for `writeTimeoutMs` is never begun, and rejects with
-   * `WRITE_TIMEOUT` and `started: false`. Its issuer's own deadline, which covers the whole journey,
+   * A write that has waited in the queue for `remainingMs`, or for this tab's own `writeTimeoutMs`
+   * if that is shorter, is never begun, and rejects with `WRITE_TIMEOUT` and `started: false`. Its
+   * issuer's deadline, which covers the whole journey and may be set differently in the issuing tab,
    * has passed by then, and it was told the write did not start: writing it afterwards would put a
    * command on the device the application may already have sent again (ADR-0013). It leaves the
    * queue when its time is up, so a backlog behind a slow write holds no payloads nobody waits for.
    *
    * @param payload - The bytes to write.
+   * @param remainingMs - What was left of the issuer's deadline when it handed the write on. A
+   *   duration counted from now, since the issuer may be another context with a clock of its own.
    * @param onStarted - Invoked at the moment the first byte is handed to the device. After
    *   this point the write is no longer replayable: if this context dies now, whether the
    *   device received the bytes is unknowable. See ADR-0013.
    */
-  write(payload: Uint8Array, onStarted: () => void): Promise<void> {
-    const written = this.#write(payload, onStarted);
+  write(payload: Uint8Array, remainingMs: number, onStarted: () => void): Promise<void> {
+    const written = this.#write(payload, remainingMs, onStarted);
     // Settled before its caller hears of it: this reaction was registered first.
     this.#unanswered.set(written, payload.byteLength);
     this.#unansweredBytes += payload.byteLength;
@@ -436,9 +439,13 @@ export class PortSupervisor {
     );
   }
 
-  async #write(payload: Uint8Array, onStarted: () => void): Promise<void> {
+  async #write(payload: Uint8Array, remainingMs: number, onStarted: () => void): Promise<void> {
     const clock = this.environment.clock;
     const { writeTimeoutMs, maxWriteChunkBytes } = this.configuration.connection;
+    // The issuer's time, never more than this tab's own: a tab running a longer `writeTimeoutMs`
+    // would otherwise begin a write its issuer has already reported as never started, and a peer's
+    // number never keeps a payload here for longer than this tab keeps its own (ADR-0013, ADR-0031).
+    const waitLimitMs = Math.min(writeTimeoutMs, remainingMs);
     const queuedAt = clock.monotonicNow();
     let expiry: TimerHandle | undefined;
     // Rejected when a chunk outlives its deadline at the device, which tells the caller while the
@@ -454,7 +461,7 @@ export class PortSupervisor {
       // begun in that moment is one its issuer has given up on. On the monotonic clock, the one the
       // expiry timer runs on, so that the system clock being set forward or back neither refuses a
       // write that is still in time nor lets a lapsed one through (ADR-0032).
-      if (clock.monotonicNow() - queuedAt >= writeTimeoutMs) {
+      if (clock.monotonicNow() - queuedAt >= waitLimitMs) {
         throw this.#waitedTooLong(payload.byteLength, queuedAt);
       }
 
@@ -532,7 +539,7 @@ export class PortSupervisor {
     expiry = clock.setTimer(() => {
       expiry = undefined;
       queued.withdraw(this.#waitedTooLong(payload.byteLength, queuedAt));
-    }, writeTimeoutMs);
+    }, waitLimitMs);
 
     try {
       await Promise.race([queued.promise, stalled.promise]);
@@ -585,7 +592,7 @@ export class PortSupervisor {
   }
 
   /**
-   * The error for a write that waited at the port for `writeTimeoutMs` without being begun.
+   * The error for a write that waited at the port until its deadline without being begun.
    *
    * @param queuedAt - A {@link Clock.monotonicNow} reading, so that `waitedMs` is how long the write
    *   really waited rather than how far the system clock moved meanwhile.
@@ -600,7 +607,7 @@ export class PortSupervisor {
     });
     return new SerialBrokerError(
       SerialBrokerErrorCode.WRITE_TIMEOUT,
-      'The write waited at the port for longer than writeTimeoutMs and was not begun',
+      'The write waited at the port until its writeTimeoutMs ran out and was not begun',
       {
         configName: this.configuration.name,
         context: { started: false, byteLength, waitedMs },

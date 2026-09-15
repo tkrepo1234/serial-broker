@@ -221,6 +221,12 @@ class FieldReader {
     return isFiniteNumber(value) ? value : malformed(this.type, 'timestamp');
   }
 
+  /** A length of time in milliseconds: finite, and not negative. */
+  duration(field: string): number {
+    const value = this.raw[field];
+    return isFiniteNumber(value) && value >= 0 ? value : malformed(this.type, field);
+  }
+
   optionalText(): string | undefined {
     const value = this.raw['text'];
     if (value === undefined) {
@@ -479,6 +485,7 @@ function decodeChecked(raw: unknown): ProtocolMessage {
         requestId: read.identifier('requestId') as RequestId,
         payload: read.payload(),
         term: read.identifier('term') as TermId,
+        remainingMs: read.duration('remainingMs'),
       };
 
     case 'write-started':
