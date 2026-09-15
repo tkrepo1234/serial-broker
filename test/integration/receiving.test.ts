@@ -75,4 +75,43 @@ describe('receiving', () => {
       `status:${SerialBrokerStatus.Reconnecting}`,
     ]);
   });
+
+  it('delivers each chunk as it is read with idleMs: 0, in every tab', async () => {
+    const { harness, device, owner, peer } = await twoTabs({ receive: { idleMs: 0 } });
+    const atOwner = eventsOf(owner);
+    const atPeer = eventsOf(peer);
+
+    for (const chunk of ['A', 'B', 'C']) {
+      device.emit(chunk);
+      await harness.settle();
+    }
+
+    expect(atOwner).toEqual(['receive:A', 'receive:B', 'receive:C']);
+    expect(atPeer).toEqual(['receive:A', 'receive:B', 'receive:C']);
+  });
+
+  it('delivers a line that never pauses at maxWaitMs, in every tab', async () => {
+    const { harness, device, owner, peer } = await twoTabs({
+      receive: { idleMs: 50, maxWaitMs: 200 },
+    });
+    const atOwner = eventsOf(owner);
+    const atPeer = eventsOf(peer);
+
+    // A byte every 10 ms, until the first delivery: the line is never quiet for idleMs.
+    let elapsed = 0;
+    device.emit('x');
+    while (atOwner.length === 0 && elapsed < 1_000) {
+      await harness.advance(10);
+      elapsed += 10;
+      device.emit('x');
+    }
+    await harness.settle();
+
+    // Measured from the first byte read, which the harness reads one tick after it is sent.
+    expect(elapsed).toBeGreaterThanOrEqual(200);
+    expect(elapsed).toBeLessThanOrEqual(220);
+    expect(atOwner).toHaveLength(1);
+    expect(atOwner[0]).toMatch(/^receive:x{19,22}$/);
+    expect(atPeer).toEqual(atOwner);
+  });
 });

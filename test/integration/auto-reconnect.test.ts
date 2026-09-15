@@ -72,4 +72,28 @@ describe('a configuration that does not reconnect by itself', () => {
 
     expect(tab.client.getStatus('Reader').status).toBe(SerialBrokerStatus.Open);
   });
+
+  it('ends in failed when the first attempt fails, ignores a replug, and connects on setup() again', async () => {
+    const harness = new BrowserHarness();
+    const device = harness.serial.addDevice(READER.vendorId, READER.productId);
+    harness.serial.grant(device);
+    device.faults.failOpenTimes = 1;
+    const tab = harness.openTab();
+
+    await tab.setup('Reader', MANUAL);
+    await harness.settle();
+    expect(tab.client.getStatus('Reader').status).toBe(SerialBrokerStatus.Failed);
+
+    // Only a configuration still waiting for its device connects when it appears.
+    harness.serial.unplug(device);
+    await harness.settle();
+    harness.serial.plug(device);
+    await harness.advance(60_000);
+    expect(tab.client.getStatus('Reader').status).toBe(SerialBrokerStatus.Failed);
+    expect(device.openCount).toBe(0);
+
+    await tab.setup('Reader', MANUAL);
+    await harness.settle();
+    expect(tab.client.getStatus('Reader').status).toBe(SerialBrokerStatus.Open);
+  });
 });

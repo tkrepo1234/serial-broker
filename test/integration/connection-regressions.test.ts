@@ -479,6 +479,29 @@ describe('a device that stops taking writes', () => {
     expect(tab.statusTrail('Reader')).not.toContain(SerialBrokerStatus.Reconnecting);
   });
 
+  it('reports stalledWriteSince while the write is stalled, and not once the device takes it', async () => {
+    const { harness, device, tab } = await connectedTab();
+    const stalledWriteSince = () =>
+      tab.client.diagnostics()?.configurations[0]?.connection?.stalledWriteSince;
+    await harness.settle();
+    expect(stalledWriteSince()).toBeUndefined();
+
+    device.pauseWrites();
+    const outcome = tab.client.send('Reader', 'HELD').catch((reason: unknown) => reason);
+    // Settled first: advancing the clock fires the deadline before a write not yet begun can begin.
+    await harness.settle();
+    await harness.advance(PAST_THE_DEADLINE_MS);
+
+    expect(await outcome).toMatchObject({ code: SerialBrokerErrorCode.WRITE_TIMEOUT });
+    expect(stalledWriteSince()).toEqual(expect.any(Number));
+
+    device.resumeWrites();
+    await harness.settle();
+
+    expect(stalledWriteSince()).toBeUndefined();
+    expect(device.writtenText()).toBe('HELD');
+  });
+
   it('begins nothing behind the write, and carries on once the device takes it', async () => {
     const { harness, device, tab, records } = await connectedTab();
 

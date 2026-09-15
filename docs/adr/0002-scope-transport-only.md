@@ -88,7 +88,9 @@ decoder, so a character split across reads is decoded intact ([ADR-0015](./0015-
 
 `test/unit/receive-buffer.test.ts` - quiet time, longest wait, size limit, flush, copies.
 `test/integration/receiving.test.ts` - an answer arriving byte by byte is one event in every tab;
-`idleMs: 0` delivers each chunk; a busy line is delivered at `maxWaitMs`; what was collected is
+`idleMs: 0` delivers each chunk ("delivers each chunk as it is read with idleMs: 0, in every tab");
+a busy line is delivered at `maxWaitMs` ("delivers a line that never pauses at maxWaitMs, in every
+tab"); what was collected is
 delivered before a lost connection is reported.
 
 ## History
