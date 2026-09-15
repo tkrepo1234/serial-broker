@@ -1,19 +1,56 @@
 name: Release
 
-# Every version gets a GitHub release: pushing a tag vX.Y.Z creates it, after the same checks as
-# CI, with the notes from CHANGELOG.md and the installable package attached. A tag with a
-# pre-release part, such as v1.2.0-alpha.1, gets a release marked as a pre-release. Nothing is
-# published to npm.
+# Every version gets a GitHub release: pushing a tag vX.Y.Z creates it, once every job of CI has
+# passed on that commit, with the notes from CHANGELOG.md and the installable package attached. A
+# tag with a pre-release part, such as v1.2.0-alpha.1, gets a release marked as a pre-release.
+# Nothing is published to npm.
+#
+# Started by hand, it is a dry run for the version in package.json: the same checks, and the notes
+# and the package uploaded as an artifact instead of released.
 on:
   push:
     tags:
       - 'v*'
+  workflow_dispatch:
 
 permissions:
   contents: write
 
 jobs:
+  # Fails when the tag does not match package.json or CHANGELOG.md has no section for the version,
+  # before anything else runs.
+  notes:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.notes.outputs.version }}
+      stable: ${{ steps.notes.outputs.stable }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      # A tag names the version; a dry run takes the one in package.json.
+      - id: notes
+        env:
+          TAG: ${{ github.event_name == 'push' && github.ref_name || '' }}
+        run: node scripts/release-notes.mjs $TAG > release-notes.md
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-notes
+          path: release-notes.md
+
+  # All of CI on the commit being released: verify, the example applications, the browser suite and
+  # the documentation.
+  ci:
+    needs: notes
+    uses: ./.github/workflows/ci.yml
+
   release:
+    needs: [notes, ci]
     runs-on: ubuntu-latest
 
     steps:
@@ -24,21 +61,24 @@ jobs:
           node-version: 24
           cache: npm
 
-      # Fails when the tag does not match package.json or CHANGELOG.md has no section for the
-      # version, before anything is built.
-      - id: notes
-        run: node scripts/release-notes.mjs "$GITHUB_REF_NAME" > release-notes.md
-
       - run: npm ci
 
-      - run: npm run verify
+      - run: npm run build
 
       - run: npm pack
 
-      - env:
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-notes
+
+      # `--prerelease` only when the version has a pre-release part. The expression is written this
+      # way round because an empty string counts as false: `stable && '' || '--prerelease'` would
+      # mark every release a pre-release.
+      - if: github.event_name == 'push'
+        env:
           GH_TOKEN: ${{ github.token }}
-          VERSION: ${{ steps.notes.outputs.version }}
-          PRERELEASE: ${{ steps.notes.outputs.stable == 'true' && '' || '--prerelease' }}
+          VERSION: ${{ needs.notes.outputs.version }}
+          PRERELEASE: ${{ needs.notes.outputs.stable != 'true' && '--prerelease' || '' }}
         run: >
           gh release create "$GITHUB_REF_NAME"
           --verify-tag
@@ -46,3 +86,11 @@ jobs:
           --notes-file release-notes.md
           $PRERELEASE
           "serial-broker-$VERSION.tgz"
+
+      - if: github.event_name != 'push'
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-dry-run
+          path: |
+            release-notes.md
+            serial-broker-${{ needs.notes.outputs.version }}.tgz

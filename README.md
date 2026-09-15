@@ -2,7 +2,7 @@
 
 One serial port, every tab.
 
-> **Alpha.** Version 0.1.0-alpha.1; the API may still change between releases. Tested in a simulated
+> **Alpha.** The API may still change between releases. Tested in a simulated
 > browser, in a real browser, and against an Arduino echo board and the USB/IP device emulator
 > ([manual test plan](./docs/manual-test-plan.md)) — a first run, not a field record.
 
