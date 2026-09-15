@@ -37,6 +37,11 @@ Requested by Tim on 2026-09-14 and done on 2026-09-15; the inventory before and 
 - `src/`: 54 files and 14 533 lines → 51 files and 13 267 lines; protocol message types 19 → 15.
 - Tests: 1 390 → 1 407 in-process (22 of them the opt-in extreme suite), about twice as fast; spec
   and test files 23 865 → 21 900 lines, the examples' smoke tests included.
+- Tests, second pass over every test file: 1 410 → 1 345 in-process (22 of them the opt-in extreme
+  suite), the warm run unchanged at about 3.2 s; spec and test files 21 974 → 21 270 lines. Gone:
+  tests of the removed goodbye and attach messages, duplicates across unit and integration, and
+  assertions on the worker's undocumented records; added: conformance of the fake BroadcastChannel
+  (no echo) and of `LockManager.query()`.
 - ADRs: rolled up into 24 current decisions and 17 superseded stubs that point forward, about
   4 040 → 2 832 lines; ADR-0001 states that rule. `docs/architecture.md` is merged into Internals,
   and the usability review moved to `docs/reviews/`.
