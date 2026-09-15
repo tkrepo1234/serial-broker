@@ -32,3 +32,33 @@ test.describe('a device the origin has no permission for', () => {
   // with transient activation, so a page driven by it can never be *without* a gesture. The
   // in-process suite covers that case, and the manual test plan covers the picker itself.
 });
+
+test.describe('a device chosen in auto mode', () => {
+  test('comes from the picker, is adopted by a second tab, and opens unasked on a later visit', async ({
+    context,
+  }) => {
+    await installStandIn(context, UNGRANTED_DEVICE);
+    const auto = echoConfiguration({ device: { auto: true }, remember: true });
+    const first = await Tab.open(context);
+
+    await first.setup('Auto', auto);
+    await first.waitForStatus('Auto', 'awaiting-permission');
+    expect(await first.requestAccessByClick('Auto')).toBe('granted');
+    await first.waitForStatus('Auto', 'open');
+
+    // A second tab in auto mode takes the device the first one chose, with no click of its own.
+    const second = await Tab.open(context);
+    await second.setup('Auto', auto);
+    await second.waitForStatus('Auto', 'open');
+    await second.send('Auto', 'FROM-SECOND');
+    await first.waitForReceivedText('Auto', 'FROM-SECOND');
+
+    // A later visit: every tab is gone, and a new one opens the remembered device without asking.
+    await first.page.close();
+    await second.page.close();
+    const later = await Tab.open(context);
+    await later.setup('Auto', auto);
+    await later.waitForStatus('Auto', 'open');
+    expect(await later.statuses('Auto')).not.toContain('awaiting-permission');
+  });
+});
