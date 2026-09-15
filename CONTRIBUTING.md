@@ -29,8 +29,9 @@ npm run docs       # the documentation site: CI's docs job
 npm run test:browser  # the built package in a real browser: CI's browser job
 ```
 
-CI runs four independent jobs on every push: `verify`, `examples` (every example's type-check and
-smoke test, see [examples/README.md](./examples/README.md)), `browser` and `docs`.
+CI runs four independent jobs on every push to `main`, on every pull request, and when the release
+workflow calls it: `verify`, `examples` (every example's type-check and smoke test, see
+[examples/README.md](./examples/README.md)), `browser` and `docs`.
 
 Node 22.13 or newer on the 22 line, or 24 or newer: that is what Vitest and ESLint require. CI
 runs Node 24. The library itself never runs in Node — that is only the toolchain.
@@ -118,8 +119,8 @@ Every size has a `SERIAL_BROKER_EXTREME_*` variable; see
 4. `npm run verify` must be green, including the coverage gates — and `npm run docs`, if the
    change touches documentation or TSDoc, and `npm run test:browser`, if it touches anything the
    browser suite loads: `src/`, the build, or `test/browser/` itself.
-5. Commit with [Conventional Commits](./docs/guidelines/git-workflow.md). The body explains
-   _why_; the diff already shows _what_.
+5. Commit as [the git workflow](./docs/guidelines/git-workflow.md) describes: an imperative subject
+   in plain words, no type prefix. The body explains _why_; the diff already shows _what_.
 6. Update `CHANGELOG.md` if the change is user-visible, and TSDoc on every touched export.
 7. Write an ADR if you made an architectural decision, or fold a changed decision into its
    current ADR with a history line ([ADR-0001](./docs/adr/0001-record-architecture-decisions.md)),
@@ -145,8 +146,13 @@ pre-release. Nothing is published to npm before 1.0.
    missing.
 4. Tag the commit and push the tag: `git tag v0.2.0 && git push origin v0.2.0`.
 
-The workflow checks that the tag matches `package.json`, runs `npm run verify`, and creates the
-release with the notes and the packed package (`serial-broker-0.2.0.tgz`) attached.
+The workflow (`scripts/release-notes.mjs` does the checking) first checks that the tag matches
+`package.json` and that `CHANGELOG.md` has a section for the version. It then runs every CI job on
+the tagged commit — `verify`, `examples`, `browser` and `docs` — and creates the GitHub release with
+the notes and the packed package (`serial-broker-0.2.0.tgz`) attached, marked as a pre-release when
+the version has a pre-release part. Started by hand from the Actions tab, it is a dry run for the
+version in `package.json`: the same checks, with the notes and the package uploaded as a workflow
+artifact instead of released. Nothing is published to npm.
 
 ## What gets a change rejected
 

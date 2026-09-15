@@ -39,7 +39,7 @@ behaviour of the Web platform APIs this library wraps.
 
 6. **Options are structures, not positional arguments.** Every option object is extensible
    without a breaking change, groups related settings (`device`, `serial`, `connection`,
-   `encoding`), and has a documented default for every field. New options are always optional.
+   `receive`, `encoding`), and has a documented default for every field. New options are always optional.
 
 7. **Events are the only push channel.** Four events, fixed: `onReceive`, `onSend`,
    `onError`, `onStatusChange`. Adding a fifth requires an ADR; the bar is that it cannot be
