@@ -107,7 +107,7 @@ migrated (see below).
   examples page list all nine applications.
 - A documentation chapter, **Tasks, counted**, shows the code for seven common tasks with
   serial-broker and with the Web Serial API alone, and counts their calls, options and concepts.
-  The usability review behind it (`docs/usability-review-2026-09-14.md`) answered the questions a
+  The usability review behind it (`docs/reviews/usability-review-2026-09-14.md`) answered the questions a
   cold read of the examples raised in the documentation: Installing names the `serial-broker/worker`
   export and recommends naming the worker URL, and the TSDoc of `setup()`, `release()`, the `queued`
   and `released` statuses and `ErrorEvent.name` now say what they left open.

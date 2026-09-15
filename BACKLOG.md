@@ -198,28 +198,26 @@ do simple things, and whether the documentation explains everything clearly and 
 chapter, ADR-0037) and the extreme-usage suites (`npm run test:extreme`, the 20-page browser run)
 found one limit, the crash of the tab that started the worker (under "Follow-ups from the hardening
 round"). All nine example applications exist with smoke tests. The usability review is
-`docs/site/tasks.md` and `docs/usability-review-2026-09-14.md`. What it and the examples left open:
+`docs/site/tasks.md` and `docs/reviews/usability-review-2026-09-14.md`. What it and the examples left open:
 
 - **P1, a defect in auto mode:** a later visit that calls only `setup()` asks for the device again
   and overwrote the remembered resolution. Fixed on 2026-09-15 (ADR-0036, amendment): `setup()` in
   auto mode takes a remembered auto-mode resolution, and the documentation no longer calls
   `restore()` first.
-- **P2:** done on 2026-09-15 (ADR-0010, amended) in the tab holding the port. A tab that does not
-  hold the port still does nothing on a repeated `setup()`; whether it should ask the holding tab to
-  try again is for the complexity reduction.
+- **P2:** done on 2026-09-15 (ADR-0010, amended): `setup()` with equal options starts a `failed`
+  configuration again, from any tab; the example applications use it.
 - **P3:** a new `onStatusChange` listener receives the current status once, so no example needs
   `getStatus()` right after `subscribe()`.
 - **P4:** `requestAccess()` works from any tab, not only the one holding the port: the permission is
   the origin's, and the holding tab looks for granted ports again when told.
 - P2 to P4 change the API's behaviour; weigh them in the complexity reduction, where each removes
   a step every example now takes.
-- Examples: `examples/openui5`'s `SerialBrokerModel.ts` holds raw control bytes in a regular
-  expression (grep treats it as binary), as the Vue and Angular examples did before their review;
-  its Reader configuration (`any: true`) can take the Printer's port when both are granted. The
+- Examples: done on 2026-09-15 - `examples/openui5`'s regular expression uses escapes, and its
+  Reader runs in auto mode, so it no longer takes the Printer's port and one example shows the mode. The
   minimal and multi-tab-dashboard READMEs contradict each other on whether Vite rewrites the
   library's `new URL(..., import.meta.url)`. The Angular example's `npm install` warns that install
   scripts of esbuild, lmdb, msgpackr-extract and @parcel/watcher are not approved. The Svelte
-  example's `$state.snapshot(options)` is unnecessary. No example exercises auto mode yet.
+  example's `$state.snapshot(options)` is unnecessary.
 
 ### Performance
 
@@ -317,9 +315,8 @@ What the implementers left open:
   no buffer to replay. A small bounded replay to a newly registered tab would help an operator who
   opens a tab after the fact. The worker's records are not in the diagnostics observer's `collect()`
   either, and the debugging surface shows them like any other log line.
-- `MAX_BOUND_IDENTITIES` eviction is the residual weakness of ADR-0028: a script that binds 4096
-  identities and waits for a tab to be silent for three minutes can claim that tab's identity.
-  Bounding per port or ageing bindings by time was not attempted.
+- ~~`MAX_BOUND_IDENTITIES` eviction is the residual weakness of ADR-0028.~~ Gone with the identity
+  secret (ADR-0040, 2026-09-15): nothing is bound any more, and integrity rests on the term locks.
 - The broker itself has no rate limit: it still routes and clones every well-formed message. Rate
   limits are per context, not per sender, so a flood can crowd legitimate answers out of the
   allowance (ADR-0031 says why per-sender rates were rejected).
@@ -355,8 +352,8 @@ What the implementers left open:
   unplugged, two minutes) and 18-19 (permission revoked); 16 could be driven from the emulator.
 - The seeded serial permission is Windows-only (device instance ID); macOS and Linux store vendor,
   product and serial number. CI exercises Chromium only.
-- The 64 KiB hardware round trip takes a quarter of an hour on the Arduino (about 80 bytes a second
-  of echo); a bridged USB-serial adapter would echo at line rate.
+- ~~The 64 KiB hardware round trip takes a quarter of an hour on the Arduino.~~ Removed on 2026-09-15;
+  the emulator's 64 KiB test and the Arduino's 5 000-byte test cover it.
 - No browser test for `USER_GESTURE_REQUIRED`: every script an automation evaluates carries
   transient activation. The stand-in has no fault injection yet (open/write failing or hanging, a
   non-USB port).
@@ -370,15 +367,14 @@ What the implementers left open:
 Everything confirmed in the bug hunt is fixed. What remains is either unconfirmed or needs a real
 browser or real hardware to settle:
 
-- **What a dead worker swallowed is only partly asked for again.** After reconnecting, the tab
+- **What a dead worker swallowed is only partly asked for again** (a documented limit since
+  2026-09-15: docs/site/known-limits.md, "Messages on their way when the bus changes are lost"). After reconnecting, the tab
   holding the port restates its status and writes that had not started are handed on (the owner
   recognises repeats). Errors and traffic broadcast into the dead worker are not repeated, and a
   write handed on this way may reach the device after a later write of the same tab that did get
   through - the ordering guarantee of ADR-0013 holds only while the bus delivers.
-- **Two tabs saving configurations at the same moment may overwrite each other's entry.** `save()`
-  and `remove()` rewrite one `localStorage` record, and Chromium commits `localStorage` across
-  renderer processes asynchronously. Unconfirmed: it needs a real multi-process browser. The fix
-  would be one key per configuration plus an index, or merging on the `storage` event.
+- ~~**Two tabs saving configurations at the same moment may overwrite each other's entry.**~~ Fixed by
+  one key per configuration (ADR-0033); what remains of it is the shared index, under "Storage" above.
 - **An unplugged device versus a revoked permission** (ADR-0010, amended) is told apart by the
   `disconnect` event. That Chromium sends no `disconnect` when a permission is revoked in site
   settings is assumed, not verified.

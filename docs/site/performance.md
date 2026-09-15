@@ -120,18 +120,17 @@ application whatever the entry point, so it is part of every installation.
 
 ## Results worse than expected
 
-Nothing in the harness run is worse than its expectation. In the browser run, the deliveries from
-the device to the tabs are more than ten times worse, which is the collection of received bytes and
-not the bus; the handover after a crash is over its expectation by less.
+Nothing in the harness run is worse than its expectation. In the browser run, only the handover
+after a crash is over its expectation, by less than ten times.
 
 ### Documented limits
 
-**A chunk reaches the tabs when the line has been quiet, not when it is read.** `device-to-tabs` on
-both transports: `latency` is about 240 ms at the median and 480 ms at the 95th percentile, against
-1 to 8 ms expected. The run of 2026-09-15 is the first since received bytes are collected until the
-line is quiet (ADR-0039), and the numbers are those of a delivery that ends at
-`receive.maxWaitMs`, 500 ms, with a chunk waiting half of that on average; this change did not look further. The expectations were written for a delivery per read and stand as written; `receive: { idleMs: 0 }` restores that
-behaviour. Throughput is not affected.
+**The benchmark measures deliveries as they are read.** Its configurations set `receive: { idleMs: 0 }`,
+so `device-to-tabs` times the library and the bus, not the collection of received bytes (ADR-0039).
+With the defaults, a delivery also waits until the line has been quiet for `receive.idleMs` (50 ms),
+and on a line that never goes quiet for up to `receive.maxWaitMs` (500 ms); see
+[Configuration](configuration.md). A run with the defaults measured about 240 ms at the median for
+a stream that never paused, which is that wait and nothing else.
 
 **Fixed: after a crash of the tab that started the `SharedWorker`, the other tabs waited about a
 minute.** In Microsoft Edge 153 the `SharedWorker` ends when the renderer of the page that started
@@ -139,16 +138,13 @@ it crashes - usually the first tab, which is also the first to hold the port. Th
 measured `handover/crash` `everyTab` on the `SharedWorker` transport at 60 seconds at the median:
 every tab but the one taking the port over learned that the worker was gone only when three
 heartbeats had gone unanswered. Since ADR-0041 the worker holds a Web Lock for its lifetime, which
-every tab waits on; the run of 2026-09-15 measured `everyTab` at 325 ms at the median and 676 ms at
-the 95th percentile, as close to `wall` as on the `BroadcastChannel` transport.
+every tab waits on; the run of 2026-09-15 measured `everyTab` at 413.5 ms at the median and 768.9 ms at the 95th percentile, as close to `wall` as on the `BroadcastChannel` transport.
 
 ### Over the expectation, by less than ten times
 
-- **A handover after a crash** (`wall` and `everyTab`): 315 ms at the median on the `SharedWorker`
-  transport and 368 ms on `BroadcastChannel`, against 250 ms, with a 95th percentile of 671 and
-  668 ms (the run of 2026-09-14: 670 and 307 ms, 840 and 640 ms). Almost none of it is the library's: `library` - the same moment
-  against a plain Web Lock the crashed page held, freed by the browser in the same crash - is 5 to
-  8 ms on both transports. The rest is Chromium noticing that the renderer is gone, plus the
+- **A handover after a crash** (`wall` and `everyTab`): 407.4 ms at the median on the `SharedWorker`
+  transport and 396.6 ms on `BroadcastChannel`, against 250 ms, with a 95th percentile of 763.0 ms and
+  716.7 ms (the run of 2026-09-14: 670 and 307 ms, 840 and 640 ms). Almost none of it is the library's: `library` - the same moment against a plain Web Lock the crashed page held, freed by the browser in the same crash - is 8.200 ms and 5.900 ms at the median. The rest is Chromium noticing that the renderer is gone, plus the
   DevTools round trip that orders the crash. In a
   separate check, the first crash after the browser started took about twice as long as the ones
   after it. The expectation stays at 250 ms, so that the next run is judged against the same line.
