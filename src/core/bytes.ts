@@ -47,28 +47,6 @@ function isBuffer(value: unknown): value is ArrayBufferLike {
   return tag === '[object ArrayBuffer]' || tag === '[object SharedArrayBuffer]';
 }
 
-/**
- * Splits a payload into chunks of at most `maxChunkBytes`.
- *
- * Devices with small receive buffers drop the tail of an oversized `write()` rather than
- * applying back-pressure. Each chunk is a view onto the same buffer - these are handed
- * straight to the writer and never escape the library, so no copy is warranted here.
- *
- * @returns One chunk for an empty payload as well, so that writing zero bytes remains an
- *   observable operation rather than a silent no-op.
- */
-export function chunkBytes(data: Uint8Array, maxChunkBytes: number): readonly Uint8Array[] {
-  if (data.byteLength <= maxChunkBytes) {
-    return [data];
-  }
-
-  const chunks: Uint8Array[] = [];
-  for (let offset = 0; offset < data.byteLength; offset += maxChunkBytes) {
-    chunks.push(data.subarray(offset, Math.min(offset + maxChunkBytes, data.byteLength)));
-  }
-  return chunks;
-}
-
 /** Formats bytes as space-separated uppercase hex, for `debug` log records. */
 export function toHex(data: Uint8Array, maxBytes = 64): string {
   const shown = data.subarray(0, maxBytes);

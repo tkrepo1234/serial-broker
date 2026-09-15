@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { LATE_DEADLINE_MS, scheduleDeadline } from '../../src/client/late-deadline.js';
+import { LATE_DEADLINE_MS, scheduleDeadline } from '../../src/client/pending-writes.js';
 import { FakeClock } from '../harness/fake-clock.js';
 
 /**

@@ -3,6 +3,10 @@ import { describe, expect, it } from 'vitest';
 import { WriteQueue } from '../../src/owner/write-queue.js';
 import { flushMicrotasks } from '../harness/fake-clock.js';
 
+function enqueue<T>(queue: WriteQueue, job: () => Promise<T>): Promise<T> {
+  return queue.enqueueWithdrawable(job).promise;
+}
+
 /** A job that runs until the test lets it finish. */
 function heldJob(events: string[], name: string) {
   let finish: () => void = () => undefined;
@@ -26,7 +30,7 @@ describe('WriteQueue withdrawal', () => {
     const queue = new WriteQueue();
     const events: string[] = [];
     const running = heldJob(events, 'running');
-    void queue.enqueue(running.job);
+    void queue.enqueueWithdrawable(running.job).promise;
     const waiting = queue.enqueueWithdrawable(async () => {
       events.push('waiting:start');
       await Promise.resolve();
@@ -46,7 +50,7 @@ describe('WriteQueue withdrawal', () => {
   it('takes a withdrawn job out of the depth at once, while the job in front still runs', async () => {
     const queue = new WriteQueue();
     const running = heldJob([], 'running');
-    void queue.enqueue(running.job);
+    void queue.enqueueWithdrawable(running.job).promise;
     const waiting = queue.enqueueWithdrawable(() => Promise.resolve());
     void waiting.promise.catch(() => undefined);
     await flushMicrotasks();
@@ -76,13 +80,13 @@ describe('WriteQueue withdrawal', () => {
     const queue = new WriteQueue();
     const events: string[] = [];
     const running = heldJob(events, 'first');
-    void queue.enqueue(running.job);
+    void queue.enqueueWithdrawable(running.job).promise;
     const withdrawn = queue.enqueueWithdrawable(async () => {
       events.push('withdrawn:start');
       await Promise.resolve();
     });
     void withdrawn.promise.catch(() => undefined);
-    const last = queue.enqueue(async () => {
+    const last = enqueue(queue, async () => {
       events.push('last:start');
       await Promise.resolve();
     });
@@ -99,7 +103,7 @@ describe('WriteQueue withdrawal', () => {
     const queue = new WriteQueue();
     const events: string[] = [];
     const running = heldJob(events, 'running');
-    void queue.enqueue(running.job);
+    void queue.enqueueWithdrawable(running.job).promise;
     const withdrawn = queue.enqueueWithdrawable(() => Promise.resolve());
     void withdrawn.promise.catch(() => undefined);
     let drained = false;
@@ -107,7 +111,7 @@ describe('WriteQueue withdrawal', () => {
       drained = true;
     });
     const later = heldJob(events, 'later');
-    void queue.enqueue(later.job);
+    void queue.enqueueWithdrawable(later.job).promise;
     await flushMicrotasks();
 
     withdrawn.withdraw(new Error('gave up'));

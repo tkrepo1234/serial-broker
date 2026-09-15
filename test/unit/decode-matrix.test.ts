@@ -13,12 +13,11 @@ const VALID = validMessages();
 
 /** Every message type paired with the fields it must have to be accepted. */
 const REQUIRED_FIELDS: Record<ProtocolMessageType, readonly string[]> = {
-  // `secret` is optional: a hello on `BroadcastChannel` carries none (ADR-0028).
   hello: [],
   'worker-log': ['level', 'message', 'fields'],
   goodbye: [],
   welcome: [],
-  heartbeat: ['configNames', 'ownedConfigNames'],
+  heartbeat: ['configNames'],
   attach: ['configName'],
   detach: ['configName'],
   'owner-claimed': ['configName', 'maxTabs'],

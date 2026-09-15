@@ -20,10 +20,10 @@ export const ERROR_PAYLOAD = new SerialBrokerError(
  */
 export function validMessages(): Record<ProtocolMessageType, Record<string, unknown>> {
   return {
-    hello: { ...BASE, type: 'hello', secret: 's-1' },
+    hello: { ...BASE, type: 'hello' },
     goodbye: { ...BASE, type: 'goodbye' },
     welcome: { ...BASE, to: 'c-2', type: 'welcome' },
-    heartbeat: { ...BASE, type: 'heartbeat', configNames: ['Reader'], ownedConfigNames: [] },
+    heartbeat: { ...BASE, type: 'heartbeat', configNames: ['Reader'] },
     attach: { ...BASE, type: 'attach', configName: 'Reader' },
     detach: { ...BASE, type: 'detach', configName: 'Reader' },
     'owner-claimed': {

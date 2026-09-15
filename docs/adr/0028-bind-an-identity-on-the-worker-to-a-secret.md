@@ -1,6 +1,6 @@
 # ADR-0028: Bind an identity on the worker to a secret sent in `hello`
 
-- **Status:** Accepted
+- **Status:** Superseded by [ADR-0040](./0040-route-to-all-participants-drop-the-identity-secret.md)
 - **Date:** 2026-09-14
 - **Amends:** ADR-0006
 

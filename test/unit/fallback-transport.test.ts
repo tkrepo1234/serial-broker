@@ -37,10 +37,6 @@ class RecordingTransport implements Transport {
     this.operations.push(`detach ${configName}`);
   }
 
-  setOwnership(configName: string, isOwner: boolean): void {
-    this.operations.push(`owner ${configName} ${String(isOwner)}`);
-  }
-
   close(): void {
     this.isClosed = true;
   }
@@ -51,8 +47,9 @@ function statusRequest(): ProtocolMessage {
     type: 'status-request',
     v: PROTOCOL_VERSION,
     from: SELF,
-    to: 'owner',
+    to: 'all',
     configName: 'Reader',
+    retry: false,
   };
 }
 
@@ -144,7 +141,6 @@ describe('FallbackTransport', () => {
     const { transport, worker, fallback, transportErrors, failToLoad } = setUp();
     transport.attach('Reader');
     transport.send(statusRequest());
-    transport.setOwnership('Reader', true);
     transport.attach('Printer');
     transport.detach('Printer');
 
@@ -154,7 +150,6 @@ describe('FallbackTransport', () => {
     expect(fallback.operations).toEqual([
       'attach Reader',
       'send status-request',
-      'owner Reader true',
       'attach Printer',
       'detach Printer',
     ]);

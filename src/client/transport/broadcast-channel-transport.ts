@@ -1,6 +1,7 @@
 import { DisposalStack } from '../../core/disposable.js';
+import { OnceLog } from '../../core/logger.js';
 import { decodeMessage } from '../../protocol/decode.js';
-import { LimitWarnings } from '../../protocol/limits.js';
+import { warnLimitExceeded } from '../../protocol/limits.js';
 import {
   configNameOf,
   type ProtocolMessage,
@@ -8,7 +9,6 @@ import {
 } from '../../protocol/messages.js';
 import { brokerChannelName } from '../../protocol/version.js';
 
-import { MessageSender } from './message-sender.js';
 import type { Transport, TransportRequest } from './transport.js';
 
 /** The messages a broker sends or is sent, which concern no context in turn. */
@@ -43,12 +43,9 @@ export type BroadcastChannelFactory = (name: string) => BroadcastChannelLike;
  * | `to` | Accepted when |
  * | --- | --- |
  * | `'all'` | this context has attached to the configuration |
- * | `'owner'` | this context currently holds the ownership lock for it |
  * | a client id | it is this context's id |
  *
- * That is the whole of it. The addressing decision is possible locally because the envelope
- * carries everything it depends on, and because ownership is a Web Lock this context either
- * holds or does not (ADR-0005) - there is nothing to agree with anyone else about.
+ * That is the whole of it: the envelope carries everything the decision depends on.
  */
 export class BroadcastChannelTransport implements Transport {
   readonly kind = 'broadcastchannel' as const;
@@ -56,24 +53,15 @@ export class BroadcastChannelTransport implements Transport {
 
   readonly #channel: BroadcastChannelLike;
   readonly #disposal = new DisposalStack();
-  readonly #sender: MessageSender;
   readonly #request: TransportRequest;
   readonly #attached = new Set<string>();
-  readonly #owned = new Set<string>();
-  readonly #limits: LimitWarnings;
+  readonly #once: OnceLog;
 
   constructor(request: TransportRequest, createChannel: BroadcastChannelFactory) {
     this.clientId = request.clientId;
     this.#request = request;
-    this.#limits = new LimitWarnings(request.logger, 'transport.limit-exceeded');
+    this.#once = new OnceLog(request.logger);
     this.#channel = createChannel(brokerChannelName());
-    this.#sender = new MessageSender(
-      request,
-      (message) => {
-        this.#channel.postMessage(message);
-      },
-      this.#disposal,
-    );
 
     this.#channel.addEventListener('message', (event: { readonly data: unknown }) => {
       this.#receive(event.data);
@@ -86,37 +74,29 @@ export class BroadcastChannelTransport implements Transport {
     this.#disposal.add(() => {
       this.#channel.close();
     });
-
-    // No secret: every context of the origin receives what is posted here, so one would be no
-    // secret, and nothing on this transport is held to an identity anyway (ADR-0028, SECURITY.md).
-    this.#sender.sendHello();
+    // No presence messages: with no broker, nobody keeps track of who is on the channel.
   }
 
   /** {@inheritDoc Transport.send} */
   send(message: ProtocolMessage): void {
-    this.#sender.send(message);
+    if (this.#disposal.isDisposed) {
+      return;
+    }
+    try {
+      this.#channel.postMessage(message);
+    } catch (error) {
+      this.#request.onTransportError(error);
+    }
   }
 
   /** {@inheritDoc Transport.attach} */
   attach(configName: string): void {
     this.#attached.add(configName);
-    this.#sender.sendAttach(configName);
   }
 
   /** {@inheritDoc Transport.detach} */
   detach(configName: string): void {
     this.#attached.delete(configName);
-    this.#owned.delete(configName);
-    this.#sender.sendDetach(configName);
-  }
-
-  /** {@inheritDoc Transport.setOwnership} */
-  setOwnership(configName: string, isOwner: boolean): void {
-    if (isOwner) {
-      this.#owned.add(configName);
-    } else {
-      this.#owned.delete(configName);
-    }
   }
 
   /** {@inheritDoc Transport.close} */
@@ -125,10 +105,7 @@ export class BroadcastChannelTransport implements Transport {
       return;
     }
 
-    this.#sender.sendGoodbye();
-
     this.#attached.clear();
-    this.#owned.clear();
     for (const failure of this.#disposal.disposeAll()) {
       this.#request.logger.warn('a cleanup step failed while closing the bus', {
         event: 'transport.dispose-failed',
@@ -142,7 +119,7 @@ export class BroadcastChannelTransport implements Transport {
     if (!result.ok) {
       if (result.failure.reason === 'limit-exceeded') {
         // Logged once, not reported per message: a sender that exceeds a limit repeats itself.
-        this.#limits.exceeded(result.failure.limit, {
+        warnLimitExceeded(this.#once, 'transport.limit-exceeded', result.failure.limit, {
           messageType: result.failure.type,
           field: result.failure.field,
         });
@@ -177,18 +154,11 @@ export class BroadcastChannelTransport implements Transport {
   }
 
   #isAddressedToUs(message: ProtocolMessage): boolean {
-    const configName = configNameOf(message);
-
-    switch (message.to) {
-      case 'all':
-        // Messages with no configuration - `hello`, `goodbye` - concern every context.
-        return configName === undefined || this.#attached.has(configName);
-
-      case 'owner':
-        return configName !== undefined && this.#owned.has(configName);
-
-      default:
-        return message.to === this.clientId;
+    if (message.to !== 'all') {
+      return message.to === this.clientId;
     }
+    // A message with no configuration - a diagnostics request - concerns every context.
+    const configName = configNameOf(message);
+    return configName === undefined || this.#attached.has(configName);
   }
 }

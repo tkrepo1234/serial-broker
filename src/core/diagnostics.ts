@@ -28,6 +28,7 @@ import { toSetupOptions } from './validation.js';
 export const CONNECTION_STATES = [
   'idle',
   'awaiting-permission',
+  'listing',
   'opening',
   'open',
   'reconnecting',
@@ -43,7 +44,8 @@ export const CONNECTION_STATES = [
  * | --- | --- |
  * | `'idle'` | Not trying to connect. |
  * | `'awaiting-permission'` | No granted port matches the device; waiting for `requestAccess()`. |
- * | `'opening'` | An attempt is in progress: finding the granted port, or opening it. |
+ * | `'listing'` | An attempt is in progress, looking for the granted port. |
+ * | `'opening'` | An attempt found the port and is opening it. |
  * | `'open'` | The port is open and being read. |
  * | `'reconnecting'` | The last attempt or connection failed, and the next attempt is scheduled. |
  * | `'failed'` | `maxAttempts` attempts failed; revived when the device is plugged in again. |

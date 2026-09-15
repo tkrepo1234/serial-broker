@@ -1,13 +1,13 @@
 import type { TimerHandle } from '../../core/clock.js';
 import { DisposalStack } from '../../core/disposable.js';
 import { describeUnknown } from '../../core/errors.js';
+import { OnceLog } from '../../core/logger.js';
 import { decodeMessage } from '../../protocol/decode.js';
 import { HEARTBEAT_INTERVAL_MS, MAX_UNANSWERED_HEARTBEATS } from '../../protocol/heartbeat.js';
-import { LimitWarnings } from '../../protocol/limits.js';
+import { warnLimitExceeded } from '../../protocol/limits.js';
 import { BROKER_ID, type ProtocolMessage, type WorkerLogMessage } from '../../protocol/messages.js';
 import { brokerChannelName, PROTOCOL_VERSION } from '../../protocol/version.js';
 
-import { MessageSender } from './message-sender.js';
 import type { Transport, TransportRequest } from './transport.js';
 
 /** The `SharedWorker` surface this transport uses. Narrowed so a fake stays small. */
@@ -61,8 +61,8 @@ export interface WorkerStartup {
  * it, and forwards what survives. Routing is the broker's job (ADR-0006).
  *
  * `attach` and `detach` become messages, because the broker is the thing that needs to know. A
- * heartbeat repeats both, with what this context owns, so the broker can forget a context that
- * died and restore one it forgot while it was only silent (ADR-0021).
+ * heartbeat repeats what this context takes part in, so the broker can forget a context that died
+ * and restore one it forgot while it was only silent (ADR-0021).
  *
  * The worker can die as well, and a port to a dead worker reports nothing. The broker therefore
  * answers every heartbeat, and a transport whose heartbeats go unanswered starts a new worker and
@@ -81,9 +81,7 @@ export class SharedWorkerTransport implements Transport {
   readonly #url: string | URL;
   readonly #startup: WorkerStartup | undefined;
   readonly #disposal = new DisposalStack();
-  readonly #sender: MessageSender;
   readonly #attached = new Set<string>();
-  readonly #owned = new Set<string>();
   /** The port to the current worker. Replaced when the transport gives up on a worker. */
   #port: MessagePortLike;
   /** A broker of this protocol version has answered at least once. */
@@ -101,14 +99,7 @@ export class SharedWorkerTransport implements Transport {
    */
   #isOtherVersion = false;
   #heartbeat: TimerHandle | undefined;
-  readonly #limits: LimitWarnings;
-  /**
-   * What this transport proves its identity to the worker with, in every `hello` it sends.
-   *
-   * Generated once, so that the `hello` to a worker started in place of one that hung shows the
-   * same secret as the first, and an identity this transport bound stays its own (ADR-0028).
-   */
-  readonly #secret: string;
+  readonly #once: OnceLog;
 
   /**
    * @param startup - When given, a script that fails to load before the broker answers is
@@ -125,22 +116,14 @@ export class SharedWorkerTransport implements Transport {
     this.#createWorker = createWorker;
     this.#url = url;
     this.#startup = startup;
-    this.#secret = request.newSecret();
-    this.#limits = new LimitWarnings(request.logger, 'transport.limit-exceeded');
-    this.#sender = new MessageSender(
-      request,
-      (message) => {
-        this.#port.postMessage(message);
-      },
-      this.#disposal,
-    );
+    this.#once = new OnceLog(request.logger);
 
     this.#port = this.#connect();
     this.#disposal.add(() => {
       this.#port.close();
     });
 
-    this.#sender.sendHello(this.#secret);
+    this.#sendHello();
 
     this.#scheduleHeartbeat();
     this.#disposal.add(() => {
@@ -152,31 +135,27 @@ export class SharedWorkerTransport implements Transport {
 
   /** {@inheritDoc Transport.send} */
   send(message: ProtocolMessage): void {
-    this.#sender.send(message);
+    if (this.#disposal.isDisposed) {
+      return;
+    }
+    try {
+      this.#port.postMessage(message);
+    } catch (error) {
+      // A closed port, or a payload that cannot be cloned: reported, never thrown into the caller.
+      this.#request.onTransportError(error);
+    }
   }
 
   /** {@inheritDoc Transport.attach} */
   attach(configName: string): void {
     this.#attached.add(configName);
-    this.#sender.sendAttach(configName);
+    this.send({ type: 'attach', v: PROTOCOL_VERSION, from: this.clientId, to: 'all', configName });
   }
 
   /** {@inheritDoc Transport.detach} */
   detach(configName: string): void {
     this.#attached.delete(configName);
-    this.#owned.delete(configName);
-    this.#sender.sendDetach(configName);
-  }
-
-  /** {@inheritDoc Transport.setOwnership} */
-  setOwnership(configName: string, isOwner: boolean): void {
-    // No message: the broker learns of ownership from the `owner-claimed` and `owner-released`
-    // messages the client already sends. It is only remembered for the heartbeat.
-    if (isOwner) {
-      this.#owned.add(configName);
-    } else {
-      this.#owned.delete(configName);
-    }
+    this.send({ type: 'detach', v: PROTOCOL_VERSION, from: this.clientId, to: 'all', configName });
   }
 
   /** {@inheritDoc Transport.close} */
@@ -185,7 +164,7 @@ export class SharedWorkerTransport implements Transport {
       return;
     }
 
-    this.#sender.sendGoodbye();
+    this.send({ type: 'goodbye', v: PROTOCOL_VERSION, from: this.clientId, to: 'all' });
 
     for (const failure of this.#disposal.disposeAll()) {
       this.#request.logger.warn('a cleanup step failed while closing the bus', {
@@ -326,9 +305,8 @@ export class SharedWorkerTransport implements Transport {
    * A worker that crashed or was ended is gone, and a `SharedWorker` with the same URL and name
    * starts a new one: the one every other tab reaches when it gives up too, and the one tabs opened
    * since have already started. Its broker learns about this context from `hello` and from a
-   * heartbeat sent at once, which restores what the context takes part in and owns, as it restores
-   * a tab the broker forgot. No `owner-claimed` is sent: the port did not change hands, and other
-   * tabs take a claim as the previous owner's death (ADR-0013).
+   * heartbeat sent at once, which restores what the context takes part in, as it restores a tab the
+   * broker forgot. No `owner-claimed` is sent: the port did not change hands.
    */
   #reconnect(): void {
     try {
@@ -353,8 +331,13 @@ export class SharedWorkerTransport implements Transport {
     this.#request.logger.info('started a new SharedWorker', {
       event: 'transport.worker-restarted',
     });
-    this.#sender.sendHello(this.#secret);
+    this.#sendHello();
     this.#sendHeartbeat();
+  }
+
+  /** Announces this context: always the first message on a port (ADR-0024). */
+  #sendHello(): void {
+    this.send({ type: 'hello', v: PROTOCOL_VERSION, from: this.clientId, to: 'all' });
   }
 
   #sendHeartbeat(): void {
@@ -364,7 +347,6 @@ export class SharedWorkerTransport implements Transport {
       from: this.clientId,
       to: 'all',
       configNames: [...this.#attached],
-      ownedConfigNames: [...this.#owned],
     });
   }
 
@@ -373,7 +355,7 @@ export class SharedWorkerTransport implements Transport {
     if (!result.ok && result.failure.reason === 'limit-exceeded') {
       // A broker of this build passes on nothing beyond the limits, so this is another build's, or a
       // broker's bug. Logged once, not reported per message, and never taken for another version.
-      this.#limits.exceeded(result.failure.limit, {
+      warnLimitExceeded(this.#once, 'transport.limit-exceeded', result.failure.limit, {
         messageType: result.failure.type,
         field: result.failure.field,
       });

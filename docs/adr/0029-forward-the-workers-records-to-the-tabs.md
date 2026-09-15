@@ -1,6 +1,6 @@
 # ADR-0029: Forward the worker's warnings to the tabs that are connected to it
 
-- **Status:** Accepted
+- **Status:** Accepted, amended 2026-09-15
 - **Date:** 2026-09-14
 - **Amends:** ADR-0006
 
@@ -100,3 +100,12 @@ reported at the sweep), `test/unit/worker-script.test.ts` (a tab is told about a
 not be cloned, and about a tab of another protocol version), `test/unit/transports.test.ts` (a tab
 logs a forwarded record as the worker's event, and ignores one that did not come from the broker),
 and `test/integration/multi-tab/hostile-bus.test.ts` (both tabs log the refusal the worker recorded).
+
+## Amendment (2026-09-15): once per key, no budget
+
+Every warning the worker writes is written once per key - a refusal reason, a limit, the answer to a
+tab of another protocol version, a message that could not be cloned - so what it forwards is bounded
+by the number of keys. The interval budget (`MAX_FORWARDED_RECORDS`, `FORWARD_INTERVAL_MS`), the
+count of dropped records (`worker.records-dropped`) and the separate trimming of fields are removed:
+a record is forwarded only if it decodes as a tab would decode it, fields that are `undefined` left
+out. The forwarding lives in `worker-ports.ts`.

@@ -1,6 +1,6 @@
 # ADR-0025: Limit how many tabs use a configuration at once
 
-- **Status:** Accepted, amended by [ADR-0030](./0030-hold-a-web-lock-for-every-term-of-holding-the-port.md)
+- **Status:** Accepted, amended by [ADR-0030](./0030-hold-a-web-lock-for-every-term-of-holding-the-port.md) and 2026-09-15
 - **Date:** 2026-09-13
 - **Amends:** ADR-0011
 
@@ -86,3 +86,10 @@ which tab holds the port.
 `test/integration/multi-tab/tab-limit.test.ts` (in both transport modes: waiting and admission after
 a release and after a crash, the tab holding the port counted, writes while queued, a differing
 limit, validation, storage).
+
+## Amendment (2026-09-15): the conflict is reported in the withdrawing tab
+
+A tab that withdraws over a different tab limit reports `CONFIGURATION_CONFLICT` to its own listeners
+only. Tabs believe an `error` message only from a context that speaks for a term of holding the port,
+as they believe device data (ADR-0030), so the tab holding the port no longer hears the conflict.
+The gate for errors is `authorize()` in `client/owner-terms.ts`.

@@ -361,50 +361,6 @@ describe('createBrowserEnvironment', () => {
     expect(ids.size).toBe(5);
   });
 
-  it('produces secrets that do not repeat, each a fixed-length hex string', () => {
-    stubBrowser();
-    const environment = createBrowserEnvironment();
-
-    const secrets = [1, 2, 3, 4, 5].map(() => environment.newSecret());
-
-    expect(new Set(secrets).size).toBe(5);
-    for (const secret of secrets) {
-      expect(secret).toMatch(/^[0-9a-f]{32}$/);
-    }
-  });
-
-  it('draws every secret from the platform, sixteen bytes, none of them dropped', () => {
-    stubBrowser();
-    const drawn: { bytes: boolean; length: number }[] = [];
-    vi.stubGlobal('crypto', {
-      getRandomValues: (array: Uint8Array) => {
-        drawn.push({ bytes: array instanceof Uint8Array, length: array.length });
-        for (let index = 0; index < array.length; index += 1) {
-          array[index] = index;
-        }
-        return array;
-      },
-    });
-
-    const secret = createBrowserEnvironment().newSecret();
-
-    // Nothing may stand in for `crypto.getRandomValues` here: a secret derived from an identity, a
-    // time or `Math.random` binds nothing, because a script of the origin can produce it too
-    // (ADR-0028). Every drawn byte reaches the secret, and a byte below 16 keeps its leading zero.
-    expect(drawn).toEqual([{ bytes: true, length: 16 }]);
-    expect(secret).toBe('000102030405060708090a0b0c0d0e0f');
-  });
-
-  it('refuses to hand out a secret where the platform has no randomness', () => {
-    stubBrowser();
-    vi.stubGlobal('crypto', undefined);
-    const environment = createBrowserEnvironment();
-
-    // Throwing is the point: `createTransport` catches it and the tab falls back to
-    // `BroadcastChannel`, which uses no secret at all, rather than binding on a guessable one.
-    expect(() => environment.newSecret()).toThrow();
-  });
-
   it('produces a clock that measures real time and cancels its timers', async () => {
     stubBrowser();
     const clock = createBrowserEnvironment().clock;

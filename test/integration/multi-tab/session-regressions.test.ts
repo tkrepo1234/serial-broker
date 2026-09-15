@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import type { SerialBrokerClient } from '../../../src/client/serial-broker-client.js';
+import { brokerChannelName } from '../../../src/protocol/version.js';
 import { BrowserHarness, TRANSPORT_MODES } from '../../harness/browser-harness.js';
 import { READER, READER_OPTIONS } from '../../harness/devices.js';
 
@@ -97,5 +98,73 @@ describe.each(TRANSPORT_MODES)('the tab that holds the port (%s)', (transport) =
     await joining.setup('Reader', READER_OPTIONS);
 
     expect(queuedWritesAt(owner.client)).toBe(queued);
+  });
+});
+
+describe.each(TRANSPORT_MODES)('a configuration that failed (%s)', (transport) => {
+  it('connects again when a tab that does not hold the port sets it up again', async () => {
+    const { harness, device } = harnessWithDevice(transport);
+    const manual = { ...READER_OPTIONS, connection: { autoReconnect: false } };
+    const holder = harness.openTab();
+    await holder.setup('Reader', manual);
+    const other = harness.openTab();
+    await other.setup('Reader', manual);
+
+    harness.serial.unplug(device);
+    await harness.settle();
+    harness.serial.plug(device);
+    await harness.advance(60_000);
+    expect(other.client.getStatus('Reader').status).toBe('failed');
+
+    // Setting a configuration up again is how an application says "try again" (ADR-0010), in
+    // whichever tab it happens.
+    await other.client.setup('Reader', manual);
+    await harness.settle();
+
+    expect(holder.client.getStatus('Reader').status).toBe('open');
+    expect(other.client.getStatus('Reader').status).toBe('open');
+  });
+});
+
+describe('a write of another tab during a clean release', () => {
+  it('is sent once, and written by the next holder once the term has ended', async () => {
+    const { harness, device } = harnessWithDevice('broadcastchannel');
+    const holder = harness.openTab();
+    await holder.setup('Reader', READER_OPTIONS);
+    const other = harness.openTab();
+    await other.setup('Reader', READER_OPTIONS);
+    const requests: unknown[] = [];
+    const spy = harness.bus.broadcastHub.create(brokerChannelName(), 'spy');
+    spy.addEventListener('message', (event: { data: unknown }) => {
+      if ((event.data as { type?: unknown }).type === 'write-request') {
+        requests.push(event.data);
+      }
+    });
+
+    // A write of the other tab is in flight at the port, so the release waits for its answer, and
+    // the next write reaches the holding tab after it let go of the port and before its goodbye.
+    device.pauseWrites();
+    const first = other.client.send('Reader', 'A').catch((error: unknown) => error);
+    await harness.settle();
+    const releasing = holder.client.release('Reader');
+    for (let round = 0; round < 10; round += 1) {
+      await harness.settle();
+    }
+    const second = other.client.send('Reader', 'B');
+    for (let round = 0; round < 20; round += 1) {
+      await harness.settle();
+    }
+
+    // One request per write: a releasing tab hears nothing more, so nothing turns the second write
+    // away to be sent to the same term again; its issuer waits for the term to end.
+    expect(requests).toHaveLength(2);
+
+    device.resumeWrites();
+    await harness.advance(5_000);
+    await releasing;
+    await first;
+    await harness.settle();
+    await expect(second).resolves.toBeUndefined();
+    expect(device.writtenText()).toContain('B');
   });
 });

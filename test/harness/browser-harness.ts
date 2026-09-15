@@ -226,7 +226,6 @@ export class BrowserHarness {
   readonly #throttledContexts = new Map<string, HeldWork[]>();
   #nextTabNumber = 0;
   #nextIdNumber = 0;
-  #nextSecretNumber = 0;
 
   constructor(private readonly options: HarnessOptions = {}) {
     this.bus = new FakeBus(
@@ -557,13 +556,6 @@ export class BrowserHarness {
       newId: (prefix) => {
         this.#nextIdNumber += 1;
         return `${prefix}-${contextId}-${String(this.#nextIdNumber)}`;
-      },
-      // Named after the context rather than drawn at random, so that a failure names the tab whose
-      // secret it was (ADR-0028), and counted like an identifier: the platform's source returns a
-      // new value on every call, and a transport that drew one twice must fail here too.
-      newSecret: () => {
-        this.#nextSecretNumber += 1;
-        return `secret-${contextId}-${String(this.#nextSecretNumber)}`;
       },
       logger,
     };

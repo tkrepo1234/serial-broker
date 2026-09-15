@@ -4,10 +4,10 @@ import { SerialBrokerClient } from '../../src/client/serial-broker-client.js';
 import { DisposalStack } from '../../src/core/disposable.js';
 import { SerialBrokerErrorCode } from '../../src/core/error-codes.js';
 import { describeUnknown, isSerializedError, SerialBrokerError } from '../../src/core/errors.js';
+import { LOCK_RETRY_DELAY_MS } from '../../src/core/held-lock.js';
 import { NOOP_LOGGER, ScopedLogger } from '../../src/core/logger.js';
 import { normalizeConfiguration, validateName } from '../../src/core/validation.js';
 import type { KeyValueStorage } from '../../src/environment/environment.js';
-import { ELECTION_RETRY_DELAY_MS } from '../../src/owner/election.js';
 import {
   ConfigurationStore,
   storageEntryKey,
@@ -158,11 +158,11 @@ describe('a browser that refuses the lock for a term of holding the port', () =>
     await harness.settle();
     expect(client.getStatus('Reader').status).not.toBe('open');
 
-    await harness.advance(ELECTION_RETRY_DELAY_MS);
+    await harness.advance(LOCK_RETRY_DELAY_MS);
 
     expect(client.getStatus('Reader').status).toBe('open');
     expect(device.isOpen).toBe(true);
-    expect(fieldsOfEvent(records, 'session.term-lock-failed')).toHaveLength(1);
+    expect(fieldsOfEvent(records, 'election.failed')).toHaveLength(1);
   });
 
   it('leaves no timer behind when the configuration is released while it waits', async () => {

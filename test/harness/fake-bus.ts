@@ -8,7 +8,7 @@ import {
 } from '../../src/client/transport/shared-worker-transport.js';
 import type { Transport, TransportRequest } from '../../src/client/transport/transport.js';
 import type { Clock } from '../../src/core/clock.js';
-import { NOOP_LOGGER, ScopedLogger } from '../../src/core/logger.js';
+import { NOOP_LOGGER } from '../../src/core/logger.js';
 import type { Logger } from '../../src/core/types.js';
 import { SWEEP_INTERVAL_MS } from '../../src/protocol/heartbeat.js';
 import { BROKER_ID, type ClientId } from '../../src/protocol/messages.js';
@@ -116,6 +116,8 @@ export interface ForeignWorkerPort {
 export class FakeWorkerHost {
   readonly #ports: WorkerPorts<FakeWorkerPort>;
   readonly #allPorts = new Set<FakeWorkerPort>();
+  /** The participants the worker's own records say it knows. */
+  readonly #participants = new Set<unknown>();
   #isCrashed = false;
 
   /**
@@ -129,16 +131,28 @@ export class FakeWorkerHost {
     private readonly meter: BusMeter = { sent: 0, delivered: 0 },
   ) {
     this.#ports = new WorkerPorts({
-      logger: new ScopedLogger(logger, {}),
+      logger: {
+        log: (level, message, fields) => {
+          if (fields.event === 'broker.connect') {
+            this.#participants.add(fields.clientId);
+          } else if (fields.event === 'broker.disconnect') {
+            this.#participants.delete(fields.clientId);
+          }
+          logger.log(level, message, fields);
+        },
+      },
       // Monotonic, as the worker script's own reading is: the silence sweep measures a duration.
       monotonicNow: () => clock.monotonicNow(),
     });
     this.#scheduleSweep();
   }
 
-  /** Participants the broker currently knows. */
+  /**
+   * Participants the worker currently knows, as its records of connecting and forgetting them say:
+   * the worker offers no count of its own.
+   */
   get clientCount(): number {
-    return this.#ports.clientCount;
+    return this.#participants.size;
   }
 
   /**
@@ -154,6 +168,7 @@ export class FakeWorkerHost {
       port.close();
     }
     this.#allPorts.clear();
+    this.#participants.clear();
     this.#ports.dispose();
   }
 

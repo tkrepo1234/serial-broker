@@ -63,20 +63,6 @@ describe('SharedWorkerTransport', () => {
     expect(messages).toHaveLength(1);
   });
 
-  it('shows the worker a secret in its hello, and sends it in no other message', () => {
-    const { transport, port } = create();
-
-    transport.attach('Reader');
-    transport.send(envelope(SELF, 'all', STATUS_REQUEST) as ProtocolMessage);
-
-    const hello = port.posted[0] as { type: string; secret: string };
-    expect(hello.type).toBe('hello');
-    expect(hello.secret.length).toBeGreaterThan(0);
-    // The secret is what holds this tab's identity on the worker (ADR-0028): a message any other
-    // script of the origin can hear must never carry it.
-    expect(JSON.stringify(port.posted.slice(1))).not.toContain(hello.secret);
-  });
-
   it('logs a record the worker forwarded, as the worker recorded it', () => {
     const { logger, records } = recordingLogger();
     const { port, messages } = create(logger);
@@ -85,10 +71,10 @@ describe('SharedWorkerTransport', () => {
       envelope(BROKER_ID, SELF, {
         type: 'worker-log',
         level: 'warn',
-        message: 'refused a hello that names an identity bound to another secret',
+        message: 'refused a message that names another sender than its port said hello as',
         fields: {
           event: 'worker.message-refused',
-          reason: 'secret-mismatch',
+          reason: 'sender-mismatch',
           clientId: 'mallory',
         },
       }),
@@ -99,10 +85,10 @@ describe('SharedWorkerTransport', () => {
     expect(records).toEqual([
       [
         'warn',
-        'refused a hello that names an identity bound to another secret',
+        'refused a message that names another sender than its port said hello as',
         {
           event: 'worker.message-refused',
-          reason: 'secret-mismatch',
+          reason: 'sender-mismatch',
           clientId: 'mallory',
           reportedBy: SELF,
         },
@@ -193,15 +179,6 @@ describe('SharedWorkerTransport', () => {
 
     expect(port.posted).toHaveLength(after);
   });
-
-  it('sends no message for an ownership change, which the broker learns from the claim', () => {
-    const { transport, port } = create();
-    const before = port.posted.length;
-
-    transport.setOwnership('Reader', true);
-
-    expect(port.posted).toHaveLength(before);
-  });
 });
 
 describe('BroadcastChannelTransport', () => {
@@ -249,22 +226,6 @@ describe('BroadcastChannelTransport', () => {
     expect(messages).toHaveLength(0);
   });
 
-  it('accepts a message addressed to the owner only while it owns the port', () => {
-    const { transport, deliver, messages } = create();
-    transport.attach('Reader');
-
-    deliver(envelope(PEER, 'owner', STATUS_REQUEST));
-    expect(messages).toHaveLength(0);
-
-    transport.setOwnership('Reader', true);
-    deliver(envelope(PEER, 'owner', STATUS_REQUEST));
-    expect(messages).toHaveLength(1);
-
-    transport.setOwnership('Reader', false);
-    deliver(envelope(PEER, 'owner', STATUS_REQUEST));
-    expect(messages).toHaveLength(1);
-  });
-
   it('accepts a message addressed to it by name', () => {
     const { deliver, messages } = create();
 
@@ -293,7 +254,7 @@ describe('BroadcastChannelTransport', () => {
     ['hello', {}],
     ['welcome', {}],
     ['goodbye', {}],
-    ['heartbeat', { configNames: ['Reader'], ownedConfigNames: ['Reader'] }],
+    ['heartbeat', { configNames: ['Reader'] }],
     ['attach', { configName: 'Reader' }],
     ['detach', { configName: 'Reader' }],
     ['worker-log', { level: 'warn', message: 'x', fields: { event: 'worker.message-refused' } }],
@@ -311,11 +272,9 @@ describe('BroadcastChannelTransport', () => {
   it('stops accepting messages for a configuration it detached from', () => {
     const { transport, deliver, messages } = create();
     transport.attach('Reader');
-    transport.setOwnership('Reader', true);
 
     transport.detach('Reader');
     deliver(envelope(PEER, 'all', STATUS_REQUEST));
-    deliver(envelope(PEER, 'owner', STATUS_REQUEST));
 
     expect(messages).toHaveLength(0);
   });
@@ -339,20 +298,22 @@ describe('BroadcastChannelTransport', () => {
       addEventListener: () => undefined,
     } as unknown as BroadcastChannelLike;
 
-    new BroadcastChannelTransport(rec.request, () => channel);
+    new BroadcastChannelTransport(rec.request, () => channel).send(
+      envelope(SELF, 'all', STATUS_REQUEST) as ProtocolMessage,
+    );
 
     expect(rec.transportErrors.length).toBeGreaterThan(0);
   });
 
-  it('closes cleanly and stops sending', () => {
+  it('posts no presence messages, and nothing once closed', () => {
     const { transport, posted } = create();
 
-    transport.close();
-    const after = posted.length;
+    // Nobody keeps track of presence on the channel, so attaching and closing post nothing.
     transport.attach('Reader');
+    transport.close();
+    transport.send(envelope(SELF, 'all', STATUS_REQUEST) as ProtocolMessage);
 
-    expect((posted.at(-1) as ProtocolMessage).type).toBe('goodbye');
-    expect(posted).toHaveLength(after);
+    expect(posted).toEqual([]);
   });
 
   it('identifies itself as the fallback', () => {
@@ -537,7 +498,6 @@ describe('SharedWorkerTransport heartbeats', () => {
     const { transport, port, clock } = start();
     transport.attach('Reader');
     transport.attach('Printer');
-    transport.setOwnership('Reader', true);
     transport.detach('Printer');
     port.posted.length = 0;
 
@@ -547,13 +507,11 @@ describe('SharedWorkerTransport heartbeats', () => {
       expect.objectContaining({
         type: 'heartbeat',
         configNames: ['Reader'],
-        ownedConfigNames: ['Reader'],
       }),
     ]);
 
-    transport.setOwnership('Reader', false);
     await clock.advance(HEARTBEAT_INTERVAL_MS);
-    expect(port.posted.at(-1)).toMatchObject({ configNames: ['Reader'], ownedConfigNames: [] });
+    expect(port.posted.at(-1)).toMatchObject({ configNames: ['Reader'] });
   });
 
   it('stops sending heartbeats once closed', async () => {

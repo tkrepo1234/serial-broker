@@ -1,4 +1,4 @@
-import { NOOP_LOGGER, ScopedLogger } from '../core/logger.js';
+import { NOOP_LOGGER } from '../core/logger.js';
 import { SWEEP_INTERVAL_MS } from '../protocol/heartbeat.js';
 
 import { WorkerPorts } from './worker-ports.js';
@@ -30,13 +30,13 @@ declare const self: {
 
 // Nothing here writes anywhere: a `SharedWorker` cannot reach the logger an application configured.
 // What the worker records at `warn` is instead sent to the connected tabs, which log it through
-// their own loggers (ADR-0029); `WorkerPorts` does that with every record it writes.
-const logger = new ScopedLogger(NOOP_LOGGER, { event: 'worker' });
-
-// `performance.now()` rather than `Date.now()`: the only thing timed in the worker is how long a
-// tab has been silent, and the system clock being set forward must not make every tab look gone
-// (ADR-0021, ADR-0032).
-const ports = new WorkerPorts<MessagePort>({ logger, monotonicNow: () => performance.now() });
+// their own loggers (ADR-0029). `performance.now()` rather than `Date.now()`: the only thing timed
+// in the worker is how long a tab has been silent, and the system clock being set forward must not
+// make every tab look gone (ADR-0021, ADR-0032).
+const ports = new WorkerPorts<MessagePort>({
+  logger: NOOP_LOGGER,
+  monotonicNow: () => performance.now(),
+});
 
 self.onconnect = (event): void => {
   const port = event.ports[0];

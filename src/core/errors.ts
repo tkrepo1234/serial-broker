@@ -265,6 +265,25 @@ function isSerializedCause(value: unknown): boolean {
 }
 
 /**
+ * Recognises the `AbortError` a cancelled lock request rejects with.
+ *
+ * Never throws: it runs in the rejection handlers that rejoin a lock queue, and a throw there would
+ * leave the context out of it for good.
+ */
+export function isAbortError(error: unknown): boolean {
+  try {
+    return (
+      typeof error === 'object' &&
+      error !== null &&
+      (error as { name?: unknown }).name === 'AbortError'
+    );
+  } catch {
+    // A `name` getter that throws. Whatever this is, it is not the platform's abort.
+    return false;
+  }
+}
+
+/**
  * Produces a readable description of a value thrown by code outside this library.
  *
  * Applications throw strings, numbers and plain objects. Interpolating those into a message

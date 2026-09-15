@@ -28,9 +28,7 @@ import {
   MAX_PAYLOAD_BYTES,
   MAX_REPORT_CHARACTERS,
   MAX_REPORT_VALUES,
-  MAX_REPORTED_CONFIGURATIONS,
   MAX_TEXT_LENGTH,
-  type LimitName,
 } from './limits.js';
 import type {
   ClientId,
@@ -84,8 +82,8 @@ export type DecodeFailure =
       readonly reason: 'limit-exceeded';
       readonly type: string;
       readonly field: string;
-      /** The limit of `limits.ts` the field exceeds. */
-      readonly limit: LimitName;
+      /** The limit of `limits.ts` the field exceeds, named as its constant is. */
+      readonly limit: string;
     };
 
 /** Result of decoding one message. */
@@ -108,7 +106,7 @@ function malformed(type: string, field: string): never {
   throw new Rejection({ reason: 'malformed', type, field });
 }
 
-function exceeded(type: string, field: string, limit: LimitName): never {
+function exceeded(type: string, field: string, limit: string): never {
   throw new Rejection({ reason: 'limit-exceeded', type, field, limit });
 }
 
@@ -135,7 +133,7 @@ class FieldReader {
   ) {}
 
   /** A string of at most `limit` characters: a name or an identifier. */
-  #boundedString(field: string, maxLength: number, limit: LimitName): string {
+  #boundedString(field: string, maxLength: number, limit: string): string {
     const value = this.raw[field];
     if (!isNonEmptyString(value)) {
       return malformed(this.type, field);
@@ -369,12 +367,6 @@ class FieldReader {
         const limit = excess === 'values' ? 'MAX_REPORT_VALUES' : 'MAX_REPORT_CHARACTERS';
         return exceeded(this.type, 'report', limit);
       }
-      // Counted on its own: a report of many small configurations stays within the value budget, and
-      // each configuration is still one more row an observer shows.
-      const configurations = (value as Record<string, unknown>)['configurations'];
-      if (Array.isArray(configurations) && configurations.length > MAX_REPORTED_CONFIGURATIONS) {
-        return exceeded(this.type, 'report', 'MAX_REPORTED_CONFIGURATIONS');
-      }
     }
     return isParticipantDiagnostics(value) ? value : malformed(this.type, 'report');
   }
@@ -430,10 +422,6 @@ function decodeChecked(raw: unknown): ProtocolMessage {
 
   switch (type) {
     case 'hello':
-      // Optional: a `hello` on `BroadcastChannel` carries none, because every context would hear it
-      // (ADR-0028). The worker refuses such a `hello` on a port; nothing else reads it.
-      return { type, v, from, to, secret: read.optionalIdentifier('secret') };
-
     case 'welcome':
     case 'goodbye':
       return { type, v, from, to };
@@ -447,19 +435,18 @@ function decodeChecked(raw: unknown): ProtocolMessage {
     }
 
     case 'heartbeat':
-      return {
-        type,
-        v,
-        from,
-        to,
-        configNames: read.nameList('configNames'),
-        ownedConfigNames: read.nameList('ownedConfigNames'),
-      };
+      return { type, v, from, to, configNames: read.nameList('configNames') };
 
     case 'attach':
     case 'detach':
-    case 'status-request':
       return { type, v, from, to, configName: read.configName() };
+
+    case 'status-request': {
+      const configName = read.configName();
+      // Optional: a request that only asks for the status carries none.
+      const retry = raw['retry'] === undefined ? false : read.boolean('retry');
+      return { type, v, from, to, configName, retry };
+    }
 
     case 'owner-claimed': {
       const configName = read.configName();

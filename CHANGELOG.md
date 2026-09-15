@@ -11,10 +11,39 @@ coordinate with each other. See
 
 ## [Unreleased]
 
-**Wire protocol version 10.** Tabs of this build and tabs of an earlier one do not share a worker,
+**Wire protocol version 11.** Tabs of this build and tabs of an earlier one do not share a worker,
 a lock or a bus; they detect each other and report `PROTOCOL_VERSION_MISMATCH`. Reload every tab
 of an application after deploying it. Configurations remembered by an earlier build are not
 migrated (see below).
+
+### Changed in the source reduction (protocol 11)
+
+- **The broker routes to all participants and believes no claim of ownership** (ADR-0040). A forged
+  `owner-claimed` on the `SharedWorker` used to divert every other tab's writes to the claimant; a
+  write request now goes to every participant, and only the tab holding its term acts on it. The
+  `'owner'` target, `Transport.setOwnership` and `ownedConfigNames` in the heartbeat are gone.
+- **The identity secret is removed** (ADR-0040, superseding ADR-0028): no secret in `hello`, no
+  binding on the worker, no `MAX_BOUND_IDENTITIES`, no `newSecret` in the environment. A port is still
+  held to the identity it said hello as.
+- **`error` messages are believed only from the tab holding the port**, like device data;
+  `REMOTE_ERROR_RATE` is gone. A tab withdrawing over a different tab limit reports the conflict in
+  that tab only (ADR-0025, amended).
+- **`setup()` retries a `failed` configuration from any tab**: `status-request` carries an optional
+  `retry` (ADR-0010, amended).
+- Every Web Lock is held through one `HeldLock`; the term lock is taken inside the election, so a
+  refused term lock retries both locks and no tab holds the ownership lock without a term (ADR-0030,
+  amended). `session.term-lock-failed` is gone; the refusal is `election.failed`.
+- What a flood would repeat is logged once per key (`OnceLog`); malformed messages once per kind of
+  fault (`MALFORMED_MESSAGE_WARNING_RATE`, `client.malformed-messages-unlogged` gone). Limit records
+  no longer carry `limitValue`; `MAX_REPORTED_CONFIGURATIONS` is gone (ADR-0031, amended).
+- The worker writes each warning once per key and forwards records without a budget
+  (`worker.records-dropped` gone, ADR-0029 amended); liveness is timed in `WorkerPorts` only (ADR-0021,
+  amended). `OwnerTerms` keeps one flood bound, `MAX_TERM_FLOOD` (ADR-0030, amended).
+- The `BroadcastChannel` transport no longer posts `hello`, `goodbye`, `attach` or `detach`, which
+  nobody read. Diagnostics report the connection state `listing` instead of mapping it to `opening`.
+  The discarding of storage keys of older formats is removed.
+- Test-only API removed: `WriteQueue.enqueue`, `Broker.clientCount`, `WorkerPorts.clientCount`.
+- `src` shrank from 14 533 to 13 405 lines.
 
 ### Added
 

@@ -1,6 +1,6 @@
 # ADR-0030: Hold a Web Lock for every term of holding the port
 
-- **Status:** Accepted
+- **Status:** Accepted, amended 2026-09-15
 - **Date:** 2026-09-14
 - **Amends:** ADR-0026, ADR-0025, ADR-0013
 
@@ -167,3 +167,21 @@ joining during a flood misses.
 `test/integration/multi-tab/failover.test.ts` and `handover-races.test.ts` cover the exact end after
 a crash and the clean handover heard out of order, in both transport modes;
 `test/unit/pending-writes.test.ts` covers a write started or answered by another term.
+
+## Amendment (2026-09-15)
+
+- **The term lock is taken inside the election.** The ownership lock's callback takes the term's
+  lock before the context counts as the owner; a term lock the browser refuses lets the ownership
+  lock go too, and the election requests both again. There is no state in which a tab holds the
+  ownership lock without a term, and no second retry path.
+- **One table decides who may say what.** `OwnerTerms.authorize()` decides for every message:
+  claims and statuses once their term's lock is held, a write's progress and result from the context
+  speaking for its term, device data and errors from a context speaking for a known term. `error`
+  messages were accepted from any sender behind a rate limit; they are gated like device data now.
+- **One flood bound.** `MAX_TERM_FLOOD` bounds the terms a tab keeps and the messages waiting on one
+  term's check. Past it, what is over is forgotten first, then the oldest check, so the newest claim
+  is always checked.
+- **No `NOT_CONNECTED` from a former holder.** A write request goes to every participant and only
+  the tab holding its term acts on it (ADR-0040). A tab that let go of the port is released, and hears
+  nothing more; the issuer hands the write on once the term has ended. The suspected ping-pong of
+  `NOT_CONNECTED` answers during a clean release does not occur (`session-regressions.test.ts`).

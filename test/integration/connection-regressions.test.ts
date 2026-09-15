@@ -10,6 +10,7 @@ import type {
   SerialPortLike,
 } from '../../src/environment/environment.js';
 import { OwnershipElection } from '../../src/owner/election.js';
+import type { TermId } from '../../src/protocol/messages.js';
 import { ownerLockName } from '../../src/protocol/version.js';
 import { BrowserHarness, VirtualTab } from '../harness/browser-harness.js';
 import { READER, READER_OPTIONS } from '../harness/devices.js';
@@ -146,7 +147,7 @@ describe('listing the granted ports', () => {
     expect(tab.client.getStatus('Reader').status).toBe(SerialBrokerStatus.Open);
   });
 
-  it('reports the connection as opening while the ports are listed for the first time', async () => {
+  it('reports the connection as listing while the ports are listed for the first time', async () => {
     const harness = new BrowserHarness();
     const device = harness.serial.addDevice(READER.vendorId, READER.productId);
     harness.serial.grant(device);
@@ -156,10 +157,10 @@ describe('listing the granted ports', () => {
     await tab.setup('Reader', READER_OPTIONS);
 
     expect(tab.client.getStatus('Reader').status).toBe(SerialBrokerStatus.Connecting);
-    expect(connectionState(tab)).toBe('opening');
+    expect(connectionState(tab)).toBe('listing');
   });
 
-  it('reports the connection as opening, with no attempt scheduled, while a retry lists the ports', async () => {
+  it('reports the connection as listing, with no attempt scheduled, while a retry lists the ports', async () => {
     const harness = new BrowserHarness();
     const device = harness.serial.addDevice(READER.vendorId, READER.productId);
     harness.serial.grant(device);
@@ -172,7 +173,7 @@ describe('listing the granted ports', () => {
     await harness.advance(0);
 
     expect(tab.client.getStatus('Reader').status).toBe(SerialBrokerStatus.Connecting);
-    expect(connectionState(tab)).toBe('opening');
+    expect(connectionState(tab)).toBe('listing');
     expect(tab.client.diagnostics()?.configurations[0]?.connection?.nextAttemptAt).toBeUndefined();
   });
 });
@@ -535,7 +536,11 @@ describe('leaving the election', () => {
       new OwnershipElection(
         locks.forContext(contextId),
         'Reader',
-        { onAcquired: () => acquired.push(contextId), onLost: () => undefined },
+        {
+          newTerm: () => ({ term: contextId as TermId, lockName: `term/${contextId}` }),
+          onAcquired: () => acquired.push(contextId),
+          onLost: () => undefined,
+        },
         logger,
         clock,
       );
@@ -550,7 +555,7 @@ describe('leaving the election', () => {
 
     // The browser grants the lock to the successor in the same turn in which it stops.
     locks.killContext('tab1');
-    successor.stop();
+    void successor.stop();
     await flushMicrotasks();
 
     expect(locks.holderOf(lockName)).toBeUndefined();

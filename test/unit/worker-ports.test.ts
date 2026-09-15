@@ -1,22 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
-import { ScopedLogger } from '../../src/core/logger.js';
-import { decodeMessage } from '../../src/protocol/decode.js';
 import { SILENT_PARTICIPANT_TIMEOUT_MS } from '../../src/protocol/heartbeat.js';
 import {
-  MAX_BOUND_IDENTITIES,
   MAX_IDENTIFIER_LENGTH,
-  MAX_LOG_RECORD_CHARACTERS,
   MAX_PARTICIPANTS,
   MAX_PORTS_PER_PARTICIPANT,
 } from '../../src/protocol/limits.js';
 import { BROKER_ID } from '../../src/protocol/messages.js';
-import { PROTOCOL_VERSION } from '../../src/protocol/version.js';
-import {
-  FORWARD_INTERVAL_MS,
-  MAX_FORWARDED_RECORDS,
-  RecordForwarder,
-} from '../../src/worker/record-forwarding.js';
 import { WorkerPorts } from '../../src/worker/worker-ports.js';
 import { fieldsOfEvent, recordingLogger, type LogRecord } from '../harness/recording-logger.js';
 import { envelope, FakeMessagePort, hello } from '../harness/transport-doubles.js';
@@ -38,10 +28,7 @@ interface World {
 function createWorld(): World {
   const { logger, records } = recordingLogger();
   const time = { now: 0 };
-  const ports = new WorkerPorts<FakeMessagePort>({
-    logger: new ScopedLogger(logger, {}),
-    monotonicNow: () => time.now,
-  });
+  const ports = new WorkerPorts<FakeMessagePort>({ logger, monotonicNow: () => time.now });
   return { ports, records, time };
 }
 
@@ -50,20 +37,15 @@ function connect(): FakeMessagePort {
   return new FakeMessagePort();
 }
 
-/**
- * A port that said hello as `id` and attached to Reader; what the worker answered is cleared.
- *
- * The secret is the one {@link hello} derives from the identity, so every port of one identity is
- * that context connecting again - unless the test passes a secret of its own (ADR-0028).
- */
-function join(world: World, id: string, port = connect(), secret?: string): FakeMessagePort {
-  world.ports.receive(port, hello(id, secret));
+/** A port that said hello as `id` and attached to Reader; what the worker answered is cleared. */
+function join(world: World, id: string, port = connect()): FakeMessagePort {
+  world.ports.receive(port, hello(id));
   world.ports.receive(port, envelope(id, 'all', { type: 'attach', configName: 'Reader' }));
   port.posted.length = 0;
   return port;
 }
 
-const HEARTBEAT = { type: 'heartbeat', configNames: ['Reader'], ownedConfigNames: [] };
+const HEARTBEAT = { type: 'heartbeat', configNames: ['Reader'] };
 
 const probe = (from: string, to = 'all'): unknown =>
   envelope(from, to, { type: 'status-request', configName: 'Reader' });
@@ -100,7 +82,7 @@ describe('WorkerPorts', () => {
 
     // A tab's first message is always hello (ADR-0024); one that is not comes from something else.
     expect(typesPosted(bob)).toEqual([]);
-    expect(world.ports.clientCount).toBe(1);
+    expect(fieldsOfEvent(world.records, 'broker.connect')).toHaveLength(1);
   });
 
   it('refuses a message that names another sender than its port said hello as', () => {
@@ -121,99 +103,17 @@ describe('WorkerPorts', () => {
     expect(mallory.closed).toBe(false);
   });
 
-  it('does not let a port that says hello as a tab with another secret hear what is addressed to it', () => {
-    const world = createWorld();
-    const alice = join(world, 'alice');
-    world.ports.receive(
-      alice,
-      envelope('alice', 'all', {
-        type: 'owner-claimed',
-        configName: 'Reader',
-        term: 't-1',
-        maxTabs: 1,
-      }),
-    );
-    const bob = join(world, 'bob');
-
-    // Identities are no secret: Mallory heard Alice's on the bus, and says hello as her. The secret
-    // Alice bound her identity to is one thing Mallory never heard (ADR-0028).
-    const mallory = join(world, 'alice', connect(), 'guessed');
-    world.ports.receive(
-      bob,
-      envelope('bob', 'owner', {
-        type: 'write-request',
-        configName: 'Reader',
-        requestId: 'w-1',
-        payload: new Uint8Array([1]),
-        term: 't-1',
-      }),
-    );
-
-    expect(typesPosted(alice)).toEqual(['write-request']);
-    expect(typesPosted(mallory)).toEqual([]);
-  });
-
-  it('serves a tab that connects again on a new port with the secret it bound', () => {
+  it('serves a tab that connects again on a new port, on both of its ports', () => {
     const world = createWorld();
     const firstPort = join(world, 'alice');
     const bob = join(world, 'bob');
 
-    // Alice gave up on a worker that hung and connected again; her transport shows the same secret.
+    // Alice gave up on a worker that hung and connected again under the same identity.
     const secondPort = join(world, 'alice');
     world.ports.receive(bob, probe('bob'));
 
     expect(typesPosted(secondPort)).toEqual(['status-request']);
     expect(typesPosted(firstPort)).toEqual(['status-request']);
-    expect(world.ports.clientCount).toBe(2);
-  });
-
-  it('logs a refused hello once per reason, naming the identity it claimed', () => {
-    const world = createWorld();
-    join(world, 'alice');
-
-    for (let round = 0; round < 10; round += 1) {
-      world.ports.receive(connect(), hello('alice', 'guessed'));
-      world.ports.receive(connect(), envelope('alice', 'all', { type: 'hello' }));
-    }
-
-    expect(fieldsOfEvent(world.records, 'worker.message-refused')).toEqual([
-      expect.objectContaining({ reason: 'secret-mismatch', claimedClientId: 'alice' }),
-      expect.objectContaining({ reason: 'secret-missing', claimedClientId: 'alice' }),
-    ]);
-  });
-
-  it('keeps an identity bound while the sweep has forgotten the tab holding it', () => {
-    const world = createWorld();
-    const alice = join(world, 'alice');
-    const bob = join(world, 'bob');
-
-    // Alice's tab was frozen long enough for the sweep to forget it.
-    world.time.now = SILENT_PARTICIPANT_TIMEOUT_MS;
-    world.ports.receive(bob, envelope('bob', 'all', HEARTBEAT));
-    world.ports.sweep();
-    expect(world.ports.clientCount).toBe(1);
-
-    const mallory = join(world, 'alice', connect(), 'guessed');
-    const returned = join(world, 'alice');
-    world.ports.receive(bob, probe('bob'));
-
-    expect(typesPosted(mallory)).toEqual([]);
-    expect(typesPosted(returned)).toEqual(['status-request']);
-    expect(alice.closed).toBe(false);
-  });
-
-  it('lets an identity be bound again once the context that bound it said goodbye', () => {
-    const world = createWorld();
-    const alice = join(world, 'alice');
-
-    world.ports.receive(alice, envelope('alice', 'all', { type: 'goodbye' }));
-    const sameIdentity = connect();
-    world.ports.receive(sameIdentity, hello('alice', 'another-secret'));
-
-    // Nothing is kept against a context that left: its identity is generated once per context, and
-    // a binding kept for every context that ever connected would grow the worker without bound.
-    expect(typesPosted(sameIdentity)).toEqual(['welcome']);
-    expect(world.ports.clientCount).toBe(1);
   });
 
   it('ends only the port that said goodbye, not the identity the tab still has ports for', () => {
@@ -227,36 +127,20 @@ describe('WorkerPorts', () => {
 
     expect(secondPort.closed).toBe(true);
     expect(typesPosted(firstPort)).toEqual(['status-request']);
-    expect(world.ports.clientCount).toBe(2);
+    expect(fieldsOfEvent(world.records, 'broker.disconnect')).toEqual([]);
   });
 
-  it('forgets the oldest binding of an identity with no port, and keeps the ones in use', () => {
+  it('forgets a participant whose last port said goodbye', () => {
     const world = createWorld();
     const alice = join(world, 'alice');
+    const bob = join(world, 'bob');
 
-    // A script of the origin says hello under one identity after another and lets each fall silent.
-    // The participants are forgotten by the sweep; their bindings outlive them, so they are what
-    // reaches the limit (ADR-0028).
-    for (let index = 0; index < MAX_BOUND_IDENTITIES; index += 1) {
-      world.ports.receive(connect(), hello(`flood-${String(index)}`));
-      if ((index + 1) % (MAX_PARTICIPANTS / 2) === 0) {
-        world.time.now += SILENT_PARTICIPANT_TIMEOUT_MS;
-        world.ports.receive(alice, envelope('alice', 'all', HEARTBEAT));
-        world.ports.sweep();
-      }
-    }
+    world.ports.receive(alice, envelope('alice', 'all', { type: 'goodbye' }));
+    world.ports.receive(bob, probe('bob'));
 
-    const claimedAgain = connect();
-    world.ports.receive(claimedAgain, hello('flood-0', 'another-secret'));
-    const asAlice = connect();
-    world.ports.receive(asAlice, hello('alice', 'another-secret'));
-
-    // The oldest binding nothing holds any more is let go of, and that identity can be claimed
-    // again. Alice's is kept: her tab is still there.
-    expect(typesPosted(claimedAgain)).toEqual(['welcome']);
-    expect(typesPosted(asAlice)).toEqual([]);
-    expect(fieldsOfEvent(world.records, 'worker.limit-exceeded')).toEqual([
-      expect.objectContaining({ limit: 'MAX_BOUND_IDENTITIES', limitValue: MAX_BOUND_IDENTITIES }),
+    expect(typesPosted(alice)).toEqual([]);
+    expect(fieldsOfEvent(world.records, 'broker.disconnect')).toEqual([
+      expect.objectContaining({ clientId: 'alice' }),
     ]);
   });
 
@@ -296,59 +180,21 @@ describe('WorkerPorts', () => {
     expect(recordsPosted(alice)).toEqual([]);
   });
 
-  it('forwards no more records in one interval than the budget, and reports what it dropped', () => {
+  it('forwards each kind of record once, however many a script of the origin causes', () => {
     const world = createWorld();
     const alice = join(world, 'alice');
 
-    for (let index = 0; index < MAX_FORWARDED_RECORDS + 5; index += 1) {
+    for (let index = 0; index < 20; index += 1) {
       // Each hello in a version of its own is a record the worker writes: nothing bounds how many
       // of them a script of the origin can cause (SECURITY.md).
       world.ports.receive(connect(), { v: 100 + index, from: 'mallory', to: 'all', type: 'hello' });
+      world.ports.reportMessageError(alice);
     }
-    const withinTheInterval = recordsPosted(alice).length;
-    world.time.now = FORWARD_INTERVAL_MS;
-    world.ports.sweep();
 
-    expect(withinTheInterval).toBe(MAX_FORWARDED_RECORDS);
-    // The count is reported once the interval is over, so nothing is dropped in silence - here at
-    // the sweep, since no further record came.
-    expect(recordsPosted(alice).at(-1)).toEqual(
-      expect.objectContaining({
-        level: 'warn',
-        fields: expect.objectContaining({
-          event: 'worker.records-dropped',
-          droppedRecords: 5,
-        }) as unknown,
-      }),
-    );
-  });
-
-  it('holds a record it forwards to one budget, so that no tab refuses it', () => {
-    const forwarded: unknown[] = [];
-    const forwarder = new RecordForwarder({
-      monotonicNow: () => 0,
-      forward: (level, message, fields) => {
-        forwarded.push({
-          v: PROTOCOL_VERSION,
-          from: BROKER_ID,
-          to: 'alice',
-          type: 'worker-log',
-          level,
-          message,
-          fields,
-        });
-      },
-      reportDropped: () => undefined,
-    });
-
-    // Nothing the worker writes is this long, but a record over the budget must not become a record
-    // no tab accepts: the message and the fields share the budget on both sides of the bus.
-    forwarder
-      .wrap({ log: () => undefined })
-      .log('warn', 'm'.repeat(MAX_LOG_RECORD_CHARACTERS + 1), { event: 'worker.message-refused' });
-
-    expect(forwarded).toHaveLength(1);
-    expect(decodeMessage(forwarded[0]).ok).toBe(true);
+    expect(recordsPosted(alice).map((record) => record['fields'])).toEqual([
+      expect.objectContaining({ event: 'worker.other-protocol-version', clientId: 'mallory' }),
+      expect.objectContaining({ event: 'worker.message-error', clientId: 'alice' }),
+    ]);
   });
 
   it('answers a hello on the port it came on, not on the other ports of that identity', () => {
@@ -417,7 +263,7 @@ describe('WorkerPorts', () => {
     world.ports.receive(late, hello('late'));
     expect(typesPosted(late)).toEqual([]);
     expect(fieldsOfEvent(world.records, 'worker.limit-exceeded')).toEqual([
-      expect.objectContaining({ limit: 'MAX_PARTICIPANTS', limitValue: MAX_PARTICIPANTS }),
+      expect.objectContaining({ limit: 'MAX_PARTICIPANTS' }),
     ]);
 
     // Its port keeps its identity, so its next heartbeat gets in once there is room.
@@ -425,12 +271,8 @@ describe('WorkerPorts', () => {
       participants[0] as FakeMessagePort,
       envelope('tab-0', 'all', { type: 'goodbye' }),
     );
-    world.ports.receive(
-      late,
-      envelope('late', 'all', { type: 'heartbeat', configNames: [], ownedConfigNames: [] }),
-    );
+    world.ports.receive(late, envelope('late', 'all', { type: 'heartbeat', configNames: [] }));
     expect(typesPosted(late)).toEqual(['welcome']);
-    expect(world.ports.clientCount).toBe(MAX_PARTICIPANTS);
   });
 
   it('keeps no more than MAX_PORTS_PER_PARTICIPANT ports for one identity', () => {
@@ -469,7 +311,27 @@ describe('WorkerPorts', () => {
 
     expect(oldPort.posted).toHaveLength(0);
     expect(typesPosted(newPort)).toEqual(['status-request']);
-    expect(world.ports.clientCount).toBe(2);
+    expect(fieldsOfEvent(world.records, 'broker.forgot-silent')).toEqual([]);
+  });
+
+  it('forgets a participant all of whose ports fell silent, and knows it again from its next message', () => {
+    const world = createWorld();
+    const alice = join(world, 'alice');
+    const bob = join(world, 'bob');
+
+    world.time.now = SILENT_PARTICIPANT_TIMEOUT_MS;
+    world.ports.receive(bob, envelope('bob', 'all', HEARTBEAT));
+    world.ports.sweep();
+    world.ports.receive(bob, probe('bob'));
+    expect(typesPosted(alice)).toEqual([]);
+    expect(fieldsOfEvent(world.records, 'broker.forgot-silent')).toEqual([
+      expect.objectContaining({ clientId: 'alice' }),
+    ]);
+
+    // Only throttled: the port still speaks as Alice, without a new hello.
+    world.ports.receive(alice, envelope('alice', 'all', HEARTBEAT));
+    world.ports.receive(bob, probe('bob'));
+    expect(typesPosted(alice)).toEqual(['welcome', 'status-request']);
   });
 
   it('does not echo a sender of any length back in its welcome to another protocol version', () => {

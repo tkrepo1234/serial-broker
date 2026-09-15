@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import { assertNever } from '../../src/core/assert.js';
-import { chunkBytes, copyBytes, toHex } from '../../src/core/bytes.js';
+import { copyBytes, toHex } from '../../src/core/bytes.js';
 import { createDeferred, createSignal, withDeadline } from '../../src/core/deadline.js';
 import { DisposalStack } from '../../src/core/disposable.js';
 import { SerialBrokerErrorCode } from '../../src/core/error-codes.js';
@@ -194,17 +194,21 @@ describe('withDeadline', () => {
   });
 });
 
+function enqueue<T>(queue: WriteQueue, job: () => Promise<T>): Promise<T> {
+  return queue.enqueueWithdrawable(job).promise;
+}
+
 describe('WriteQueue', () => {
   it('runs jobs one after another, never overlapping', async () => {
     const queue = new WriteQueue();
     const events: string[] = [];
 
-    const first = queue.enqueue(async () => {
+    const first = enqueue(queue, async () => {
       events.push('first:start');
       await Promise.resolve();
       events.push('first:end');
     });
-    const second = queue.enqueue(async () => {
+    const second = enqueue(queue, async () => {
       events.push('second:start');
       await Promise.resolve();
       events.push('second:end');
@@ -220,11 +224,11 @@ describe('WriteQueue', () => {
     const queue = new WriteQueue();
     const after = vi.fn();
 
-    const failing = queue.enqueue(async () => {
+    const failing = enqueue(queue, async () => {
       await Promise.resolve();
       throw new Error('the device refused');
     });
-    const next = queue.enqueue(async () => {
+    const next = enqueue(queue, async () => {
       after();
       await Promise.resolve();
     });
@@ -237,8 +241,8 @@ describe('WriteQueue', () => {
   it('reports a failure only to the caller that submitted it', async () => {
     const queue = new WriteQueue();
 
-    const failing = queue.enqueue(() => Promise.reject(new Error('mine')));
-    const other = queue.enqueue(() => Promise.resolve('ok'));
+    const failing = enqueue(queue, () => Promise.reject(new Error('mine')));
+    const other = enqueue(queue, () => Promise.resolve('ok'));
 
     await expect(failing).rejects.toThrow('mine');
     await expect(other).resolves.toBe('ok');
@@ -247,7 +251,7 @@ describe('WriteQueue', () => {
   it('tracks how much work is outstanding', async () => {
     const queue = new WriteQueue();
 
-    const job = queue.enqueue(async () => {
+    const job = enqueue(queue, async () => {
       await Promise.resolve();
     });
     expect(queue.depth).toBe(1);
@@ -340,18 +344,6 @@ describe('copyBytes', () => {
     new Uint8Array(buffer).fill(0);
 
     expect([...copy]).toEqual([3, 4, 5]);
-  });
-});
-
-describe('chunkBytes', () => {
-  it('splits a payload into ordered chunks of at most the given size', () => {
-    const chunks = chunkBytes(new Uint8Array([1, 2, 3, 4, 5]), 2);
-
-    expect(chunks.map((chunk) => [...chunk])).toEqual([[1, 2], [3, 4], [5]]);
-  });
-
-  it('keeps writing nothing an observable single chunk', () => {
-    expect(chunkBytes(new Uint8Array(0), 4)).toHaveLength(1);
   });
 });
 

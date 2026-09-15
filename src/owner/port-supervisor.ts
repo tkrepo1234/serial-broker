@@ -148,10 +148,7 @@ export class PortSupervisor {
    */
   diagnostics(): ConnectionDiagnostics {
     return {
-      // Looking for the port and opening it are one step of an attempt to an operator, and one
-      // state in the report: a new state value would change what peers on this protocol version
-      // accept.
-      state: this.#state.kind === 'listing' ? 'opening' : this.#state.kind,
+      state: this.#state.kind,
       attempt: this.#backoff.attempt,
       nextAttemptAt: this.#nextAttemptAt,
       openedAt: this.#openedAt,

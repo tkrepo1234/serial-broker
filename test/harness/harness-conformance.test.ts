@@ -419,7 +419,6 @@ describe('BrowserHarness frozen contexts', () => {
       onTransportError: () => undefined,
       logger: new ScopedLogger(NOOP_LOGGER, {}),
       clock: harness.busClock,
-      newSecret: () => 'secret',
     });
   }
 
@@ -562,7 +561,6 @@ describe('BrowserHarness throttled timers', () => {
       onTransportError: () => undefined,
       logger: new ScopedLogger(NOOP_LOGGER, {}),
       clock: harness.busClock,
-      newSecret: () => 'secret',
     });
     hidden.attach('Reader');
     const sender = harness.createEnvironment('sender').createTransport({
@@ -572,7 +570,6 @@ describe('BrowserHarness throttled timers', () => {
       onTransportError: () => undefined,
       logger: new ScopedLogger(NOOP_LOGGER, {}),
       clock: harness.busClock,
-      newSecret: () => 'secret',
     });
     await harness.settle();
     heard.splice(0);

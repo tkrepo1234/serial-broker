@@ -48,15 +48,6 @@ export class WriteQueue {
     return this.#waiting.size + (this.#running === undefined ? 0 : 1);
   }
 
-  /**
-   * Queues `job` behind everything already queued.
-   *
-   * @returns A promise settling with `job`'s outcome - not with the queue's.
-   */
-  enqueue<T>(job: () => Promise<T>): Promise<T> {
-    return this.enqueueWithdrawable(job).promise;
-  }
-
   /** Queues `job` behind everything already queued, so that it can be withdrawn until it begins. */
   enqueueWithdrawable<T>(job: () => Promise<T>): WithdrawableJob<T> {
     const outcome = createDeferred<T>();

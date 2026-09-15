@@ -1,10 +1,11 @@
 import { copyBytes } from '../core/bytes.js';
-import type { NormalizedConfiguration } from '../core/defaults.js';
+import type { NormalizedConfiguration, ResolvedDevice } from '../core/defaults.js';
 import type { ParticipantDiagnostics } from '../core/diagnostics.js';
 import { DisposalStack } from '../core/disposable.js';
 import { SerialBrokerErrorCode } from '../core/error-codes.js';
 import { describeUnknown, SerialBrokerError, withTimestamp } from '../core/errors.js';
-import type { ScopedLogger } from '../core/logger.js';
+import { HeldLock } from '../core/held-lock.js';
+import { OnceLog, type ScopedLogger } from '../core/logger.js';
 import { RateLimiter } from '../core/rate-limit.js';
 import type {
   ReleaseOptions,
@@ -30,11 +31,7 @@ import {
   versionAnnouncement,
 } from '../protocol/announcement.js';
 import { describeDecodeFailure, type DecodeFailure } from '../protocol/decode.js';
-import {
-  DIAGNOSTICS_ANSWER_RATE,
-  MALFORMED_MESSAGE_WARNING_RATE,
-  MAX_PAYLOAD_BYTES,
-} from '../protocol/limits.js';
+import { DIAGNOSTICS_ANSWER_RATE, MAX_PAYLOAD_BYTES } from '../protocol/limits.js';
 import {
   configNameOf,
   type ClientId,
@@ -43,7 +40,7 @@ import {
 } from '../protocol/messages.js';
 import { PROTOCOL_VERSION } from '../protocol/version.js';
 import { ConfigurationStore } from '../storage/configuration-store.js';
-import { forgetUnlessHeld, PersistenceHold } from '../storage/persistence-hold.js';
+import { forgetUnlessHeld, persistenceLockName } from '../storage/persistence-hold.js';
 
 import { ConfigurationSession } from './configuration-session.js';
 import type { BroadcastChannelLike } from './transport/broadcast-channel-transport.js';
@@ -100,23 +97,19 @@ export class SerialBrokerClient {
   readonly #unheardErrors: SerialBrokerError[] = [];
   /** Peer protocol versions already reported: a mixed deployment is reported once per version. */
   readonly #reportedPeerVersions = new Set<unknown>();
-  /** {@link MAX_UNHEARD_ERRORS} was exceeded and logged. */
-  #hasDroppedUnheardErrors = false;
-  /** {@link MAX_REPORTED_PEER_VERSIONS} was reached and logged. */
-  #hasReachedPeerVersionLimit = false;
+  /** What this context records once only. */
+  readonly #once: OnceLog;
   readonly #store: ConfigurationStore;
   /**
    * The holds that tell other tabs this one still runs a remembered configuration, by name
    * (ADR-0027). Only configurations set up with `remember: true` have one.
    */
-  readonly #holds = new Map<string, PersistenceHold>();
+  readonly #holds = new Map<string, HeldLock>();
   readonly #disposal = new DisposalStack();
   readonly #clientId: ClientId;
   readonly #logger: ScopedLogger;
   /** How often this context answers `diagnostics-request` (ADR-0031). */
   readonly #diagnosticsAnswers: RateLimiter;
-  /** How often a malformed message is logged (ADR-0031). */
-  readonly #malformedWarnings: RateLimiter;
 
   #transport: Transport | undefined;
   #isDisposed = false;
@@ -125,20 +118,8 @@ export class SerialBrokerClient {
     this.#clientId = environment.newId('c') as ClientId;
     this.#logger = environment.logger.child({ clientId: this.#clientId });
 
-    this.#diagnosticsAnswers = new RateLimiter(
-      DIAGNOSTICS_ANSWER_RATE,
-      environment.clock,
-      this.#logger,
-      'client.diagnostics-answers-dropped',
-      'diagnostics requests',
-    );
-    this.#malformedWarnings = new RateLimiter(
-      MALFORMED_MESSAGE_WARNING_RATE,
-      environment.clock,
-      this.#logger,
-      'client.malformed-messages-unlogged',
-      'records of malformed messages',
-    );
+    this.#once = new OnceLog(this.#logger);
+    this.#diagnosticsAnswers = new RateLimiter(DIAGNOSTICS_ANSWER_RATE, environment.clock);
 
     this.#store = new ConfigurationStore(
       environment.storage,
@@ -241,12 +222,16 @@ export class SerialBrokerClient {
     const session: ConfigurationSession = new ConfigurationSession(
       this.environment,
       this.#ensureTransport(),
-      this.#withRememberedDevice(configuration),
+      configuration,
       this.#logger.child({ configName: configuration.name }),
       () => {
         this.#rememberResolution(session);
       },
     );
+    const remembered = this.#rememberedResolution(configuration);
+    if (remembered !== undefined) {
+      session.resolveDevice(remembered, 'remembered');
+    }
 
     this.#sessions.set(configuration.name, session);
     this.#remember(session);
@@ -268,9 +253,9 @@ export class SerialBrokerClient {
   }
 
   /**
-   * Starts an auto-mode configuration with the device its remembered entry resolved to (ADR-0036,
-   * amended 2026-09-15), so that a later visit calling only `setup()` reconnects without a prompt,
-   * as `restore()` does, and saves the resolution back rather than a configuration waiting again.
+   * The device the remembered entry of a new auto-mode configuration resolved to (ADR-0036, amended
+   * 2026-09-15), so that a later visit calling only `setup()` reconnects without a prompt, as
+   * `restore()` does, and saves the resolution back rather than a configuration waiting again.
    *
    * Read only for a new configuration: a name already set up in this tab is judged against what it
    * runs, so `CONFIGURATION_CONFLICT` is decided as before. Taken only from an entry in auto mode
@@ -279,28 +264,13 @@ export class SerialBrokerClient {
    * which does not use what is remembered, nor for one that passes `resolved` itself, or names its
    * device - what the call says wins.
    */
-  #withRememberedDevice(configuration: NormalizedConfiguration): NormalizedConfiguration {
+  #rememberedResolution(configuration: NormalizedConfiguration): ResolvedDevice | undefined {
     const device = configuration.device;
     if (!configuration.remember || device.kind !== 'auto' || device.resolved !== undefined) {
-      return configuration;
+      return undefined;
     }
     const remembered = this.#store.find(configuration.name)?.device;
-    if (remembered?.kind !== 'auto' || remembered.resolved === undefined) {
-      return configuration;
-    }
-    const resolved = remembered.resolved;
-    this.#logger.info('auto mode resolved the device', {
-      configName: configuration.name,
-      event: 'session.device-resolved',
-      source: 'remembered',
-      device: resolved.kind,
-      vendorId: resolved.kind === 'usb' ? resolved.vendorId : undefined,
-      productId: resolved.kind === 'usb' ? resolved.productId : undefined,
-    });
-    return Object.freeze({
-      ...configuration,
-      device: Object.freeze({ kind: 'auto' as const, resolved }),
-    });
+    return remembered?.kind === 'auto' ? remembered.resolved : undefined;
   }
 
   /**
@@ -416,18 +386,28 @@ export class SerialBrokerClient {
       return;
     }
 
-    const hold = new PersistenceHold(
-      this.environment.locks,
-      name,
-      () => {
+    const hold = new HeldLock({
+      locks: this.environment.locks,
+      clock: this.environment.clock,
+      name: persistenceLockName(name),
+      mode: 'shared',
+      hold: async (released) => {
+        // Saved again once held: a tab that forgot the entry while this request was queued behind
+        // its exclusive check has finished forgetting by then.
         if (this.#sessions.get(name) === session) {
           // What the session runs by now, which may carry a device resolved meanwhile.
           this.#store.save(session.definition);
         }
+        await released;
       },
-      this.#logger,
-      this.environment.clock,
-    );
+      onFailed: (error) => {
+        this.#logger.warn('requesting the hold on a remembered configuration failed', {
+          configName: name,
+          event: 'storage.hold-failed',
+          error: describeUnknown(error),
+        });
+      },
+    });
     // Registered before the entry is saved. Storage that fails reports to the listeners of every
     // configuration, and one of them may release this very configuration from there; that release
     // lets go of the hold it finds. A hold registered only afterwards would be found by nobody, and
@@ -657,7 +637,6 @@ export class SerialBrokerClient {
       },
       logger: this.#logger,
       clock: this.environment.clock,
-      newSecret: () => this.environment.newSecret(),
     });
 
     // Not registered with `#disposal`: `dispose()` closes the transport itself, before the device
@@ -685,14 +664,17 @@ export class SerialBrokerClient {
       return;
     }
 
-    let channel: BroadcastChannelLike;
-    try {
-      channel = createChannel(ANNOUNCEMENT_CHANNEL_NAME);
-    } catch (error) {
+    const unavailable = (error: unknown): void => {
       this.#logger.warn('cannot detect tabs on other protocol versions', {
         event: 'client.announcement-unavailable',
         reason: describeUnknown(error),
       });
+    };
+    let channel: BroadcastChannelLike;
+    try {
+      channel = createChannel(ANNOUNCEMENT_CHANNEL_NAME);
+    } catch (error) {
+      unavailable(error);
       return;
     }
 
@@ -700,10 +682,7 @@ export class SerialBrokerClient {
       try {
         channel.postMessage(versionAnnouncement(PROTOCOL_VERSION, isReply));
       } catch (error) {
-        this.#logger.warn('cannot detect tabs on other protocol versions', {
-          event: 'client.announcement-unavailable',
-          reason: describeUnknown(error),
-        });
+        unavailable(error);
       }
     };
 
@@ -795,7 +774,15 @@ export class SerialBrokerClient {
    */
   #answerDiagnostics(observer: ClientId, requestId: RequestId): void {
     const report = this.diagnostics();
-    if (report === undefined || !this.#diagnosticsAnswers.take()) {
+    if (report === undefined) {
+      return;
+    }
+    if (!this.#diagnosticsAnswers.take()) {
+      this.#once.warn(
+        'diagnostics-answers',
+        'dropped diagnostics requests beyond the rate limit; further ones are dropped without a record',
+        { event: 'client.diagnostics-answers-dropped' },
+      );
       return;
     }
     this.#transport?.send({
@@ -816,12 +803,9 @@ export class SerialBrokerClient {
       return;
     }
 
-    if (!this.#malformedWarnings.take()) {
-      // Dropped either way; only the record is rationed, so that a flood of nonsense does not
-      // become a flood in the application's log (ADR-0031).
-      return;
-    }
-    this.#logger.warn('dropped a malformed message', {
+    // Recorded once for each way a message can be malformed, so that a flood of nonsense does not
+    // become a flood in the application's log (ADR-0031).
+    this.#once.warn(`malformed:${failure.reason}`, 'dropped a malformed message', {
       event: 'client.malformed-message',
       reason: description,
     });
@@ -838,17 +822,15 @@ export class SerialBrokerClient {
       return;
     }
     if (this.#reportedPeerVersions.size >= MAX_REPORTED_PEER_VERSIONS) {
-      if (!this.#hasReachedPeerVersionLimit) {
-        this.#hasReachedPeerVersionLimit = true;
-        this.#logger.warn(
-          'heard of more protocol versions than are reported; further ones are not',
-          {
-            event: 'client.peer-versions-limit',
-            limit: MAX_REPORTED_PEER_VERSIONS,
-            theirVersion: describeUnknown(theirVersion),
-          },
-        );
-      }
+      this.#once.warn(
+        'peer-versions',
+        'heard of more protocol versions than are reported; further ones are not',
+        {
+          event: 'client.peer-versions-limit',
+          limit: MAX_REPORTED_PEER_VERSIONS,
+          theirVersion: describeUnknown(theirVersion),
+        },
+      );
       return;
     }
     this.#reportedPeerVersions.add(theirVersion);
@@ -875,13 +857,10 @@ export class SerialBrokerClient {
       this.#unheardErrors.push(error);
       if (this.#unheardErrors.length > MAX_UNHEARD_ERRORS) {
         this.#unheardErrors.shift();
-        if (!this.#hasDroppedUnheardErrors) {
-          this.#hasDroppedUnheardErrors = true;
-          this.#logger.warn('dropped the oldest error nobody listened for', {
-            event: 'client.unheard-errors-dropped',
-            limit: MAX_UNHEARD_ERRORS,
-          });
-        }
+        this.#once.warn('unheard-errors', 'dropped the oldest error nobody listened for', {
+          event: 'client.unheard-errors-dropped',
+          limit: MAX_UNHEARD_ERRORS,
+        });
       }
     }
   }

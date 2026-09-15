@@ -3,12 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { SerialBrokerErrorCode } from '../../../src/core/error-codes.js';
 import { SerialBrokerError } from '../../../src/core/errors.js';
 import { SerialBrokerStatus } from '../../../src/core/types.js';
-import {
-  DIAGNOSTICS_ANSWER_RATE,
-  MALFORMED_MESSAGE_WARNING_RATE,
-  REMOTE_ERROR_RATE,
-  STATUS_ANSWER_RATE,
-} from '../../../src/protocol/limits.js';
+import { DIAGNOSTICS_ANSWER_RATE, STATUS_ANSWER_RATE } from '../../../src/protocol/limits.js';
 import {
   brokerChannelName,
   PROTOCOL_VERSION,
@@ -370,7 +365,7 @@ describe('a script of the origin that floods the bus with well-formed messages',
     expect(reports.length).toBeGreaterThan(0);
   });
 
-  it('reaches an application`s onError only as often as the rate for remote errors allows', async () => {
+  it('never reaches an application`s onError with an error it made up', async () => {
     const { harness, other, mallory, records } = await twoWatchedTabs();
     const error = new SerialBrokerError(SerialBrokerErrorCode.WRITE_FAILED, 'made up').toJSON();
 
@@ -379,11 +374,12 @@ describe('a script of the origin that floods the bus with well-formed messages',
     }
     await harness.settle();
 
-    expect(other.errorCodes('Reader').length).toBeLessThanOrEqual(REMOTE_ERROR_RATE.burst);
-    expect(fieldsOfEvent(records, 'session.remote-errors-dropped')).toHaveLength(2);
+    // Errors about the port are believed only from the tab holding it, as its data is.
+    expect(other.errorCodes('Reader')).toEqual([]);
+    expect(fieldsOfEvent(records, 'session.data-without-a-term')).toHaveLength(2);
   });
 
-  it('is logged only as often as the rate for malformed messages allows, and the drop once', async () => {
+  it('is logged once per context, however many malformed messages arrive', async () => {
     const { harness, device, other, records } = await twoTabs('broadcastchannel');
 
     for (let round = 0; round < 200; round += 1) {
@@ -397,88 +393,55 @@ describe('a script of the origin that floods the bus with well-formed messages',
     device.emit('REAL');
     await harness.settle();
 
-    expect(fieldsOfEvent(records, 'client.malformed-message').length).toBeLessThanOrEqual(
-      2 * MALFORMED_MESSAGE_WARNING_RATE.burst,
-    );
-    // One record per context says that the rest go unlogged, and nothing else changes.
-    expect(fieldsOfEvent(records, 'client.malformed-messages-unlogged')).toHaveLength(2);
+    // One record per context, and nothing else changes.
+    expect(fieldsOfEvent(records, 'client.malformed-message')).toHaveLength(2);
     expect(other.receivedText('Reader')).toBe('REAL');
   });
 });
 
 describe('a script on the SharedWorker that uses the identity of a tab', () => {
-  it('hears nothing addressed to the tab holding the port by saying hello as it', async () => {
-    const { harness, device, owner, other, records } = await twoTabs('sharedworker');
+  it('diverts no write, and delays none, by claiming to hold the port', async () => {
+    const { harness, device, other } = await twoTabs('sharedworker');
     const mallory = harness.bus.workerHost.connectForeign();
 
-    // The identity is no secret - it is in every message the tab sends - but the secret the tab
-    // showed the worker in its hello is (ADR-0028).
-    mallory.post({
-      v: PROTOCOL_VERSION,
-      from: owner.client.clientId,
-      to: 'all',
-      type: 'hello',
-      secret: 'guessed',
-    });
+    // A participant of its own that claims the port in a term it made up. A broker that routed what
+    // is meant for the owner to the last claimant would hand it every write (ADR-0040).
+    const forged = { v: PROTOCOL_VERSION, from: 'mallory', to: 'all', configName: 'Reader' };
+    mallory.post({ ...forged, type: 'hello' });
+    mallory.post({ ...forged, type: 'attach' });
+    mallory.post({ ...forged, type: 'owner-claimed', term: 't-forged', maxTabs: 1 });
     await harness.settle();
     const writing = other.client.send('Reader', 'PING');
     await harness.settle();
 
-    expect(device.writtenText()).toBe('PING');
     await expect(writing).resolves.toBeUndefined();
-    expect(mallory.received).toEqual([]);
-    // The worker has no logger of its own, so the tabs write its records for it (ADR-0029).
-    expect(fieldsOfEvent(records, 'worker.message-refused')).toEqual([
-      expect.objectContaining({
-        reason: 'secret-mismatch',
-        claimedClientId: owner.client.clientId,
-        reportedBy: owner.client.clientId,
-      }),
-      expect.objectContaining({ reason: 'secret-mismatch', reportedBy: other.client.clientId }),
-    ]);
+    expect(device.writtenText()).toBe('PING');
+    expect(other.client.getStatus('Reader').status).toBe(SerialBrokerStatus.Open);
   });
 
   it('does not cut a tab off by saying goodbye in its name', async () => {
-    const { harness, device, owner, other, records } = await twoTabs('sharedworker');
+    const { harness, device, other, records } = await twoTabs('sharedworker');
     const mallory = harness.bus.workerHost.connectForeign();
 
-    mallory.post({
-      v: PROTOCOL_VERSION,
-      from: other.client.clientId,
-      to: 'all',
-      type: 'hello',
-      secret: 'guessed',
-    });
-    mallory.post({ v: PROTOCOL_VERSION, from: other.client.clientId, to: 'all', type: 'goodbye' });
+    // Identities are no secret. The port that says hello as the tab is one more port of that
+    // identity, and its goodbye ends that port alone, not the tab's own (ADR-0040).
+    const forged = { v: PROTOCOL_VERSION, from: other.client.clientId, to: 'all' };
+    mallory.post({ ...forged, type: 'hello' });
+    mallory.post({ ...forged, type: 'goodbye' });
     await harness.settle();
     device.emit('STILL HERE');
     await harness.settle();
 
     expect(other.receivedText('Reader')).toBe('STILL HERE');
-    // The hello is refused for its secret, so the port never holds the identity and the goodbye that
-    // follows is a message before a hello. That a goodbye ends the port that sent it and not the
-    // identity a tab still has ports for is held by test/unit/worker-ports.test.ts.
-    expect(fieldsOfEvent(records, 'worker.message-refused')).toEqual([
-      expect.objectContaining({ reason: 'secret-mismatch', reportedBy: owner.client.clientId }),
-      expect.objectContaining({ reason: 'secret-mismatch', reportedBy: other.client.clientId }),
-      expect.objectContaining({ reason: 'before-hello', reportedBy: owner.client.clientId }),
-      expect.objectContaining({ reason: 'before-hello', reportedBy: other.client.clientId }),
-    ]);
+    expect(fieldsOfEvent(records, 'worker.message-refused')).toEqual([]);
   });
 
   it('cannot speak for a tab from a port that said hello as something else', async () => {
     const { harness, device, owner, other, records } = await twoTabs('sharedworker');
     const mallory = harness.bus.workerHost.connectForeign();
 
-    // An identity of its own, with a secret of its own: the port is served, and is held to the
-    // identity it bound. Saying hello as the tab instead would end at the tab's secret (ADR-0028).
-    mallory.post({
-      v: PROTOCOL_VERSION,
-      from: 'mallory',
-      to: 'all',
-      type: 'hello',
-      secret: 'mallory-secret',
-    });
+    // An identity of its own: the port is served, and is held to the identity it said hello as.
+    mallory.post({ v: PROTOCOL_VERSION, from: 'mallory', to: 'all', type: 'hello' });
     mallory.post({
       v: PROTOCOL_VERSION,
       from: other.client.clientId,
