@@ -76,9 +76,9 @@ first:
 npm run test:examples -- examples/openui5/smoke.spec.ts
 ```
 
-The test itself is checked by the root, not by this folder: it is in the root's TypeScript program
-and ESLint run (`npm run typecheck`, `npm run lint` at the repository root), as
-[examples/README.md](../README.md) describes.
+The test itself is type-checked by the root, not by this folder: it is in the root's TypeScript
+program (`npm run typecheck` at the repository root), and like every file under `examples/` it is
+not linted, as [examples/README.md](../README.md) describes.
 
 ## Taking the integration module into your own application
 
@@ -91,8 +91,8 @@ and ESLint run (`npm run typecheck`, `npm run lint` at the repository root), as
    bundler works too - the module only imports the published entry point `serial-broker`.
 4. **Serve the broker script from your own origin.** Copy
    `node_modules/serial-broker/dist/serial-broker.worker.js` into your application's resources;
-   [`scripts/copy-serial-broker-assets.mjs`](scripts/copy-serial-broker-assets.mjs) is 40 lines and
-   does exactly that.
+   [`scripts/copy-serial-broker-assets.mjs`](scripts/copy-serial-broker-assets.mjs) is a short
+   script that does exactly that.
 5. **Configure once, in `Component.init()`**, before the first model:
 
    ```ts
@@ -116,6 +116,8 @@ and ESLint run (`npm run typecheck`, `npm run lint` at the repository root), as
    this.setModel(scale, 'scale');
    void scale.start();
    ```
+
+   Leaving `device` out lets the port the user picks decide.
 
 7. **Bind it** in an XML view:
 
@@ -245,15 +247,14 @@ moves the class body into an object literal, where `#private` members are a synt
 everything internal is `private _name` instead. The integration module deliberately has no
 `@namespace`, so it stays an ordinary class and can be copied into any application.
 
-**The root ESLint configuration ignores this folder - except the smoke test.** UI5 answers to
+**The root ESLint configuration ignores this folder, the smoke test included.** UI5 answers to
 other conventions than the library does: every module is a default export, an application reads
 `window` itself, handlers are passed as unbound methods, and the type-aware rules would need this
 example's dependencies installed to say anything true. `npm run typecheck` here is the gate for
 `webapp/` instead, and it runs in CI as a job of its own. Prettier still formats the folder.
-`smoke.spec.ts` is the exception: it is a test of the root's kind, written against the root's
-Playwright and the stand-in under `test/browser/`, and this folder's `tsconfig.json` does not
-include it - so the root's TypeScript program and ESLint run do, with the relaxations the root's
-own tests get. Without that, nothing would check it: Playwright strips types and checks none.
+`smoke.spec.ts` is written against the root's Playwright and the stand-in under `test/browser/`,
+and this folder's `tsconfig.json` does not include it - so the root's TypeScript program does.
+Without that, nothing would check it: Playwright strips types and checks none.
 
 **Stable control ids.** `index.html` fixes the id of both the component container (`container`) and
 the component (`serialbroker`), and the root view is `app`, so every DOM id is

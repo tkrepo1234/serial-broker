@@ -155,7 +155,8 @@ note gone, releases, starts again and sends once more.
    with the worker URL, then `provideSerialBrokerConfiguration()` with the name and options.
 5. **Name your device.** Replace `device: { any: true }` with its USB ids, and `baudRate` with the
    device's. On Windows the ids are in Device Manager under _Hardware Ids_ (`VID_1A86&PID_7523`);
-   the library's [debugging surface](../../docs/site/diagnostics.md) reads them off the device.
+   the library's [debugging surface](../../docs/site/diagnostics.md#the-debugging-surface) reads
+   them off the device. Leaving `device` out instead lets the port the user picks decide.
 6. **Inject `SerialBrokerService`** where you show the device, and read its signals in the
    template.
 7. **Show a connect button only for `awaiting-permission`**, and call `serial.connect()` straight
@@ -179,7 +180,7 @@ the name for the whole tab, so another service providing the same name loses the
 | `partialLine`       | `Signal<string>`: what the device sent after its last line ending.                                 |
 | `name`              | The configuration name.                                                                            |
 | `connect()`         | Shows the port picker. Call it from a click. Resolves `true` once a port is granted.               |
-| `send(data)`        | Sends text or bytes; nothing is appended. Resolves once the bytes were handed to the device.       |
+| `send(data)`        | Sends text or bytes; nothing is appended. Resolves once the browser took the bytes for the port.   |
 | `release(options?)` | Stops using the configuration in this tab; the status ends at `released`.                          |
 | `restart()`         | Releases the configuration if it is still set up, and sets it up again.                            |
 | `clearLines()`      | Empties `lines` and `partialLine`. The device is not touched.                                      |
@@ -207,20 +208,22 @@ nothing. Where the script cannot be loaded at all, serial-broker falls back to a
 **One tab holds the port; no tab can tell which.** Every tab sets the same configuration up,
 receives the same events and can send. Do not write UI that claims "this tab owns the device".
 
-**An echo can be listed before the line that caused it.** `onSend` reports a write once the bytes
-were handed to the device, and a loopback or a fast device may answer before that report arrives.
+**An echo can be listed before the line that caused it.** `onSend` reports a write once the browser
+took the bytes for the port, and a loopback or a fast device may answer before that report arrives.
 With the stand-in, `STATUS?` sent shows up as `in` first and `out` second, in the same millisecond.
 Read `lines` as what each side reported, not as a strict transcript of the wire.
 
 **`failed` is not the end.** After `RECONNECT_EXHAUSTED` the configuration comes back by itself
-when the device is plugged in again; _Start again_ only tries sooner. After
+when the device is plugged in again - with the default `connection.autoReconnect: true`; with
+`false`, nothing is retried until `setup()` is called again. _Start again_ only tries sooner. After
 `CONFIGURATION_CONFLICT` a tab stays `failed` until it is released and set up again, which is what
-_Start again_ does. A failed configuration is usually still set up, and `setup()` does nothing for
-a name that is already set up with the same options, so `restart()` releases first.
+_Start again_ does. For any other `failed`, `setup()` with the same options would start over by
+itself; `restart()` releases first so that one path covers both.
 
-**Framing is the device's.** The library delivers chunks, not messages. The service ends a line at
-CR, LF or CR LF, splits a line longer than `maxLineLength`, and without `encoding.decodeText` lists
-every chunk as a line of hexadecimal. A device with STX/ETX frames or length-prefixed messages
+**Framing is the device's.** The library delivers `onReceive` events, not messages: an answer
+usually arrives as one, but event boundaries carry no meaning. The service ends a line at CR, LF or
+CR LF, splits a line longer than `maxLineLength`, and without `encoding.decodeText` lists every
+event as a line of hexadecimal. A device with STX/ETX frames or length-prefixed messages
 needs its own assembly in place of `#receive()`.
 
 ## Stable element ids
@@ -295,17 +298,17 @@ and clearing on `open` would hide the one error that needs a decision before the
 again. The set is chosen by code rather than by where the error came from, so an `onError` event
 for the same write cannot clear it. A dismiss button calls `clearError()` for the rest.
 
-**Lines are assembled in the service.** A chunk is an arbitrary piece of the byte stream, and every
-screen wants lines. A `\r` at the end of a chunk is held back, so a `\r\n` split across two chunks
-is one line ending and not two; the unterminated tail is offered as `partialLine`, so a prompt
+**Lines are assembled in the service.** A received event is an arbitrary piece of the byte stream,
+and every screen wants lines. A `\r` at the end of an event is held back, so a `\r\n` split across
+two events is one line ending and not two; the unterminated tail is offered as `partialLine`, so a prompt
 without a line ending is not invisible. Each line has an increasing `id` for `track`, because the
 list slides once it is full and an index would re-render every row.
 
-**Long lines are split, binary chunks are lines of their own.** A barcode scanner with no suffix
+**Long lines are split, binary events are lines of their own.** A barcode scanner with no suffix
 never sends a line ending, and a screen stays open for weeks: without a limit the tail would grow
-for as long, and re-render in full with every chunk. At `maxLineLength` (1024 characters, well
+for as long, and re-render in full with every event. At `maxLineLength` (1024 characters, well
 above a text line and small enough to render) the tail becomes a line. Without text decoding there
-is no line ending to look for at all - hexadecimal contains none - so each chunk is listed as it
+is no line ending to look for at all - hexadecimal contains none - so each event is listed as it
 arrived.
 
 **Operations run one after another, destroying included.** `release()` and `restart()` go through

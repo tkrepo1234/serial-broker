@@ -26,8 +26,9 @@ about the rest of the page.
 - **The permission flow.** _Choose device…_ appears only while the status is
   `awaiting-permission`, and calls `requestAccess()` synchronously from the click - the one place
   a browser needs a user gesture. A dismissed picker is a note, not an error.
-- **Received lines, and who sent what.** Chunks are joined into lines; a partial line is shown
-  until its ending arrives. Every write appears too, marked _this tab_ or _another tab_ - `onSend`
+- **Received lines, and who sent what.** Received text is joined into lines; a partial line is
+  shown until its ending arrives. An answer usually arrives as one `onReceive` event, but event
+  boundaries carry no meaning, so the lines are still assembled. Every write appears too, marked _this tab_ or _another tab_ - `onSend`
   fires in every tab, with `origin` saying whose write it was.
 - **Remembering and restoring.** _Remember this device_ decides `remember`; on load, `restore()`
   brings a remembered configuration back before anything is set up. _Release in this tab_ stops
@@ -115,9 +116,10 @@ npm run test:examples -- examples/multi-tab-dashboard/smoke.spec.ts
 ## What a developer needs to know
 
 **Only the tab holding the port can ask for permission.** Every tab shows `awaiting-permission`,
-and every tab shows the button, but `requestAccess()` in a tab that does not hold the port rejects
-with `PERMISSION_REQUIRED` - the library cannot open a port another tab chose. The hint under the
-status says so, and the error strip shows the remediation. With a device already granted, the
+and every tab shows the button, but `requestAccess()` in a tab that knows another tab holds the
+port rejects with `PERMISSION_REQUIRED` - unless the status is already `open`, when it resolves
+`true` without asking. A tab that has just set the configuration up and knows of no holder yet may
+ask at once. The hint under the status says so, and the error strip shows the remediation. With a device already granted, the
 question does not arise: `setup()` opens it with no prompt in whichever tab holds the port.
 
 **Which tab holds the port is invisible to the application, on purpose.** Nothing in the main
@@ -166,7 +168,8 @@ this one shows the library itself. Every module takes the elements it works on a
 **One configuration, `device: { any: true }`.** The example should run with whatever adapter a
 reader has, so it accepts any granted port. A configuration that names its device by USB ids -
 the comment in `device.ts` shows one - pre-filters the port picker and tells two granted ports
-apart; the two configurations at once are in the OpenUI5 example.
+apart; the two configurations at once are in the OpenUI5 example. Leaving `device` out takes the
+device from the port the user picks, remembers it and shares it with the other tabs.
 
 **The status table is typed over the union.** `Record<SerialBrokerStatus, StatusPresentation>`
 makes "every state named" a property the compiler checks, not a promise in a README. `present()`

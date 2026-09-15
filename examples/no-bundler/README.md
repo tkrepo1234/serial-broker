@@ -210,7 +210,8 @@ prints "nothing to check" - would have left the plain-JavaScript integration the
 
 **`device: { any: true }`.** The page is meant to work with whatever adapter is at hand. An
 application names its device by USB ids, so that the picker is filtered and two granted devices
-are never confused; the comment in `app.js` and step 3 above show the form.
+are never confused; the comment in `app.js` and step 3 above show the form. Leaving `device` out
+lets the port the user picks decide, and the library remembers that device.
 
 **Sending is enabled while `connecting` and `reconnecting`, not only while `open`.** A write
 issued then is accepted and waits for the connection, up to `connection.writeTimeoutMs`. Disabling

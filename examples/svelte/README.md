@@ -102,9 +102,10 @@ npm run test:examples -- examples/svelte/smoke.spec.ts
 [`smoke.spec.ts`](smoke.spec.ts) runs in the installed Edge with the stand-in installed before the
 page loads. It opens the page with a granted device and sees it reach `open` without a click, sends
 a line and sees it echoed, unplugs the device and sees `reconnecting` with a retryable
-`DEVICE_DISCONNECTED`, and plugs it in again; opens the page with an ungranted device and connects
-with a real click on _Choose device…_; and opens two tabs, sees each receive what the other sends,
-releases in one while the other keeps sending, and sets up again.
+`DEVICE_DISCONNECTED`, plugs it in again and sends once more; opens the page with an ungranted
+device and connects with a real click on _Choose device…_; and opens two tabs, sees the second
+receive what the first sends, releases in the first while the second keeps sending, and sets up
+again.
 
 ## Taking it into your own application
 
@@ -135,7 +136,8 @@ releases in one while the other keeps sending, and sets up again.
    would otherwise show the state from before `dispose()`.
 5. **Call `createSerialBroker()` at the top level of a component's `<script>`**, with your device's
    USB ids and baud rate. On Windows the ids are in Device Manager under _Hardware Ids_
-   (`VID_1A86&PID_7523`). Every tab must pass the same name and options.
+   (`VID_1A86&PID_7523`), or leave `device` out to let the port the user picks decide. Every tab
+   must pass the same name and options.
 6. **Show the status**, a connect button while `needsPermission`, and `error.code` with
    `error.remediation`. Call `connect()` first thing in the click handler - no `await` before it.
 7. **Decide who owns the configuration.** The default releases it when the component is destroyed.
@@ -160,7 +162,7 @@ releases in one while the other keeps sending, and sets up again.
 | `received`                        | Received text, the last `maxReceivedLength` characters (20 000 by default).         |
 | `receivedBytes`, `sentBytes`      | Byte counters since the last setup; `sentBytes` counts every tab's writes.          |
 | `connect()`                       | The port picker. Resolves `'granted'`, `'dismissed'` or `'failed'`; never rejects.  |
-| `send(data)`                      | Resolves `true` once the bytes reached the device, `false` with `error` set.        |
+| `send(data)`                      | Resolves `true` once the browser took the bytes, `false` with `error` set.          |
 | `release()`, `restart()`          | Give up what this connection set up; release that if needed and set up again.       |
 | `clearError()`, `clearReceived()` | Empty `error` or `received`.                                                        |
 
@@ -231,7 +233,7 @@ in a map by name so the new setup waits for it rather than race it.
 **Setups, restarts and releases of one connection run one after the other.** `restart()` waits for
 the first setup and for an earlier restart, `release()` for both, and destroy for both before it
 decides whether there is anything to release. Two setups side by side would both subscribe, and
-every chunk would be shown and counted twice. The listeners are also always removed before new ones
+every event would be shown and counted twice. The listeners are also always removed before new ones
 are added, and a `subscribe()` that fails - the configuration released by other code between setup
 and subscribe - becomes `failed` with its error rather than an unhandled rejection.
 
@@ -252,9 +254,9 @@ still worth reading after the port reopens, until the user dismisses it or start
 to `connection.writeTimeoutMs`, then rejects with `WRITE_TIMEOUT`. With the status shown next to
 the button, a disabled button says the same thing sooner, as in the minimal example.
 
-**`restart()` releases before it sets up.** A `failed` configuration is still set up, and `setup()`
-does nothing for a name that is set up with the same options. Release first, then set up, is the
-library's own remediation for `CONFIGURATION_CONFLICT` and `RECONNECT_EXHAUSTED`.
+**`restart()` releases before it sets up.** `setup()` with the same options starts a `failed`
+configuration again by itself, but a tab that failed with `CONFIGURATION_CONFLICT` stays `failed`
+until it is released and set up again. Releasing first covers both.
 
 **`configure()` and `dispose()` live in `main.ts`, not in the module.** Both are page-wide: the
 worker URL has to be named once, before the first setup, and `pagehide` fires for a closing tab,
@@ -274,7 +276,8 @@ status union, so a status a later version adds fails the type-check instead of s
 follows a setup that failed and a `CONFIGURATION_CONFLICT`, where plugging the device in again
 changes nothing. So the sentence points to the error and to _Set up again_, and only the error code
 `RECONNECT_EXHAUSTED` - the attempts ran out - selects the sentence saying the device coming back
-resumes the connection.
+resumes the connection. That holds with the default `connection.autoReconnect: true`; with `false`,
+nothing is retried after `failed`, not even on replug, until `setup()` is called again.
 
 **_Set up again_ appears in `released` and `failed` only.** Those are the two statuses that end.
 Before the first setup has finished the status is `idle` and the button is absent, so a click
