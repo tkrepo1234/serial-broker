@@ -131,8 +131,8 @@ SERIAL_BROKER_HARDWARE=arduino npm run test:browser -- test/browser/hardware
 $env:SERIAL_BROKER_HARDWARE='arduino'; npm run test:browser -- test/browser/hardware
 ```
 
-Add `SERIAL_BROKER_HARDWARE_LARGE=1` for the 64 KiB round trip, which takes about a quarter of an
-hour and is left out otherwise.
+The 64 KiB round trip is no longer part of this suite: it took a quarter of an hour on the board,
+and `emulator.spec.ts` covers it (steps 20, 22).
 
 What they cover of the checklist below:
 

@@ -60,9 +60,9 @@ SERIAL_BROKER_HARDWARE=arduino npm run test:browser -- test/browser/hardware
 $env:SERIAL_BROKER_HARDWARE='arduino'; npm run test:browser -- test/browser/hardware
 ```
 
-That runs six tests. The seventh, a 64 KiB round trip, takes about a quarter of an hour on the
-board this was written against and is asked for separately, with both variables set:
-`SERIAL_BROKER_HARDWARE_LARGE=1`. `SERIAL_BROKER_HARDWARE_PORT` picks the port when several of
+That runs seven tests. The 64 KiB round trip runs against the USB/IP emulator
+(`SERIAL_BROKER_HARDWARE=emulator`) rather than the board, which echoes at about 80 bytes a second
+and took a quarter of an hour for it. `SERIAL_BROKER_HARDWARE_PORT` picks the port when several of
 these boards are attached.
 
 It expects an Arduino (USB `0x2341`/`0x0078`) on a COM port, running a sketch that echoes every
