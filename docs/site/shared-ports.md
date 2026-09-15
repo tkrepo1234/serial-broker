@@ -375,8 +375,8 @@ minutes hidden, runs repeating timers only once a minute. Messages between tabs 
 are not held back. In a hidden tab, deadlines and reconnect delays can therefore end up to a minute
 late, and write timeouts take that much longer. Learning that the tab holding the port has gone does
 not: it is a Web Lock being freed, not a timer, and the browser grants a waiting tab that lock as
-promptly in a hidden tab as in a visible one. The message bus counts unanswered heartbeats rather
-than measuring silence, so a throttled tab is not mistaken for a dead worker.
+promptly in a hidden tab as in a visible one. The same holds for learning that the worker has ended,
+or that a tab has gone: both are Web Locks too.
 
 A deadline that runs a second or more late first handles the messages that arrived meanwhile, so a
 write whose result is already waiting resolves instead of timing out.
@@ -387,8 +387,8 @@ Chromium freezes hidden tabs to save energy: a frozen tab runs nothing until it 
 It does not freeze a tab that uses Web Serial, or that holds a Web Lock another tab is waiting
 for — so neither the tab holding the port, nor a tab holding a place that another tab queues for
 under `maxTabs`, is frozen by that policy. Other tabs can be. A frozen tab hears nothing and sends
-nothing; its own writes wait. Its message bus falls silent too, and the worker forgets it after
-three minutes and takes it back with its next heartbeat. When it is shown again, its overdue timers
+nothing; its own writes wait. It still holds its Web Locks, so the worker keeps it. When it is shown
+again, its overdue timers
 and the messages that arrived meanwhile run in no defined order; as for a hidden tab, a deadline
 that is late handles the waiting messages first, so a write that succeeded meanwhile resolves.
 
@@ -416,8 +416,8 @@ was still on its way when the browser freed its lock remains undecidable, as des
 serial-broker listens for no page lifecycle events. In Chromium, a page that holds a Web Lock, uses
 Web Serial or listens on a `BroadcastChannel` is not kept in the back/forward cache, and a tab with a
 configuration set up does all three, so navigating away unloads it like closing it: the browser
-closes its port and lets its locks go. Tabs on the `SharedWorker` are forgotten by the worker only
-after three minutes. To say goodbye at once, and close the port before the lock is let go, call
+closes its port and lets its locks go, and the worker forgets the tab as soon as it does. To close
+the port before the lock is let go, call
 `SerialBroker.dispose()` in a `pagehide` listener. Should a browser restore such a page from the
 cache anyway — `pageshow` with `persisted` set — set its configurations up again.
 
@@ -430,9 +430,8 @@ pressure any tab can be discarded. When the user returns to it, the page loads a
 
 When a computer sleeps, every tab and the worker stop together, and when it wakes, their overdue
 timers run. USB adapters are often reset on wake; the tab holding the port then reconnects as for
-any unplugged device. The worker may run its check for silent tabs before their first heartbeat
-after waking and forget them; each is taken back with its next heartbeat, within 15 seconds, and a
-write that crosses the bus in between may be lost and rejects with `WRITE_TIMEOUT`.
+any unplugged device. No tab is forgotten for having slept: who is still there is a Web Lock, not a
+timer.
 
 The system clock can be set, or corrected, while tabs run — by the user, by a time zone change or by
 an NTP step. Nothing this library times is affected. Every duration it measures — whether a

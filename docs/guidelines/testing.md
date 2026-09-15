@@ -188,14 +188,14 @@ support refuses to measure without one. Its scenarios, each on both transports:
 | `writes-under-crashes` | 10 000 writes from 20 tabs, the tab holding the port killed every 100 writes with the batch at its port; at-most-once checked from the device's side.     |
 | `largest-payloads`     | 16 MiB payloads back to back from a tab that does not hold the port, then as many at once as the port keeps waiting.                                      |
 | `setup-release-churn`  | 1 000 setup and release cycles in two tabs taking turns holding the port.                                                                                 |
-| `simulated-week`       | 10 tabs through 7 simulated days of heartbeats and sweeps, with a chunk and a write an hour.                                                              |
+| `simulated-week`       | 10 tabs through 7 simulated idle days, with a chunk and a write an hour.                                                                                  |
 | `freezing-under-load`  | Half of 10 tabs frozen for a minute of full-rate traffic with a write on its way, resumed timers-first or tasks-first; every chunk in order.              |
 | `observer-watchers`    | A diagnostics observer with 1 000 watchers under traffic, then stopped.                                                                                   |
 
 Every scenario measures the same **footprint** before and after its load (`support/extreme.ts`):
 heap and `ArrayBuffer` memory after a collection, timers on the library's clock and on the bus's,
 device listeners, application listeners, Web Locks held and pending, writes pending and queued at
-the port, participants the worker knows, and messages sent and delivered on the wire - heartbeats
+the port, participants the worker knows, and messages sent and delivered on the wire - handshakes
 included, counted by `FakeBus.meter`. The bounds are that every count is the same before and after,
 memory grows by no more than a few MiB, the messages stay within the scenario's **budget** - a
 formula of its load, written next to it, that an amplification would cross (the bus is
@@ -214,8 +214,7 @@ timers in one step, so a simulated week advances an hour at a time.
 A memory bound measures the harness as much as the library, so the harness keeps nothing of a tab
 that closed or was killed: its ports, listeners and bus connections are let go of, which
 `harness-conformance.test.ts` proves with a `WeakRef` and a collection. What the worker itself keeps
-of a killed tab - its port, until the sweep finds it silent (ADR-0021) - is the library's, and is
-held for `SILENT_PARTICIPANT_TIMEOUT_MS` by design. Some state the library keeps is visible to no
+of a killed tab is let go as soon as the browser lets go of the tab's lock (ADR-0041). Some state the library keeps is visible to no
 count - the record of writes accepted at the port, for one - and is bounded through the heap alone:
 `long-lived-owner` fails when that record is unbounded.
 

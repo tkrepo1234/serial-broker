@@ -1,7 +1,7 @@
 {
   "kind": "browser",
-  "date": "2026-09-14",
-  "commit": "62275c5",
+  "date": "2026-09-15",
+  "commit": "ff7be44 (with uncommitted changes)",
   "machine": {
     "os": "Windows 11 Home (10.0.26200)",
     "cpu": "AMD Ryzen 7 7840HS w/ Radeon 780M Graphics",
@@ -18,26 +18,26 @@
         {
           "key": "throughput",
           "unit": "B/s",
-          "measured": 23720000,
+          "measured": 7883000,
           "expected": 500000,
           "better": "higher",
-          "ratio": 0.0211
+          "ratio": 0.0634
         },
         {
           "key": "latencyP50",
           "unit": "ms",
-          "measured": 0.09985,
+          "measured": 240.8,
           "expected": 1,
           "better": "lower",
-          "ratio": 0.0999
+          "ratio": 241
         },
         {
           "key": "latencyP95",
           "unit": "ms",
-          "measured": 0.2,
+          "measured": 481.3,
           "expected": 3,
           "better": "lower",
-          "ratio": 0.0667
+          "ratio": 160
         }
       ],
       "note": "255-byte chunks pushed by the stand-in in the page holding the port; latency from the push to `onReceive` in each page, one chunk every 10 ms; throughput from a burst of 2000 chunks, until the last page has the last one."
@@ -50,26 +50,26 @@
         {
           "key": "throughput",
           "unit": "B/s",
-          "measured": 4876000,
+          "measured": 7612000,
           "expected": 300000,
           "better": "higher",
-          "ratio": 0.0615
+          "ratio": 0.0394
         },
         {
           "key": "latencyP50",
           "unit": "ms",
-          "measured": 0.4001,
+          "measured": 239.5,
           "expected": 2,
           "better": "lower",
-          "ratio": 0.2
+          "ratio": 120
         },
         {
           "key": "latencyP95",
           "unit": "ms",
-          "measured": 0.7,
+          "measured": 484.9,
           "expected": 5,
           "better": "lower",
-          "ratio": 0.14
+          "ratio": 97
         }
       ],
       "note": "255-byte chunks pushed by the stand-in in the page holding the port; latency from the push to `onReceive` in each page, one chunk every 10 ms; throughput from a burst of 2000 chunks, until the last page has the last one."
@@ -82,15 +82,63 @@
         {
           "key": "throughput",
           "unit": "B/s",
-          "measured": 2630000,
+          "measured": 7025000,
           "expected": 200000,
           "better": "higher",
-          "ratio": 0.076
+          "ratio": 0.0285
         },
         {
           "key": "latencyP50",
           "unit": "ms",
-          "measured": 0.5999,
+          "measured": 243.8,
+          "expected": 3,
+          "better": "lower",
+          "ratio": 81.3
+        },
+        {
+          "key": "latencyP95",
+          "unit": "ms",
+          "measured": 488.8,
+          "expected": 8,
+          "better": "lower",
+          "ratio": 61.1
+        }
+      ],
+      "note": "255-byte chunks pushed by the stand-in in the page holding the port; latency from the push to `onReceive` in each page, one chunk every 10 ms; throughput from a burst of 2000 chunks, until the last page has the last one."
+    },
+    {
+      "id": "tabs-to-device/1-per-second",
+      "transport": "sharedworker",
+      "samples": 20,
+      "metrics": [
+        {
+          "key": "latencyP50",
+          "unit": "ms",
+          "measured": 0.7,
+          "expected": 3,
+          "better": "lower",
+          "ratio": 0.233
+        },
+        {
+          "key": "latencyP95",
+          "unit": "ms",
+          "measured": 1.2,
+          "expected": 8,
+          "better": "lower",
+          "ratio": 0.15
+        }
+      ],
+      "note": "A six-byte write from the page that does not hold the port, timed from `send()` to its promise settling; the interval between writes is real time."
+    },
+    {
+      "id": "tabs-to-device/10-per-second",
+      "transport": "sharedworker",
+      "samples": 30,
+      "metrics": [
+        {
+          "key": "latencyP50",
+          "unit": "ms",
+          "measured": 0.6,
           "expected": 3,
           "better": "lower",
           "ratio": 0.2
@@ -104,54 +152,6 @@
           "ratio": 0.1
         }
       ],
-      "note": "255-byte chunks pushed by the stand-in in the page holding the port; latency from the push to `onReceive` in each page, one chunk every 10 ms; throughput from a burst of 2000 chunks, until the last page has the last one."
-    },
-    {
-      "id": "tabs-to-device/1-per-second",
-      "transport": "sharedworker",
-      "samples": 20,
-      "metrics": [
-        {
-          "key": "latencyP50",
-          "unit": "ms",
-          "measured": 0.9,
-          "expected": 3,
-          "better": "lower",
-          "ratio": 0.3
-        },
-        {
-          "key": "latencyP95",
-          "unit": "ms",
-          "measured": 1.4,
-          "expected": 8,
-          "better": "lower",
-          "ratio": 0.175
-        }
-      ],
-      "note": "A six-byte write from the page that does not hold the port, timed from `send()` to its promise settling; the interval between writes is real time."
-    },
-    {
-      "id": "tabs-to-device/10-per-second",
-      "transport": "sharedworker",
-      "samples": 30,
-      "metrics": [
-        {
-          "key": "latencyP50",
-          "unit": "ms",
-          "measured": 0.9,
-          "expected": 3,
-          "better": "lower",
-          "ratio": 0.3
-        },
-        {
-          "key": "latencyP95",
-          "unit": "ms",
-          "measured": 1.1,
-          "expected": 8,
-          "better": "lower",
-          "ratio": 0.137
-        }
-      ],
       "note": "A six-byte write from the page that does not hold the port, timed from `send()` to its promise settling; the interval between writes is real time."
     },
     {
@@ -162,18 +162,18 @@
         {
           "key": "latencyP50",
           "unit": "ms",
-          "measured": 0.8,
+          "measured": 0.6,
           "expected": 3,
           "better": "lower",
-          "ratio": 0.267
+          "ratio": 0.2
         },
         {
           "key": "latencyP95",
           "unit": "ms",
-          "measured": 1.1,
+          "measured": 0.7,
           "expected": 8,
           "better": "lower",
-          "ratio": 0.137
+          "ratio": 0.0875
         }
       ],
       "note": "A six-byte write from the page that does not hold the port, timed from `send()` to its promise settling; the interval between writes is real time."
@@ -186,10 +186,10 @@
         {
           "key": "wallP50",
           "unit": "ms",
-          "measured": 19.9,
+          "measured": 12.2,
           "expected": 2000,
           "better": "lower",
-          "ratio": 0.00995
+          "ratio": 0.0061
         }
       ],
       "note": "One `send()` of 1 MiB from the page that does not hold the port, to its promise settling, with the default 4 KiB write chunk; the stand-in then echoes it back in 255-byte pieces."
@@ -202,120 +202,56 @@
         {
           "key": "wallP50",
           "unit": "ms",
-          "measured": 669.8,
+          "measured": 315,
           "expected": 250,
           "better": "lower",
-          "ratio": 2.68
+          "ratio": 1.26
         },
         {
           "key": "wallP95",
           "unit": "ms",
-          "measured": 838.3,
+          "measured": 670.8,
           "expected": 500,
           "better": "lower",
-          "ratio": 1.68
+          "ratio": 1.34
         },
         {
           "key": "everyTabP50",
           "unit": "ms",
-          "measured": 60000,
+          "measured": 324.5,
           "expected": 250,
           "better": "lower",
-          "ratio": 240
+          "ratio": 1.3
         },
         {
           "key": "everyTabP95",
           "unit": "ms",
-          "measured": 60010,
+          "measured": 676.3,
           "expected": 500,
           "better": "lower",
-          "ratio": 120
+          "ratio": 1.35
         },
         {
           "key": "libraryP50",
           "unit": "ms",
-          "measured": 5.4,
+          "measured": 8.1,
           "expected": 50,
           "better": "lower",
-          "ratio": 0.108
+          "ratio": 0.162
         },
         {
           "key": "libraryP95",
           "unit": "ms",
-          "measured": 7.6,
+          "measured": 8.3,
           "expected": 100,
           "better": "lower",
-          "ratio": 0.076
+          "ratio": 0.083
         }
       ],
       "note": "Three pages; the renderer of the one holding the port - the first page opened, which on the SharedWorker transport also started the worker - is crashed through the DevTools protocol. `wall` times the first surviving page to report `open`, `everyTab` the last, both from the moment the crash was ordered; `library` times the first against a plain Web Lock the crashed page held, granted to a surviving page in the same crash."
     },
     {
       "id": "handover/release",
-      "transport": "sharedworker",
-      "samples": 5,
-      "metrics": [
-        {
-          "key": "wallP50",
-          "unit": "ms",
-          "measured": 5.1,
-          "expected": 50,
-          "better": "lower",
-          "ratio": 0.102
-        },
-        {
-          "key": "wallP95",
-          "unit": "ms",
-          "measured": 5.6,
-          "expected": 100,
-          "better": "lower",
-          "ratio": 0.056
-        },
-        {
-          "key": "everyTabP50",
-          "unit": "ms",
-          "measured": 5.2,
-          "expected": 50,
-          "better": "lower",
-          "ratio": 0.104
-        },
-        {
-          "key": "everyTabP95",
-          "unit": "ms",
-          "measured": 5.8,
-          "expected": 100,
-          "better": "lower",
-          "ratio": 0.058
-        }
-      ],
-      "note": "Three pages; the one holding the port releases the configuration. `wall` times the first surviving page to report `open`, `everyTab` the last, both from the call."
-    },
-    {
-      "id": "start/first-tab",
-      "transport": "sharedworker",
-      "samples": 5,
-      "metrics": [
-        {
-          "key": "wallP50",
-          "unit": "ms",
-          "measured": 6.2,
-          "expected": 50,
-          "better": "lower",
-          "ratio": 0.124
-        },
-        {
-          "key": "wallP95",
-          "unit": "ms",
-          "measured": 8.5,
-          "expected": 100,
-          "better": "lower",
-          "ratio": 0.085
-        }
-      ],
-      "note": "A fresh browser context with the device granted: from `setup()` to the page reporting `open`."
-    },
-    {
-      "id": "start/joining-tab",
       "transport": "sharedworker",
       "samples": 5,
       "metrics": [
@@ -330,10 +266,74 @@
         {
           "key": "wallP95",
           "unit": "ms",
-          "measured": 4.8,
+          "measured": 4.3,
           "expected": 100,
           "better": "lower",
-          "ratio": 0.048
+          "ratio": 0.043
+        },
+        {
+          "key": "everyTabP50",
+          "unit": "ms",
+          "measured": 4.2,
+          "expected": 50,
+          "better": "lower",
+          "ratio": 0.084
+        },
+        {
+          "key": "everyTabP95",
+          "unit": "ms",
+          "measured": 4.6,
+          "expected": 100,
+          "better": "lower",
+          "ratio": 0.046
+        }
+      ],
+      "note": "Three pages; the one holding the port releases the configuration. `wall` times the first surviving page to report `open`, `everyTab` the last, both from the call."
+    },
+    {
+      "id": "start/first-tab",
+      "transport": "sharedworker",
+      "samples": 5,
+      "metrics": [
+        {
+          "key": "wallP50",
+          "unit": "ms",
+          "measured": 9,
+          "expected": 50,
+          "better": "lower",
+          "ratio": 0.18
+        },
+        {
+          "key": "wallP95",
+          "unit": "ms",
+          "measured": 9.7,
+          "expected": 100,
+          "better": "lower",
+          "ratio": 0.097
+        }
+      ],
+      "note": "A fresh browser context with the device granted: from `setup()` to the page reporting `open`."
+    },
+    {
+      "id": "start/joining-tab",
+      "transport": "sharedworker",
+      "samples": 5,
+      "metrics": [
+        {
+          "key": "wallP50",
+          "unit": "ms",
+          "measured": 4.9,
+          "expected": 50,
+          "better": "lower",
+          "ratio": 0.098
+        },
+        {
+          "key": "wallP95",
+          "unit": "ms",
+          "measured": 6,
+          "expected": 100,
+          "better": "lower",
+          "ratio": 0.06
         }
       ],
       "note": "A page joining a configuration another page already holds open: from `setup()` to `open`."
@@ -346,10 +346,10 @@
         {
           "key": "heapGrowth",
           "unit": "KB",
-          "measured": 274.1,
+          "measured": 278.8,
           "expected": 2048,
           "better": "lower",
-          "ratio": 0.134
+          "ratio": 0.136
         }
       ],
       "note": "An hour's traffic - 3600 chunks and 3600 writes across three pages - as fast as the pages take it; the largest growth of any page's heap, read through the DevTools protocol after a forced collection before and after."
@@ -362,26 +362,26 @@
         {
           "key": "throughput",
           "unit": "B/s",
-          "measured": 27570000,
+          "measured": 7578000,
           "expected": 500000,
           "better": "higher",
-          "ratio": 0.0181
+          "ratio": 0.066
         },
         {
           "key": "latencyP50",
           "unit": "ms",
-          "measured": 0.09985,
+          "measured": 241,
           "expected": 1,
           "better": "lower",
-          "ratio": 0.0999
+          "ratio": 241
         },
         {
           "key": "latencyP95",
           "unit": "ms",
-          "measured": 0.1001,
+          "measured": 480.3,
           "expected": 3,
           "better": "lower",
-          "ratio": 0.0334
+          "ratio": 160
         }
       ],
       "note": "255-byte chunks pushed by the stand-in in the page holding the port; latency from the push to `onReceive` in each page, one chunk every 10 ms; throughput from a burst of 2000 chunks, until the last page has the last one."
@@ -394,26 +394,26 @@
         {
           "key": "throughput",
           "unit": "B/s",
-          "measured": 5737000,
+          "measured": 7265000,
           "expected": 300000,
           "better": "higher",
-          "ratio": 0.0523
+          "ratio": 0.0413
         },
         {
           "key": "latencyP50",
           "unit": "ms",
-          "measured": 0.6001,
+          "measured": 251.7,
           "expected": 2,
           "better": "lower",
-          "ratio": 0.3
+          "ratio": 126
         },
         {
           "key": "latencyP95",
           "unit": "ms",
-          "measured": 0.9001,
+          "measured": 487.7,
           "expected": 5,
           "better": "lower",
-          "ratio": 0.18
+          "ratio": 97.5
         }
       ],
       "note": "255-byte chunks pushed by the stand-in in the page holding the port; latency from the push to `onReceive` in each page, one chunk every 10 ms; throughput from a burst of 2000 chunks, until the last page has the last one."
@@ -426,26 +426,26 @@
         {
           "key": "throughput",
           "unit": "B/s",
-          "measured": 3346000,
+          "measured": 6939000,
           "expected": 200000,
           "better": "higher",
-          "ratio": 0.0598
+          "ratio": 0.0288
         },
         {
           "key": "latencyP50",
           "unit": "ms",
-          "measured": 0.5999,
+          "measured": 254.1,
           "expected": 3,
           "better": "lower",
-          "ratio": 0.2
+          "ratio": 84.7
         },
         {
           "key": "latencyP95",
           "unit": "ms",
-          "measured": 0.8997,
+          "measured": 490,
           "expected": 8,
           "better": "lower",
-          "ratio": 0.112
+          "ratio": 61.3
         }
       ],
       "note": "255-byte chunks pushed by the stand-in in the page holding the port; latency from the push to `onReceive` in each page, one chunk every 10 ms; throughput from a burst of 2000 chunks, until the last page has the last one."
@@ -458,18 +458,18 @@
         {
           "key": "latencyP50",
           "unit": "ms",
-          "measured": 1,
+          "measured": 0.6,
           "expected": 3,
           "better": "lower",
-          "ratio": 0.333
+          "ratio": 0.2
         },
         {
           "key": "latencyP95",
           "unit": "ms",
-          "measured": 1.3,
+          "measured": 0.8,
           "expected": 8,
           "better": "lower",
-          "ratio": 0.162
+          "ratio": 0.1
         }
       ],
       "note": "A six-byte write from the page that does not hold the port, timed from `send()` to its promise settling; the interval between writes is real time."
@@ -482,10 +482,34 @@
         {
           "key": "latencyP50",
           "unit": "ms",
-          "measured": 1,
+          "measured": 0.6,
           "expected": 3,
           "better": "lower",
-          "ratio": 0.333
+          "ratio": 0.2
+        },
+        {
+          "key": "latencyP95",
+          "unit": "ms",
+          "measured": 2.4,
+          "expected": 8,
+          "better": "lower",
+          "ratio": 0.3
+        }
+      ],
+      "note": "A six-byte write from the page that does not hold the port, timed from `send()` to its promise settling; the interval between writes is real time."
+    },
+    {
+      "id": "tabs-to-device/100-per-second",
+      "transport": "broadcastchannel",
+      "samples": 300,
+      "metrics": [
+        {
+          "key": "latencyP50",
+          "unit": "ms",
+          "measured": 0.6,
+          "expected": 3,
+          "better": "lower",
+          "ratio": 0.2
         },
         {
           "key": "latencyP95",
@@ -499,30 +523,6 @@
       "note": "A six-byte write from the page that does not hold the port, timed from `send()` to its promise settling; the interval between writes is real time."
     },
     {
-      "id": "tabs-to-device/100-per-second",
-      "transport": "broadcastchannel",
-      "samples": 300,
-      "metrics": [
-        {
-          "key": "latencyP50",
-          "unit": "ms",
-          "measured": 0.9,
-          "expected": 3,
-          "better": "lower",
-          "ratio": 0.3
-        },
-        {
-          "key": "latencyP95",
-          "unit": "ms",
-          "measured": 1.2,
-          "expected": 8,
-          "better": "lower",
-          "ratio": 0.15
-        }
-      ],
-      "note": "A six-byte write from the page that does not hold the port, timed from `send()` to its promise settling; the interval between writes is real time."
-    },
-    {
       "id": "tabs-to-device/1-mb-write",
       "transport": "broadcastchannel",
       "samples": 3,
@@ -530,10 +530,10 @@
         {
           "key": "wallP50",
           "unit": "ms",
-          "measured": 21.4,
+          "measured": 13.6,
           "expected": 2000,
           "better": "lower",
-          "ratio": 0.0107
+          "ratio": 0.0068
         }
       ],
       "note": "One `send()` of 1 MiB from the page that does not hold the port, to its promise settling, with the default 4 KiB write chunk; the stand-in then echoes it back in 255-byte pieces."
@@ -546,96 +546,56 @@
         {
           "key": "wallP50",
           "unit": "ms",
-          "measured": 307,
+          "measured": 368,
           "expected": 250,
           "better": "lower",
-          "ratio": 1.23
+          "ratio": 1.47
         },
         {
           "key": "wallP95",
           "unit": "ms",
-          "measured": 641.3,
+          "measured": 668.4,
           "expected": 500,
           "better": "lower",
-          "ratio": 1.28
+          "ratio": 1.34
         },
         {
           "key": "everyTabP50",
           "unit": "ms",
-          "measured": 307.2,
+          "measured": 368.2,
           "expected": 250,
           "better": "lower",
-          "ratio": 1.23
+          "ratio": 1.47
         },
         {
           "key": "everyTabP95",
           "unit": "ms",
-          "measured": 641.6,
+          "measured": 668.7,
           "expected": 500,
           "better": "lower",
-          "ratio": 1.28
+          "ratio": 1.34
         },
         {
           "key": "libraryP50",
           "unit": "ms",
-          "measured": 5.6,
+          "measured": 7,
           "expected": 50,
           "better": "lower",
-          "ratio": 0.112
+          "ratio": 0.14
         },
         {
           "key": "libraryP95",
           "unit": "ms",
-          "measured": 6.7,
+          "measured": 12,
           "expected": 100,
           "better": "lower",
-          "ratio": 0.067
+          "ratio": 0.12
         }
       ],
       "note": "Three pages; the renderer of the one holding the port - the first page opened, which on the SharedWorker transport also started the worker - is crashed through the DevTools protocol. `wall` times the first surviving page to report `open`, `everyTab` the last, both from the moment the crash was ordered; `library` times the first against a plain Web Lock the crashed page held, granted to a surviving page in the same crash."
     },
     {
       "id": "handover/release",
-      "transport": "broadcastchannel",
-      "samples": 5,
-      "metrics": [
-        {
-          "key": "wallP50",
-          "unit": "ms",
-          "measured": 5.2,
-          "expected": 50,
-          "better": "lower",
-          "ratio": 0.104
-        },
-        {
-          "key": "wallP95",
-          "unit": "ms",
-          "measured": 5.9,
-          "expected": 100,
-          "better": "lower",
-          "ratio": 0.059
-        },
-        {
-          "key": "everyTabP50",
-          "unit": "ms",
-          "measured": 5.2,
-          "expected": 50,
-          "better": "lower",
-          "ratio": 0.104
-        },
-        {
-          "key": "everyTabP95",
-          "unit": "ms",
-          "measured": 6,
-          "expected": 100,
-          "better": "lower",
-          "ratio": 0.06
-        }
-      ],
-      "note": "Three pages; the one holding the port releases the configuration. `wall` times the first surviving page to report `open`, `everyTab` the last, both from the call."
-    },
-    {
-      "id": "start/first-tab",
       "transport": "broadcastchannel",
       "samples": 5,
       "metrics": [
@@ -650,10 +610,50 @@
         {
           "key": "wallP95",
           "unit": "ms",
-          "measured": 6.8,
+          "measured": 8.1,
           "expected": 100,
           "better": "lower",
-          "ratio": 0.068
+          "ratio": 0.081
+        },
+        {
+          "key": "everyTabP50",
+          "unit": "ms",
+          "measured": 5.2,
+          "expected": 50,
+          "better": "lower",
+          "ratio": 0.104
+        },
+        {
+          "key": "everyTabP95",
+          "unit": "ms",
+          "measured": 9,
+          "expected": 100,
+          "better": "lower",
+          "ratio": 0.09
+        }
+      ],
+      "note": "Three pages; the one holding the port releases the configuration. `wall` times the first surviving page to report `open`, `everyTab` the last, both from the call."
+    },
+    {
+      "id": "start/first-tab",
+      "transport": "broadcastchannel",
+      "samples": 5,
+      "metrics": [
+        {
+          "key": "wallP50",
+          "unit": "ms",
+          "measured": 6.4,
+          "expected": 50,
+          "better": "lower",
+          "ratio": 0.128
+        },
+        {
+          "key": "wallP95",
+          "unit": "ms",
+          "measured": 8,
+          "expected": 100,
+          "better": "lower",
+          "ratio": 0.08
         }
       ],
       "note": "A fresh browser context with the device granted: from `setup()` to the page reporting `open`."
@@ -666,18 +666,18 @@
         {
           "key": "wallP50",
           "unit": "ms",
-          "measured": 3.7,
+          "measured": 3.9,
           "expected": 50,
           "better": "lower",
-          "ratio": 0.074
+          "ratio": 0.078
         },
         {
           "key": "wallP95",
           "unit": "ms",
-          "measured": 4.8,
+          "measured": 4.6,
           "expected": 100,
           "better": "lower",
-          "ratio": 0.048
+          "ratio": 0.046
         }
       ],
       "note": "A page joining a configuration another page already holds open: from `setup()` to `open`."
@@ -690,10 +690,10 @@
         {
           "key": "heapGrowth",
           "unit": "KB",
-          "measured": 272.6,
+          "measured": 287,
           "expected": 2048,
           "better": "lower",
-          "ratio": 0.133
+          "ratio": 0.14
         }
       ],
       "note": "An hour's traffic - 3600 chunks and 3600 writes across three pages - as fast as the pages take it; the largest growth of any page's heap, read through the DevTools protocol after a forced collection before and after."

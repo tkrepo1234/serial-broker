@@ -309,16 +309,10 @@ What the implementers left open:
 
 ### Worker and bus
 
-- **A crash of the tab that started the SharedWorker stalls the other tabs for a minute** (found by
-  the browser benchmark, 2026-09-14, recorded as a limit in the Performance chapter). In Edge the
-  worker ends with the page that started it, which is usually also the first tab holding the port.
-  The tab that takes the port over is `open` at once, but every other tab stays `reconnecting` for
-  60 s - four minutes in a hidden tab - until its heartbeats give up (ADR-0021), and a write sent
-  meanwhile ends in `WRITE_TIMEOUT`: 240 times the expectation. The fix is the worker-lifetime Web
-  Lock ADR-0021 names as its upgrade path, so that a tab learns of the worker's end at once. Until
-  then `SerialBroker.configure({ transport: 'broadcastchannel' })` avoids it. Rerun
-  `npm run bench:browser` afterwards. Take it up with the complexity reduction, since it changes
-  the message bus.
+- ~~**A crash of the tab that started the SharedWorker stalls the other tabs for a minute.**~~ Done
+  2026-09-15 (ADR-0041): the worker holds a Web Lock for its lifetime and every tab waits on it;
+  the browser benchmark measured `handover/crash` `everyTab` at 325 ms at the median, down from
+  60 s.
 - A tab that connects after a worker record was written is never told about it: the worker keeps
   no buffer to replay. A small bounded replay to a newly registered tab would help an operator who
   opens a tab after the fact. The worker's records are not in the diagnostics observer's `collect()`
@@ -342,8 +336,8 @@ What the implementers left open:
 
 ### Time and sleep
 
-- After the machine wakes, the broker's sweep can forget every tab before their heartbeats arrive;
-  write messages in between are lost. Needs a real browser to confirm.
+- ~~After the machine wakes, the broker's sweep can forget every tab before their heartbeats
+  arrive.~~ Gone with the sweep (ADR-0041): who is still there is a Web Lock, not a timer.
 - The debugging surface renders "in 1.4 s" / "320 ms ago" from wall-clock timestamps; a system clock
   jump skews those displays until the next report.
 - ~~`BrokerHost.now()` / `WorkerPortsHost.now()` are monotonic but still called `now`.~~ Renamed to

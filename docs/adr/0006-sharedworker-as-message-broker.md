@@ -92,3 +92,10 @@ Two positive consequences above were wrong, and are corrected here rather than r
   tab whose heartbeats go unanswered starts a new worker and restores its participation and
   ownership with a heartbeat. The broker still holds nothing that has to be recovered; what is lost
   is the traffic between its death and the tabs reconnecting.
+
+## Amendment (2026-09-15): the vocabulary a tab speaks to the broker
+
+`attach`, `detach`, `heartbeat` and `goodbye` are gone. A tab's `hello` names every configuration
+it takes part in and is sent again whenever that changes, and the broker takes each for the whole of
+the tab's participation. A tab and the worker learn that the other has gone from Web Locks, not from
+messages ([ADR-0041](./0041-tell-liveness-through-web-locks.md)).

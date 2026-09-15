@@ -120,45 +120,36 @@ application whatever the entry point, so it is part of every installation.
 
 ## Results worse than expected
 
-Nothing in the harness run is worse than its expectation. In the browser run, one result is more
-than ten times worse, and it is a documented limit; two more are over their expectation by less.
+Nothing in the harness run is worse than its expectation. In the browser run, the deliveries from
+the device to the tabs are more than ten times worse, which is the collection of received bytes and
+not the bus; the handover after a crash is over its expectation by less.
 
 ### Documented limits
 
-**After a crash of the tab that started the `SharedWorker`, the other tabs wait about a minute.**
-`handover/crash` on the `SharedWorker` transport: `everyTab` is 60 seconds at the median, against
-the 250 ms expected - 240 times worse.
+**A chunk reaches the tabs when the line has been quiet, not when it is read.** `device-to-tabs` on
+both transports: `latency` is about 240 ms at the median and 480 ms at the 95th percentile, against
+1 to 8 ms expected. The run of 2026-09-15 is the first since received bytes are collected until the
+line is quiet (ADR-0039), and the numbers are those of a delivery that ends at
+`receive.maxWaitMs`, 500 ms, with a chunk waiting half of that on average; this change did not look further. The expectations were written for a delivery per read and stand as written; `receive: { idleMs: 0 }` restores that
+behaviour. Throughput is not affected.
 
-In Microsoft Edge 153, the `SharedWorker` ends when the renderer of the page that started it
-crashes, and it survives the crash of any other page (checked separately, by listing the browser's
-worker targets before and after each kind of crash). The page that started the worker is usually
-the first one opened, which is also the first to hold the port - as in the benchmark. The tab that
-takes the port over is not affected: it reports `open` as soon as the browser frees the lock, and
-it can read and write. Every other tab has lost its connection to the worker, shows
-`reconnecting`, and learns that the worker is gone only when three heartbeats, 15 seconds apart,
-have gone unanswered (ADR-0021); it then starts a new worker, reports `BROKER_UNAVAILABLE` through
-`onError`, and is `open` again. In a separate check, a write issued by such a tab right after the
-crash ended in `WRITE_TIMEOUT` after its five-second deadline. On the `BroadcastChannel` transport
-there is no worker, and every tab is `open` again as soon as the first one is.
-
-This is not fixed yet. The fix is the one ADR-0021 names as its upgrade path: a Web Lock the worker
-holds for as long as it lives, which every tab waits for, so that a tab learns of a dead worker as
-soon as the browser frees that lock. That should bring the wait down to the time the platform takes
-to notice the crash, but it changes the message bus and is left for a change of its own, measured
-again with this benchmark. Until then, an application that must not lose its other tabs for a minute
-after a crash can call `SerialBroker.configure({ transport: 'broadcastchannel' })` before the first
-`setup()`: [the message bus](shared-ports.md#the-message-bus) behaves the same on it, at a little
-more work per message.
+**Fixed: after a crash of the tab that started the `SharedWorker`, the other tabs waited about a
+minute.** In Microsoft Edge 153 the `SharedWorker` ends when the renderer of the page that started
+it crashes - usually the first tab, which is also the first to hold the port. The run of 2026-09-14
+measured `handover/crash` `everyTab` on the `SharedWorker` transport at 60 seconds at the median:
+every tab but the one taking the port over learned that the worker was gone only when three
+heartbeats had gone unanswered. Since ADR-0041 the worker holds a Web Lock for its lifetime, which
+every tab waits on; the run of 2026-09-15 measured `everyTab` at 325 ms at the median and 676 ms at
+the 95th percentile, as close to `wall` as on the `BroadcastChannel` transport.
 
 ### Over the expectation, by less than ten times
 
-- **A handover after a crash, for the first tab** (`wall`): 670 ms at the median on the
-  `SharedWorker` transport and 307 ms on `BroadcastChannel`, against 250 ms, with a 95th
-  percentile of 840 and 640 ms. Almost none of it is the library's: `library` - the same moment
+- **A handover after a crash** (`wall` and `everyTab`): 315 ms at the median on the `SharedWorker`
+  transport and 368 ms on `BroadcastChannel`, against 250 ms, with a 95th percentile of 671 and
+  668 ms (the run of 2026-09-14: 670 and 307 ms, 840 and 640 ms). Almost none of it is the library's: `library` - the same moment
   against a plain Web Lock the crashed page held, freed by the browser in the same crash - is 5 to
   8 ms on both transports. The rest is Chromium noticing that the renderer is gone, plus the
-  DevTools round trip that orders the crash. The platform's part is larger on the `SharedWorker`
-  transport, where the worker ends with the crashed page; the benchmark does not say why. In a
+  DevTools round trip that orders the crash. In a
   separate check, the first crash after the browser started took about twice as long as the ones
   after it. The expectation stays at 250 ms, so that the next run is judged against the same line.
 
@@ -184,8 +175,8 @@ more work per message.
   that does not hold the port on the `SharedWorker` transport closest to the line. The expectations
   reasoned from tens of microseconds a hop where the process spends a few; they stand as written,
   and a result is compared with them, not with the last run.
-- **The harness cannot show the limit above.** Its worker is a fake that outlives every tab, and
-  its handover has two tabs, the second of which takes the port over.
+- **The harness cannot show a worker that ends with a crashed tab.** Its worker is a fake that
+  outlives every tab, and its handover has two tabs, the second of which takes the port over.
 
 Anything that changes this section - a result that crosses the line, a fix, a limit - is recorded
 here with the run that found it.
@@ -198,9 +189,8 @@ here with the run that found it.
 - The browser numbers are one machine, one browser version, one day. They are recorded so that a
   change in the library can be compared against them, not as a promise.
 - A hidden tab is throttled by the browser to about one timer a minute, which slows nothing in
-  these scenarios - deliveries and writes are messages, not timers - but delays a heartbeat, and
-  so the reconnect in the limit above, to about four minutes (ADR-0021); see
-  [Shared ports](shared-ports.md) for what throttling means.
+  these scenarios - deliveries, writes and a lost worker are messages and Web Locks, not timers;
+  see [Shared ports](shared-ports.md) for what throttling means.
 
 ## Running the benchmarks
 

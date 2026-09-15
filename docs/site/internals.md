@@ -92,25 +92,24 @@ The bus is an interface, `Transport`, with two implementations [ADR-0006, ADR-00
 - **`SharedWorkerTransport`** connects to a `SharedWorker` running the `Broker`. The broker tracks
   which tabs participate in which configuration, and routes each message to `all` participants of a
   configuration or to one tab. It knows no owner: a write request goes to every participant, and only
-  the tab holding the addressed term acts on it [ADR-0040]. A tab that
-  dies sends no goodbye, so every tab on the worker also sends a heartbeat, and the broker forgets
-  one that stays silent for three minutes. The worker can die too, and tells nobody: the broker
-  answers every heartbeat, and a tab whose last three heartbeats went unanswered reports
-  `BROKER_UNAVAILABLE`, starts a new worker, and restores its part there with a heartbeat
-  [ADR-0021].
+  the tab holding the addressed term acts on it [ADR-0040]. A port tells nobody when the context at
+  its other end goes away, so liveness is Web Locks [ADR-0041]: every tab holds a lock named after
+  its identity for its lifetime, and the worker forgets the tab when the browser grants it the lock;
+  the worker holds a lock for its lifetime, named in its `welcome`, and a tab granted that lock
+  reports `BROKER_UNAVAILABLE`, starts a new worker, and restores its part there with a `hello`.
 - **`BroadcastChannelTransport`** sends every message to every tab; each tab keeps a message only
   if it is addressed to a configuration it participates in, or to its own identifier.
 
 Because routing depends only on the addressed envelope, and ownership only on the Web Lock, the two
 behave identically. Messages meant only for a broker, or written by one - `hello`, `welcome`,
-`heartbeat`, `goodbye`, `attach`, `detach`, `worker-log` - reach nobody above either transport.
+`worker-log` - reach nobody above either transport.
 
 Every script of the origin can reach the bus as well, so the worker trusts a port with no more than
 it said about itself (`WorkerPorts`). A port's first message must be `hello`, and names the identity
 the port speaks as from then on; a message before it, or in another sender's name, is dropped. An
-identity may have several ports - a tab that gave up on a worker that hung connects to it again on a
-new one - so a later port never takes an identity's messages from its earlier ports: each of them
-receives them, until the sweep finds a port silent. A `goodbye` ends only the port it arrived on.
+identity may have several ports - a tab that gave up on a worker that did not welcome it in time may
+reach it again on a new one - so a later port never takes an identity's messages from its earlier
+ports: each of them receives them, until the identity's lock is let go.
 Nothing the worker routes depends on believing an identity [ADR-0040]. The test harness routes
 through the same class. `SECURITY.md` lists what this does and does not protect.
 
@@ -123,9 +122,10 @@ amended].
 
 In the default mode the worker transport is wrapped in a `FallbackTransport`. A `SharedWorker`
 whose script answers 404 is still created; the browser reports the failure afterwards. So until
-the broker's `welcome` arrives, the wrapper keeps everything the tab sent. If the failure comes
-first, none of it reached anyone, and it is replayed over a `BroadcastChannel` — exactly once, in
-order — before the tab carries on there.
+the broker's `welcome` arrives, the wrapper can still move. If the failure comes first, none of what
+the tab sent reached anyone: the tab carries on over a `BroadcastChannel`, attached to what it takes
+part in, and restates its status or asks for it, as after reaching a new worker [ADR-0041]. A worker
+that has not welcomed the tab 45 seconds after it was started is treated the same way.
 
 The same happens when the worker script is of another protocol version, such as a copied worker
 file left over from an earlier release. The `hello` and the `welcome` are the one exchange whose
@@ -135,7 +135,7 @@ in its own. A tab that receives a message in another version on the worker's por
 
 Where nothing falls back — with `transport: 'sharedworker'`, or on a worker started in place of one
 that died — such a worker answers `hello` and nothing else, and its silence is no crash. The tab
-closes its port, stops its heartbeats and starts no other worker, since one started from the same
+closes its port and starts no other worker, since one started from the same
 URL runs the same script; only a reload helps [ADR-0024, amended].
 
 ## The protocol between tabs
@@ -149,11 +149,9 @@ the same way: participants, ports per participant, and configurations.
 
 | Message                                     | Sent by                 | Purpose                                                                     |
 | ------------------------------------------- | ----------------------- | --------------------------------------------------------------------------- |
-| `hello`, `goodbye`                          | every tab on the worker | Announce a tab to the broker; leave cleanly.                                |
-| `welcome`                                   | the broker              | Answers `hello` and every `heartbeat`: the worker script runs and is alive. |
+| `hello`                                     | every tab on the worker | Announces a tab and every configuration it takes part in; sent on change.   |
+| `welcome`                                   | the broker              | Answers `hello`: the script runs; names the lock the worker holds.          |
 | `worker-log`                                | the broker              | One of the worker's own records, for the tab's logger [ADR-0029].           |
-| `heartbeat`                                 | every tab on the worker | Keeps a tab known to the broker, and restores what it takes part in.        |
-| `attach`, `detach`                          | every tab               | Start or stop participating in a configuration.                             |
 | `owner-claimed`, `owner-released`           | the owner               | A term of holding the port began; it ended, as its last message.            |
 | `status-request`                            | a tab that just set up  | Asks the owner to restate the status, or to retry where it gave up.         |
 | `status`                                    | the owner               | The connection status changed, with the owner's tab limit, device and term. |
@@ -279,7 +277,7 @@ and the [Performance](performance.md) chapter records the results [ADR-0037].
 | 0018 | Expose coordination internals to operators through a diagnostics observer           |
 | 0019 | Ship the debugging surface in the package, as static content                        |
 | 0020 | Build the developer documentation with Sphinx, MyST and a TSDoc-generated reference |
-| 0021 | Forget tabs that stop sending heartbeats                                            |
+| 0021 | Forget tabs that stop sending heartbeats (superseded by 0041)                       |
 | 0022 | Version stored configurations separately from the protocol                          |
 | 0023 | Announce the protocol version on an unversioned channel                             |
 | 0024 | Keep the handshake with the worker readable by every protocol version               |
@@ -297,3 +295,4 @@ and the [Performance](performance.md) chapter records the results [ADR-0037].
 | 0038 | Leave a write the device has not taken in flight                                    |
 | 0039 | Collect received bytes until the line is quiet                                      |
 | 0040 | Route to all participants; drop the identity secret                                 |
+| 0041 | Tell who is still there through Web Locks, not heartbeats                           |

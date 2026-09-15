@@ -124,3 +124,10 @@ tabs that fell back.
 
 `test/unit/worker-transport-liveness.test.ts` and
 `test/integration/multi-tab/worker-script-fallback.test.ts`.
+
+## Note (2026-09-15): no heartbeats
+
+Where this record says the tab stops its heartbeats, read that it stops waiting on the worker: a tab
+learns that a worker ended from the Web Lock the worker holds for its lifetime, and a worker that
+never welcomes it from the handshake deadline
+([ADR-0041](./0041-tell-liveness-through-web-locks.md)).
