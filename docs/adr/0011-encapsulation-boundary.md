@@ -1,7 +1,6 @@
 # ADR-0011: Expose nothing about the coordination mechanism
 
-- **Status:** Accepted, amended by [ADR-0018](./0018-diagnostics-observer.md) and
-  [ADR-0025](./0025-limit-the-tabs-using-a-configuration.md)
+- **Status:** Accepted
 - **Date:** 2026-09-12
 
 ## Context
@@ -15,34 +14,39 @@ microseconds later, and any code built on that belief is a race.
 
 ## Decision
 
-The public surface exposes **no** owner identity, no participant identity, no participant
-count, no lock state, no transport identity, no worker reference and no `SerialPort` object.
+The public surface of the main entry point exposes **no** owner identity, no participant identity,
+no participant count, no lock state, no transport identity, no worker reference and no `SerialPort`
+object.
 
 Concretely:
 
-- `getStatus(name)` returns `{ status, vendorId, productId, serialOptions, since,
-lastErrorCode }` - the condition of the _connection_, never of the _coordination_.
-- The `status` union describes what an application can act on: `idle`, `awaiting-permission`,
-  `connecting`, `open`, `reconnecting`, `failed`, `released`. Whether the local context or a
-  peer is doing the connecting is not represented, because it must not matter.
-- `onSend` carries `origin: 'local' | 'remote'` - whether _this_ context issued the write.
-  That is information about the caller's own action, not about the coordination topology, and
-  it is the minimum needed to satisfy the requirement that a tab can tell its own echo from a
-  peer's traffic. No peer identifier is included.
-- Diagnostics that would reveal the mechanism exist only through the opt-in `Logger` at
-  `debug` level, which is explicitly documented as unstable and not covered by SemVer.
+- `getStatus(name)` returns `{ name, status, deviceKind, vendorId, productId, serialOptions, since,
+observedAt, lastErrorCode }` - the condition of the _connection_ and the device in effect, never
+  of the _coordination_.
+- The `status` union describes what an application can act on: `idle`, `queued`,
+  `awaiting-permission`, `connecting`, `open`, `reconnecting`, `failed`, `released`. Whether the
+  local context or a peer is doing the connecting is not represented, because it must not matter.
+  `queued` says that the tab limit the application itself set is reached, and nothing about which
+  tab holds the port ([ADR-0025](./0025-limit-the-tabs-using-a-configuration.md)).
+- `onSend` carries `origin: 'local' | 'remote'` - whether _this_ context issued the write. That is
+  information about the caller's own action, not about the topology, and the minimum needed for a
+  tab to tell its own echo from a peer's traffic. No peer identifier is included.
+- Operators, not applications, see the mechanism: through the separate, read-only entry point
+  `serial-broker/diagnostics` ([ADR-0018](./0018-diagnostics-observer.md)), and through the opt-in
+  `Logger`. Neither is reachable from the main entry point's API, and neither is covered by SemVer.
 
 ## Alternatives considered
 
-- **Expose `isOwner` read-only.** Every reviewer asks for it. Rejected: it is stale the moment
-  it is read, it invites exactly the branching this decision prevents, and no legitimate
-  application need for it survived examination - the library already routes writes from any
-  context, so there is nothing an owner can do that a participant cannot.
-- **Expose a participant count.** Useful for dashboards, but it leaks the topology and
-  fluctuates during transfers. If a genuine need appears, it can be added later as an opt-in
-  diagnostic; removing it later would be breaking, so it is not added speculatively.
+- **Expose `isOwner` read-only.** Every reviewer asks for it. Rejected: it is stale the moment it
+  is read, it invites exactly the branching this decision prevents, and no legitimate application
+  need for it survived examination - the library already routes writes from any context, so there
+  is nothing an owner can do that a participant cannot.
+- **Expose a participant count.** Useful for dashboards, but it leaks the topology and fluctuates
+  during transfers. Operators get it from diagnostics.
 - **Expose the `SerialPort`.** Would let one tab close a port other tabs depend on and would
   break every invariant the library maintains. Never.
+- **Diagnostics on the main facade.** Puts "who owns the port" one autocomplete away from
+  application code (ADR-0018).
 
 ## Consequences
 
@@ -54,10 +58,19 @@ lastErrorCode }` - the condition of the _connection_, never of the _coordination
 
 ### Negative
 
-- Debugging a multi-tab deployment requires enabling the logger. Accepted, and the reason
-  the logger interface carries correlating fields on every record.
+- Debugging a multi-tab deployment needs the diagnostics entry point or a logger, not the
+  application's own API. Accepted; the logger carries correlating fields on every record.
 
 ## Verification
 
-A test asserts the exact set of keys on every public return value and event payload, so an
+`test/integration/encapsulation.test.ts` asserts the exact set of keys on every public return value
+and event payload, and that nothing diagnostic is exported from the main entry point, so an
 accidental leak fails the suite rather than shipping.
+
+## History
+
+- 2026-09-12: Accepted, with diagnostics only through the logger.
+- 2026-09-13: Operators see the mechanism through the diagnostics observer (ADR-0018); `queued`
+  added by the tab limit (ADR-0025).
+- 2026-09-14: `deviceKind` added to `getStatus()` (ADR-0036).
+- 2026-09-15: Key list and statuses brought up to date.

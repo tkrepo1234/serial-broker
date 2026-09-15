@@ -1,9 +1,8 @@
 # ADR-0000: Title in the imperative
 
-- **Status:** Proposed | Accepted | Superseded by ADR-NNNN | Deprecated
+- **Status:** Proposed | Accepted | Superseded by ADR-NNNN (YYYY-MM-DD)
 - **Date:** YYYY-MM-DD
 - **Deciders:** role or team
-- **Supersedes:** ADR-NNNN (optional)
 
 ## Context
 
@@ -32,3 +31,9 @@ rejected alternatives is a note, not a decision record.
 ## Verification
 
 How we know this decision holds: which tests, which manual checks.
+
+## History
+
+One line per change to the decision, oldest first: `- YYYY-MM-DD: what changed (and the record it
+came from, if one was folded in).` A superseded record keeps only its title, status, date, the
+decision as first recorded in one sentence, and a one-line trail (ADR-0001).

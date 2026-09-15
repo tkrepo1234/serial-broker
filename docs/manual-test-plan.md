@@ -100,7 +100,7 @@ appears as an ordinary USB serial device with a COM port. It is a loopback like 
 adapter below, and it can be unplugged, hung mid-write and made to split its answers on command,
 which covers steps 13–17, 21 and 24 better than hardware can. Setup, commands and the mapping to
 each step are in [`emulator/README.md`](../emulator/README.md); the reasoning is in
-[ADR-0017](./adr/0017-usbip-device-emulator.md).
+[ADR-0035](./adr/0035-browser-tests-with-playwright.md).
 
 A run with the emulator is recorded like any other run, naming the emulator and the usbip-win2
 version instead of a device. It does not replace the run on real hardware that a release needs:

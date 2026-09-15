@@ -1,12 +1,7 @@
 # ADR-0018: Expose coordination internals to operators through a diagnostics observer
 
-- **Status:** Accepted, amended by [ADR-0031](./0031-bound-and-rate-limit-what-the-bus-can-cost-a-tab.md)
+- **Status:** Accepted
 - **Date:** 2026-09-13
-- **Amends:** [ADR-0011](./0011-encapsulation-boundary.md)
-
-> **Amendment (ADR-0031).** A context answers `diagnostics-request` only within a rate, and one
-> collection keeps at most `MAX_REPORTS_PER_COLLECTION` reports: a request id is broadcast, so
-> anything on the bus can answer it under as many identities as it invents.
 
 ## Context
 
@@ -19,19 +14,20 @@ It left one audience unserved. An **operator** looking at a deployment — a sup
 developer on a shop floor, the person who owns the machine — has questions ADR-0011 makes
 unanswerable: which tab holds the port, whether the owner is reconnecting and when it tries
 next, whether a tab is sitting on writes that never went out, whether every tab even runs the
-same settings. The only channel ADR-0011 left is the opt-in logger, which has to be enabled in
-advance, in every tab, in the application's own code.
+same settings. A logger has to be enabled in advance, in every tab, in the application's own code.
 
 The requirement (2026-09-13) is a debugging surface shipped with the library that shows every
 setting and every piece of status, for transparency towards the people running it.
 
-Two facts shape how that can be built:
+Three facts shape how that can be built:
 
 - **The facade is a module-level singleton.** A second entry point that read its state would
-  share nothing with it as soon as the two entry points were bundled separately, which is the
-  normal case for a separately published entry point.
+  share nothing with it as soon as the two entry points were bundled separately.
 - **The message bus already reaches every context of the origin**, from any page, with no
   cooperation from the application beyond using the library.
+- **The worker can reach no logger.** A `SharedWorker` is a context of its own, started by the
+  browser, and the logger an application configured belongs to a tab. What the worker records -
+  a refused message, an exceeded limit, a tab of another build - was written to nowhere.
 
 ## Decision
 
@@ -40,25 +36,37 @@ Diagnostics are a **separate, read-only entry point, `serial-broker/diagnostics`
 up no configuration, requests no Web Lock, and never answers for a port.
 
 - **Collecting.** The observer broadcasts `diagnostics-request` to every context on the bus. Each
-  context that has at least one configuration answers the observer with a
-  `diagnostics-report`: its transport, and per configuration its role, status, effective
-  settings, listener counts and pending writes, plus — in the owner — the supervisor's
-  connection state, attempt count, next scheduled attempt, queued writes and byte counters.
-  Nothing announces how many contexts exist, so a collection listens for a fixed window
-  (500 ms by default). The observer also lists this library's Web Locks through
-  `LockManager.query()` where the browser offers it.
+  context that has at least one configuration answers the observer with a `diagnostics-report`:
+  its transport, and per configuration its role, status, effective settings, listener counts and
+  pending writes, plus — in the tab holding the port — the supervisor's connection state, attempt
+  count, next scheduled attempt, queued writes, a stalled write and byte counters. Nothing announces
+  how many contexts exist, so a collection listens for a fixed window (500 ms by default). The
+  observer also lists this library's Web Locks through `LockManager.query()` where the browser
+  offers it.
 - **Watching.** The observer can join a configuration's broadcasts — and only its broadcasts —
   to stream traffic, status changes, errors and ownership changes as they cross the bus.
-- **The main entry point does not change.** `getStatus()`, the four events and every payload keep
-  exactly the keys ADR-0011 pinned, and a test asserts that nothing diagnostic is exported from
-  it.
-- **The wire protocol goes to version 2**, for the two new messages. The broker delivers a
-  `diagnostics-request` to every connected context, attached to a configuration or not; the
-  `BroadcastChannel` fallback already delivers configuration-less broadcasts to everyone. A
-  report is validated in full on arrival, like every other message (amended below).
+- **Bounded.** A context answers `diagnostics-request` only within `DIAGNOSTICS_ANSWER_RATE`, and one
+  collection keeps at most `MAX_REPORTS_PER_COLLECTION` reports and
+  `MAX_REPORT_CHARACTERS_PER_COLLECTION` characters: the request id is broadcast, so anything on the
+  bus can answer it under as many identities as it invents. The values are in
+  [ADR-0031](./0031-bound-and-rate-limit-what-the-bus-can-cost-a-tab.md).
+- **A report is filed, not validated in full.** It is only ever displayed, and the decoder already
+  holds it to its structure budget. Only what files it is checked - the sender, its transport,
+  version and time, and that its configurations are a list of named entries. What displays a report
+  reads it defensively.
+- **The worker's warnings reach the tabs.** The worker sends its `warn` and `error` records to every
+  connected context as `worker-log`, and each tab writes them to its own logger at the recorded
+  level, under the worker's own events (`worker.message-refused`, `worker.limit-exceeded`,
+  `broker.limit-exceeded`, `worker.other-protocol-version`, `worker.message-error`). Every warning
+  is written once per key, so what is forwarded is bounded without a budget; a record is forwarded
+  only if it decodes as a tab would decode it. `debug` and `info` records stay in the worker. A tab
+  logs a `worker-log` only from the broker's identity; `clientId` in it stays the identity the record
+  concerns, and `reportedBy` names the tab that wrote the copy.
+- **The main entry point does not change.** `getStatus()`, the events and every payload keep
+  exactly the keys ADR-0011 pins, and a test asserts that nothing diagnostic is exported from it.
 
-ADR-0011 is amended, not superseded: its boundary stands for the application-facing API, and
-this record adds the one deliberate exception and the reason it is an exception.
+This is the one deliberate exception to ADR-0011, and it is an exception for operators, not for
+application code.
 
 ## Alternatives considered
 
@@ -66,18 +74,25 @@ this record adds the one deliberate exception and the reason it is an exception.
   the one ADR-0011 exists to prevent: it puts "who owns the port" one autocomplete away from
   application code. Rejected.
 - **A second entry point reading the facade's singleton.** Hidden coupling, and broken outright
-  when the entry points are bundled separately — each bundle gets its own singleton, and the
-  diagnostics one sees an empty library. A global registry would paper over that at the cost of
-  a hidden global. Rejected.
-- **Asking the broker instead of the contexts.** The broker knows participants and the claimed
-  owner, but nothing about connections, writes or settings, and the `BroadcastChannel` fallback
-  has no broker at all. Rejected.
-- **A diagnostics page that is a full participant** — sets the configuration up and reads its
-  own state. It would see only its own view, and it would join the election: close the
-  application's tabs and the port moves to the page that was only meant to be watching.
-  Rejected; the page can still set configurations up deliberately, through the public API.
-- **Logger only.** What ADR-0011 left. Requires enabling in advance, in the application's code,
-  in every tab, and produces a stream rather than a state. Kept as the complement, not the answer.
+  when the entry points are bundled separately. Rejected.
+- **Asking the broker instead of the contexts.** The broker knows participants, but nothing about
+  connections, writes or settings, and the `BroadcastChannel` fallback has no broker at all.
+- **A diagnostics page that is a full participant.** It would see only its own view, and it would
+  join the election: close the application's tabs and the port moves to the page that was only
+  meant to be watching.
+- **Logger only.** Requires enabling in advance, in the application's code, in every tab, and
+  produces a stream rather than a state. Kept as the complement, not the answer.
+- **Validate every field of a report on arrival.** What the decoder did until 2026-09-15, in some 150
+  lines repeating the report's type, for data that is only displayed.
+- **Send the worker's records only to the tab concerned.** Half of them concern a port that is no
+  participant, and a refused message is as likely to come from the script causing the trouble as
+  from the tab suffering it.
+- **Let the worker hold its records and hand them out on request.** Reaches an operator only while
+  an observer is open, and makes the worker hold state ([ADR-0006](./0006-sharedworker-as-message-broker.md)).
+- **Give the worker a `console`, or forward every level.** A worker's console goes to its own
+  inspector page; `debug` and `info` are per message and would become the bus's busiest traffic.
+- **An interval budget for forwarded records.** What the forwarding had until 2026-09-15; writing
+  each warning once per key bounds the same thing with less code.
 
 ## Consequences
 
@@ -85,38 +100,38 @@ this record adds the one deliberate exception and the reason it is an exception.
 
 - An operator can see every tab of an origin, every configuration and every setting from one
   page, without changing the application and without disturbing ownership.
-- The state that decides failover and the write guarantee — roles, started writes, reconnect
-  timing — is inspectable in a real browser, which also makes the manual test plan checkable
-  rather than inferred.
+- The state that decides failover and the write guarantee is inspectable in a real browser, which
+  also makes the manual test plan checkable rather than inferred.
+- A refused message, an exceeded limit or a stale worker script is visible in the application's
+  logger, where every other record is.
 
 ### Negative
 
-- The internals described in a report become visible, and anything visible attracts
-  dependence. Mitigated by the separate entry point, by the documentation, and by allowing report
-  types to grow in minor releases; not prevented.
-- Protocol version 2 partitions from version 1 (ADR-0008). Version 1 was never released.
+- The internals described in a report become visible, and anything visible attracts dependence.
+  Mitigated by the separate entry point and the documentation; not prevented.
 - A collection is a window, not a transaction: a tab that answers late is missing from it, and
-  every report is stale on arrival.
+  every report is stale on arrival. A legitimate burst beyond the answer rate gets fewer answers.
 - Reports describe traffic volume and pending writes, never payload bytes; the watch stream does
-  carry payloads, exactly as every participant already receives them. A page that uses it sees
-  what the device says. That is the purpose of a debugging surface, and why it is not in the main
-  entry point.
+  carry payloads, exactly as every participant receives them.
+- Each forwarded worker record is written once per tab, told apart by `reportedBy`, and a tab that
+  connects after a record was written never sees it.
 
 ## Verification
 
-- `test/integration/multi-tab/diagnostics-observer.test.ts`, on both transports: reports from
-  every tab with roles and settings, the owner's connection state, pending writes, listener
-  counts, lock listing, streamed events — and that observing never changes who owns the port.
+- `test/integration/multi-tab/diagnostics-observer.test.ts`, on both transports: reports from every
+  tab with roles and settings, the owner's connection state, pending writes, listener counts, lock
+  listing, streamed events, that observing never changes who owns the port, and a collection
+  answered under invented identities held to its bounds.
 - `test/unit/decode-diagnostics.test.ts` and the decode matrix: a report that cannot be filed is
-  rejected (see the amendment below).
+  rejected.
+- `test/unit/worker-ports.test.ts` and `test/unit/transports.test.ts`: records go to every connected
+  port, `debug` and `info` go nowhere, and a tab logs a forwarded record only from the broker.
 - `test/integration/encapsulation.test.ts`: the main entry point exports nothing diagnostic.
 
-## Amendment (2026-09-15): a report is filed, not validated in full
+## History
 
-A report used to be checked field by field on arrival, in some 150 lines that repeated its type. It
-is only ever displayed, and the decoder already holds it to its structure budget: a tree of plain
-values of bounded size. So only what files it is checked now - the sender, its transport, version and
-time, and that its configurations are a list of named entries. Below that, a report says what its
-context sent, which may be a build that reports differently, and what displays it reads it
-defensively: the debugging surface leaves the other tabs' reports out until the next collection when
-one cannot be shown. A collection keeps the contexts it has heard from in a set.
+- 2026-09-13: Accepted.
+- 2026-09-14: Answer rate and collection bounds (ADR-0031); the worker's warnings forwarded to the
+  tabs within a budget (ADR-0029).
+- 2026-09-15: A report is filed rather than validated in full; forwarding once per key, no budget.
+  ADR-0029 folded in.

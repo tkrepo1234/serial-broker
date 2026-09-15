@@ -1,12 +1,7 @@
 # ADR-0025: Limit how many tabs use a configuration at once
 
-- **Status:** Accepted, amended by [ADR-0030](./0030-hold-a-web-lock-for-every-term-of-holding-the-port.md) and 2026-09-15
+- **Status:** Accepted
 - **Date:** 2026-09-13
-- **Amends:** ADR-0011
-
-> **Amendment (ADR-0030).** The tab limit of the tab holding the port is part of the name of that
-> term's Web Lock, and `owner-claimed` carries it as `status` does. A tab therefore withdraws only
-> for a limit the tab holding the port demonstrably runs, never for one a message claims.
 
 ## Context
 
@@ -19,8 +14,8 @@ Tabs of other origins and other programs cannot be counted: they share neither W
 message bus. A port they hold already makes `open()` fail, and the owner retries until it is free.
 
 Web Locks offer an exclusive lock and a shared one, but no lock that `n` holders may share. The
-broker knows the tabs attached to a configuration, but the `BroadcastChannel` fallback has none, and
-the broker notices a dead tab only after three minutes of silence (ADR-0021).
+`BroadcastChannel` fallback has no broker that could count tabs, and a count kept on the bus can be
+forged by any script of the origin.
 
 ## Decision
 
@@ -28,8 +23,7 @@ A configuration takes `maxTabs`: an integer from 1 to 100, or `Infinity`, the de
 
 With a limit, a tab joins the bus and the ownership election only while it holds one of `maxTabs`
 **places**, each a Web Lock named `serial-broker/tab-slot/v<protocol>/<maxTabs>/<place>/<name>`.
-Until then its status is the new value `queued`: it receives nothing, and its writes wait for their
-deadline.
+Until then its status is `queued`: it receives nothing, and its writes wait for their deadline.
 
 Web Locks cannot wait for any one of several locks, so a tab first takes a **gate** lock,
 `serial-broker/tab-slot-gate/v<protocol>/<maxTabs>/<name>`, and only while holding it requests every
@@ -38,27 +32,33 @@ the same moment is returned at once, and the gate is released. Waiting tabs queu
 they are admitted in the order they arrived. A tab gives its place up last when it releases the
 configuration, after leaving the port and the bus; the browser gives it up when the tab dies.
 
-Every tab has to use the same limit. The limit is part of the lock names, so tabs that disagree hold
-separate sets of places, and the tab holding the port sends its limit with every `status` message.
-A tab that hears a different limit reports `CONFIGURATION_CONFLICT` to every tab, leaves the
-election, the bus and its place, and stays `failed` until the application releases the
-configuration and sets it up with the same limit. The tab holding the port decides. The `status`
-message gains `maxTabs`, so the protocol version becomes 6.
+**Every tab has to use the same limit, and the tab holding the port decides.** The limit is part of
+the lock names, so tabs that disagree hold separate sets of places. The tab holding the port runs
+its limit as part of the name of its term's Web Lock, and `owner-claimed` and `status` carry it; a
+tab believes the limit only because a held term lock names it
+([ADR-0030](./0030-hold-a-web-lock-for-every-term-of-holding-the-port.md)). A tab that learns of a
+different limit that way withdraws: it leaves the election, the bus and its place, reports
+`CONFIGURATION_CONFLICT` to its own listeners, and stays `failed` until the application releases the
+configuration and sets it up with the same limit.
 
-ADR-0011 withholds everything about coordination from the application. `queued` is an exception by
-request: it says that the limit the application itself set is reached, and still nothing about
-which tab holds the port.
+[ADR-0011](./0011-encapsulation-boundary.md) withholds everything about coordination from the
+application. `queued` is an exception by request: it says that the limit the application itself set
+is reached, and still nothing about which tab holds the port.
 
 ## Alternatives considered
 
 - **Count the tabs in the broker.** Exact while the worker lives, but the `BroadcastChannel`
-  fallback has no broker, a dead tab is counted for three minutes, and a restarted worker knows
-  nobody.
+  fallback has no broker, and a restarted worker knows nobody until the tabs say `hello` again.
 - **Poll the places with `ifAvailable`.** No queue order, and a timer in every waiting tab.
 - **Reject a tab beyond the limit.** Simpler, but every application would have to retry, and the
   tab that should take over after a crash would have to notice it. Tim chose waiting.
 - **Leave differing limits to documentation**, as for the other options. Two tabs with different
   limits would jointly exceed both, which defeats a limit meant to guarantee exclusive use.
+- **Believe the limit a `status` message states.** A forged status with another `maxTabs` made every
+  tab with a different limit withdraw for good. The term lock's name cannot be forged by a message.
+- **Report the conflict to every tab.** An `error` is believed only from a context speaking for a
+  term, so the withdrawing tab's report would not reach the holder anyway; it reports to its own
+  listeners.
 
 ## Consequences
 
@@ -85,11 +85,12 @@ which tab holds the port.
 `test/unit/tab-slot.test.ts` (places, queue order, a dying holder, leaving the queue) and
 `test/integration/multi-tab/tab-limit.test.ts` (in both transport modes: waiting and admission after
 a release and after a crash, the tab holding the port counted, writes while queued, a differing
-limit, validation, storage).
+limit, validation, storage); `test/integration/multi-tab/hostile-bus.test.ts` posts a status with
+another limit.
 
-## Amendment (2026-09-15): the conflict is reported in the withdrawing tab
+## History
 
-A tab that withdraws over a different tab limit reports `CONFIGURATION_CONFLICT` to its own listeners
-only. Tabs believe an `error` message only from a context that speaks for a term of holding the port,
-as they believe device data (ADR-0030), so the tab holding the port no longer hears the conflict.
-The gate for errors is `authorize()` in `client/owner-terms.ts`.
+- 2026-09-13: Accepted.
+- 2026-09-14: The holder's limit is part of its term lock's name, and believed only from it
+  (ADR-0030).
+- 2026-09-15: The conflict is reported in the withdrawing tab only.

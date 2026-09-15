@@ -82,8 +82,14 @@ consistently. Application-facing documentation says "the tab that holds the port
 Format: MADR-derived, see [`0000-template.md`](../adr/0000-template.md).
 
 - One decision per record. Numbered sequentially, never renumbered.
-- **Immutable once accepted.** A decision that changes gets a new ADR that supersedes the old
-  one; the old one is marked `Superseded by ADR-NNNN` and otherwise left untouched.
+- **One current record per decision** ([ADR-0001](../adr/0001-record-architecture-decisions.md)).
+  A decision that changes is folded into its current record, which is rewritten to state the
+  decision as it now stands and gains a one-line entry under **History**. No amendments are
+  appended.
+- A record whose decision was replaced, merged into another or retired becomes a stub of about ten
+  lines - `Superseded by ADR-NNNN (date)`, the original decision in one sentence, a one-line trail -
+  and keeps its number and file, so citations still resolve.
+- `docs/adr/README.md` lists the current records and the superseded trail.
 - Every ADR states what was **rejected** and why. An ADR without alternatives is a note, not
   a decision record.
 - Code that exists because of an ADR references it: `// See ADR-0005.`
