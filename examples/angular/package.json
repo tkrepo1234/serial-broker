@@ -28,5 +28,11 @@
     "@angular/compiler-cli": "^22.1.6",
     "@types/w3c-web-serial": "^1.0.8",
     "typescript": "~6.0.3"
+  },
+  "allowScripts": {
+    "esbuild": true,
+    "lmdb": false,
+    "msgpackr-extract": false,
+    "@parcel/watcher": false
   }
 }

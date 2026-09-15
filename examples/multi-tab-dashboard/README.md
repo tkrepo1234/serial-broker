@@ -95,10 +95,11 @@ npm run test:examples -- examples/multi-tab-dashboard/smoke.spec.ts
 
    `?url` makes Vite serve the file from your origin - and, in a production build, copy it into
    `dist/assets/` under a hashed name. A `SharedWorker` is identified by its script URL, so every
-   tab has to load it from the same URL of the same origin. The library's default resolves the
-   worker next to its own entry point with `import.meta.url`, which does not survive bundling.
-   With another bundler, copy `node_modules/serial-broker/dist/serial-broker.worker.js` into your
-   static files and pass that path.
+   tab has to load it from the same URL of the same origin. Vite would also find the script
+   through the library's own `new URL(..., import.meta.url)`; naming it puts that one URL in one
+   line ([Installing](../../docs/site/installing.md#the-worker-script)). With a toolchain that does
+   not understand that pattern, copy `node_modules/serial-broker/dist/serial-broker.worker.js`
+   into your static files and pass that path.
 
 4. **Configure before the first call.** `configure()` is read when the library builds its
    internals, which the first `setup()` or `restore()` does. In `app.ts` it is the first thing

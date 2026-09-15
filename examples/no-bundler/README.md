@@ -103,9 +103,9 @@ Chrome or Edge is required - Web Serial exists nowhere else - and a secure conte
    other. Serving the library under a sub-path (`https://host/scale/serial-broker/`) means both
    the import map and `workerUrl` change together.
 
-4. **Subscribe, then read the status once.** Between `setup()` resolving and the listener being
-   registered, the status may already have moved on, so `app.js` calls `getStatus()` right after
-   subscribing.
+4. **Subscribe to the status.** A new listener is told the current status once, right after
+   `subscribe()` returns, with `previousStatus` equal to `status`, so nothing is missed between
+   `setup()` resolving and the listener being registered.
 
 5. **Show the connect button for `awaiting-permission` only**, and call `requestAccess()` as the
    first thing in its click handler - no `await` before it.

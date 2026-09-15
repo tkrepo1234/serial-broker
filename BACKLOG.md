@@ -185,8 +185,9 @@ after this many iterations is what hardens the product now.
       for the options); the drift found was fixed, and `test/unit/documentation.test.ts` checks
       documented defaults, ranges and log events against the source.
 - [x] The ADR index shows only current decisions (24) plus a superseded trail (17 stubs).
-- [ ] No two tests pin the same behaviour; no test covers code that is gone. The duplicates the
-      inventory named were removed; a full second pass over every test file was not made.
+- [x] No two tests pin the same behaviour; no test covers code that is gone. The duplicates the
+      inventory named were removed, and a second pass over every test file on 2026-09-15 took the
+      in-process suite from 1 410 to 1 345 tests; what it kept on purpose is in the CHANGELOG.
 - [x] The repository root and every directory contain only what is used, and the top-level README
       describes the layout.
 
@@ -220,11 +221,14 @@ round"). All nine example applications exist with smoke tests. The usability rev
 - P2 to P4 change the API's behaviour; weigh them in the complexity reduction, where each removes
   a step every example now takes.
 - Examples: done on 2026-09-15 - `examples/openui5`'s regular expression uses escapes, and its
-  Reader runs in auto mode, so it no longer takes the Printer's port and one example shows the mode. The
-  minimal and multi-tab-dashboard READMEs contradict each other on whether Vite rewrites the
-  library's `new URL(..., import.meta.url)`. The Angular example's `npm install` warns that install
-  scripts of esbuild, lmdb, msgpackr-extract and @parcel/watcher are not approved. The Svelte
-  example's `$state.snapshot(options)` is unnecessary.
+  Reader runs in auto mode, so it no longer takes the Printer's port and one example shows the mode.
+  The minimal and multi-tab-dashboard READMEs agree with Installing: Vite finds the worker through
+  `new URL(..., import.meta.url)`, and naming it is recommended. The Angular and OpenUI5 examples
+  record their install-script decisions in `allowScripts` (npm 11): esbuild's check of its binary
+  runs; lmdb, msgpackr-extract and @parcel/watcher use their prebuilt binaries instead of compiling;
+  the UI5 tooling scripts, which only edit `ui5.yaml` when asked to, do not run. The Svelte
+  example's `$state.snapshot(options)` stays: the options may be a `$state` proxy, which cannot be
+  passed between tabs.
 
 ### Performance
 
@@ -274,27 +278,27 @@ Everything below holds, and nothing beyond it is part of this item.
 
 **Performance**
 
-- [ ] `npm run bench` runs the harness scenarios in under two minutes and writes their results,
+- [x] `npm run bench` runs the harness scenarios in under two minutes and writes their results,
       with the expectations next to them, to a Performance chapter of the documentation site.
-- [ ] The real-browser numbers for the scenarios above are recorded once in the same chapter, with
+- [x] The real-browser numbers for the scenarios above are recorded once in the same chapter, with
       browser, operating system and device or stand-in named.
-- [ ] `scripts/check-dist.mjs` reports the gzipped size of every build in CI. There is no size
+- [x] `scripts/check-dist.mjs` reports the gzipped size of every build in CI. There is no size
       budget (decided on 2026-09-14).
-- [ ] Every result more than ten times worse than its expectation has become a fix or a
+- [x] Every result more than ten times worse than its expectation has become a fix or a
       documented limit.
 
 **Example apps**
 
-- [ ] The apps above exist, one per framework integration. Each starts with one documented command, type-checks in CI, and has a
+- [x] The apps above exist, one per framework integration. Each starts with one documented command, type-checks in CI, and has a
       README that says what it shows.
-- [ ] A smoke test per app runs in CI against the stand-in: the page loads, connects, receives and
+- [x] A smoke test per app runs in CI against the stand-in: the page loads, connects, receives and
       sends.
 
 **Usability**
 
-- [ ] The step count for each task above is a table in the documentation, with the code for each
+- [x] The step count for each task above is a table in the documentation, with the code for each
       task, and the Web Serial comparison.
-- [ ] No task needs a concept beyond `setup`, `subscribe`, `requestAccess`, `send` and `release`,
+- [x] No task needs a concept beyond `setup`, `subscribe`, `requestAccess`, `send` and `release`,
       or the task has a written design proposal that removes the extra step.
 - [ ] The cold read is done for every app. Every logged question or guess is resolved, by a
       documentation fix or a recorded reason for leaving it, and the list is committed.

@@ -21,5 +21,9 @@
     "typescript": "^6.0.3",
     "ui5-tooling-modules": "^3.38.3",
     "ui5-tooling-transpile": "^3.13.1"
+  },
+  "allowScripts": {
+    "ui5-tooling-modules": false,
+    "ui5-tooling-transpile": false
   }
 }

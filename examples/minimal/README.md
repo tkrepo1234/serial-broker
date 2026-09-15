@@ -116,8 +116,8 @@ npm run test:examples -- examples/minimal/smoke.spec.ts
    so it is visible in one place. With another toolchain, copy
    `node_modules/serial-broker/dist/serial-broker.worker.js` to your static files and pass that
    path to `configure()` instead. Every tab must load it from the same URL.
-3. **Copy the calls above** into your page: `setup()` on every load, the three subscriptions,
-   `getStatus()` after subscribing.
+3. **Copy the calls above** into your page: `setup()` on every load and the three subscriptions.
+   A new status listener is told the current status once, so the page needs no `getStatus()`.
 4. **Name your device.** Replace `device: { any: true }` with its USB ids, and `baudRate` with the
    device's. On Windows the ids are in Device Manager under _Hardware Ids_ (`VID_1A86&PID_7523`);
    the library's [debugging surface](../../docs/site/diagnostics.md#the-debugging-surface) reads
