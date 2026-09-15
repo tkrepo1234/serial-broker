@@ -37,6 +37,12 @@ Remembered configurations moved from **storage version 1 to 2** and are not migr
   `awaiting-permission` for the user to choose a port. `getStatus()` gains `deviceKind`.
 - **`setup()` with the same options starts a `failed` configuration again**, from any tab. Before,
   it did nothing; code that released first to try again still works but no longer needs to.
+- **With `connection.autoReconnect: false`, connection errors carry `isRetryable: false`**:
+  `DEVICE_DISCONNECTED`, `OPEN_FAILED`, `OPEN_TIMEOUT` and `READ_FAILED` say, in every tab, that
+  nothing retries them. Code that skips retryable errors now sees these losses.
+- **With `connection.autoReconnect: false`, a `failed` configuration stays `failed` through a
+  handover**: when the tab holding the port closes or crashes, the next tab does not connect, and the
+  other tabs keep `failed` instead of showing `reconnecting`. Call `setup()` again, in any tab.
 - **`requestAccess()` works in any tab taking part in a configuration.** `PERMISSION_REQUIRED` is
   left for a tab `queued` under `maxTabs` or one that withdrew.
 - **A write the device does not take in time no longer ends the connection.** `send()` still rejects
@@ -69,6 +75,11 @@ Remembered configurations moved from **storage version 1 to 2** and are not migr
 - **`connection.autoReconnect`** (default `true`): with `false`, a lost connection or failed attempt
   ends in `failed`, and nothing is retried - not even on replug - until `setup()` is called again
   (ADR-0010).
+- **Choosing a different device in auto mode**: `requestAccess(name, { chooseAgain: true })`
+  (`RequestAccessOptions`) opens an unfiltered picker in any tab taking part; the chosen port becomes
+  the device of every tab and is remembered, and the tab holding the port switches to it, also while
+  open (`supervisor.device-changed`). A configuration that names its device rejects with
+  `INVALID_ARGUMENT`. The debugging surface offers _Choose a different device…_ for it (ADR-0036).
 - **`WRITE_QUEUE_FULL`**: the tab holding the port keeps at most 4096 writes and 64 MiB of payload
   waiting, from every tab together; a write beyond that is refused, and nothing of it was written.
 - **The worker's records reach the application's logger** (ADR-0018): `worker.message-refused`,
@@ -121,8 +132,8 @@ Remembered configurations moved from **storage version 1 to 2** and are not migr
   `session.term-check-failed`, `session.term-watch-failed`, `session.data-without-a-term`,
   `session.status-answers-throttled`, `client.diagnostics-answers-dropped`,
   `diagnostics.limit-exceeded`, `supervisor.write-queue-full`, `supervisor.write-stalled`,
-  `storage.lookup-failed`, `storage.stale-name`, `transport.context-lock-failed`,
-  `transport.worker-watch-failed` and `worker.lock-failed`.
+  `supervisor.device-changed`, `storage.lookup-failed`, `storage.stale-name`,
+  `transport.context-lock-failed`, `transport.worker-watch-failed` and `worker.lock-failed`.
 - `PERMISSION_REQUIRED`, `DEVICE_DISCONNECTED` and `RECONNECT_EXHAUSTED` have new remediation texts;
   the package describes itself as built for industrial production interfaces, and the README went
   from 364 to 99 lines, linking the chapters instead of repeating them.
