@@ -387,11 +387,13 @@ export class Tab {
   /** Kills this tab's renderer: no unload handler runs, as in a crash or an out-of-memory kill. */
   async crash(): Promise<void> {
     const session = await this.page.context().newCDPSession(this.page);
+    // Listening before the crash is ordered: the event can arrive before a listener added afterwards.
+    const crashed = this.page.waitForEvent('crash');
     // Never resolves for a page that is gone; the crash itself is the result.
     void session.send('Page.crash').catch(() => {
       // The target is gone, which is what was asked for.
     });
-    await this.page.waitForEvent('crash');
+    await crashed;
   }
 }
 

@@ -196,10 +196,12 @@ class BenchTab {
   async crash(): Promise<number> {
     const session = await this.page.context().newCDPSession(this.page);
     const toldAt = Date.now();
+    // Listening before the crash is ordered: the event can arrive before a listener added afterwards.
+    const crashed = this.page.waitForEvent('crash');
     void session.send('Page.crash').catch(() => {
       // The target is gone, which is what was asked for.
     });
-    await this.page.waitForEvent('crash');
+    await crashed;
     return toldAt;
   }
 
