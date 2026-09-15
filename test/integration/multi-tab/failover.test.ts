@@ -90,8 +90,8 @@ describe.each(TRANSPORT_MODES)('ownership failover (%s)', (transport) => {
   it('fails a write the owner had begun as soon as the browser frees its lock, and never repeats it', async () => {
     const { harness, device, owner, peer } = await twoTabsSharingAPort();
 
-    // The owner reports `write-started` and then vanishes. Whether the device received the
-    // bytes is unknowable, so the only honest outcome is a specific error - and above all,
+    // The peer lets the owner begin the write, and the owner vanishes. Whether the device received
+    // the bytes is unknowable, so the only honest outcome is a specific error - and above all,
     // no retry. Repeating a command to industrial hardware is the one thing this library
     // must never do (ADR-0013).
     device.faults.hangOnWrite = true;

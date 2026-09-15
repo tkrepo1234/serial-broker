@@ -34,8 +34,13 @@ describe.each(TRANSPORT_MODES)('a tab that was frozen (%s)', (transport) => {
   it('resolves a write that succeeded while it was frozen, when its deadline runs before the result on resume', async () => {
     const { harness, device, participant } = await twoTabs();
 
+    // Let begin before the freeze - a frozen tab lets nothing begin (ADR-0013) - and taken by the
+    // device while it is frozen.
+    device.pauseWrites();
     const outcome = outcomeOf(participant.client.send('Reader', 'PING'));
+    await harness.settle();
     participant.freeze();
+    device.resumeWrites();
     await harness.advance(60_000);
     expect(device.writtenText()).toBe('PING');
 
@@ -44,6 +49,29 @@ describe.each(TRANSPORT_MODES)('a tab that was frozen (%s)', (transport) => {
 
     expect(await outcome).toBe('resolved');
   });
+
+  for (const order of ['timers-first', 'tasks-first'] as const) {
+    it(`begins nothing while the issuing tab is frozen, and says started: false on resume (${order})`, async () => {
+      const { harness, device, participant } = await twoTabs();
+
+      // Frozen before the tab holding the port could ask: nobody lets the write begin, and the
+      // holder stops waiting for the answer at its own writeTimeoutMs.
+      const outcome = outcomeOf(participant.client.send('Reader', 'PING'));
+      participant.freeze();
+      await harness.advance(60_000);
+      expect(device.written).toHaveLength(0);
+
+      await participant.resume(order);
+      await harness.advance(0);
+
+      expect(await outcome).toMatchObject({
+        code: SerialBrokerErrorCode.WRITE_TIMEOUT,
+        context: { started: false },
+      });
+      await harness.advance(10_000);
+      expect(device.written).toHaveLength(0);
+    });
+  }
 
   it('still times a write out that no word of arrived while it was frozen', async () => {
     const { harness, device, participant } = await twoTabs();
@@ -71,10 +99,13 @@ describe.each(TRANSPORT_MODES)('a tab that was frozen (%s)', (transport) => {
     await busy.client.setup('Reader', READER_OPTIONS);
     await harness.settle();
 
-    // The first tab's words about the write are later in the busy tab's queue than the second
-    // tab's claim, and the busy tab is frozen after hearing the claim.
-    busy.hold(first.client.clientId);
+    // The busy tab lets the first tab begin the write. The first tab's words after that are later in
+    // the busy tab's queue than the second tab's claim, and the busy tab is frozen after hearing it.
+    device.pauseWrites();
     const outcome = outcomeOf(busy.client.send('Reader', 'PING'));
+    await harness.settle();
+    busy.hold(first.client.clientId);
+    device.resumeWrites();
     await harness.settle();
     expect(device.writtenText()).toBe('PING');
     await first.close();

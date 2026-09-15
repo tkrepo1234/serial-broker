@@ -2,8 +2,8 @@
 
 | File | Built | Gzipped |
 | --- | --- | --- |
-| `dist/index.js` | 226.6 KB | 55.2 KB |
-| `dist/index.min.js` | 89.7 KB | 26.1 KB |
-| `dist/diagnostics.js` | 80.7 KB | 20.4 KB |
-| `dist/diagnostics.min.js` | 36.0 KB | 11.7 KB |
-| `dist/serial-broker.worker.js` | 62.1 KB | 16.3 KB |
+| `dist/index.js` | 242.5 KB | 59.8 KB |
+| `dist/index.min.js` | 93.0 KB | 27.5 KB |
+| `dist/diagnostics.js` | 78.2 KB | 19.9 KB |
+| `dist/diagnostics.min.js` | 35.1 KB | 11.4 KB |
+| `dist/serial-broker.worker.js` | 48.9 KB | 13.4 KB |

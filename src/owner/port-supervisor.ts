@@ -130,6 +130,11 @@ export class PortSupervisor {
   readonly #unanswered = new Map<Promise<void>, number>();
   #unansweredBytes = 0;
   readonly #once: OnceLog;
+  /**
+   * Ends the wait of the write asking its issuer whether it may begin, while one does: only the write
+   * next in the queue asks, so there is at most one. {@link stop} ends it at once.
+   */
+  readonly #answerWaits = new Set<() => void>();
   /** Incremented on every connection attempt, so a stale async continuation can be ignored. */
   #generation = 0;
   /** When the scheduled reconnect is due, while one is scheduled. Diagnostics only. */
@@ -212,6 +217,11 @@ export class PortSupervisor {
   }
 
   async #stop(): Promise<void> {
+    // A write waiting for its issuer's answer has not begun, and never will here: it goes back at
+    // once, rather than holding the close for as long as the answer may take.
+    for (const stopWaiting of [...this.#answerWaits]) {
+      stopWaiting();
+    }
     this.#generation += 1;
     const previous = this.#state;
     if (previous.kind === 'open') {
@@ -376,22 +386,24 @@ export class PortSupervisor {
    * another's. Large payloads are chunked, because devices with small receive buffers drop
    * the tail of an oversized write rather than applying back-pressure.
    *
-   * A write that has waited in the queue for `remainingMs`, or for this tab's own `writeTimeoutMs`
-   * if that is shorter, is never begun, and rejects with `WRITE_TIMEOUT` and `started: false`. Its
-   * issuer's deadline, which covers the whole journey and may be set differently in the issuing tab,
-   * has passed by then, and it was told the write did not start: writing it afterwards would put a
-   * command on the device the application may already have sent again (ADR-0013). It leaves the
-   * queue when its time is up, so a backlog behind a slow write holds no payloads nobody waits for.
+   * A write is begun only once `mayBegin` has said yes. The context that issued it decides: its
+   * deadline may already have told the caller that the write did not start, and writing it afterwards
+   * would put a command on the device the application may have sent again (ADR-0013). That context's
+   * `writeTimeoutMs` is its own and may differ from this tab's, and no clock of this tab can tell
+   * when it ran out - so it is asked.
+   *
+   * A write that has waited for this tab's own `writeTimeoutMs`, in the queue and for the answer
+   * together, is not begun either, and rejects with `WRITE_TIMEOUT` and `started: false`: an issuer
+   * that is gone or does not answer holds the queue no longer than a write of this tab's own would
+   * wait, and a backlog behind a slow write holds no payloads longer than that (ADR-0031).
    *
    * @param payload - The bytes to write.
-   * @param remainingMs - What was left of the issuer's deadline when it handed the write on. A
-   *   duration counted from now, since the issuer may be another context with a clock of its own.
-   * @param onStarted - Invoked at the moment the first byte is handed to the device. After
-   *   this point the write is no longer replayable: if this context dies now, whether the
-   *   device received the bytes is unknowable. See ADR-0013.
+   * @param mayBegin - Asked when the write is next and the port is open. `true` means the issuing
+   *   context counts the write as begun from now on: if this context dies before its result, whether
+   *   the device received the bytes is unknowable. See ADR-0013.
    */
-  write(payload: Uint8Array, remainingMs: number, onStarted: () => void): Promise<void> {
-    const written = this.#write(payload, remainingMs, onStarted);
+  write(payload: Uint8Array, mayBegin: () => boolean | Promise<boolean>): Promise<void> {
+    const written = this.#write(payload, mayBegin);
     // Settled before its caller hears of it: this reaction was registered first.
     this.#unanswered.set(written, payload.byteLength);
     this.#unansweredBytes += payload.byteLength;
@@ -439,13 +451,9 @@ export class PortSupervisor {
     );
   }
 
-  async #write(payload: Uint8Array, remainingMs: number, onStarted: () => void): Promise<void> {
+  async #write(payload: Uint8Array, mayBegin: () => boolean | Promise<boolean>): Promise<void> {
     const clock = this.environment.clock;
     const { writeTimeoutMs, maxWriteChunkBytes } = this.configuration.connection;
-    // The issuer's time, never more than this tab's own: a tab running a longer `writeTimeoutMs`
-    // would otherwise begin a write its issuer has already reported as never started, and a peer's
-    // number never keeps a payload here for longer than this tab keeps its own (ADR-0013, ADR-0031).
-    const waitLimitMs = Math.min(writeTimeoutMs, remainingMs);
     const queuedAt = clock.monotonicNow();
     let expiry: TimerHandle | undefined;
     // Rejected when a chunk outlives its deadline at the device, which tells the caller while the
@@ -461,20 +469,22 @@ export class PortSupervisor {
       // begun in that moment is one its issuer has given up on. On the monotonic clock, the one the
       // expiry timer runs on, so that the system clock being set forward or back neither refuses a
       // write that is still in time nor lets a lapsed one through (ADR-0032).
-      if (clock.monotonicNow() - queuedAt >= waitLimitMs) {
-        throw this.#waitedTooLong(payload.byteLength, queuedAt);
+      if (clock.monotonicNow() - queuedAt >= writeTimeoutMs) {
+        throw this.#notBegun('waited-too-long', payload.byteLength, queuedAt);
       }
+      // Asked only with a port to write to: a write that finds none goes back to its issuer as
+      // `NOT_CONNECTED`, to be handed on, without holding the queue for an answer.
+      this.#openConnection(payload.byteLength);
 
-      const state = this.#state;
-      if (state.kind !== 'open') {
-        throw new SerialBrokerError(SerialBrokerErrorCode.NOT_CONNECTED, 'The port is not open', {
-          configName: this.configuration.name,
-          context: { status: this.#status, byteLength: payload.byteLength },
-          timestamp: clock.now(),
-        });
+      const answer = this.#askToBegin(mayBegin, queuedAt + writeTimeoutMs - clock.monotonicNow());
+      const isApproved = typeof answer === 'boolean' ? answer : await answer;
+      // The answer may have crossed a lost connection, or this tab letting go of the port. The write
+      // has not begun, and `NOT_CONNECTED` says so to the issuer, which hands it on - including one it
+      // has just let begin (ADR-0013).
+      const state = this.#openConnection(payload.byteLength);
+      if (!isApproved) {
+        throw this.#notBegun('not-approved', payload.byteLength, queuedAt);
       }
-
-      onStarted();
 
       // One chunk at a time rather than all of them up front: a large payload with a small chunk size
       // would otherwise allocate a view per chunk - millions of them - before the first byte goes out.
@@ -538,8 +548,8 @@ export class PortSupervisor {
 
     expiry = clock.setTimer(() => {
       expiry = undefined;
-      queued.withdraw(this.#waitedTooLong(payload.byteLength, queuedAt));
-    }, waitLimitMs);
+      queued.withdraw(this.#notBegun('waited-too-long', payload.byteLength, queuedAt));
+    }, writeTimeoutMs);
 
     try {
       await Promise.race([queued.promise, stalled.promise]);
@@ -591,23 +601,88 @@ export class PortSupervisor {
     }
   }
 
+  /** The open connection, or `NOT_CONNECTED` for a write that finds none: it has not begun. */
+  #openConnection(byteLength: number): Extract<ConnectionState, { kind: 'open' }> {
+    const state = this.#state;
+    if (state.kind !== 'open') {
+      throw new SerialBrokerError(SerialBrokerErrorCode.NOT_CONNECTED, 'The port is not open', {
+        configName: this.configuration.name,
+        context: { status: this.#status, byteLength },
+        timestamp: this.environment.clock.now(),
+      });
+    }
+    return state;
+  }
+
   /**
-   * The error for a write that waited at the port until its deadline without being begun.
+   * Asks whether a write may begin, and takes no for an answer that has not come within `withinMs`.
+   *
+   * An answer given at once is returned as it is, so a write this context issued itself begins in the
+   * same turn it was approved in.
+   */
+  #askToBegin(
+    mayBegin: () => boolean | Promise<boolean>,
+    withinMs: number,
+  ): boolean | Promise<boolean> {
+    const answer = mayBegin();
+    if (typeof answer === 'boolean') {
+      return answer;
+    }
+    const clock = this.environment.clock;
+    const outcome = createDeferred<boolean>();
+    // Ended by whichever comes first: the answer, this tab's deadline, or `stop()`. Each wait
+    // registers with `stop()` for its own duration only - racing a promise that lives as long as the
+    // supervisor would attach one reaction per write to it, and keep every one of them.
+    const stopWaiting = (): void => {
+      outcome.resolve(false);
+    };
+    this.#answerWaits.add(stopWaiting);
+    const timer = clock.setTimer(stopWaiting, Math.max(0, withinMs));
+    answer.then(
+      (isApproved) => {
+        outcome.resolve(isApproved);
+      },
+      () => {
+        outcome.resolve(false);
+      },
+    );
+    return outcome.promise.finally(() => {
+      this.#answerWaits.delete(stopWaiting);
+      clock.clearTimer(timer);
+    });
+  }
+
+  /**
+   * The error for a write that was not begun: it waited at the port until this tab's deadline, or
+   * the context that issued it did not let it begin in that time.
    *
    * @param queuedAt - A {@link Clock.monotonicNow} reading, so that `waitedMs` is how long the write
    *   really waited rather than how far the system clock moved meanwhile.
    */
-  #waitedTooLong(byteLength: number, queuedAt: number): SerialBrokerError {
+  #notBegun(
+    reason: 'waited-too-long' | 'not-approved',
+    byteLength: number,
+    queuedAt: number,
+  ): SerialBrokerError {
     const waitedMs = this.environment.clock.monotonicNow() - queuedAt;
-    this.logger.debug('a write waited too long at the port and was not begun', {
-      configName: this.configuration.name,
-      event: 'supervisor.write-expired',
-      byteLength,
-      queuedWrites: this.#writes.depth,
-    });
+    const isExpired = reason === 'waited-too-long';
+    this.logger.debug(
+      isExpired
+        ? 'a write waited too long at the port and was not begun'
+        : 'the tab that issued a write did not let it begin, and it was not begun',
+      {
+        configName: this.configuration.name,
+        event: isExpired ? 'supervisor.write-expired' : 'supervisor.write-not-approved',
+        byteLength,
+        waitedMs,
+        queuedWrites: this.#writes.depth,
+      },
+    );
     return new SerialBrokerError(
       SerialBrokerErrorCode.WRITE_TIMEOUT,
-      'The write waited at the port until its writeTimeoutMs ran out and was not begun',
+      isExpired
+        ? 'The write waited at the port until its writeTimeoutMs ran out and was not begun'
+        : 'The tab that issued the write did not let it begin within writeTimeoutMs, and it was not begun',
       {
         configName: this.configuration.name,
         context: { started: false, byteLength, waitedMs },

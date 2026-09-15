@@ -167,9 +167,11 @@ later task.
 it has been written, for `onSend`. A 16 MiB payload is therefore copied into every tab, several times
 over while it is in flight. The tab holding the port hands it to the device in chunks of
 `connection.maxWriteChunkBytes`, one at a time, and each chunk has `connection.writeTimeoutMs` to be
-taken. The whole `send()` has `connection.writeTimeoutMs` as well, in the tab that issued it: for a
-large payload to a slow device, raise it to cover the whole write — up to ten minutes — or send the
-data as several calls, between which writes from other tabs may come.
+taken. The whole `send()` has `connection.writeTimeoutMs` as well, and each tab's writes are timed by
+its own setting, which tabs may set differently: the tab holding the port asks the issuing tab before
+it begins a write, and begins none that tab has given up. For a large payload to a slow device, raise
+it to cover the whole write — up to ten minutes — or send the data as several calls, between which
+writes from other tabs may come.
 
 ## Tabs that run for a long time
 

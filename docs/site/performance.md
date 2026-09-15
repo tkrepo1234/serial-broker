@@ -70,7 +70,9 @@ expectation stays what it was.
 For the harness, the expectations follow from what a hop costs: a structured clone of a few
 hundred bytes and a validation, tens of microseconds each. A chunk to one tab is two clones and a
 validation, so 0.1 ms at the median and 2 MB/s in a burst; every further tab adds one clone and
-one validation. A write from a tab that does not hold the port makes four hops. Handovers and
+one validation. A write from a tab that does not hold the port made four hops when these were
+written - the request, `write-started`, the result and `data-sent`; since the tab holding the port
+asks the issuing tab before it begins, it makes five. Handovers and
 starts wait on no timer, so they should take no simulated time and a couple of milliseconds of
 wall clock. After an hour, the heap should be within half a megabyte of where it started, with
 the same timers scheduled.

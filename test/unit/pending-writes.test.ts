@@ -19,8 +19,6 @@ interface Harness {
   readonly clock: FakeClock;
   /** Every request handed out for sending, in order, with its term. A repeat here is a repeated command. */
   readonly dispatched: string[];
-  /** What was left of each dispatched request's deadline when it was handed out, in the same order. */
-  readonly remaining: number[];
   /** The term of the tab holding the port, as far as the tracker is told. */
   setCurrentTerm(value: TermId | undefined): void;
   /** Ends a term, as its lock being freed does. */
@@ -34,7 +32,6 @@ interface Harness {
 function createHarness(options: { writeTimeoutMs?: number } = {}): Harness {
   const clock = new FakeClock();
   const dispatched: string[] = [];
-  const remaining: number[] = [];
   let current: TermId | undefined = FIRST;
   const ended = new Set<TermId>();
 
@@ -42,9 +39,8 @@ function createHarness(options: { writeTimeoutMs?: number } = {}): Harness {
     clock,
     configName: 'Reader',
     writeTimeoutMs: options.writeTimeoutMs ?? 5_000,
-    dispatch: (requestId, _payload, to, remainingMs) => {
+    dispatch: (requestId, _payload, to) => {
       dispatched.push(`${requestId}@${to}`);
-      remaining.push(remainingMs);
     },
     canDispatch: () => true,
     currentTerm: () => current,
@@ -56,7 +52,6 @@ function createHarness(options: { writeTimeoutMs?: number } = {}): Harness {
     writes,
     clock,
     dispatched,
-    remaining,
     setCurrentTerm: (value) => {
       current = value;
     },
@@ -88,6 +83,7 @@ const notConnected = (): SerialBrokerError =>
  * one direction loses a command; getting it wrong in the other executes it twice, and for a
  * device that cuts, dispenses or moves something, twice is materially worse than zero times.
  * A write belongs to the term it was handed to, and only that term ending decides it (ADR-0026).
+ * No term begins it without this tracker's approval, which is what makes `started: false` true.
  */
 describe('PendingWrites', () => {
   it('dispatches immediately to the current term when there is a connection', async () => {
@@ -141,7 +137,7 @@ describe('PendingWrites', () => {
   it('settles a started write with the result its term reports after a new owner claimed', async () => {
     const harness = createHarness();
     const outcome = outcomeOf(harness.writes.add(id('w1'), PAYLOAD));
-    harness.writes.markStarted(id('w1'), FIRST);
+    expect(harness.writes.approve(id('w1'), FIRST)).toBe(true);
 
     harness.setCurrentTerm(SECOND);
     harness.writes.dispatchWaiting();
@@ -156,7 +152,7 @@ describe('PendingWrites', () => {
     const harness = createHarness();
     let outcome: unknown = 'pending';
     void outcomeOf(harness.writes.add(id('w1'), PAYLOAD)).then((value) => (outcome = value));
-    harness.writes.markStarted(id('w1'), FIRST);
+    harness.writes.approve(id('w1'), FIRST);
 
     harness.endTerm(term('t0'));
     await Promise.resolve();
@@ -164,14 +160,14 @@ describe('PendingWrites', () => {
     expect(outcome).toBe('pending');
   });
 
-  it('takes a write for started only from the term it was addressed to', async () => {
+  it('lets only the term it was addressed to begin a write', async () => {
     const harness = createHarness();
     let outcome: unknown = 'pending';
     void outcomeOf(harness.writes.add(id('w1'), PAYLOAD)).then((value) => (outcome = value));
 
-    // Said by a tab that was never asked to write it. Taking it would tie the write to a term that
+    // Asked by a tab that was never asked to write it. Approving would tie the write to a term that
     // is not writing it, and lose it when that term ends (ADR-0030).
-    harness.writes.markStarted(id('w1'), SECOND);
+    expect(harness.writes.approve(id('w1'), SECOND)).toBe(false);
     harness.endTerm(SECOND);
     await flushMicrotasks();
 
@@ -215,15 +211,20 @@ describe('PendingWrites', () => {
     expect(harness.dispatched).toEqual(['w1@t1']);
   });
 
-  it('never dispatches again a write that had started, whoever declines it', () => {
+  it('never dispatches again a write it let begin, unless that term says it did not begin it', () => {
     const harness = createHarness();
     void outcomeOf(harness.writes.add(id('w1'), PAYLOAD));
-    harness.writes.markStarted(id('w1'), FIRST);
+    harness.writes.approve(id('w1'), FIRST);
 
-    harness.writes.handleResult(id('w1'), FIRST, notConnected());
     harness.writes.resendUnstarted();
-
+    harness.writes.dispatchWaiting();
     expect(harness.dispatched).toEqual(['w1@t1']);
+
+    // The port closed between the approval and the first byte: that term did not begin it, and the
+    // next attempt has to be approved again.
+    harness.writes.handleResult(id('w1'), FIRST, notConnected());
+    expect(harness.dispatched).toEqual(['w1@t1', 'w1@t1']);
+    expect(harness.writes.diagnostics().started).toBe(0);
   });
 
   it('resends an unstarted write to its own term, but not past a term that has not ended', () => {
@@ -241,7 +242,7 @@ describe('PendingWrites', () => {
   it('says in the timeout whether the write had started', async () => {
     const harness = createHarness({ writeTimeoutMs: 1_000 });
     const outcome = outcomeOf(harness.writes.add(id('w1'), PAYLOAD));
-    harness.writes.markStarted(id('w1'), FIRST);
+    harness.writes.approve(id('w1'), FIRST);
 
     await harness.clock.advance(1_000);
 
@@ -249,6 +250,33 @@ describe('PendingWrites', () => {
     // question for the caller, so the timeout has to carry it too.
     expect((await outcome) as SerialBrokerError).toMatchObject({
       context: { started: true, byteLength: 3 },
+    });
+  });
+
+  it('lets no term begin a write once its deadline has said it did not start (ADR-0013)', async () => {
+    const harness = createHarness({ writeTimeoutMs: 1_000 });
+    const outcome = outcomeOf(harness.writes.add(id('w1'), PAYLOAD));
+
+    await harness.clock.advance(1_000);
+
+    expect(await outcome).toMatchObject({
+      code: SerialBrokerErrorCode.WRITE_TIMEOUT,
+      context: { started: false },
+    });
+    expect(harness.writes.approve(id('w1'), FIRST)).toBe(false);
+  });
+
+  it('lets a write begin up to its deadline, and then never says it did not start', async () => {
+    const harness = createHarness({ writeTimeoutMs: 1_000 });
+    const outcome = outcomeOf(harness.writes.add(id('w1'), PAYLOAD));
+
+    await harness.clock.advance(999);
+    expect(harness.writes.approve(id('w1'), FIRST)).toBe(true);
+    await harness.clock.advance(1);
+
+    expect(await outcome).toMatchObject({
+      code: SerialBrokerErrorCode.WRITE_TIMEOUT,
+      context: { started: true },
     });
   });
 
@@ -275,12 +303,12 @@ describe('PendingWrites', () => {
     expect(await outcome).toBe('resolved');
   });
 
-  it('takes a result, a start or a settlement of a request it does not know as nothing', () => {
+  it('takes a result, a question or a settlement of a request it does not know as nothing', () => {
     const harness = createHarness();
 
     expect(() => {
       harness.writes.handleResult(id('never-seen'), FIRST, notConnected());
-      harness.writes.markStarted(id('never-seen'), FIRST);
+      expect(harness.writes.approve(id('never-seen'), FIRST)).toBe(false);
       harness.writes.settle(id('never-seen'), undefined);
     }).not.toThrow();
     expect(harness.dispatched).toEqual([]);
@@ -299,6 +327,8 @@ describe('PendingWrites', () => {
     expect(await second).toMatchObject({ code: SerialBrokerErrorCode.CONFIGURATION_RELEASED });
     expect(harness.writes.size).toBe(0);
     expect(harness.clock.pendingTimerCount).toBe(0);
+    // Released: no term may begin them any more.
+    expect(harness.writes.approve(id('w1'), FIRST)).toBe(false);
   });
 
   it('keeps writes from several callers apart', async () => {
@@ -316,30 +346,11 @@ describe('PendingWrites', () => {
     expect(await second).toMatchObject({ code: SerialBrokerErrorCode.WRITE_FAILED });
   });
 
-  it('hands a write on with what is left of its deadline, not the whole of it (ADR-0013)', async () => {
-    const harness = createHarness({ writeTimeoutMs: 5_000 });
-    harness.setCurrentTerm(undefined);
-    const outcome = outcomeOf(harness.writes.add(id('w1'), PAYLOAD));
-
-    // Held for 3 s while no tab holds the port: the tab that gets it may begin it for 2 s more.
-    await harness.clock.advance(3_000);
-    harness.setCurrentTerm(FIRST);
-    harness.writes.dispatchWaiting();
-    // Declined by that term and handed on 1 s later: 1 s is left.
-    await harness.clock.advance(1_000);
-    harness.writes.handleResult(id('w1'), FIRST, notConnected());
-
-    expect(harness.dispatched).toEqual(['w1@t1', 'w1@t1']);
-    expect(harness.remaining).toEqual([2_000, 1_000]);
-    harness.writes.settle(id('w1'), undefined);
-    expect(await outcome).toBe('resolved');
-  });
-
   it('resolves a mixture of started and unstarted writes correctly when a term ends', async () => {
     const harness = createHarness();
     const started = outcomeOf(harness.writes.add(id('w1'), PAYLOAD));
     const waiting = outcomeOf(harness.writes.add(id('w2'), PAYLOAD));
-    harness.writes.markStarted(id('w1'), FIRST);
+    harness.writes.approve(id('w1'), FIRST);
 
     harness.setCurrentTerm(SECOND);
     harness.endTerm(FIRST);

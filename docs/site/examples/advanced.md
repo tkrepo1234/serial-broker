@@ -48,8 +48,8 @@ the command reached the device: treat the command as one that may have run.
 
 ## Commands that must not run twice
 
-`OWNER_LOST_DURING_WRITE` means a write had begun when the tab holding the port went away, and
-nothing can tell whether the device received it. serial-broker does not resend it. What to do
+`OWNER_LOST_DURING_WRITE` means the tab holding the port had been let begin a write when it went
+away, and nothing can tell whether the device received it. serial-broker does not resend it. What to do
 depends on the command:
 
 ```{literalinclude} code/advanced/safe-commands.ts

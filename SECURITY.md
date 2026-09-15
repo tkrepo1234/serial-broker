@@ -95,10 +95,12 @@ sends, and in its diagnostics report.
 - **Make a tab withdraw over a tab limit.** The limit of the tab holding the port is part of that
   term's lock name, so a status naming another limit names no term of the configuration
   (ADR-0025).
-- **Settle or strand another tab's write.** A write is reported started, or answered, only by the
-  term it was addressed to and only by the context that holds that term's lock. A `write-result`
-  from anywhere else — with a request id read off the channel — is ignored, so no script can tell an
-  application that bytes reached the device.
+- **Settle, strand or begin another tab's write.** A write is asked about, or answered, only by the
+  term it was addressed to and only by the context that holds that term's lock. A `write-ready` or
+  `write-result` from anywhere else — with a request id read off the channel — is ignored, so no
+  script can tell an application that bytes reached the device. The tab holding the port begins a
+  write only on a `write-approval` from the context that issued it; one from any other identity is
+  ignored, and the write is not begun (ADR-0013).
 - **Pass off data or errors as the device's** to a tab that knows who holds the port:
   `data-received`, `data-sent` and `error` are delivered only from a context that speaks for a term
   this tab knows of. A script that speaks under the identity of the tab holding the port still can;
@@ -129,6 +131,9 @@ These follow from the missing sender identity, and no validation can prevent the
   - a status that is not the device's, in every tab that does not hold the port;
   - a `write-result` for a write addressed to that term, whose request id it knows: every write
     request reaches every participant, request id included;
+  - a `write-approval` under the identity of the tab that issued a write, which lets the tab holding
+    the port begin that write after its issuer gave it up - no more than a `write-request` of the
+    script's own puts on the device;
   - errors that did not happen, delivered to `onError`.
 - **Hold the Web Locks** - the ownership lock, the places of a tab limit, or a lock named for a term
   it invents - and so keep every tab away from the device, have an invented term believed while it

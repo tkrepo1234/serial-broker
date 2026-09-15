@@ -144,7 +144,6 @@ describe('serial-broker.worker', () => {
         requestId: 'w-1',
         payload: new Uint8Array([1]),
         term: 't-1',
-        remainingMs: 5_000,
       }),
     );
 

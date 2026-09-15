@@ -34,7 +34,7 @@ depends on the option:
 | ---------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
 | `device`, `serial`                                                     | The tab that holds the port, when it opens it. A tab in auto mode adopts the holder's.    |
 | `connection`, except `writeTimeoutMs`                                  | The tab that holds the port.                                                              |
-| `connection.writeTimeoutMs`                                            | The tab that issued the write, for the whole `send()`; the holding tab's, for each chunk. |
+| `connection.writeTimeoutMs`                                            | Each tab for its own writes, for the whole `send()`; the holding tab's, at the port.      |
 | `receive`, `encoding.decodeText`, and `encoding.encoding` for decoding | The tab that holds the port. Its deliveries reach every tab.                              |
 | `encoding.encoding` for sending, `remember`                            | Each tab for itself.                                                                      |
 | `maxTabs`                                                              | Every tab alike. A tab running a different limit than the tab holding the port withdraws. |
@@ -262,9 +262,12 @@ block the connection indefinitely; a timeout counts as a failed attempt, reporte
 **Raise it** only for an adapter known to take long to open.
 
 `writeTimeoutMs`
-: Three deadlines in one. In the tab that called `send()`, the whole write, including waiting for a
-connection. In the tab holding the port, how long a write may wait behind other writes before it
-begins — one that waited longer is never begun — and how long the device has to take each chunk.
+: Three deadlines in one. In the tab that called `send()`, the whole write, counted from `send()`,
+including waiting for a connection. The tab holding the port begins no write without that tab's
+approval, which it no longer gives once this deadline has run, so tabs may set it differently. In the
+tab holding the port, how long a write may wait there before it begins — behind other writes, and for
+the approval of the tab that issued it; one that waited longer is never begun — and how long the
+device has to take each chunk.
 **Raise it** for a large payload to a slow device, or a device that applies flow control for long
 stretches; up to ten minutes. **Lower it** when a user is waiting for the result. **Cost** of a high
 value: a device that stopped taking data is noticed later, and the writes behind a stuck one wait

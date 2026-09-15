@@ -123,29 +123,39 @@ export interface WriteRequestMessage extends Envelope {
    * and the sender hands it to another term only once this one has ended (ADR-0026).
    */
   readonly term: TermId;
-  /**
-   * Milliseconds left of the sender's deadline for this write when it sent the request: a duration,
-   * because the clocks of two contexts cannot be compared.
-   *
-   * The receiving tab never begins the write once this long has passed since it received the
-   * request, nor once its own `writeTimeoutMs` has. By then the sender has told its caller that the
-   * write did not start, whatever deadline the receiving tab runs (ADR-0013).
-   */
-  readonly remainingMs: number;
 }
 
 /**
- * Reports that the owner has begun writing a request.
+ * Asks the context that issued a write whether the tab holding the port may begin it now.
  *
- * This is the point after which the request is no longer replayable: if the owner dies now,
- * whether the bytes reached the device is unknowable. See ADR-0013.
+ * Sent by the tab holding the port, to the request's `from`, when the write is next in its queue. The
+ * write is begun only once that context has answered with {@link WriteApprovalMessage}: the issuer
+ * decides in its own event loop whether it has given the write up, so no clocks of two contexts are
+ * compared (ADR-0013).
  */
-export interface WriteStartedMessage extends Envelope {
-  readonly type: 'write-started';
+export interface WriteReadyMessage extends Envelope {
+  readonly type: 'write-ready';
   readonly configName: string;
   readonly requestId: RequestId;
-  /** The term writing it. */
+  /** The term that would write it. */
   readonly term: TermId;
+}
+
+/**
+ * The issuing context's answer to {@link WriteReadyMessage}, addressed to the tab that asked.
+ *
+ * `approved` is `true` only while the issuer has not given the write up, and from that moment the
+ * issuer counts the write as begun: it is never handed to another term, and its deadline no longer
+ * reports it as not started. The tab holding the port takes the answer only from the context that
+ * issued the write (ADR-0013).
+ */
+export interface WriteApprovalMessage extends Envelope {
+  readonly type: 'write-approval';
+  readonly configName: string;
+  readonly requestId: RequestId;
+  /** The term that asked. */
+  readonly term: TermId;
+  readonly approved: boolean;
 }
 
 /** Reports the outcome of a write request to its originator. */
@@ -286,7 +296,8 @@ export type ProtocolMessage =
   | OwnerClaimedMessage
   | OwnerReleasedMessage
   | WriteRequestMessage
-  | WriteStartedMessage
+  | WriteReadyMessage
+  | WriteApprovalMessage
   | WriteResultMessage
   | DataReceivedMessage
   | DataSentMessage

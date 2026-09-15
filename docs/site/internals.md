@@ -196,8 +196,9 @@ what it keeps in the same way: participants, ports per participant, and configur
 | `owner-claimed`, `owner-released`           | the owner               | A term of holding the port began; it ended, as its last message.            |
 | `status-request`                            | a tab that just set up  | Asks the owner to restate the status, or to retry where it gave up.         |
 | `status`                                    | the owner               | The connection status changed, with the owner's tab limit, device and term. |
-| `write-request`                             | a participant           | Asks the owner in one term to write, with the time left of its deadline.    |
-| `write-started`, `write-result`             | the owner               | The write began, in a term; how it ended.                                   |
+| `write-request`                             | a participant           | Asks the owner in one term to write.                                        |
+| `write-ready`, `write-result`               | the owner               | Asks the issuer whether the write may begin, in a term; how it ended.       |
+| `write-approval`                            | the issuing tab         | Answers `write-ready`: the write may begin, or it was given up.             |
 | `data-received`, `data-sent`                | the owner               | Traffic, to every participant.                                              |
 | `error`                                     | the owner               | A failure every participant should know about.                              |
 | `diagnostics-request`, `diagnostics-report` | an observer; every tab  | The diagnostics collection [ADR-0018].                                      |
@@ -249,16 +250,24 @@ the tab holding it reports, and `reconnecting` while ownership moves.
 
 A write belongs to the tab that issued it, not to the owner or the broker [ADR-0013].
 `PendingWrites` in that tab holds it until a term exists, addresses it to that term, and settles it
-when the term reports the result. The owner reports `write-started` the moment it begins, and that
-marks the write as not repeatable. Because this decision lives in the issuing tab, it is the same on
+when the term reports the result. Because this decision lives in the issuing tab, it is the same on
 both transports and does not depend on the broker. The owner records the writes it accepted in its
 term (`AcceptedWrites`), so a request handed to it twice is answered, not written twice.
 
-The issuing tab's `writeTimeoutMs` decides when a write that has not begun is given up, and the tab
-holding the port must not begin it afterwards, whatever its own setting. So each request carries
-`remainingMs`, what was left of the issuer's deadline when it was sent - a duration, since the clocks
-of two contexts do not compare. The owner does not begin a write once that long has passed since it
-received the request, or once its own `writeTimeoutMs` has if that is shorter [ADR-0013].
+**The issuing tab decides whether a write begins** [ADR-0013]. Its `writeTimeoutMs` decides when a
+write that has not begun is given up, and no clock of another tab can tell when that is. So when a
+write from another tab is next in its queue, the owner sends `write-ready` to the issuing tab and
+waits. That tab answers `write-approval`: yes while it still waits on the write - and in the same
+turn it counts the write as begun, not repeatable, `started: true` at its deadline - and no once it
+has given the write up. The owner begins only on a yes from that tab, and waits no longer than its
+own `writeTimeoutMs`; an owner's own writes are decided the same way, without a message.
+
+```text
+issuing tab ──write-request──▶ every tab; the owner of the addressed term queues it
+            ◀─write-ready───── the owner, when the write is next
+            ──write-approval─▶ the owner: approved, or given up
+            ◀─write-result──── the owner, when the write has ended
+```
 
 A new claim does not decide anything by itself: the former term's result may still be on its way. A
 term ends when the browser frees its lock, or - for a holder that is letting go cleanly - at its
@@ -268,10 +277,10 @@ term ends when the browser frees its lock, or - for a holder that is letting go 
 | When the term holding the port ends | Outcome                                                      |
 | ----------------------------------- | ------------------------------------------------------------ |
 | The write had not begun             | Handed to the next term. Written once.                       |
-| The write had begun                 | Rejected with `OWNER_LOST_DURING_WRITE`. **Never repeated.** |
+| The write had been let begin        | Rejected with `OWNER_LOST_DURING_WRITE`. **Never repeated.** |
 
-An owner that crashed after writing but before its `write-started` arrived cannot be told from one
-that never received the write.
+An owner that crashed can have begun only what the issuing tab let it begin, so a crash never makes
+a begun write look unstarted.
 
 What the bus can cost a tab is bounded as well as validated [ADR-0031]: a port keeps a bounded
 number of waiting writes and payload bytes, and refuses the rest with `WRITE_QUEUE_FULL`; answers to

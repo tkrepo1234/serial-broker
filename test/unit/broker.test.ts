@@ -82,7 +82,7 @@ describe('Broker', () => {
     broker.handleMessage(
       ALICE,
       message(ALICE, BOB, {
-        type: 'write-started',
+        type: 'write-ready',
         configName: 'Reader',
         requestId: 'w1',
       } as never),

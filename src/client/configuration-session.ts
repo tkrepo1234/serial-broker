@@ -1,5 +1,6 @@
 import { assertNever } from '../core/assert.js';
 import type { TimerHandle } from '../core/clock.js';
+import { createDeferred, type Deferred } from '../core/deadline.js';
 import {
   effectiveDevice,
   type NormalizedConfiguration,
@@ -47,8 +48,11 @@ import type { Transport } from './transport/transport.js';
 
 /** Where the outcome of a write performed at this context's port goes. */
 interface WriteReport {
-  /** The first byte is being handed to the device. */
-  readonly started: () => void;
+  /**
+   * Asks the context that issued the write whether it may begin now (ADR-0013): at once for this
+   * context's own, with `write-ready` for another's. `true` means that context counts it as begun.
+   */
+  readonly mayBegin: () => boolean | Promise<boolean>;
   /** The write ended, or was answered with the outcome of an earlier attempt. */
   readonly finished: (error: SerialBrokerError | undefined) => void;
 }
@@ -93,6 +97,18 @@ export class ConfigurationSession {
    * outcome in the old term's record, where it cannot make the new term forget a write.
    */
   #acceptedWrites = new AcceptedWrites();
+  /**
+   * The `write-ready` questions this context has asked as the tab holding the port, by the issuing
+   * context and request, with the term that asked (ADR-0013).
+   *
+   * Only the write next in the port's queue asks, and each question ends with its write, which the
+   * supervisor bounds by `writeTimeoutMs`: there is never more than one per term here, and never one
+   * a message could add.
+   */
+  readonly #awaitedApprovals = new Map<
+    string,
+    { readonly term: TermId; readonly answer: Deferred<boolean> }
+  >();
 
   #supervisor: PortSupervisor | undefined;
   #status: SerialBrokerStatus = SerialBrokerStatus.Idle;
@@ -170,8 +186,8 @@ export class ConfigurationSession {
       clock: environment.clock,
       configName: configuration.name,
       writeTimeoutMs: configuration.connection.writeTimeoutMs,
-      dispatch: (requestId, payload, term, remainingMs) => {
-        this.#dispatchWrite(requestId, payload, term, remainingMs);
+      dispatch: (requestId, payload, term) => {
+        this.#dispatchWrite(requestId, payload, term);
       },
       // A write can only go anywhere while there is a connection to write to. Asking here
       // rather than tracking it in two places keeps one source of truth for the answer.
@@ -630,17 +646,26 @@ export class ConfigurationSession {
   #apply(message: ProtocolMessage): void {
     switch (message.type) {
       case 'write-request':
-        this.#performWriteForPeer(
-          message.from,
-          message.requestId,
-          message.payload,
-          message.term,
-          message.remainingMs,
-        );
+        this.#performWriteForPeer(message.from, message.requestId, message.payload, message.term);
         return;
 
-      case 'write-started':
-        this.#writes.markStarted(message.requestId, message.term);
+      case 'write-ready':
+        // Decided here, in this context's own event loop, against whether it has given the write up
+        // (ADR-0013). Answered either way, so that a refused write does not hold the port's queue.
+        this.transport.send({
+          type: 'write-approval',
+          v: PROTOCOL_VERSION,
+          from: this.transport.clientId,
+          to: message.from,
+          configName: this.#configuration.name,
+          requestId: message.requestId,
+          term: message.term,
+          approved: this.#writes.approve(message.requestId, message.term),
+        });
+        return;
+
+      case 'write-approval':
+        this.#takeApproval(message.from, message.requestId, message.term, message.approved);
         return;
 
       case 'write-result':
@@ -889,22 +914,16 @@ export class ConfigurationSession {
    * is the first attempt or a re-dispatch after ownership moved. The decision lives there;
    * this method only knows *how* to send, not *whether* to.
    */
-  #dispatchWrite(
-    requestId: RequestId,
-    payload: Uint8Array,
-    term: TermId,
-    remainingMs: number,
-  ): void {
+  #dispatchWrite(requestId: RequestId, payload: Uint8Array, term: TermId): void {
     const supervisor = this.#supervisor;
     if (this.#election.isOwner && supervisor !== undefined && term === this.#term) {
       // Straight to the port, with no round trip across the bus - but through the same record as
       // a peer's write: a late `NOT_CONNECTED` from a former owner hands this write on again, and
       // it may already be queued here. A write that found no open connection never started, so it
       // goes back to wait for the next one, in the tab holding the port exactly as in any other.
-      this.#performWrite(supervisor, this.transport.clientId, requestId, payload, remainingMs, {
-        started: () => {
-          this.#writes.markStarted(requestId, term);
-        },
+      this.#performWrite(supervisor, this.transport.clientId, requestId, payload, {
+        // The issuer is this context: asked at once, with nothing on the bus.
+        mayBegin: () => this.#writes.approve(requestId, term),
         finished: (error) => {
           this.#writes.handleResult(requestId, term, error);
         },
@@ -922,7 +941,6 @@ export class ConfigurationSession {
       requestId,
       payload,
       term,
-      remainingMs,
     });
   }
 
@@ -932,7 +950,6 @@ export class ConfigurationSession {
     requestId: RequestId,
     payload: Uint8Array,
     requestedTerm: TermId,
-    remainingMs: number,
   ): void {
     const supervisor = this.#supervisor;
     const term = this.#term;
@@ -943,10 +960,13 @@ export class ConfigurationSession {
       return;
     }
 
-    this.#performWrite(supervisor, origin, requestId, payload, remainingMs, {
-      started: () => {
+    const key = approvalKey(origin, requestId);
+    this.#performWrite(supervisor, origin, requestId, payload, {
+      mayBegin: () => {
+        const answer = createDeferred<boolean>();
+        this.#awaitedApprovals.set(key, { term, answer });
         this.transport.send({
-          type: 'write-started',
+          type: 'write-ready',
           v: PROTOCOL_VERSION,
           from: this.transport.clientId,
           to: origin,
@@ -954,11 +974,32 @@ export class ConfigurationSession {
           requestId,
           term,
         });
+        return answer.promise;
       },
       finished: (error) => {
+        // Answered or not, the question is over: the supervisor stopped waiting for it.
+        this.#awaitedApprovals.delete(key);
         this.#sendWriteResult(origin, requestId, term, error);
       },
     });
+  }
+
+  /**
+   * Takes the answer to a `write-ready` this context asked.
+   *
+   * Only from the context that issued the write, which the request's `from` named, and only for the
+   * term that asked: whether a write may begin is that context's to decide, and a yes from any other
+   * would begin a write its issuer may have given up (ADR-0013). Any other answer is ignored - the
+   * supervisor stops waiting at its deadline, so the write is not begun.
+   */
+  #takeApproval(from: ClientId, requestId: RequestId, term: TermId, approved: boolean): void {
+    const key = approvalKey(from, requestId);
+    const awaited = this.#awaitedApprovals.get(key);
+    if (awaited?.term !== term) {
+      return;
+    }
+    this.#awaitedApprovals.delete(key);
+    awaited.answer.resolve(approved);
   }
 
   /**
@@ -967,15 +1008,12 @@ export class ConfigurationSession {
    * A repeat of a write still being written is ignored, since its own outcome is on the way; a
    * repeat of a finished one is answered with the known outcome, for an issuer that may have
    * missed it.
-   *
-   * @param remainingMs - What was left of the issuer's deadline when it handed the write on.
    */
   #performWrite(
     supervisor: PortSupervisor,
     origin: ClientId,
     requestId: RequestId,
     payload: Uint8Array,
-    remainingMs: number,
     report: WriteReport,
   ): void {
     const accepted = this.#acceptedWrites;
@@ -996,7 +1034,7 @@ export class ConfigurationSession {
       return;
     }
 
-    void supervisor.write(payload, remainingMs, report.started).then(
+    void supervisor.write(payload, report.mayBegin).then(
       () => {
         accepted.finish(origin, requestId, undefined);
         // The outcome goes to the issuer before any tab hears `onSend`. A listener may release the
@@ -1275,6 +1313,11 @@ export class ConfigurationSession {
       });
     }
   }
+}
+
+/** The key of a question about one write: requests are identified per issuing context. */
+function approvalKey(origin: ClientId, requestId: RequestId): string {
+  return `${origin} ${requestId}`;
 }
 
 /** `true` if a resolution is the one an auto-mode filter already holds. */

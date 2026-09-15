@@ -19,8 +19,9 @@ const REQUIRED_FIELDS: Record<ProtocolMessageType, readonly string[]> = {
   'owner-claimed': ['configName', 'maxTabs'],
   'owner-released': ['configName'],
   'status-request': ['configName'],
-  'write-request': ['configName', 'requestId', 'payload', 'remainingMs'],
-  'write-started': ['configName', 'requestId'],
+  'write-request': ['configName', 'requestId', 'payload', 'term'],
+  'write-ready': ['configName', 'requestId', 'term'],
+  'write-approval': ['configName', 'requestId', 'term', 'approved'],
   'write-result': ['configName', 'requestId', 'ok'],
   'data-received': ['configName', 'payload', 'timestamp'],
   'data-sent': ['configName', 'payload', 'originClientId', 'timestamp'],
@@ -135,7 +136,7 @@ describe('decode matrix', () => {
     ['a NaN timestamp', { ...VALID.status, timestamp: Number.NaN }],
     ['an infinite timestamp', { ...VALID.status, timestamp: Number.POSITIVE_INFINITY }],
     ['an empty configuration name', { ...VALID['status-request'], configName: '' }],
-    ['an empty request id', { ...VALID['write-started'], requestId: '' }],
+    ['an empty request id', { ...VALID['write-ready'], requestId: '' }],
     ['an empty sender', { ...VALID['status-request'], from: '' }],
   ])('rejects %s', (_label, message) => {
     expect(decodeMessage(message).ok).toBe(false);
@@ -188,23 +189,32 @@ describe('decode matrix', () => {
     }
   });
 
-  it.each(['owner-claimed', 'owner-released', 'write-started', 'status'] as const)(
-    'rejects %s that names no term (ADR-0026)',
-    (type) => {
-      expect(decodeMessage({ ...VALID[type], term: undefined }).ok).toBe(false);
+  it.each([
+    'owner-claimed',
+    'owner-released',
+    'write-request',
+    'write-ready',
+    'write-approval',
+    'status',
+  ] as const)('rejects %s that names no term (ADR-0026)', (type) => {
+    expect(decodeMessage({ ...VALID[type], term: undefined }).ok).toBe(false);
+  });
+
+  it.each([1, 'true', null, undefined])(
+    'rejects a write approval whose answer is %s, not a boolean (ADR-0013)',
+    (approved) => {
+      // Read loosely, anything truthy would begin a write its issuer did not approve.
+      expect(decodeMessage({ ...VALID['write-approval'], approved }).ok).toBe(false);
     },
   );
 
-  it.each([-1, Number.NaN, Number.POSITIVE_INFINITY, '5000'])(
-    'rejects a write request whose remainingMs is %s (ADR-0013)',
-    (remainingMs) => {
-      // Read as a time left, anything else would let a write begin after its issuer gave up on it.
-      expect(decodeMessage({ ...VALID['write-request'], remainingMs }).ok).toBe(false);
-    },
-  );
+  it('accepts a write approval that refuses, and passes the refusal on', () => {
+    const result = decodeMessage({ ...VALID['write-approval'], approved: false });
 
-  it('accepts a write request with no time left, which is never begun', () => {
-    expect(decodeMessage({ ...VALID['write-request'], remainingMs: 0 }).ok).toBe(true);
+    expect(result.ok && result.message.type === 'write-approval' && result.message.approved).toBe(
+      false,
+    );
+    expect(result.ok).toBe(true);
   });
 
   it('accepts a write result without a term, from a tab that never held the port', () => {

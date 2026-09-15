@@ -6,6 +6,7 @@ import { SerialBrokerStatus } from '../../../src/core/types.js';
 import { DIAGNOSTICS_ANSWER_RATE, STATUS_ANSWER_RATE } from '../../../src/protocol/limits.js';
 import {
   brokerChannelName,
+  contextLockName,
   PROTOCOL_VERSION,
   termLockName,
 } from '../../../src/protocol/version.js';
@@ -275,6 +276,49 @@ describe('a script of the origin that forges messages about the port', () => {
     expect(device.writtenText()).toBe('PING');
   });
 
+  it('cannot begin a write its issuer has not let begin, by approving it in its own name', async () => {
+    const harness = new BrowserHarness({ transport: 'broadcastchannel' });
+    const device = harness.serial.addDevice(READER.vendorId, READER.productId);
+    harness.serial.grant(device);
+    const mallory = eavesdrop(harness);
+    const owner = harness.openTab();
+    await owner.setup('Reader', READER_OPTIONS);
+    const issuer = harness.openBusyTab();
+    await issuer.client.setup('Reader', READER_OPTIONS);
+    await harness.settle();
+
+    // The issuing tab is busy: the question of the tab holding the port waits there, unanswered.
+    issuer.hold(owner.client.clientId);
+    let outcome: unknown = 'pending';
+    void issuer.client.send('Reader', 'PING').then(
+      () => (outcome = 'resolved'),
+      (error: unknown) => (outcome = error),
+    );
+    await harness.settle();
+    const question = heardOf(mallory.heard, 'write-ready');
+    expect(question).toBeDefined();
+
+    mallory.post({
+      ...FORGED,
+      to: owner.client.clientId,
+      type: 'write-approval',
+      configName: 'Reader',
+      requestId: question?.['requestId'],
+      term: question?.['term'],
+      approved: true,
+    });
+    await harness.settle();
+
+    // Whether a write may begin is its issuer's to say: begun on this, it could be a write the
+    // application was told did not start (ADR-0013).
+    expect(device.written).toHaveLength(0);
+
+    issuer.deliverHeld();
+    await harness.settle();
+    expect(outcome).toBe('resolved');
+    expect(device.writtenText()).toBe('PING');
+  });
+
   it('cannot deliver device data it made up', async () => {
     const { harness, device, other } = await twoTabs('broadcastchannel');
     const mallory = eavesdrop(harness);
@@ -417,6 +461,73 @@ describe('a script on the SharedWorker that uses the identity of a tab', () => {
     await expect(writing).resolves.toBeUndefined();
     expect(device.writtenText()).toBe('PING');
     expect(other.client.getStatus('Reader').status).toBe(SerialBrokerStatus.Open);
+  });
+
+  it('begins no write another tab issued by approving it, in its own name or in that tab`s', async () => {
+    const harness = new BrowserHarness({ transport: 'sharedworker' });
+    const device = harness.serial.addDevice(READER.vendorId, READER.productId);
+    harness.serial.grant(device);
+    const owner = harness.openTab();
+    await owner.setup('Reader', READER_OPTIONS);
+    const issuer = harness.openBusyTab();
+    await issuer.client.setup('Reader', READER_OPTIONS);
+    await harness.settle();
+    // A participant of its own, which holds the lock that tells the worker a context is there - as a
+    // tab takes it, and as any script of the origin can (ADR-0041).
+    void harness.locks
+      .forContext('mallory')
+      .request(
+        contextLockName('mallory'),
+        { mode: 'exclusive' },
+        () => new Promise(() => undefined),
+      );
+    const mallory = harness.bus.workerHost.connectForeign();
+    mallory.post({
+      v: PROTOCOL_VERSION,
+      from: 'mallory',
+      to: 'all',
+      type: 'hello',
+      configNames: ['Reader'],
+    });
+    await harness.settle();
+
+    // The issuing tab is busy, so the question of the tab holding the port waits there. The script
+    // reads the request off the worker as a participant of the configuration.
+    issuer.hold(owner.client.clientId);
+    let outcome: unknown = 'pending';
+    void issuer.client.send('Reader', 'PING').then(
+      () => (outcome = 'resolved'),
+      (error: unknown) => (outcome = error),
+    );
+    await harness.settle();
+    const request = [...mallory.received]
+      .reverse()
+      .find((message) => (message as Record<string, unknown>)['type'] === 'write-request') as
+      Record<string, unknown> | undefined;
+    expect(request).toBeDefined();
+
+    for (const from of ['mallory', issuer.client.clientId]) {
+      mallory.post({
+        v: PROTOCOL_VERSION,
+        from,
+        to: owner.client.clientId,
+        type: 'write-approval',
+        configName: 'Reader',
+        requestId: request?.['requestId'],
+        term: request?.['term'],
+        approved: true,
+      });
+    }
+    await harness.settle();
+
+    // In its own name it is not the issuer; in the issuer's, the worker refuses a port that said hello
+    // as something else.
+    expect(device.written).toHaveLength(0);
+
+    issuer.deliverHeld();
+    await harness.settle();
+    expect(outcome).toBe('resolved');
+    expect(device.writtenText()).toBe('PING');
   });
 
   it('does not make the worker forget a tab by leaving under its identity', async () => {

@@ -94,7 +94,7 @@ function speaksForATerm(terms: OwnerTerms, from: ClientId): boolean {
 /** Whether what `from` says about a write of `term` is believed. */
 function speaksFor(terms: OwnerTerms, term: TermId, from: ClientId): boolean {
   let isBelieved = false;
-  const message = { ...ENVELOPE, type: 'write-started', from, term, requestId: 'w-1' as RequestId };
+  const message = { ...ENVELOPE, type: 'write-ready', from, term, requestId: 'w-1' as RequestId };
   terms.authorize(message as ProtocolMessage, () => (isBelieved = true));
   return isBelieved;
 }
