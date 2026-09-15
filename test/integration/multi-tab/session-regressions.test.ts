@@ -117,7 +117,8 @@ describe('a write of another tab during a clean release', () => {
     });
 
     // A write of the other tab is in flight at the port, so the release waits for its answer, and
-    // the next write reaches the holding tab after it let go of the port and before its goodbye.
+    // the next write reaches the holding tab after it let go of the port and before its
+    // owner-released.
     device.pauseWrites();
     const first = other.client.send('Reader', 'A').catch((error: unknown) => error);
     await harness.settle();

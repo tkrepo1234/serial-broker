@@ -10,8 +10,8 @@ interface ScheduledTimer {
 /**
  * A clock whose time only moves when a test says so.
  *
- * Reconnect backoff, write deadlines and ownership-transfer grace periods are all measured in
- * milliseconds that would otherwise have to be waited out. Controlling time turns "wait 30
+ * Reconnect backoff, write deadlines and the handshake deadline are all measured in milliseconds
+ * that would otherwise have to be waited out. Controlling time turns "wait 30
  * seconds and hope" into an exact assertion, and it is the difference between a test suite
  * that runs in 200 ms and one nobody runs.
  *

@@ -59,7 +59,7 @@ describe.each(TRANSPORT_MODES)('a tab that was frozen (%s)', (transport) => {
     expect(await outcome).toMatchObject({ code: SerialBrokerErrorCode.WRITE_TIMEOUT });
   });
 
-  it('writes once a write the former holder performed, when the grace period runs before its words on resume', async () => {
+  it('writes once a write the former holder performed, when the deadline runs before its words on resume', async () => {
     const harness = new BrowserHarness({ transport });
     const device = harness.serial.addDevice(READER.vendorId, READER.productId);
     harness.serial.grant(device);

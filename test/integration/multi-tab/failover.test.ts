@@ -12,8 +12,8 @@ import { READER, READER_OPTIONS } from '../../harness/devices.js';
  *
  * This is the hardest thing the library does and the reason ownership is a Web Lock rather
  * than an agreement between tabs (ADR-0005). The abrupt cases matter most: a tab killed by
- * the process manager runs no unload handler, sends no goodbye, and releases nothing on its
- * own - only the browser releasing its lock makes recovery possible.
+ * the process manager runs no unload handler, sends no `owner-released`, and releases nothing on
+ * its own - only the browser releasing its lock makes recovery possible.
  */
 describe.each(TRANSPORT_MODES)('ownership failover (%s)', (transport) => {
   async function twoTabsSharingAPort(): Promise<{
@@ -47,7 +47,7 @@ describe.each(TRANSPORT_MODES)('ownership failover (%s)', (transport) => {
   it('promotes the remaining tab when the owning tab is killed without warning', async () => {
     const { harness, device, owner, peer } = await twoTabsSharingAPort();
 
-    // No unload handler, no goodbye, no close: a crashed renderer. Everything that follows
+    // No unload handler, no owner-released, no close: a crashed renderer. Everything that follows
     // has to come from the browser releasing the lock.
     await owner.kill();
 
@@ -145,8 +145,7 @@ describe.each(TRANSPORT_MODES)('ownership failover (%s)', (transport) => {
     // does as it tears the crashed tab down (ADR-0030).
     await owner.kill();
 
-    // The clock has not moved between the crash and the answer: nothing waits for a grace period
-    // any more.
+    // The clock has not moved between the crash and the answer: nothing about it is timed.
     expect(outcome).toMatchObject({ code: SerialBrokerErrorCode.OWNER_LOST_DURING_WRITE });
     expect(device.written).toHaveLength(0);
   });

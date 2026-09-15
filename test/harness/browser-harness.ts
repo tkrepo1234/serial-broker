@@ -149,7 +149,7 @@ export class VirtualTab {
    * Destroys this tab with no chance to clean up.
    *
    * A crashed renderer, an out-of-memory kill, a hard power-off. No disposer runs, no
-   * `goodbye` is sent, and the port stays "open" from the device's point of view until the
+   * `owner-released` is sent, and the port stays "open" from the device's point of view until the
    * browser tears the context down. Recovery has to come entirely from the lock being
    * released - which is the single most important behaviour in the library (ADR-0005).
    */

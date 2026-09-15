@@ -22,7 +22,7 @@ interface Harness {
   setConnected(connected: boolean): void;
   /** The term of the tab holding the port, as far as the tracker is told. */
   setCurrentTerm(value: TermId | undefined): void;
-  /** Ends a term, as its `owner-released` or the grace period does. */
+  /** Ends a term, as its lock being freed does. */
   endTerm(value: TermId): void;
 }
 

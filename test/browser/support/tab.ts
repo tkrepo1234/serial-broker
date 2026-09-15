@@ -464,7 +464,7 @@ export async function sharedWorkersOf(tab: Tab): Promise<readonly SharedWorkerTa
  * Terminates every shared worker of this tab's context, and says which ones went.
  *
  * What step 29 of the manual test plan does from `chrome://inspect/#workers`: the broker is gone
- * with nothing of ours told about it, so the tabs have to notice by themselves (ADR-0021).
+ * with nothing of ours told about it, so the tabs have to notice by themselves (ADR-0041).
  * Killing it outright rather than crashing a renderer and hoping the worker lived there - which
  * Chromium is free to arrange either way.
  */

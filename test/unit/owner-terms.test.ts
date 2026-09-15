@@ -48,7 +48,7 @@ async function holdTerm(
   locks: FakeLockManager,
   contextId: string,
   claim: TermClaim,
-): Promise<{ letGo: () => void; sayGoodbye: () => void }> {
+): Promise<{ letGo: () => void; queueForRelease: () => void }> {
   const name = termLockName(CONFIG, claim.term, claim.from, claim.maxTabs);
   let letGo!: () => void;
   const held = new Promise<void>((resolve) => {
@@ -60,9 +60,9 @@ async function holdTerm(
   await flushMicrotasks();
   return {
     letGo,
-    // What a tab letting go cleanly queues before its goodbye, and what tells a watching tab that
-    // the term's last words are on their way.
-    sayGoodbye: () => {
+    // What a tab letting go cleanly queues before its owner-released, and what tells a watching tab
+    // that the term's last words are on their way.
+    queueForRelease: () => {
       void locks.forContext(contextId).request(name, { mode: 'exclusive' }, async () => undefined);
     },
   };
@@ -75,7 +75,7 @@ function observe(terms: OwnerTerms, claim: TermClaim, apply: () => void): void {
   terms.authorize({ ...ENVELOPE, type: 'owner-claimed', ...claim }, apply);
 }
 
-/** The goodbye of a term, from `from`. */
+/** The `owner-released` of a term, from `from`. */
 function heardReleased(terms: OwnerTerms, term: TermId, from: ClientId): void {
   terms.authorize({ ...ENVELOPE, type: 'owner-released', term, from }, () => undefined);
 }
@@ -197,15 +197,15 @@ describe('OwnerTerms', () => {
     expect(terms.current).toBeUndefined();
   });
 
-  it('ends a term at its goodbye, once its holder has let the lock go', async () => {
+  it('ends a term at its owner-released, once its holder has let the lock go', async () => {
     const { terms, locks, ended } = createTerms();
     const holder = await holdTerm(locks, 'owner', FIRST);
     observe(terms, FIRST, () => undefined);
     await flushMicrotasks();
 
-    // The goodbye reached this tab before the lock was free, which is the usual order: the holder
-    // posts it and then lets the lock go.
-    holder.sayGoodbye();
+    // The owner-released reached this tab before the lock was free, which is the usual order: the
+    // holder posts it and then lets the lock go.
+    holder.queueForRelease();
     heardReleased(terms, FIRST.term, HOLDER);
     await flushMicrotasks();
     expect(ended).toEqual([]);
@@ -216,14 +216,15 @@ describe('OwnerTerms', () => {
     expect(ended).toEqual([{ term: 't1', wasCurrent: true }]);
   });
 
-  it('does not end a live term at a goodbye with somebody else queued on the lock', async () => {
+  it('does not end a live term at an owner-released with somebody else queued on the lock', async () => {
     const { terms, locks, ended } = createTerms();
     await holdTerm(locks, 'owner', FIRST);
     observe(terms, FIRST, () => undefined);
     await flushMicrotasks();
 
     // What a script of the origin can produce: a request of its own on the real term's lock, which
-    // no tab can tell from the holder's goodbye request, and a goodbye in the holder's name.
+    // no tab can tell from the request the holder queues before it lets go, and an owner-released in
+    // the holder's name.
     void locks
       .forContext('mallory')
       .request(
@@ -240,7 +241,7 @@ describe('OwnerTerms', () => {
     expect(terms.isEnded(FIRST.term)).toBe(false);
   });
 
-  it('does not end a live term at a goodbye nobody queued for', async () => {
+  it('does not end a live term at an owner-released nobody queued for', async () => {
     const { terms, locks, ended } = createTerms();
     await holdTerm(locks, 'owner', FIRST);
     observe(terms, FIRST, () => undefined);
@@ -253,28 +254,28 @@ describe('OwnerTerms', () => {
     expect(terms.current).toBe('t1');
   });
 
-  it('does not end a term at a goodbye from anyone but its holder', async () => {
+  it('does not end a term at an owner-released from anyone but its holder', async () => {
     const { terms, locks, ended } = createTerms();
     const holder = await holdTerm(locks, 'owner', FIRST);
     observe(terms, FIRST, () => undefined);
     await flushMicrotasks();
 
-    holder.sayGoodbye();
+    holder.queueForRelease();
     heardReleased(terms, FIRST.term, 'c-mallory' as ClientId);
     await flushMicrotasks();
 
     expect(ended).toEqual([]);
   });
 
-  it('waits for the goodbye of a holder that let go cleanly, rather than ending at the free lock', async () => {
+  it('waits for the owner-released of a holder that let go cleanly, rather than ending at the free lock', async () => {
     const { terms, locks, ended } = createTerms();
     const holder = await holdTerm(locks, 'owner', FIRST);
     observe(terms, FIRST, () => undefined);
     await flushMicrotasks();
 
-    // The order a tab letting go keeps: queue for the lock, say goodbye, let the lock go. The
-    // goodbye is still on its way here.
-    holder.sayGoodbye();
+    // The order a tab letting go keeps: queue for the lock, post owner-released, let the lock go.
+    // The owner-released is still on its way here.
+    holder.queueForRelease();
     holder.letGo();
     await flushMicrotasks();
     expect(ended).toEqual([]);
@@ -324,7 +325,7 @@ describe('OwnerTerms', () => {
     expect(ended).toEqual([{ term: 't1', wasCurrent: true }]);
   });
 
-  it('ignores a goodbye for its own term: only this tab ends it', async () => {
+  it('ignores an owner-released for its own term: only this tab ends it', async () => {
     const { terms, ended } = createTerms();
     terms.takeOwn(FIRST);
 
@@ -361,12 +362,12 @@ describe('OwnerTerms', () => {
     expect(fieldsOfEvent(records, 'session.term-flood')).toHaveLength(1);
   });
 
-  it('ends a term whose goodbye arrived while its lock was being checked', async () => {
+  it('ends a term whose owner-released arrived while its lock was being checked', async () => {
     const { terms, locks, ended } = createTerms();
     const holder = await holdTerm(locks, 'owner', FIRST);
 
     observe(terms, FIRST, () => undefined);
-    holder.sayGoodbye();
+    holder.queueForRelease();
     heardReleased(terms, FIRST.term, HOLDER);
     await flushMicrotasks();
     expect(ended).toEqual([]);
@@ -393,7 +394,7 @@ describe('OwnerTerms', () => {
     observe(terms, FIRST, () => undefined);
     await flushMicrotasks();
 
-    holder.sayGoodbye();
+    holder.queueForRelease();
     holder.letGo();
     await flushMicrotasks();
 

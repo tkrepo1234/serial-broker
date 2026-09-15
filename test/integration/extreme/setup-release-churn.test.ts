@@ -17,7 +17,7 @@ import {
 
 /**
  * Row 16 of the scenario matrix at a size that finds a leak of one object per cycle:
- * `test/integration/resource-lifecycle.test.ts` does ten cycles, this does a thousand, in two
+ * `test/integration/resource-lifecycle.test.ts` does five rounds, this does a thousand, in two
  * tabs that take turns holding the port.
  *
  * The footprint compared is that of the two tabs after one cycle, with nothing set up, so

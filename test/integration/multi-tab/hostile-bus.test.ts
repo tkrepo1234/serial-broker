@@ -191,7 +191,7 @@ describe('a script of the origin that forges messages about the port', () => {
     expect(fieldsOfEvent(records, 'client.malformed-message')).toEqual([]);
   });
 
-  it('cannot end the term of the tab holding the port by saying goodbye for it', async () => {
+  it('cannot end the term of the tab holding the port by announcing its release for it', async () => {
     const { harness, device, owner, other, mallory } = await twoWatchedTabs();
 
     mallory.post({
@@ -210,13 +210,13 @@ describe('a script of the origin that forges messages about the port', () => {
     expect(device.writtenText()).toBe('PING');
   });
 
-  it('cannot end that term by queueing on its lock and saying goodbye for it', async () => {
+  it('cannot end that term by queueing on its lock and announcing its release for it', async () => {
     const { harness, device, owner, other, mallory } = await twoWatchedTabs();
     const term = termOnTheBus(mallory.heard);
 
     // A request of the script's own on the real term's lock. It stays queued while the tab holding
-    // the port holds that lock, and looks exactly like the goodbye request a tab queues before it
-    // lets go - so the goodbye below must not be believed for it.
+    // the port holds that lock, and looks exactly like the request a tab queues before it lets go -
+    // so the owner-released below must not be believed for it.
     void harness.locks
       .forContext('mallory')
       .request(
@@ -395,6 +395,7 @@ describe('a script of the origin that floods the bus with well-formed messages',
 
     // One record per context, and nothing else changes.
     expect(fieldsOfEvent(records, 'client.malformed-message')).toHaveLength(2);
+    expect(other.client.getStatus('Reader').status).toBe(SerialBrokerStatus.Open);
     expect(other.receivedText('Reader')).toBe('REAL');
   });
 });

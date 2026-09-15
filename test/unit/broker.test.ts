@@ -165,7 +165,7 @@ describe('Broker', () => {
     expect(delivered).toHaveLength(0);
   });
 
-  it('delivers a diagnostics request to every connected context but the sender, attached or not', () => {
+  it('delivers a diagnostics request to every connected context but the sender, whatever its hello named', () => {
     const { broker, delivered } = createBroker();
     broker.handleMessage(ALICE, hello(ALICE, 'Reader'));
 
