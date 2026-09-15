@@ -215,8 +215,8 @@ Read `lines` as what each side reported, not as a strict transcript of the wire.
 **`failed` is not the end.** After `RECONNECT_EXHAUSTED` the configuration comes back by itself
 when the device is plugged in again; _Start again_ only tries sooner. After
 `CONFIGURATION_CONFLICT` a tab stays `failed` until it is released and set up again, which is what
-_Start again_ does. A failed configuration is usually still set up, and `setup()` does nothing for
-a name that is already set up with the same options, so `restart()` releases first.
+_Start again_ does. A failed configuration is usually still set up, and `setup()` with the same
+options starts it again from any tab, so `restart()` releases first only after that conflict.
 
 **Framing is the device's.** The library delivers chunks, not messages. The service ends a line at
 CR, LF or CR LF, splits a line longer than `maxLineLength`, and without `encoding.decodeText` lists

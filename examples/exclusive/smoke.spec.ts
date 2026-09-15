@@ -161,8 +161,8 @@ test('a tab that finds the device run under another limit fails, and "Use the de
   await other.page.close();
   await tab.expectStatus('failed');
 
-  // ... and `setup()` alone would do nothing for a name that is still set up. The button
-  // releases the failed configuration first, and the new one reaches the device.
+  // ... and `setup()` alone does not bring a withdrawn tab back. The button releases the
+  // withdrawn configuration first, and the new one takes the port.
   await tab.locator('#setup').click();
   await tab.expectStatus('open');
   await expect(tab.locator('#error')).toBeHidden();

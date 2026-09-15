@@ -252,10 +252,11 @@ replacement, keeps the device rather than losing it under the new instance.
 `UNKNOWN_CONFIGURATION`. The composable catches that like a failed set-up: the error is shown, the
 status is `failed`, and _Try again_ is there. Nothing rejects unhandled.
 
-**`restart()` releases first when the configuration still exists.** A configuration in `failed` is
-still set up, and `setup()` does nothing for a name that is set up; releasing and setting up again is
-the library's own remediation for `RECONNECT_EXHAUSTED` and `CONFIGURATION_CONFLICT`. The buttons
-that call it are disabled while it runs, so a second click cannot release what the first sets up.
+**`restart()` sets up again, and releases first only after a withdrawal.** A configuration in
+`failed` is still set up, and `setup()` with the same options starts it again, from any tab. A tab
+that withdrew with `CONFIGURATION_CONFLICT`, because the tab holding the port runs another `maxTabs`,
+does not come back that way, so `restart()` releases it first. The buttons that call it are disabled
+while it runs, so a second click cannot release what the first sets up.
 
 **A setup that fails shows `failed`.** Where Web Serial is missing, `setup()` rejects with
 `WEB_SERIAL_UNAVAILABLE`, whose remediation names the browsers that work; the page shows it like any

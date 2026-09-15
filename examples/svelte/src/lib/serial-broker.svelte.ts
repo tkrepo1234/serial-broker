@@ -25,6 +25,7 @@
 import {
   SerialBroker,
   SerialBrokerError,
+  SerialBrokerErrorCode,
   type SendableData,
   type SerialBrokerOptions,
   type SerialBrokerStatus,
@@ -83,8 +84,8 @@ export interface SerialBrokerConnection {
   /** Epoch milliseconds at which the current status was entered. */
   readonly since: number;
   /**
-   * `true` while the configuration is set up in this tab - also in `failed`, which is why
-   * {@link SerialBrokerConnection.restart} releases before it sets up again.
+   * `true` while the configuration is set up in this tab - also in `failed`, from which
+   * {@link SerialBrokerConnection.restart} starts it again.
    */
   readonly isSetUp: boolean;
   /** `status === 'awaiting-permission'`: the one state in which a connect button belongs on screen. */
@@ -141,10 +142,11 @@ export interface SerialBrokerConnection {
    */
   release(): Promise<void>;
   /**
-   * Starts over: releases the configuration if this connection set it up, then sets it up again.
-   * The way back from `released`, and from a `failed` that does not end by itself - `setup()` alone
-   * does nothing for a name that is still set up. Waits for a setup or a restart still under way,
-   * so two of them never run side by side.
+   * Starts over: sets the configuration up again. The way back from `released`, and from a
+   * `failed` that does not end by itself - `setup()` with the same options starts a failed
+   * configuration again, from any tab. A configuration this connection set up is released first
+   * when it withdrew over another `maxTabs`, or when the options now open the port differently.
+   * Waits for a setup or a restart still under way, so two of them never run side by side.
    */
   restart(): Promise<void>;
   /** Clears `error`, for an error panel the user dismissed. */
@@ -366,21 +368,41 @@ class ReactiveConnection implements SerialBrokerConnection {
       return;
     }
     this.#error = null;
-    if (this.#ownsSetup) {
-      this.#ownsSetup = false;
-      try {
-        await this.#release();
-      } catch (error) {
-        this.#report(error);
-        return;
-      }
-    }
     this.#unsubscribe();
     this.#starting = undefined;
-    if (this.#destroyed) {
-      return;
-    }
     await this.start();
+  }
+
+  /**
+   * Calls `setup()`. With the same options it starts a `failed` configuration again, from any tab,
+   * and leaves a working one alone. A configuration this connection set up is released first where
+   * `setup()` alone cannot help: a tab that withdrew with `CONFIGURATION_CONFLICT` over another
+   * `maxTabs` in the tab holding the port, and options that now open the port differently - a
+   * `$state` baud rate changed since, say.
+   */
+  async #setUp(options: SerialBrokerOptions): Promise<void> {
+    // Checked with exists(): restart() has unsubscribed, so a release by other code since then has
+    // not reached #applyStatus.
+    if (this.#ownsSetup && SerialBroker.exists(this.name)) {
+      const { status, lastErrorCode } = SerialBroker.getStatus(this.name);
+      if (status === 'failed' && lastErrorCode === SerialBrokerErrorCode.CONFIGURATION_CONFLICT) {
+        this.#ownsSetup = false;
+        await this.#release();
+      }
+    }
+    try {
+      await SerialBroker.setup(this.name, options);
+    } catch (error) {
+      const refused =
+        error instanceof SerialBrokerError &&
+        error.code === SerialBrokerErrorCode.CONFIGURATION_CONFLICT;
+      if (!this.#ownsSetup || !refused) {
+        throw error;
+      }
+      this.#ownsSetup = false;
+      await this.#release();
+      await SerialBroker.setup(this.name, options);
+    }
   }
 
   async #start(): Promise<void> {
@@ -392,7 +414,7 @@ class ReactiveConnection implements SerialBrokerConnection {
         return;
       }
       // A plain copy: `options` may be a `$state` proxy, and a proxy cannot be passed between tabs.
-      await SerialBroker.setup(this.name, $state.snapshot(this.#options) as SerialBrokerOptions);
+      await this.#setUp($state.snapshot(this.#options) as SerialBrokerOptions);
       // Set up by this connection, so released by it - on destroy as well, which waits for this.
       this.#ownsSetup = true;
       if (this.#destroyed) {
@@ -433,7 +455,7 @@ class ReactiveConnection implements SerialBrokerConnection {
     );
     this.#subscriptions.push(
       SerialBroker.subscribe(this.name, 'onSend', (event) => {
-        // Fires in every tab for every write that reached the device, whichever tab issued it.
+        // Fires in every tab for every write the browser took for the port, whichever tab issued it.
         this.#sentBytes += event.data.byteLength;
       }),
     );

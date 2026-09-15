@@ -104,7 +104,8 @@ npm run test:examples -- examples/multi-tab-dashboard/smoke.spec.ts
    that runs.
 5. **Restore, then set up**, as `startDevice()` does: `restore()` brings back what an earlier
    visit remembered; when the configuration is not among the restored names, `setup()` creates
-   it. Calling `setup()` on every load is fine - with equal options it is a no-op.
+   it. Calling `setup()` on every load is fine - with equal options it leaves a working
+   configuration alone.
 6. **Subscribe after every setup.** Listeners do not survive a release. `attach()` in `app.ts`
    subscribes every panel and is called again after _Set up again_ and _Try again_.
 7. **Ask for permission from a click, and from nothing else.** Show the button while the status is
@@ -128,8 +129,8 @@ entry point says it - to an operator, to be looked at, never to branch on.
 tab held the port, another takes it over. What is remembered belongs to the origin: `release()`
 forgets the stored configuration only when no other tab still runs it with `remember: true`.
 
-**Changing `remember` means setting up again.** A repeated `setup()` with only `remember` changed is
-a no-op - the options count as equivalent - so the checkbox releases and sets up again. The status
+**Changing `remember` means setting up again.** A repeated `setup()` with only `remember` changed
+does not apply it - the options count as equivalent - so the checkbox releases and sets up again. The status
 passes through `released` and comes back; the other tabs do not notice.
 
 **Statuses, and what this page does with each:**

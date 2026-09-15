@@ -62,7 +62,7 @@ test('connects on Connect, echoes a line once, shares it with a second tab, and 
   await expect(first.locator('#error')).toBeHidden();
 
   // A second tab: the origin is granted now, so it opens with no click, and a line it sends
-  // reaches the device through whichever tab holds the port, and comes back in both.
+  // goes to the port through whichever tab holds it, and comes back in both.
   const second = await ExampleTab.open(context, UI);
   await second.expectStatus('open');
   await sendLineOnce(second, 'PONG', [second, first]);

@@ -54,7 +54,7 @@ export function configureLibrary(logger: Logger): void {
  * Sets the device up on page load: from what an earlier visit remembered where there is
  * something to restore, and freshly otherwise.
  *
- * @param remember - Whether a fresh setup is persisted. A restored configuration was persisted
+ * @param remember - Whether a fresh setup is remembered. A restored configuration was remembered
  *   by definition, so the value is not consulted for it.
  * @returns How the configuration came to be.
  */
@@ -92,6 +92,23 @@ export async function setUpDevice(remember: boolean): Promise<void> {
 }
 
 /**
+ * Tries again after `failed`, or after a setup that failed.
+ *
+ * `setup()` with the same options starts a failed configuration again, from any tab. A tab that
+ * withdrew with `CONFIGURATION_CONFLICT`, because the tab holding the port runs another `maxTabs`,
+ * does not come back that way, and is released first.
+ */
+export async function setUpDeviceAgain(remember: boolean): Promise<void> {
+  if (SerialBroker.exists(DEVICE_NAME)) {
+    const { status, lastErrorCode } = SerialBroker.getStatus(DEVICE_NAME);
+    if (status === 'failed' && lastErrorCode === SerialBrokerErrorCode.CONFIGURATION_CONFLICT) {
+      await SerialBroker.release(DEVICE_NAME);
+    }
+  }
+  await setUpDevice(remember);
+}
+
+/**
  * Stops using the device in this tab. Other tabs keep it, and one of them takes the port over if
  * this tab held it.
  *
@@ -105,8 +122,8 @@ export async function releaseDevice(forgetDevice = false): Promise<void> {
 /**
  * Changes whether the configuration is remembered.
  *
- * A repeated `setup()` with only `remember` changed is a no-op - the library treats the options as
- * equivalent - so the configuration is released and set up again. The status passes through
+ * A repeated `setup()` with only `remember` changed does not apply it - the library treats the
+ * options as equivalent - so the configuration is released and set up again. The status passes through
  * `released` and comes back; other tabs are not affected.
  */
 export async function setRemembered(remember: boolean): Promise<void> {

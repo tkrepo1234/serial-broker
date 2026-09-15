@@ -12,6 +12,7 @@ import {
   isSupported,
   PROTOCOL_VERSION,
   SerialBroker,
+  SerialBrokerErrorCode,
   SerialBrokerStatus,
 } from 'serial-broker/min';
 
@@ -222,6 +223,32 @@ function onSend(event) {
   );
 }
 
+/** @param {import('serial-broker/min').StatusChangeEvent} event */
+function onStatusChange(event) {
+  showStatus(event.status);
+}
+
+/** @param {import('serial-broker/min').ErrorEvent} event */
+function onError(event) {
+  showError(event.error);
+}
+
+/**
+ * Whether this tab gave the configuration up because the tab holding the port runs another
+ * `maxTabs`. It shows `failed` with CONFIGURATION_CONFLICT and has left the other tabs; `setup()`
+ * does not bring it back, a release and a new setup do.
+ */
+function hasWithdrawn() {
+  if (!SerialBroker.exists(CONFIGURATION)) {
+    return false;
+  }
+  const { status, lastErrorCode } = SerialBroker.getStatus(CONFIGURATION);
+  return (
+    status === SerialBrokerStatus.Failed &&
+    lastErrorCode === SerialBrokerErrorCode.CONFIGURATION_CONFLICT
+  );
+}
+
 /**
  * Registers the configuration and wires the page to it.
  *
@@ -243,14 +270,12 @@ async function start() {
     return;
   }
 
-  SerialBroker.subscribe(CONFIGURATION, 'onStatusChange', (event) => {
-    showStatus(event.status);
-  });
+  // Named functions: _Set up again_ on a failed configuration runs this with the listeners still
+  // subscribed, and the library adds the same function only once.
+  SerialBroker.subscribe(CONFIGURATION, 'onStatusChange', onStatusChange);
   SerialBroker.subscribe(CONFIGURATION, 'onReceive', onReceive);
   SerialBroker.subscribe(CONFIGURATION, 'onSend', onSend);
-  SerialBroker.subscribe(CONFIGURATION, 'onError', (event) => {
-    showError(event.error);
-  });
+  SerialBroker.subscribe(CONFIGURATION, 'onError', onError);
   // The status may have moved on between setup() and the subscription above.
   showStatus(SerialBroker.getStatus(CONFIGURATION).status);
 }
@@ -269,11 +294,10 @@ ui.connect.addEventListener('click', () => {
 
 ui.retry.addEventListener('click', () => {
   ui.retry.hidden = true;
-  // `setup()` with the same options on a configuration that still exists does nothing, so a
-  // failed one is released first. A released one is simply set up again.
-  const released = SerialBroker.exists(CONFIGURATION)
-    ? SerialBroker.release(CONFIGURATION)
-    : Promise.resolve();
+  // `setup()` with the same options starts a failed configuration again, from any tab, and sets a
+  // released one up anew. The one exception is a tab that withdrew with CONFIGURATION_CONFLICT
+  // because the tab holding the port runs another `maxTabs`: only a release brings that one back.
+  const released = hasWithdrawn() ? SerialBroker.release(CONFIGURATION) : Promise.resolve();
   released.then(start).catch(showError);
 });
 

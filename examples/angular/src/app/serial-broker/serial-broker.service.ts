@@ -190,20 +190,23 @@ export class SerialBrokerService {
   }
 
   /**
-   * Starts over: releases the configuration in this tab if it is still set up, and sets it up
-   * again. The way back after `released`, and after `failed`.
+   * Starts over: sets the configuration up again. The way back after `released`, and after
+   * `failed`.
    *
-   * A configuration that shows `failed` is usually still set up, and `setup()` does nothing for a
-   * name that is already set up with the same options - so it is released first. After
-   * `RECONNECT_EXHAUSTED` that is only a way to try sooner: the configuration comes back by itself
-   * when the device is plugged in again. After `CONFIGURATION_CONFLICT` it is the way back.
+   * A configuration that shows `failed` is usually still set up, and `setup()` with the same
+   * options starts it again, whichever tab holds the port. After `RECONNECT_EXHAUSTED` that is
+   * only a way to try sooner: the configuration comes back by itself when the device is plugged in
+   * again. A tab that withdrew with `CONFIGURATION_CONFLICT`, because the tab holding the port runs
+   * another `maxTabs`, is the exception: `setup()` does not bring it back, so it is released first.
    *
    * Like {@link SerialBrokerService.release}, it acts on the name for the whole tab.
    */
   restart(): Promise<void> {
     return this.#enqueue(async () => {
       this.#lastError.set(null);
-      await this.#release();
+      if (this.#hasWithdrawn()) {
+        await this.#release();
+      }
       await this.#setUp();
     });
   }
@@ -250,6 +253,18 @@ export class SerialBrokerService {
     this.#applyStatus(SerialBroker.getStatus(this.name).status);
   }
 
+  /**
+   * Whether this tab withdrew from the configuration: `failed` with `CONFIGURATION_CONFLICT`, over
+   * a different `maxTabs` in the tab holding the port.
+   */
+  #hasWithdrawn(): boolean {
+    if (!SerialBroker.exists(this.name)) {
+      return false;
+    }
+    const { status, lastErrorCode } = SerialBroker.getStatus(this.name);
+    return status === 'failed' && lastErrorCode === SerialBrokerErrorCode.CONFIGURATION_CONFLICT;
+  }
+
   async #release(options?: ReleaseOptions): Promise<void> {
     this.#unsubscribe();
     try {
@@ -277,7 +292,7 @@ export class SerialBrokerService {
         }
       }),
       SerialBroker.subscribe(this.name, 'onSend', (event) => {
-        // Every write that reached the device, from any tab: 'local' when this tab issued it.
+        // Every write the browser took for the port, from any tab: 'local' when this tab issued it.
         this.#appendLines([
           {
             direction: 'out',

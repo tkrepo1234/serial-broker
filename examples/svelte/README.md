@@ -160,7 +160,7 @@ releases in one while the other keeps sending, and sets up again.
 | `received`                        | Received text, the last `maxReceivedLength` characters (20 000 by default).         |
 | `receivedBytes`, `sentBytes`      | Byte counters since the last setup; `sentBytes` counts every tab's writes.          |
 | `connect()`                       | The port picker. Resolves `'granted'`, `'dismissed'` or `'failed'`; never rejects.  |
-| `send(data)`                      | Resolves `true` once the bytes reached the device, `false` with `error` set.        |
+| `send(data)`                      | Resolves `true` once the browser took the bytes, `false` with `error` set.          |
 | `release()`, `restart()`          | Give up what this connection set up; release that if needed and set up again.       |
 | `clearError()`, `clearReceived()` | Empty `error` or `received`.                                                        |
 
@@ -252,9 +252,11 @@ still worth reading after the port reopens, until the user dismisses it or start
 to `connection.writeTimeoutMs`, then rejects with `WRITE_TIMEOUT`. With the status shown next to
 the button, a disabled button says the same thing sooner, as in the minimal example.
 
-**`restart()` releases before it sets up.** A `failed` configuration is still set up, and `setup()`
-does nothing for a name that is set up with the same options. Release first, then set up, is the
-library's own remediation for `CONFIGURATION_CONFLICT` and `RECONNECT_EXHAUSTED`.
+**`restart()` sets up again, and releases only where that cannot help.** A `failed` configuration is
+still set up, and `setup()` with the same options starts it again, from any tab. What this connection
+set up is released first in two cases: the tab withdrew with `CONFIGURATION_CONFLICT` because the tab
+holding the port runs another `maxTabs`, or the options changed so that they open the port
+differently, which `setup()` refuses for a name that is set up.
 
 **`configure()` and `dispose()` live in `main.ts`, not in the module.** Both are page-wide: the
 worker URL has to be named once, before the first setup, and `pagehide` fires for a closing tab,

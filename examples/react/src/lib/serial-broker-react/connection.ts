@@ -69,6 +69,41 @@ const LINE_ENDING = /\r\n|\r|\n/u;
 /** Characters per byte in {@link toHex}'s output: two digits and a space. */
 const HEX_WIDTH = 3;
 
+function setUpOnce(name: string, options: SerialBrokerOptions): Promise<void> {
+  return SerialBroker.setup(name, options);
+}
+
+/**
+ * Sets a configuration up again, for `restart()`.
+ *
+ * `setup()` with the same options starts a `failed` configuration again, from any tab, and sets a
+ * released one up anew. Two cases need a release first, because `setup()` alone cannot help: a tab
+ * that withdrew with `CONFIGURATION_CONFLICT` over another `maxTabs` in the tab holding the port,
+ * and options that open the port differently from the ones the name is set up with - which is how
+ * `restart(options)` applies new ones.
+ */
+async function setUpAgain(name: string, options: SerialBrokerOptions): Promise<void> {
+  if (SerialBroker.exists(name)) {
+    const { status, lastErrorCode } = SerialBroker.getStatus(name);
+    if (status === 'failed' && lastErrorCode === SerialBrokerErrorCode.CONFIGURATION_CONFLICT) {
+      await SerialBroker.release(name);
+    }
+  }
+  try {
+    await SerialBroker.setup(name, options);
+  } catch (error: unknown) {
+    const refused =
+      isSerialBrokerError(error) &&
+      error.code === SerialBrokerErrorCode.CONFIGURATION_CONFLICT &&
+      SerialBroker.exists(name);
+    if (!refused) {
+      throw error;
+    }
+    await SerialBroker.release(name);
+    await SerialBroker.setup(name, options);
+  }
+}
+
 /** The store for one configuration name. Obtain it with {@link getSerialConnection}. */
 export class SerialConnection {
   readonly name: string;
@@ -177,28 +212,21 @@ export class SerialConnection {
   };
 
   /**
-   * Sets the configuration up again: after `released`, or to start over from `failed` - which a
-   * `CONFIGURATION_CONFLICT` needs, since the library does not revive that one by itself.
+   * Sets the configuration up again: after `released`, or to start over from `failed`. See
+   * {@link setUpAgain} for when that releases first.
    *
    * @param options - Options to set up with from now on; the store's current ones otherwise.
    */
   readonly restart = async (options?: SerialBrokerOptions): Promise<void> => {
     this.#generation += 1;
-    const generation = this.#generation;
     if (options !== undefined) {
       this.#options = options;
     }
     this.#released = false;
     this.#detach();
     this.#update({ status: 'idle', lastError: null });
-    try {
-      // Ends whatever is left of a failed configuration; a no-op for a released one.
-      await SerialBroker.release(this.name);
-    } catch (error: unknown) {
-      this.#report(error);
-    }
-    if (generation === this.#generation && this.#listeners.size > 0) {
-      this.#start();
+    if (this.#listeners.size > 0) {
+      this.#start(setUpAgain);
     }
   };
 
@@ -207,7 +235,8 @@ export class SerialConnection {
     this.#update({ lastError: null });
   };
 
-  #start(): void {
+  /** @param setUp - How to set up: `setup()` itself, or {@link setUpAgain} for a restart. */
+  #start(setUp = setUpOnce): void {
     if (this.#released) {
       this.#update({ status: 'released' });
       return;
@@ -215,8 +244,9 @@ export class SerialConnection {
     this.#generation += 1;
     const generation = this.#generation;
     // Resolves once the configuration is registered, not once the port is open: opening may need
-    // the user. Calling it again with the same options - another mount, a hot update - is a no-op.
-    SerialBroker.setup(this.name, this.#options).then(
+    // the user. Calling it again with the same options - another mount, a hot update - joins the
+    // configuration that is set up, and leaves a working one alone.
+    setUp(this.name, this.#options).then(
       () => {
         if (generation === this.#generation) {
           this.#attach();

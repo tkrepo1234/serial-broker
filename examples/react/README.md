@@ -225,7 +225,8 @@ first used, and again on `restart()` - a changed object on a later render does n
 **StrictMode and hot updates pair up by construction.** React's `useSyncExternalStore` subscribes
 after the commit and unsubscribes on unmount - twice in a row under StrictMode. The store counts
 subscribers, and a `setup()` that resolves after its subscriber left does not subscribe to the
-library. `setup()` itself is a no-op when called again with the same options. Tried in the browser
+library. `setup()` itself leaves a working configuration alone when called again with the same
+options. Tried in the browser
 with `?stand-in`: after a hot update of `App.tsx` the lines stayed and the next echo appeared once;
 after an edit of `connection.ts` the page came back `open` with an empty list - the store module is
 replaced - and the next echo appeared once. Neither logged a warning.
