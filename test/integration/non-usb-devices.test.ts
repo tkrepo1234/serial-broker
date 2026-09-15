@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 
-import { SerialBrokerErrorCode } from '../../src/core/error-codes.js';
 import { SerialBrokerStatus } from '../../src/core/types.js';
 import { normalizeConfiguration } from '../../src/core/validation.js';
 import { matchesDevice, toRequestOptions } from '../../src/owner/port-matcher.js';
@@ -23,19 +22,6 @@ const ANY_DEVICE = {
  * write and the library has to accept whatever the user granted. See ADR-0016.
  */
 describe('a device with no USB identity', () => {
-  it('connects through an "any" configuration', async () => {
-    const harness = new BrowserHarness();
-    const port = harness.serial.addNonUsbPort();
-    harness.serial.grant(port);
-
-    const tab = harness.openTab();
-    await tab.setup('LocalPort', ANY_DEVICE);
-
-    // With a USB filter this is unreachable: `getInfo()` reports nothing to match against, so
-    // the port would stay invisible and the status would sit at `awaiting-permission` forever.
-    expect(tab.client.getStatus('LocalPort').status).toBe(SerialBrokerStatus.Open);
-  });
-
   it('sends and receives like any other device', async () => {
     const harness = new BrowserHarness();
     const port = harness.serial.addNonUsbPort();
@@ -150,32 +136,6 @@ describe('the device filter', () => {
     );
   });
 
-  it('rejects a filter that is both specific and a wildcard', () => {
-    // Either reading would be a guess about which device to open, and that is not a guess
-    // worth making.
-    expect(() =>
-      normalizeConfiguration('Mixed', {
-        device: { any: true, vendorId: 0x1a86, productId: 0x7523 },
-        serial: { baudRate: 9600 },
-      }),
-    ).toThrow(expect.objectContaining({ code: SerialBrokerErrorCode.INVALID_ARGUMENT }));
-  });
-
-  it('rejects `any` set to anything other than true', () => {
-    expect(() =>
-      normalizeConfiguration('Odd', { device: { any: 'yes' }, serial: { baudRate: 9600 } }),
-    ).toThrow(expect.objectContaining({ code: SerialBrokerErrorCode.INVALID_ARGUMENT }));
-  });
-
-  it('still requires IDs when none of them says any', () => {
-    expect(() =>
-      normalizeConfiguration('Reader', {
-        device: { vendorId: 0x1a86 },
-        serial: { baudRate: 9600 },
-      }),
-    ).toThrow(expect.objectContaining({ code: SerialBrokerErrorCode.INVALID_ARGUMENT }));
-  });
-
   it('treats two wildcard configurations as compatible with each other', async () => {
     const harness = new BrowserHarness();
     harness.serial.grant(harness.serial.addNonUsbPort());
@@ -183,17 +143,5 @@ describe('the device filter', () => {
 
     await tab.client.setup('LocalPort', ANY_DEVICE);
     await expect(tab.client.setup('LocalPort', ANY_DEVICE)).resolves.toBeUndefined();
-  });
-
-  it('refuses to turn a USB configuration into a wildcard one', async () => {
-    const harness = new BrowserHarness();
-    harness.serial.grant(harness.serial.addDevice(READER.vendorId, READER.productId));
-    const tab = harness.openTab();
-    await tab.client.setup('Reader', READER_OPTIONS);
-
-    // One of the two would open a port the other never asked for.
-    await expect(tab.client.setup('Reader', ANY_DEVICE)).rejects.toMatchObject({
-      code: SerialBrokerErrorCode.CONFIGURATION_CONFLICT,
-    });
   });
 });

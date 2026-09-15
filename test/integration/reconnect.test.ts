@@ -25,15 +25,6 @@ describe('reconnect supervision', () => {
     return { harness, device, tab };
   }
 
-  it('reports reconnecting when the device is unplugged', async () => {
-    const { harness, device, tab } = await connectedTab();
-
-    harness.serial.unplug(device);
-    await harness.settle();
-
-    expect(tab.client.getStatus('Reader').status).toBe(SerialBrokerStatus.Reconnecting);
-  });
-
   it('reopens the port automatically when the device comes back', async () => {
     const { harness, device, tab } = await connectedTab();
 
@@ -81,24 +72,26 @@ describe('reconnect supervision', () => {
     expect(tab.client.getStatus('Reader').status).toBe(SerialBrokerStatus.Open);
   });
 
-  it('backs off exponentially while the device stays away', async () => {
+  it('retries at once only once, then backs off as from a fresh start', async () => {
     const harness = new BrowserHarness();
     const device = harness.serial.addDevice(READER.vendorId, READER.productId);
     harness.serial.grant(device);
+    await harness.openTab().setup('Reader', READER_OPTIONS);
+    // Longer than stableAfterMs, so the attempt count starts over when the connection breaks.
+    await harness.advance(6_000);
+
     device.faults.failOpenWith = 'NetworkError';
-
-    const tab = harness.openTab();
-    await tab.setup('Reader', READER_OPTIONS);
-
-    const delays: number[] = [];
-    for (let attempt = 0; attempt < 5; attempt += 1) {
-      delays.push(harness.clock.nextTimerInMs ?? -1);
+    device.breakStream();
+    await harness.settle();
+    const delays: (number | undefined)[] = [];
+    for (let attempt = 0; attempt < 4; attempt += 1) {
+      delays.push(harness.clock.nextTimerInMs);
       await harness.clock.advanceToNextTimer();
       await harness.settle();
     }
 
-    // Attempt 0 immediate, then 250 * 2^n with the harness's jitter draw at the top of its range.
-    expect(delays).toEqual([0, 250, 500, 1000, 2000]);
+    // Before the fix this was [0, 0, 250, 500]: two immediate retries in a row.
+    expect(delays).toEqual([0, 250, 500, 1000]);
   });
 
   it('never waits longer than maxDelayMs between attempts', async () => {

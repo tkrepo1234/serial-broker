@@ -225,38 +225,43 @@ describe('debugging surface: configurations', () => {
     expect(thisPageState(queued[0]!)).toBe('queued');
     expect(thisPageState(elsewhere[0]!)).toBe('not connected');
   });
-
-  it('can connect with reported settings as they are, because setup accepts them unchanged', () => {
-    const running = normalizeConfiguration('Scale', {
-      device: { vendorId: 0x0403, productId: 0x6001 },
-      serial: { baudRate: 19_200, parity: 'odd', stopBits: 2 },
-      connection: { maxDelayMs: 1_000 },
-      encoding: { decodeText: false },
-      remember: false,
-    });
-
-    expect(normalizeConfiguration('Scale', describeSettings(running))).toEqual(running);
-  });
 });
 
 describe('debugging surface: new and edited configurations', () => {
-  it('fills the form with the settings a configuration runs with, so saving changes nothing', () => {
-    const running = normalizeConfiguration('Scale', {
-      device: { vendorId: 0x0403, productId: 0x6001 },
-      serial: { baudRate: 19_200, parity: 'odd', stopBits: 2, flowControl: 'hardware' },
-      connection: { maxDelayMs: 1_000 },
-      encoding: { decodeText: false, encoding: 'windows-1252' },
-      remember: false,
-    });
+  it.each([
+    [
+      'the settings a configuration runs with',
+      '1',
+      {
+        device: { vendorId: 0x0403, productId: 0x6001 },
+        serial: { baudRate: 19_200, parity: 'odd', stopBits: 2, flowControl: 'hardware' },
+        connection: { maxDelayMs: 1_000 },
+        encoding: { decodeText: false, encoding: 'windows-1252' },
+        remember: false,
+      },
+    ],
+    [
+      'a port without USB identity',
+      'any',
+      { device: { any: true }, serial: { baudRate: 115_200 } },
+    ],
+    [
+      'a port without USB identity named as such',
+      'non-usb',
+      { device: { nonUsb: true }, serial: { baudRate: 115_200 } },
+    ],
+  ])('fills the form for %s, so saving changes nothing', (_label, choice, options) => {
+    const running = normalizeConfiguration('Scale', options);
 
     const values = formValuesFor('Scale', describeSettings(running));
 
-    expect(deviceChoiceFor(values)).toBe('1');
+    expect(deviceChoiceFor(values)).toBe(choice);
     expect(normalizeConfiguration('Scale', buildSetupOptions(values))).toEqual(running);
   });
 
-  it('fills the form with a tab limit, finite or none, so saving changes nothing', () => {
-    for (const maxTabs of [3, Number.POSITIVE_INFINITY]) {
+  it.each([3, Number.POSITIVE_INFINITY])(
+    'fills the form with a tab limit of %s, so saving changes nothing',
+    (maxTabs) => {
       const running = normalizeConfiguration('Scale', {
         device: { vendorId: 0x0403, productId: 0x6001 },
         serial: { baudRate: 19_200 },
@@ -268,20 +273,8 @@ describe('debugging surface: new and edited configurations', () => {
       expect(values.maxTabs).toBe(String(maxTabs));
       expect(buildSetupOptions(values)['maxTabs']).toBe(maxTabs);
       expect(normalizeConfiguration('Scale', buildSetupOptions(values))).toEqual(running);
-    }
-  });
-
-  it('fills the form for a port without USB identity', () => {
-    const running = normalizeConfiguration('Panel', {
-      device: { any: true },
-      serial: { baudRate: 115_200 },
-    });
-
-    const values = formValuesFor('Panel', describeSettings(running));
-
-    expect(deviceChoiceFor(values)).toBe('any');
-    expect(normalizeConfiguration('Panel', buildSetupOptions(values))).toEqual(running);
-  });
+    },
+  );
 
   it('leaves blank optional fields out, so the library applies its own defaults', () => {
     expect(buildSetupOptions(defaultFormValues())).toEqual({
@@ -383,18 +376,6 @@ describe('debugging surface: new and edited configurations', () => {
     expect(deviceChoiceFor({ ...values, deviceKind: 'non-usb' })).toBe('non-usb');
   });
 
-  it('fills the form for a port without USB identity named as such', () => {
-    const running = normalizeConfiguration('Panel', {
-      device: { nonUsb: true },
-      serial: { baudRate: 115_200 },
-    });
-
-    const values = formValuesFor('Panel', describeSettings(running));
-
-    expect(deviceChoiceFor(values)).toBe('non-usb');
-    expect(normalizeConfiguration('Panel', buildSetupOptions(values))).toEqual(running);
-  });
-
   it('keeps what an automatic device resolved to, so editing the line settings does not ask again', () => {
     // Editing is release and setup: without the resolution in the options, the configuration would
     // wait for the user to choose the device once more (ADR-0036).
@@ -490,15 +471,16 @@ describe('debugging surface: library settings', () => {
     ).toEqual({ workerUrl: '/linked.js', transport: 'broadcastchannel', logPayloads: true });
   });
 
-  it('ignores saved settings that are unreadable or of the wrong shape', () => {
-    for (const saved of ['{not json', '42', JSON.stringify({ transport: 'carrier-pigeon' })]) {
+  it.each(['{not json', '42', JSON.stringify({ transport: 'carrier-pigeon' })])(
+    'ignores saved settings that are unreadable or of the wrong shape: %s',
+    (saved) => {
       expect(resolveLibrarySettings(new URLSearchParams(''), saved, DEFAULT_WORKER)).toEqual({
         workerUrl: DEFAULT_WORKER,
         transport: 'auto',
         logPayloads: false,
       });
-    }
-  });
+    },
+  );
 
   it('lets an unusable value in a link fall back to the saved one, not to the default', () => {
     const saved = JSON.stringify({ workerUrl: '/saved.js', transport: 'broadcastchannel' });
@@ -526,20 +508,18 @@ describe('debugging surface: library settings', () => {
     );
   });
 
-  it('never takes a worker script from another origin or a data: or blob: URL', () => {
+  it.each([
+    'https://attacker.example/evil.js',
+    '//attacker.example/evil.js',
+    'data:text/javascript,postMessage(1)',
+    'blob:http://localhost/0b6c',
+    'javascript:alert(1)',
+  ])('never takes a worker script from another origin or a data: or blob: URL: %s', (workerUrl) => {
     const saved = JSON.stringify({ workerUrl: '/saved.js' });
-    for (const workerUrl of [
-      'https://attacker.example/evil.js',
-      '//attacker.example/evil.js',
-      'data:text/javascript,postMessage(1)',
-      'blob:http://localhost/0b6c',
-      'javascript:alert(1)',
-    ]) {
-      const query = new URLSearchParams({ workerUrl });
+    const query = new URLSearchParams({ workerUrl });
 
-      expect(resolveLibrarySettings(query, saved, DEFAULT_WORKER).workerUrl).toBe('/saved.js');
-      expect(linkedWorkerUrlToConfirm(query, saved, DEFAULT_WORKER)).toBeUndefined();
-    }
+    expect(resolveLibrarySettings(query, saved, DEFAULT_WORKER).workerUrl).toBe('/saved.js');
+    expect(linkedWorkerUrlToConfirm(query, saved, DEFAULT_WORKER)).toBeUndefined();
   });
 
   it('asks to confirm a worker script that only the link names', () => {

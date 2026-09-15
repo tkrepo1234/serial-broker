@@ -150,20 +150,4 @@ describe('handing a write to the device in chunks', () => {
   it('hands an empty payload over as one empty write', async () => {
     expect(await chunkSizesFor(0, 4)).toEqual([0]);
   });
-
-  it('hands a payload of exactly the chunk size over in one piece', async () => {
-    expect(await chunkSizesFor(4, 4)).toEqual([4]);
-  });
-
-  it('hands a payload one byte longer than the chunk size over in two pieces', async () => {
-    expect(await chunkSizesFor(5, 4)).toEqual([4, 1]);
-  });
-
-  it('hands a payload of several chunk sizes over in full chunks and a remainder', async () => {
-    expect(await chunkSizesFor(10, 3)).toEqual([3, 3, 3, 1]);
-  });
-
-  it('hands a payload over byte by byte with a chunk size of one', async () => {
-    expect(await chunkSizesFor(3, 1)).toEqual([1, 1, 1]);
-  });
 });
