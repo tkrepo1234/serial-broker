@@ -7,6 +7,8 @@ import {
   type Unsubscribe,
 } from 'serial-broker';
 
+import { LineSplitter } from '../features/lines.js';
+
 /** The page elements the panel works with. */
 export interface PanelElements {
   readonly status: HTMLElement;
@@ -36,7 +38,8 @@ const MAX_LOG_LINES = 200;
 export class ScalePanel {
   readonly #elements: PanelElements;
   #listeners: Unsubscribe[] = [];
-  #partialLine = '';
+  /** Bounded, and emptied whenever the status leaves `open`: a line torn by a gap is not joined. */
+  readonly #lines = new LineSplitter();
   /** Set once the user disconnected this window: a change made elsewhere must not reconnect it. */
   #isStopped = false;
   /** The reconnect under way. Changes in quick succession reconnect one after the other. */
@@ -112,6 +115,9 @@ export class ScalePanel {
 
     this.#listeners = [
       SerialBroker.subscribe(NAME, 'onStatusChange', (event) => {
+        if (event.status !== 'open') {
+          this.#lines.reset();
+        }
         this.#renderStatus(event.status);
       }),
       SerialBroker.subscribe(NAME, 'onReceive', (event) => {
@@ -122,6 +128,8 @@ export class ScalePanel {
         this.#appendLog(`> ${new TextDecoder().decode(event.data).trim()} (${who})`);
       }),
       SerialBroker.subscribe(NAME, 'onError', (event) => {
+        // Right only with `connection.autoReconnect` on, the default: with it off these errors
+        // still carry `isRetryable: true`, but nothing recovers, and they must be shown.
         if (!event.error.isRetryable) {
           this.#showError(event.error);
         }
@@ -169,9 +177,7 @@ export class ScalePanel {
 
   /** Assembles lines, because a delivery from the device is not a line. */
   #receive(text: string): void {
-    const lines = (this.#partialLine + text).split('\r\n');
-    this.#partialLine = lines.pop() ?? '';
-    for (const line of lines) {
+    for (const line of this.#lines.push(text)) {
       this.#appendLog(`< ${line}`);
     }
   }

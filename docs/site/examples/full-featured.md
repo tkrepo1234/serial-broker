@@ -32,7 +32,10 @@ The panel never asks which window it is.
 **Traffic from every window appears in every window.** `onReceive` delivers what the scale sends
 everywhere, and `onSend` reports every command the browser took for the port, with `origin` telling
 this window's commands from the others'. An answer usually arrives in one delivery, but the panel
-still assembles lines, because nothing guarantees it.
+still assembles lines, because nothing guarantees it. It uses the bounded `LineSplitter` from
+[Reading lines](all-features.md#reading-lines), and empties it whenever the status leaves `open`:
+what the scale sends during a reconnect or a handover is lost, and the halves of a line from either
+side of that gap must not be joined.
 
 **Line settings are the application's to keep consistent.** The window that holds the port opens
 it with its own settings, and serial-broker does not compare settings between windows. The panel
@@ -49,7 +52,9 @@ may or may not have received the command and the user has to check.
 
 **Failures serial-broker is recovering from are not shown as problems.** An unplugged scale
 produces an error with `isRetryable: true`; the status line already says _Reconnecting…_, which is
-all the user needs to know.
+all the user needs to know. That holds because the panel keeps `connection.autoReconnect` on, the
+default. With it off, the same errors still carry `isRetryable: true` — the flag belongs to the
+code — but nothing recovers, the status becomes `failed`, and a page has to show them.
 
 **Disconnecting one window leaves the others working.** `release()` affects only the window that
 calls it. If that window held the port, another window takes it over.

@@ -50,14 +50,34 @@ that has them for its own code keeps whichever version it chose. The definitions
 
 `dist/index.min.js` and `dist/diagnostics.min.js` are the same code, minified, with source maps.
 Each is one file that imports nothing else, for pages that load the library without a bundler — from
-your own static files, with `<script type="module">` or an import map. A bundler minifies on its own,
-so there the readable build is the better choice.
+your own static files, with an import map or by URL. A bundler minifies on its own, so there the
+readable build is the better choice.
+
+Copy `index.min.js` and `serial-broker.worker.js` into one directory, and map the specifier
+`serial-broker/min` — the package's own export for the minified build — to the library:
 
 ```html
-<script type="module">
-  import { SerialBroker } from '/assets/serial-broker/index.min.js';
+<script type="importmap">
+  { "imports": { "serial-broker/min": "/assets/serial-broker/index.min.js" } }
 </script>
+<script type="module" src="/assets/app.js"></script>
 ```
+
+```js
+// app.js
+import { SerialBroker } from 'serial-broker/min';
+
+SerialBroker.configure({
+  workerUrl: new URL('serial-broker.worker.js', import.meta.resolve('serial-broker/min')),
+});
+```
+
+The worker URL is derived from where the map puts the library, so moving the directory is one change
+in the map. Code that imports `serial-broker` instead needs the map to name that specifier; any
+specifier works as long as the script imports the one the map names. Without an import map, import
+the file by its URL: `import { SerialBroker } from '/assets/serial-broker/index.min.js'`.
+[Deploying to a web server](deploying.md) lists the files, the headers a strict policy needs for the
+import map, and what to check afterwards.
 
 Both builds use the same worker script, so tabs on the minified build and tabs on the readable build
 coordinate — as long as the script is served at the same URL for both.
@@ -120,6 +140,9 @@ worker-src 'self';
 
 Without it, the browser blocks the worker, and serial-broker falls back to a `BroadcastChannel`,
 logged as `environment.transport-fallback`. That works, but it is probably not what you intended.
+serial-broker makes no network requests and loads nothing else, so it needs no `connect-src`. An
+inline import map counts as an inline script under `script-src` and needs its hash; the complete
+policy, the hash and the other headers are in [Deploying to a web server](deploying.md).
 The debugging surface brings a policy of its own; see
 [Whether to serve it](diagnostics.md#whether-to-serve-it).
 
