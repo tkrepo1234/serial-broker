@@ -148,9 +148,9 @@ export const REMEDIATION: Record<SerialBrokerErrorCode, string> = {
   OPEN_TIMEOUT:
     'Opening or closing the port exceeded connection.openTimeoutMs. This usually means a hung driver; unplugging and replugging the device clears it.',
   DEVICE_DISCONNECTED:
-    'No action required: the library reconnects automatically when the device reappears. Use onStatusChange to reflect the state in your UI.',
+    'No action required: the library reconnects automatically when the device reappears, and onStatusChange reflects the state for your UI. With connection.autoReconnect set to false it does not: call SerialBroker.setup() again with the same options once the device is back.',
   RECONNECT_EXHAUSTED:
-    'Reconnection stopped after connection.maxAttempts. It resumes automatically if the device is plugged in again; to retry sooner, release the configuration and set it up again.',
+    'Reconnection stopped after connection.maxAttempts. It resumes automatically if the device is plugged in again; to retry sooner, call SerialBroker.setup() again with the same options, in any tab.',
   READ_FAILED:
     'The read stream failed, often from a framing or parity error. The library reopens the port automatically; if this repeats, check the line settings, the cable and the adapter.',
   NOT_CONNECTED:
@@ -160,7 +160,7 @@ export const REMEDIATION: Record<SerialBrokerErrorCode, string> = {
   WRITE_TIMEOUT:
     'The write did not complete within connection.writeTimeoutMs. When `context.started` is false nothing was written and it can be sent again; otherwise the device may have received it. If timeouts are frequent while the port is open, check the flowControl serial option and whether the device is ready to receive.',
   WRITE_QUEUE_FULL:
-    'The tab holding the port has as many writes waiting as it keeps (see MAX_WAITING_WRITES and MAX_WAITING_WRITE_BYTES), so nothing of this write was written and it is safe to send again. Send fewer writes at once, or wait for earlier ones to settle; if the application sends few, a script of the origin is flooding the port.',
+    'The tab holding the port has as many writes waiting as it keeps (4096 writes, or 64 MiB of payload, from every tab together), so nothing of this write was written and it is safe to send again. Send fewer writes at once, or wait for earlier ones to settle; if the application sends few, a script of the origin is flooding the port.',
   OWNER_LOST_DURING_WRITE:
     'The tab that owned the port closed or crashed mid-write, so it is unknown whether the device received the bytes. Only repeat the command if it is idempotent for your device.',
   PROTOCOL_VERSION_MISMATCH:
