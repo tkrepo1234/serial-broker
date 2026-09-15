@@ -458,6 +458,92 @@ describe('an unplugged device', () => {
   });
 });
 
+describe('a device that stops taking writes', () => {
+  // Measured in Chromium on Windows against the USB/IP emulator: a write the device has not taken
+  // cannot be aborted, and a port with one outstanding neither closes nor opens again, however soon
+  // the device recovers. Tearing the connection down for a write timeout therefore made recovery
+  // impossible. See ADR-0038.
+
+  /** Past the deadline of the tab holding the port, which starts the write a little after `send()`. */
+  const PAST_THE_DEADLINE_MS = 2_000;
+
+  async function connectedTab(): Promise<{
+    harness: BrowserHarness;
+    device: ReturnType<BrowserHarness['serial']['addDevice']>;
+    tab: VirtualTab;
+    records: ReturnType<typeof recordingLogger>['records'];
+  }> {
+    const { logger, records } = recordingLogger();
+    const harness = new BrowserHarness({ logger });
+    const device = harness.serial.addDevice(READER.vendorId, READER.productId);
+    harness.serial.grant(device);
+    const tab = harness.openTab();
+    await tab.setup('Reader', { ...READER_OPTIONS, connection: { writeTimeoutMs: 1_000 } });
+    return { harness, device, tab, records };
+  }
+
+  it('fails the write with WRITE_TIMEOUT and keeps the connection', async () => {
+    const { harness, device, tab, records } = await connectedTab();
+
+    device.pauseWrites();
+    const outcome = tab.client.send('Reader', 'HELD').catch((reason: unknown) => reason);
+    // Settled first: advancing the clock fires the deadline before a write not yet begun can begin.
+    await harness.settle();
+    await harness.advance(PAST_THE_DEADLINE_MS);
+
+    expect(await outcome).toMatchObject({ code: SerialBrokerErrorCode.WRITE_TIMEOUT });
+    expect(fieldsOfEvent(records, 'supervisor.write-stalled')).toHaveLength(1);
+    await harness.advance(10_000);
+    expect(tab.client.getStatus('Reader').status).toBe(SerialBrokerStatus.Open);
+    expect(tab.statusTrail('Reader')).not.toContain(SerialBrokerStatus.Reconnecting);
+  });
+
+  it('begins nothing behind the write, and carries on once the device takes it', async () => {
+    const { harness, device, tab, records } = await connectedTab();
+
+    device.pauseWrites();
+    const first = tab.client.send('Reader', 'FIRST').catch((reason: unknown) => reason);
+    await harness.advance(500);
+    const second = tab.client.send('Reader', 'SECOND').catch((reason: unknown) => reason);
+    await harness.advance(PAST_THE_DEADLINE_MS);
+
+    expect(await first).toMatchObject({ code: SerialBrokerErrorCode.WRITE_TIMEOUT });
+    // Never begun, so it can safely be sent again - and it is not written when the device recovers.
+    expect(await second).toMatchObject({
+      code: SerialBrokerErrorCode.WRITE_TIMEOUT,
+      context: { started: false },
+    });
+    expect(fieldsOfEvent(records, 'supervisor.write-stalled')).toHaveLength(1);
+
+    device.resumeWrites();
+    await harness.settle();
+    await tab.client.send('Reader', 'THIRD');
+
+    expect(device.writtenText()).toBe('FIRSTTHIRD');
+    expect(tab.statusTrail('Reader')).not.toContain(SerialBrokerStatus.Reconnecting);
+  });
+
+  it('reconnects when the write it gave up on fails afterwards', async () => {
+    const { harness, device, tab, records } = await connectedTab();
+
+    device.pauseWrites();
+    const outcome = tab.client.send('Reader', 'HELD').catch((reason: unknown) => reason);
+    // Settled first: advancing the clock fires the deadline before a write not yet begun can begin.
+    await harness.settle();
+    await harness.advance(PAST_THE_DEADLINE_MS);
+    expect(await outcome).toMatchObject({ code: SerialBrokerErrorCode.WRITE_TIMEOUT });
+    expect(fieldsOfEvent(records, 'supervisor.write-stalled')).toHaveLength(1);
+
+    device.faults.failWriteWith = 'NetworkError';
+    device.resumeWrites();
+    await harness.advance(100);
+
+    expect(fieldsOfEvent(records, 'supervisor.reconnect')[0]?.['reason']).toBe('write-failed');
+    expect(tab.statusTrail('Reader')).toContain(SerialBrokerStatus.Reconnecting);
+    expect(tab.errorCodes('Reader')).toContain(SerialBrokerErrorCode.WRITE_FAILED);
+  });
+});
+
 describe('leaving the election', () => {
   it('lets go of a lock that was granted but whose callback has not run yet', async () => {
     const locks = new FakeLockManager();

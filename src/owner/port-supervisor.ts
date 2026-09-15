@@ -1,7 +1,7 @@
 import { BackoffState, computeBackoffDelayMs } from '../core/backoff.js';
 import { toHex } from '../core/bytes.js';
 import type { TimerHandle } from '../core/clock.js';
-import { withDeadline } from '../core/deadline.js';
+import { createDeferred, withDeadline } from '../core/deadline.js';
 import type { NormalizedConfiguration, NormalizedDeviceFilter } from '../core/defaults.js';
 import type { ConnectionDiagnostics } from '../core/diagnostics.js';
 import { SerialBrokerErrorCode } from '../core/error-codes.js';
@@ -265,6 +265,9 @@ export class PortSupervisor {
     const { writeTimeoutMs, maxWriteChunkBytes } = this.configuration.connection;
     const queuedAt = clock.monotonicNow();
     let expiry: TimerHandle | undefined;
+    // Rejected when a chunk outlives its deadline at the device, which tells the caller while the
+    // chunk itself stays in flight (see below).
+    const stalled = createDeferred<never>();
 
     const queued = this.#writes.enqueueWithdrawable(async () => {
       if (expiry !== undefined) {
@@ -295,8 +298,9 @@ export class PortSupervisor {
       let bytesWritten = 0;
       do {
         const chunk = payload.subarray(bytesWritten, bytesWritten + maxWriteChunkBytes);
+        const written = Promise.resolve(state.writer.write(chunk));
         try {
-          await withDeadline(state.writer.write(chunk), this.environment.clock, {
+          await withDeadline(written, this.environment.clock, {
             timeoutMs: this.configuration.connection.writeTimeoutMs,
             code: SerialBrokerErrorCode.WRITE_TIMEOUT,
             message: 'The device did not accept the write in time',
@@ -304,6 +308,20 @@ export class PortSupervisor {
             context: { bytesWritten, byteLength: payload.byteLength },
           });
         } catch (error) {
+          if (
+            error instanceof SerialBrokerError &&
+            error.code === SerialBrokerErrorCode.WRITE_TIMEOUT
+          ) {
+            // The device has not taken the chunk. Tearing the connection down would not help: the
+            // browser cannot abort a write the operating system still holds, and a port with one
+            // outstanding neither closes nor opens again, however soon the device recovers
+            // (measured in Chromium on Windows, ADR-0038). So the caller hears now, and the chunk
+            // stays in flight - holding the queue, so that nothing behind it begins - until the
+            // device takes it or the connection is lost.
+            stalled.reject(error);
+            await this.#awaitStalledWrite(written, state, chunk.byteLength);
+            return;
+          }
           // A failed write means the connection is suspect: report it to the caller with how
           // far it got, and start recovery, because the next write would fail the same way.
           const failure =
@@ -341,10 +359,49 @@ export class PortSupervisor {
     }, writeTimeoutMs);
 
     try {
-      await queued.promise;
+      await Promise.race([queued.promise, stalled.promise]);
     } finally {
       // Safe for a timer that has fired: clearing it then does nothing.
       clock.clearTimer(expiry);
+    }
+  }
+
+  /**
+   * Waits for a chunk the device did not accept in time, once its caller has been told so.
+   *
+   * Taken late, the chunk changes nothing but the byte count: its write has already failed. A
+   * stream that fails instead is a lost connection, like any failed write - unless the connection
+   * it was written to has already been replaced.
+   */
+  async #awaitStalledWrite(
+    written: Promise<unknown>,
+    state: Extract<ConnectionState, { kind: 'open' }>,
+    chunkBytes: number,
+  ): Promise<void> {
+    this.logger.warn('the device did not accept a write in time; it stays in flight', {
+      configName: this.configuration.name,
+      event: 'supervisor.write-stalled',
+      chunkBytes,
+    });
+    try {
+      await written;
+      this.#bytesSent += chunkBytes;
+    } catch (error) {
+      if (this.#state === state) {
+        this.#handleConnectionLoss(
+          'write-failed',
+          new SerialBrokerError(
+            SerialBrokerErrorCode.WRITE_FAILED,
+            `The device rejected the write: ${describeUnknown(error)}`,
+            {
+              configName: this.configuration.name,
+              context: { chunkBytes },
+              timestamp: this.environment.clock.now(),
+              cause: error,
+            },
+          ),
+        );
+      }
     }
   }
 

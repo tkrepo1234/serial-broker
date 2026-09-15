@@ -196,19 +196,20 @@ them or by letting the user choose the device. See
 ### `send(name, data): Promise<void>`
 
 Sends `string` (UTF-8) or `BufferSource`. **Nothing is appended** — no newline, no terminator.
-The promise resolves once the bytes have been handed to the device.
+The promise resolves once the browser has taken the bytes for the port, not once the device has
+received them: Web Serial does not report that.
 
 Whichever tab currently owns the port performs the write; the caller does not have to be that
 tab and cannot tell whether it is.
 
 ### `subscribe(name, event, listener): () => void`
 
-| Event            | Payload                                       | Fires                                                                        |
-| ---------------- | --------------------------------------------- | ---------------------------------------------------------------------------- |
-| `onReceive`      | `{ name, data, text?, timestamp }`            | A chunk arrived, in every tab.                                               |
-| `onSend`         | `{ name, data, origin, timestamp }`           | Bytes reached the device, in every tab. `origin` is `'local'` or `'remote'`. |
-| `onError`        | `{ name, error, timestamp }`                  | Something went wrong.                                                        |
-| `onStatusChange` | `{ name, status, previousStatus, timestamp }` | The connection status changed.                                               |
+| Event            | Payload                                       | Fires                                                                                   |
+| ---------------- | --------------------------------------------- | --------------------------------------------------------------------------------------- |
+| `onReceive`      | `{ name, data, text?, timestamp }`            | A chunk arrived, in every tab.                                                          |
+| `onSend`         | `{ name, data, origin, timestamp }`           | The browser took bytes for the port, in every tab. `origin` is `'local'` or `'remote'`. |
+| `onError`        | `{ name, error, timestamp }`                  | Something went wrong.                                                                   |
+| `onStatusChange` | `{ name, status, previousStatus, timestamp }` | The connection status changed.                                                          |
 
 Returns a function that removes the listener. `unsubscribe(name, event, listener)` does the
 same for code that keeps its callbacks.
@@ -400,8 +401,8 @@ see [`test/harness/`](./test/harness/) and the scenario matrix in
 [docs/guidelines/testing.md](./docs/guidelines/testing.md).
 
 `npm run test:browser` then runs the **built** package in a real Chromium — several tabs of one
-origin, a real `SharedWorker`, real Web Locks — and, when a device is attached and
-`SERIAL_BROKER_HARDWARE=arduino` says so, against real hardware
+origin, a real `SharedWorker`, real Web Locks — and, when `SERIAL_BROKER_HARDWARE` says so,
+against real hardware or the USB/IP emulator
 ([ADR-0035](./docs/adr/0035-browser-tests-with-playwright.md)).
 
 Before changing anything, read [the engineering guidelines](./docs/guidelines/). They are

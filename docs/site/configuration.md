@@ -123,8 +123,10 @@ rates work is a property of the adapter, and `open()` reports a rate it cannot u
 as replacement characters in decoded text.
 
 `bufferSize`
-: The size of the read buffer the browser allocates. The default suits most devices. Raise it for
-a device that sends large bursts faster than the page reads them; there is no benefit beyond that.
+: The size of the buffers the browser allocates for the port, one for each direction. The default
+suits most devices. Raise it for a device that sends large bursts faster than the page reads them.
+A write that fits in the transmit buffer resolves as soon as it is there, before the device has
+taken it; a larger buffer makes more writes resolve early, not faster.
 
 `flowControl`
 : `'hardware'` uses RTS/CTS. Enable it only if the device and cable support it: with a device that

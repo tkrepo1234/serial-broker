@@ -166,8 +166,10 @@ export interface SerialBrokerApi {
    * @param name - The configuration name passed to {@link SerialBrokerApi.setup}.
    * @param data - Text, encoded as UTF-8, or raw bytes. Nothing is appended: no newline, no
    *   terminator. What you pass is what the device receives.
-   * @returns A promise that resolves once the bytes have been handed to the device - not once
-   *   the device has acted on them, which a serial port cannot report.
+   * @returns A promise that resolves once the browser has taken the bytes for the port - into its
+   *   transmit buffer of `serial.bufferSize` bytes - not once the device has received them, which
+   *   Web Serial does not report. A device that has stopped taking data fails a write with
+   *   `WRITE_TIMEOUT` only once that buffer is full (ADR-0038).
    * @throws A `SerialBrokerError` with code `UNKNOWN_CONFIGURATION`, `INVALID_ARGUMENT` for a
    *   string while an `encoding` other than UTF-8 is configured or for more than 16 MiB of data,
    *   `WRITE_FAILED`, `WRITE_TIMEOUT`,

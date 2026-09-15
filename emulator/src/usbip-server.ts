@@ -50,6 +50,8 @@ export type ServerEvent =
   | { readonly kind: 'attached'; readonly remoteAddress: string }
   | { readonly kind: 'import-refused'; readonly remoteAddress: string; readonly reason: string }
   | { readonly kind: 'detached'; readonly reason: 'unplugged' | 'connection-closed' }
+  /** The client cancelled a transfer; `wasPending` is false when it had already completed. */
+  | { readonly kind: 'unlinked'; readonly seqnum: number; readonly wasPending: boolean }
   | { readonly kind: 'protocol-error'; readonly remoteAddress: string; readonly message: string }
   | { readonly kind: 'server-error'; readonly message: string };
 
@@ -270,7 +272,10 @@ export class UsbipServer {
     if (command.kind === 'submit') {
       this.#device.submit(command);
     } else {
-      socket.write(encodeUnlinkReply(command.seqnum, this.#device.unlink(command)));
+      const status = this.#device.unlink(command);
+      socket.write(encodeUnlinkReply(command.seqnum, status));
+      // A cancelled transfer answers with a negative errno; one that had completed, with 0.
+      this.#onEvent({ kind: 'unlinked', seqnum: command.unlinkSeqnum, wasPending: status < 0 });
     }
     return length;
   }

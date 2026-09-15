@@ -46,3 +46,4 @@ because of a decision references it in a comment (`// See ADR-0005.`).
 | [0035](./0035-browser-tests-with-playwright.md)                          | Test the built package in a real browser, and against real hardware                 | Accepted                                |
 | [0036](./0036-take-the-device-identity-from-the-chosen-port.md)          | Take the device identity from the port the user chooses                             | Accepted                                |
 | [0037](./0037-measure-performance-against-expectations-written-first.md) | Measure performance against expectations written first                              | Accepted                                |
+| [0038](./0038-leave-a-write-the-device-has-not-taken-in-flight.md)       | Leave a write the device has not taken in flight                                    | Accepted                                |

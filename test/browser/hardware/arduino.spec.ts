@@ -20,12 +20,11 @@
 
 import process from 'node:process';
 
-import { chromium, expect, test as base, type BrowserContext } from '@playwright/test';
+import { expect, test as base, type BrowserContext } from '@playwright/test';
 
 import { echoConfiguration, Tab } from '../support/tab.js';
 
-import { createProfileWithSerialPermission } from './support/seeded-profile.js';
-import { findWindowsSerialDevices } from './support/windows-serial-device.js';
+import { holderOf, launchWithSerialPermission, occurrences } from './support/hardware-context.js';
 
 /** The device under test: an Arduino with an echo sketch. */
 const ARDUINO = { vendorId: 0x2341, productId: 0x0078 } as const;
@@ -47,30 +46,7 @@ const SETTLE_AFTER_OPEN_MS = 2_500;
 const test = base.extend<{ hardware: BrowserContext }>({
   // eslint-disable-next-line no-empty-pattern -- Playwright's fixture signature.
   hardware: async ({}, use, testInfo) => {
-    const devices = findWindowsSerialDevices(ARDUINO.vendorId, ARDUINO.productId);
-    const device = devices.find((it) => it.portName === PORT_NAME) ?? devices[0];
-    if (device === undefined) {
-      throw new Error(
-        'No serial port with USB 0x2341/0x0078 is attached, or this is not Windows, where the ' +
-          'permission is seeded by device instance ID. Check the cable and the Device Manager.',
-      );
-    }
-
-    const baseURL = String(testInfo.project.use.baseURL);
-    const profile = await createProfileWithSerialPermission(testInfo.outputPath('profile'), {
-      origin: new URL(baseURL).origin,
-      deviceInstanceId: device.deviceInstanceId,
-      name: device.name,
-    });
-
-    // A context of its own, with a profile of its own: the permission is in that profile, and
-    // the browser started for the rest of the suite has none.
-    const context = await chromium.launchPersistentContext(profile, {
-      ...(testInfo.project.use.channel === undefined
-        ? {}
-        : { channel: testInfo.project.use.channel }),
-      baseURL,
-    });
+    const context = await launchWithSerialPermission(testInfo, ARDUINO, PORT_NAME);
 
     await use(context);
 
@@ -123,36 +99,6 @@ async function text(tab: Tab | undefined): Promise<string> {
   return (await tab?.receivedText(CONFIGURATION)) ?? '';
 }
 
-/** How often `needle` occurs in `haystack`. */
-function occurrences(haystack: string, needle: string): number {
-  return haystack.split(needle).length - 1;
-}
-
-/**
- * Waits until exactly one of these tabs holds the port, and says which.
- *
- * A handover is not instantaneous - the successor has to open a real COM port - so this polls
- * rather than asserting once.
- */
-async function holderOf(tabs: readonly Tab[], timeoutMs = 30_000): Promise<number> {
-  const deadline = Date.now() + timeoutMs;
-  for (;;) {
-    const holders: number[] = [];
-    for (const [index, tab] of tabs.entries()) {
-      if (await tab.holdsOwnerLock(CONFIGURATION)) {
-        holders.push(index);
-      }
-    }
-    if (holders.length === 1) {
-      return holders[0] as number;
-    }
-    if (Date.now() >= deadline) {
-      expect(holders, 'exactly one tab holds the port').toHaveLength(1);
-    }
-    await new Promise((resolve) => setTimeout(resolve, 250));
-  }
-}
-
 test.describe('an Arduino running an echo sketch', () => {
   // One port, one board: these tests cannot overlap.
   test.describe.configure({ mode: 'serial' });
@@ -198,14 +144,14 @@ test.describe('an Arduino running an echo sketch', () => {
 
   test('keeps echoing when the tab holding the port closes', async ({ hardware }) => {
     const tabs = await connectedTabs(hardware, 3);
-    const holder = await holderOf(tabs);
+    const holder = await holderOf(tabs, CONFIGURATION);
     const survivors = tabs.filter((_, index) => index !== holder);
 
     await tabs[holder]?.page.close();
 
     // The port is reopened by another tab - a real open of a real COM port, including the
     // board's reset - and then the echo works again from a tab that never had it.
-    await holderOf(survivors);
+    await holderOf(survivors, CONFIGURATION);
     await survivors[0]?.page.waitForTimeout(SETTLE_AFTER_OPEN_MS);
     await survivors[0]?.send(CONFIGURATION, 'AFTER-FAILOVER');
     for (const tab of survivors) {

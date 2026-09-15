@@ -67,7 +67,7 @@ tab goes away. [How shared ports behave](shared-ports.md) is what that takes to 
 :end-before: // [/send]
 ```
 
-**Concepts:** nothing is appended; the promise resolves once the bytes were handed to the device,
+**Concepts:** nothing is appended; the promise resolves once the browser has taken the bytes for the port,
 and waits for a connection up to `connection.writeTimeoutMs`; a write that had begun when the tab
 holding the port went away rejects with `OWNER_LOST_DURING_WRITE` and is not sent again.
 

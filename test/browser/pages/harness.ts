@@ -49,6 +49,14 @@ export interface PageHarness {
   lastAccessRequest(): string | undefined;
   send(name: string, text: string): Promise<void>;
   /**
+   * Starts a send without waiting for it, for a scenario that has to act while it is in flight.
+   *
+   * @returns A handle for {@link PageHarness.sendOutcome}.
+   */
+  startSend(name: string, text: string): number;
+  /** How a send from {@link PageHarness.startSend} ended: `pending`, `sent` or `error:<code>`. */
+  sendOutcome(handle: number): string;
+  /**
    * Sends `byteLength` bytes of the pattern {@link patternByteAt}, and starts looking for it in
    * what arrives.
    *
@@ -149,6 +157,7 @@ export function installHarness(
   const parameters = new URLSearchParams(location.search);
   const records: HarnessLogRecord[] = [];
   const errorCodes: string[] = [];
+  const sendOutcomes: string[] = [];
   const collected = new Map<string, Collected>();
   const traffic = new Map<string, { sent: number; failed: number }>();
   let trafficTimer: ReturnType<typeof setInterval> | undefined;
@@ -249,6 +258,20 @@ export function installHarness(
     send: async (name, text) => {
       await api.send(name, text);
     },
+    startSend: (name, text) => {
+      const handle = sendOutcomes.push('pending') - 1;
+      void api.send(name, text).then(
+        () => {
+          sendOutcomes[handle] = 'sent';
+        },
+        (error: unknown) => {
+          const code = (error as { code?: unknown }).code;
+          sendOutcomes[handle] = `error:${typeof code === 'string' ? code : String(error)}`;
+        },
+      );
+      return handle;
+    },
+    sendOutcome: (handle) => sendOutcomes[handle] ?? 'unknown',
     sendPattern: async (name, byteLength, seed) => {
       const entry = collect(name);
       entry.patternSeed = seed ?? 0;

@@ -71,6 +71,12 @@ permission through a throwaway profile written before it starts; nothing clicks 
 prompt and no machine-wide setting is changed. Record what you saw in
 [the manual test plan](./docs/manual-test-plan.md).
 
+With [usbip-win2](./emulator/README.md) installed, `SERIAL_BROKER_HARDWARE=emulator` runs the same
+suite's `emulator.spec.ts` against the USB/IP emulator instead. It needs no device: the spec starts
+the emulator, lets usbip-win2 attach it, and unplugs, hangs and slows it down on cue. Nothing else
+may be listening on port 3240, and `SERIAL_BROKER_USBIP` points at `usbip.exe` if it is not in
+`C:\Program Files\USBip`.
+
 ### Benchmarks
 
 `npm run bench` measures what the library costs on the simulated browser - latency and throughput

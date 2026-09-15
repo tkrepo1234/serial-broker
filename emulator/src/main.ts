@@ -268,6 +268,8 @@ function describeServerEvent(event: ServerEvent): string {
       return `import by ${event.remoteAddress} refused: ${event.reason}`;
     case 'detached':
       return `detached (${event.reason})`;
+    case 'unlinked':
+      return `transfer ${String(event.seqnum)} cancelled by the host${event.wasPending ? '' : ', but it had already completed'}`;
     case 'protocol-error':
       return `protocol error from ${event.remoteAddress}: ${event.message}`;
     case 'server-error':

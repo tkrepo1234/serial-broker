@@ -12,9 +12,9 @@ that matter, and they must be **deterministic**.
 | **Integration**     | `test/integration/`                                  | Several real modules against the simulated browser harness: a single tab end-to-end, reconnect, write queueing.                                                                     | Uses the harness, never the real DOM.                                                                                                                   |
 | **Multi-context**   | `test/integration/multi-tab/`                        | The actual product claim: N simulated tabs sharing one port, ownership failover, broadcast fan-out, interlocking under contention.                                                  | Mandatory for every change to `owner/`, `worker/` or `client/`.                                                                                         |
 | **Browser**         | `test/browser/`                                      | The **built** package in a real Chromium: a real `SharedWorker` handshake, real Web Locks, real `BroadcastChannel`, `dist/` loaded by a page.                                       | Scenarios only, no races; `npm run test:browser`. See below and ADR-0035.                                                                               |
-| **Hardware**        | `test/browser/hardware/`                             | The same scenarios against a real serial device, through a real UART.                                                                                                               | Runs only with `SERIAL_BROKER_HARDWARE=arduino`; results in `docs/manual-test-plan.md`.                                                                 |
+| **Hardware**        | `test/browser/hardware/`                             | The same scenarios against a real serial device, through a real UART.                                                                                                               | Runs only with `SERIAL_BROKER_HARDWARE=arduino` or `=emulator`; results in `docs/manual-test-plan.md`.                                                  |
 | **Extreme**         | `test/integration/extreme/`, `test/browser/extreme/` | What the library costs and whether it stays stable at sizes no operator reaches: a hundred tabs, an hour of full-rate traffic, thousands of writes under crashes, a simulated week. | Runs only with `SERIAL_BROKER_EXTREME=1` (`npm run test:extreme`), never in CI; each part records its last run in a `RESULTS.md` next to it. See below. |
-| **Emulated device** | `emulator/`                                          | Real Chromium and the real Windows serial stack against a USB device whose failures are scriptable.                                                                                 | Its own tests live in `emulator/test/`; runs are recorded in `docs/manual-test-plan.md`.                                                                |
+| **Emulated device** | `emulator/`                                          | Real Chromium and the real Windows serial stack against a USB device whose failures are scriptable.                                                                                 | Its own tests live in `emulator/test/`; a browser drives it in `test/browser/hardware/emulator.spec.ts`.                                                |
 | **Manual**          | `debug/`                                             | Real Chromium, real hardware. Documented, checklisted, never a substitute for the above.                                                                                            | Recorded in `docs/manual-test-plan.md`.                                                                                                                 |
 | **Benchmark**       | `bench/`                                             | What the library costs: latency, throughput, handover and start times, an hour's steady state; on the harness and in a real browser.                                                | Not a test: nothing gates on a number. `npm run bench`; see below and ADR-0037.                                                                         |
 
@@ -99,7 +99,7 @@ later for a reason that is not the library's.
 ### Against real hardware
 
 `test/browser/hardware/` runs the same scenarios against a device that answers. It is skipped
-unless `SERIAL_BROKER_HARDWARE=arduino` is set, it never runs in CI, and it **works on Windows
+unless `SERIAL_BROKER_HARDWARE` names the device (`arduino` or `emulator`), it never runs in CI, and it **works on Windows
 only**: the permission is seeded as a Windows device instance ID, read with
 `Get-CimInstance Win32_PnPEntity`, and elsewhere no port is found.
 
@@ -118,6 +118,14 @@ touched. `SERIAL_BROKER_HARDWARE_PORT` picks the port when several boards are at
 `SERIAL_BROKER_HARDWARE_LARGE=1` **in addition to** `SERIAL_BROKER_HARDWARE=arduino` adds the
 64 KiB round trip, which takes about a quarter of an hour on a board that echoes at 80 bytes a
 second: the documented command runs six tests, not seven.
+
+`SERIAL_BROKER_HARDWARE=emulator` runs `emulator.spec.ts` instead, against the
+[USB/IP emulator](../../emulator/README.md). The spec starts the emulator itself, lets usbip-win2
+attach it and drives it through its terminal, so it covers what a board on a cable cannot be made
+to do on cue: unplugged and plugged in again, hung mid-write, answering one byte per read, and an
+owner killed while its write is held at the device. It counts the bytes that reached the device
+rather than inferring them from the echo. It needs usbip-win2 (`SERIAL_BROKER_USBIP` points at
+`usbip.exe` if it is not in `C:\Program Files\USBip`) and nothing else listening on port 3240.
 
 **Record every hardware run in [the manual test plan](../manual-test-plan.md)** — date, browser
 version, device, result.
