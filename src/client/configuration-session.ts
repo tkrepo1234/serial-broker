@@ -639,10 +639,6 @@ export class ConfigurationSession {
       case 'owner-released':
       case 'hello':
       case 'welcome':
-      case 'heartbeat':
-      case 'goodbye':
-      case 'attach':
-      case 'detach':
       case 'worker-log':
         // Presence bookkeeping and the worker's own records, handled by the broker or the
         // transport, which logs a forwarded record itself (ADR-0029). Nothing to do here.

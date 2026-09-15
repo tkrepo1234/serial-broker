@@ -203,11 +203,11 @@ export class BrowserHarness {
   readonly bus: FakeBus;
   readonly clock = new FakeClock();
   /**
-   * Time for the message bus: the heartbeats tabs send and the worker's sweep (ADR-0021).
+   * Time for the message bus: the deadline of the worker's handshake (ADR-0041).
    *
    * Separate from {@link clock}, so that a test asserting on the library's own timers - "no
-   * reconnect is scheduled any more" - is not disturbed by the bus's, and a test about heartbeats
-   * moves this one.
+   * reconnect is scheduled any more" - is not disturbed by the bus's, and a test about a worker
+   * that never answers moves this one.
    */
   readonly busClock = new FakeClock();
   readonly storage = new FakeStorage();
@@ -232,6 +232,7 @@ export class BrowserHarness {
       options.transport ?? 'sharedworker',
       options.workerScript ?? 'loads',
       this.busClock,
+      this.locks,
     );
   }
 
@@ -328,7 +329,7 @@ export class BrowserHarness {
    * itself is granted and held, as the lock manager lives outside the page. Time goes on, and what
    * other contexts do goes on.
    *
-   * Not held: the context's heartbeats to the worker, which run on the bus clock in `fake-bus.ts`,
+   * Not held: the deadline of the worker's handshake, which runs on the bus clock in `fake-bus.ts`,
    * and the port's streams. Chromium does not freeze a page that uses Web Serial or holds a lock
    * another page waits for, so a frozen tab holding an open port is not a state to test against.
    */

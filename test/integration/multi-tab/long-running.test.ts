@@ -2,10 +2,6 @@ import { describe, expect, it } from 'vitest';
 
 import type { SerialBrokerClient } from '../../../src/client/serial-broker-client.js';
 import { SerialBrokerStatus } from '../../../src/core/types.js';
-import {
-  SILENT_PARTICIPANT_TIMEOUT_MS,
-  SWEEP_INTERVAL_MS,
-} from '../../../src/protocol/heartbeat.js';
 import { ownerLockName } from '../../../src/protocol/version.js';
 import { persistenceLockName } from '../../../src/storage/persistence-hold.js';
 import { BrowserHarness, TRANSPORT_MODES } from '../../harness/browser-harness.js';
@@ -103,8 +99,8 @@ describe.each(TRANSPORT_MODES)('a deployment left running (%s)', (transport) => 
       live.push(joining);
       await elapse(harness, 2_000);
     }
-    // Long enough for the worker to forget the killed tabs (ADR-0021).
-    await elapse(harness, SILENT_PARTICIPANT_TIMEOUT_MS + SWEEP_INTERVAL_MS);
+    // The worker forgets a killed tab as soon as the browser lets go of its lock (ADR-0041).
+    await elapse(harness, 1_000);
 
     expect(
       footprintOf(

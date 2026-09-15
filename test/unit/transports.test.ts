@@ -10,15 +10,17 @@ import {
   type WorkerLoadFailure,
 } from '../../src/client/transport/shared-worker-transport.js';
 import type { Logger } from '../../src/core/types.js';
-import { HEARTBEAT_INTERVAL_MS } from '../../src/protocol/heartbeat.js';
 import { BROKER_ID, type ClientId, type ProtocolMessage } from '../../src/protocol/messages.js';
-import { PROTOCOL_VERSION } from '../../src/protocol/version.js';
+import { contextLockName, PROTOCOL_VERSION, workerLockName } from '../../src/protocol/version.js';
+import { flushMicrotasks } from '../harness/fake-clock.js';
 import { recordingLogger } from '../harness/recording-logger.js';
 import {
   envelope,
   FakeMessagePort,
+  holdLock,
   recordTransportRequest,
   type TransportRequestRecorder,
+  welcome,
 } from '../harness/transport-doubles.js';
 
 const SELF = 'self' as ClientId;
@@ -39,20 +41,58 @@ describe('SharedWorkerTransport', () => {
     return { ...rec, port, transport };
   }
 
-  it('announces itself as soon as it connects', () => {
-    const { port } = create();
+  it('announces itself once it holds its own lock', async () => {
+    const { port, locks } = create();
+    await flushMicrotasks();
 
-    expect((port.posted[0] as ProtocolMessage).type).toBe('hello');
+    expect(port.posted).toEqual([expect.objectContaining({ type: 'hello', configNames: [] })]);
+    // The worker waits on this lock, and forgets the tab once the browser lets go of it (ADR-0041).
+    expect(locks.holderOf(contextLockName(SELF))).toBe(SELF);
   });
 
-  it('sends attach and detach as messages, because the broker needs to know', () => {
+  it('says hello again, naming what it takes part in, whenever that changes', async () => {
     const { transport, port } = create();
+    await flushMicrotasks();
 
     transport.attach('Reader');
+    transport.attach('Scale');
     transport.detach('Reader');
 
-    expect((port.posted[1] as ProtocolMessage).type).toBe('attach');
-    expect((port.posted[2] as ProtocolMessage).type).toBe('detach');
+    expect(port.posted.slice(1)).toEqual([
+      expect.objectContaining({ type: 'hello', configNames: ['Reader'] }),
+      expect.objectContaining({ type: 'hello', configNames: ['Reader', 'Scale'] }),
+      expect.objectContaining({ type: 'hello', configNames: ['Scale'] }),
+    ]);
+  });
+
+  it('sends nothing before its hello, and what waited follows it in order', async () => {
+    const rec = recordTransportRequest(SELF);
+    // Somebody else holds the lock for a moment: the transport waits for it.
+    let release: () => void = () => undefined;
+    void rec.locks.forContext('other').request(contextLockName(SELF), {}, async () => {
+      await new Promise<void>((resolve) => {
+        release = resolve;
+      });
+    });
+    const port = new FakeMessagePort();
+    const transport = new SharedWorkerTransport(
+      rec.request,
+      () => ({ port, addEventListener: () => undefined }),
+      'fake://worker',
+    );
+
+    transport.attach('Reader');
+    transport.send(envelope(SELF, 'all', STATUS_REQUEST) as ProtocolMessage);
+    await flushMicrotasks();
+    const postedWhileWaiting = port.posted.length;
+    release();
+    await flushMicrotasks();
+
+    expect(postedWhileWaiting).toBe(0);
+    expect(port.posted).toEqual([
+      expect.objectContaining({ type: 'hello', configNames: ['Reader'] }),
+      expect.objectContaining({ type: 'status-request' }),
+    ]);
   });
 
   it('delivers a valid message from the broker', () => {
@@ -134,7 +174,7 @@ describe('SharedWorkerTransport', () => {
     expect(messages).toHaveLength(0);
   });
 
-  it('reports a failure to post rather than throwing into the caller', () => {
+  it('reports a failure to post rather than throwing into the caller', async () => {
     const rec = recordTransportRequest(SELF);
     const port = new FakeMessagePort();
     Object.assign(port, {
@@ -146,6 +186,7 @@ describe('SharedWorkerTransport', () => {
 
     const transport = new SharedWorkerTransport(rec.request, () => worker, 'fake://w');
     transport.attach('Reader');
+    await flushMicrotasks();
 
     // A caller in the middle of a state transition has nothing useful to do with an exception
     // from a postMessage.
@@ -160,17 +201,22 @@ describe('SharedWorkerTransport', () => {
     expect(transportErrors).toHaveLength(1);
   });
 
-  it('says goodbye and closes the port', () => {
-    const { transport, port } = create();
+  it('closes the port and lets go of its lock, which is all the worker needs to hear', async () => {
+    const { transport, port, locks } = create();
+    await flushMicrotasks();
+    const posted = port.posted.length;
 
     transport.close();
+    await flushMicrotasks();
 
-    expect((port.posted.at(-1) as ProtocolMessage).type).toBe('goodbye');
+    expect(port.posted).toHaveLength(posted);
     expect(port.closed).toBe(true);
+    expect(locks.holderOf(contextLockName(SELF))).toBeUndefined();
   });
 
-  it('is safe to close twice and sends nothing afterwards', () => {
+  it('is safe to close twice and sends nothing afterwards', async () => {
     const { transport, port } = create();
+    await flushMicrotasks();
 
     transport.close();
     const after = port.posted.length;
@@ -251,12 +297,8 @@ describe('BroadcastChannelTransport', () => {
   });
 
   it.each([
-    ['hello', {}],
-    ['welcome', {}],
-    ['goodbye', {}],
-    ['heartbeat', { configNames: ['Reader'] }],
-    ['attach', { configName: 'Reader' }],
-    ['detach', { configName: 'Reader' }],
+    ['hello', { configNames: ['Reader'] }],
+    ['welcome', { worker: 'worker-1' }],
     ['worker-log', { level: 'warn', message: 'x', fields: { event: 'worker.message-refused' } }],
   ])('passes on no %s, which is meant for a broker and read by nobody above it', (type, body) => {
     const { transport, deliver, messages } = create();
@@ -362,7 +404,7 @@ describe('both transports', () => {
 });
 
 describe('SharedWorkerTransport, while its script is starting', () => {
-  const WELCOME = { v: PROTOCOL_VERSION, from: 'serial-broker/broker', to: SELF, type: 'welcome' };
+  const WELCOME = welcome(SELF) as Record<string, unknown>;
 
   function start(): TransportRequestRecorder & {
     port: FakeMessagePort;
@@ -371,6 +413,8 @@ describe('SharedWorkerTransport, while its script is starting', () => {
     failToLoad: () => void;
   } {
     const rec = recordTransportRequest(SELF);
+    // The worker that will welcome this tab holds its lifetime lock, as a running worker does.
+    holdLock(rec.locks, 'worker', workerLockName('worker-1'));
     const port = new FakeMessagePort();
     let errorListener: (event: unknown) => void = () => undefined;
     const worker: SharedWorkerLike = {
@@ -479,50 +523,6 @@ describe('SharedWorkerTransport, while its script is starting', () => {
     port.deliver({ ...WELCOME, v: PROTOCOL_VERSION - 1 });
 
     expect(loadFailures).toEqual([]);
-  });
-});
-
-describe('SharedWorkerTransport heartbeats', () => {
-  function start(): TransportRequestRecorder & {
-    port: FakeMessagePort;
-    transport: SharedWorkerTransport;
-  } {
-    const rec = recordTransportRequest(SELF);
-    const port = new FakeMessagePort();
-    const worker: SharedWorkerLike = { port, addEventListener: () => undefined };
-    const transport = new SharedWorkerTransport(rec.request, () => worker, 'fake://worker');
-    return { ...rec, port, transport };
-  }
-
-  it('tells the broker periodically what this context takes part in and owns', async () => {
-    const { transport, port, clock } = start();
-    transport.attach('Reader');
-    transport.attach('Printer');
-    transport.detach('Printer');
-    port.posted.length = 0;
-
-    await clock.advance(HEARTBEAT_INTERVAL_MS);
-
-    expect(port.posted).toEqual([
-      expect.objectContaining({
-        type: 'heartbeat',
-        configNames: ['Reader'],
-      }),
-    ]);
-
-    await clock.advance(HEARTBEAT_INTERVAL_MS);
-    expect(port.posted.at(-1)).toMatchObject({ configNames: ['Reader'] });
-  });
-
-  it('stops sending heartbeats once closed', async () => {
-    const { transport, port, clock } = start();
-
-    transport.close();
-    port.posted.length = 0;
-    await clock.advance(3 * HEARTBEAT_INTERVAL_MS);
-
-    expect(port.posted).toEqual([]);
-    expect(clock.pendingTimerCount).toBe(0);
   });
 });
 

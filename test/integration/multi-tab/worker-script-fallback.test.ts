@@ -3,16 +3,10 @@ import { describe, expect, it } from 'vitest';
 import { SerialBrokerErrorCode } from '../../../src/core/error-codes.js';
 import { SerialBrokerStatus } from '../../../src/core/types.js';
 import type { LogFields } from '../../../src/core/types.js';
-import {
-  HEARTBEAT_INTERVAL_MS,
-  MAX_UNANSWERED_HEARTBEATS,
-} from '../../../src/protocol/heartbeat.js';
+import { HANDSHAKE_DEADLINE_MS } from '../../../src/protocol/handshake.js';
 import { BrowserHarness } from '../../harness/browser-harness.js';
 import { READER, READER_OPTIONS } from '../../harness/devices.js';
 import { recordingLogger } from '../../harness/recording-logger.js';
-
-/** Enough for every tab to miss the heartbeats that mark a broker as gone, whatever its timer's phase. */
-const DETECTION_MS = (MAX_UNANSWERED_HEARTBEATS + 1) * HEARTBEAT_INTERVAL_MS;
 
 /**
  * A worker script that was not deployed, or is served from the wrong path (ADR-0007).
@@ -155,7 +149,7 @@ describe('tabs whose worker script is of another protocol version', () => {
     // from that URL runs the new script: only a reload helps (ADR-0024, amended).
     harness.bus.crashWorker('other-version');
     for (let round = 0; round < 10; round += 1) {
-      await harness.busClock.advance(DETECTION_MS);
+      await harness.busClock.advance(HANDSHAKE_DEADLINE_MS);
       await harness.settle();
     }
 

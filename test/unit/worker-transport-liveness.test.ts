@@ -7,14 +7,16 @@ import {
 } from '../../src/client/transport/shared-worker-transport.js';
 import type { Clock } from '../../src/core/clock.js';
 import type { Logger } from '../../src/core/types.js';
-import { HEARTBEAT_INTERVAL_MS, MAX_UNANSWERED_HEARTBEATS } from '../../src/protocol/heartbeat.js';
+import { HANDSHAKE_DEADLINE_MS } from '../../src/protocol/handshake.js';
 import { BROKER_ID, type ClientId, type ProtocolMessage } from '../../src/protocol/messages.js';
-import { PROTOCOL_VERSION } from '../../src/protocol/version.js';
-import type { FakeClock } from '../harness/fake-clock.js';
+import { PROTOCOL_VERSION, workerLockName } from '../../src/protocol/version.js';
+import { flushMicrotasks, type FakeClock } from '../harness/fake-clock.js';
+import type { FakeLockManager } from '../harness/fake-locks.js';
 import { fieldsOfEvent, recordingLogger } from '../harness/recording-logger.js';
 import {
   envelope,
   FakeMessagePort,
+  holdLock,
   recordTransportRequest,
   type TransportRequestRecorder,
 } from '../harness/transport-doubles.js';
@@ -26,39 +28,42 @@ const PEER = 'peer' as ClientId;
 const THROTTLED_TIMER_MS = 60_000;
 
 /**
- * A port to a worker whose broker answers `hello` and every heartbeat at once, for as long as the
- * worker lives.
+ * A port to a worker, which holds its lifetime lock while it runs and answers `hello` with a welcome
+ * naming that lock (ADR-0041).
  *
- * A worker of another protocol version answers only `hello`, in its own version, and drops
- * everything else (ADR-0024).
+ * A worker that does not answer never welcomes anyone. A worker of another protocol version answers
+ * only `hello`, in its own version, and drops everything else (ADR-0024).
  */
 class WorkerPort extends FakeMessagePort {
-  isAlive: boolean;
-  readonly isOtherVersion: boolean;
-
-  constructor(isAlive: boolean, isOtherVersion = false) {
+  constructor(
+    private readonly locks: FakeLockManager,
+    readonly workerId: string,
+    readonly answers: boolean,
+    readonly isOtherVersion: boolean,
+  ) {
     super();
-    this.isAlive = isAlive;
-    this.isOtherVersion = isOtherVersion;
+    if (answers && !isOtherVersion) {
+      holdLock(locks, workerId, workerLockName(workerId));
+    }
   }
 
   override postMessage(message: unknown): void {
     super.postMessage(message);
-    const type = (message as { readonly type?: unknown }).type;
-    if (this.isOtherVersion) {
-      if (type === 'hello') {
-        this.deliver({ v: PROTOCOL_VERSION - 1, from: BROKER_ID, to: SELF, type: 'welcome' });
-      }
+    if ((message as { readonly type?: unknown }).type !== 'hello' || !this.answers) {
       return;
     }
-    if (this.isAlive && (type === 'hello' || type === 'heartbeat')) {
-      this.deliver({
-        v: PROTOCOL_VERSION,
-        from: 'serial-broker/broker',
-        to: SELF,
-        type: 'welcome',
-      });
-    }
+    this.deliver({
+      v: this.isOtherVersion ? PROTOCOL_VERSION - 1 : PROTOCOL_VERSION,
+      from: BROKER_ID,
+      to: SELF,
+      type: 'welcome',
+      worker: this.workerId,
+    });
+  }
+
+  /** The worker ends: crashed, ended by the browser, terminated. Only its lock tells. */
+  end(): void {
+    this.locks.killContext(this.workerId);
   }
 }
 
@@ -76,22 +81,26 @@ function throttled(clock: FakeClock, minimumDelayMs: number): Clock {
 
 /**
  * A transport whose factory starts a new worker every time it is called, as `new SharedWorker`
- * does once the previous worker has died.
+ * does once the previous worker has ended. Settled: the transport holds its own lock and has said
+ * hello.
  */
-function start(
+async function start(
   options: {
     throttle?: boolean;
-    workersAnswer?: boolean;
+    /** The number of the first worker that does not answer. */
+    silentFrom?: number;
     /** The number of the first worker whose script runs another protocol version. */
     otherVersionFrom?: number;
     startup?: WorkerStartup;
     logger?: Logger;
   } = {},
-): TransportRequestRecorder & {
-  transport: SharedWorkerTransport;
-  workers: WorkerPort[];
-  workerErrors: ((event: unknown) => void)[];
-} {
+): Promise<
+  TransportRequestRecorder & {
+    transport: SharedWorkerTransport;
+    workers: WorkerPort[];
+    workerErrors: ((event: unknown) => void)[];
+  }
+> {
   const rec = recordTransportRequest(SELF, options.logger);
   const workers: WorkerPort[] = [];
   const workerErrors: ((event: unknown) => void)[] = [];
@@ -99,13 +108,17 @@ function start(
     options.throttle === true
       ? { ...rec.request, clock: throttled(rec.clock, THROTTLED_TIMER_MS) }
       : rec.request;
+  const from = (first: number | undefined): boolean =>
+    first !== undefined && workers.length >= first;
 
   const transport = new SharedWorkerTransport(
     request,
     () => {
       const port = new WorkerPort(
-        options.workersAnswer ?? true,
-        options.otherVersionFrom !== undefined && workers.length >= options.otherVersionFrom,
+        rec.locks,
+        `worker-${String(workers.length)}`,
+        !from(options.silentFrom),
+        from(options.otherVersionFrom),
       );
       workers.push(port);
       return {
@@ -118,11 +131,9 @@ function start(
     'fake://worker',
     options.startup,
   );
+  await flushMicrotasks();
   return { ...rec, transport, workers, workerErrors };
 }
-
-/** Long enough for the heartbeats that mark a broker as gone to go unanswered, whatever the phase. */
-const DETECTION_MS = (MAX_UNANSWERED_HEARTBEATS + 1) * HEARTBEAT_INTERVAL_MS;
 
 function worker(workers: readonly WorkerPort[], index: number): WorkerPort {
   const port = workers[index];
@@ -133,92 +144,91 @@ function worker(workers: readonly WorkerPort[], index: number): WorkerPort {
 }
 
 /**
- * How a tab notices that the worker died (ADR-0021, amended).
+ * How a tab notices that the worker ended (ADR-0041).
  *
- * A port to a dead worker reports nothing, and a transport that only sent heartbeats could not tell a
- * dead broker from one with nothing to route. The broker answers every heartbeat, so a tab counts
- * the heartbeats that go unanswered.
+ * A port to a dead worker reports nothing. The worker holds a Web Lock for its lifetime, and the tab
+ * waits on it: the browser grants it the moment the worker has ended.
  */
-describe('SharedWorkerTransport, while its broker answers', () => {
-  it('keeps its worker, however long it runs', async () => {
-    const { clock, workers, transportErrors } = start();
+describe('SharedWorkerTransport, while its worker runs', () => {
+  it('keeps its worker, however long it runs, and sends nothing to show it is there', async () => {
+    const { clock, workers, transportErrors } = await start();
+    const posted = worker(workers, 0).posted.length;
 
-    await clock.advance(100 * HEARTBEAT_INTERVAL_MS);
+    await clock.advance(100 * HANDSHAKE_DEADLINE_MS);
 
     expect(workers).toHaveLength(1);
+    expect(worker(workers, 0).posted).toHaveLength(posted);
+    expect(clock.pendingTimerCount).toBe(0);
     expect(transportErrors).toEqual([]);
   });
 
-  it('keeps its worker when the browser holds its timers back to one a minute', async () => {
-    const { clock, workers, transportErrors } = start({ throttle: true });
+  it('keeps its worker when the browser holds its timers back', async () => {
+    const { clock, workers, transportErrors } = await start({ throttle: true });
 
     await clock.advance(60 * THROTTLED_TIMER_MS);
 
-    // A throttled tab sends fewer heartbeats, and the broker still answers each of them.
+    // The welcome arrived long before the deadline ran, however late it ran.
     expect(workers).toHaveLength(1);
     expect(transportErrors).toEqual([]);
   });
 
-  it('takes any message from the broker as a sign of life, not only its answers', async () => {
-    const { clock, workers } = start();
-    worker(workers, 0).isAlive = false;
+  it('holds its own lock before it says hello', async () => {
+    const rec = recordTransportRequest(SELF);
+    const port = new FakeMessagePort();
+    new SharedWorkerTransport(
+      rec.request,
+      () => ({ port, addEventListener: () => undefined }),
+      'fake://worker',
+    );
 
-    for (let elapsed = 0; elapsed < 10 * HEARTBEAT_INTERVAL_MS; elapsed += HEARTBEAT_INTERVAL_MS) {
-      worker(workers, 0).deliver(
-        envelope(PEER, 'all', { type: 'status-request', configName: 'Reader' }),
-      );
-      await clock.advance(HEARTBEAT_INTERVAL_MS);
-    }
+    const postedAtOnce = port.posted.length;
+    await flushMicrotasks();
 
-    expect(workers).toHaveLength(1);
+    expect(postedAtOnce).toBe(0);
+    expect(port.posted).toEqual([expect.objectContaining({ type: 'hello' })]);
   });
 });
 
-describe('SharedWorkerTransport, when its broker stops answering', () => {
-  it(`starts a new worker once ${String(MAX_UNANSWERED_HEARTBEATS)} heartbeats in a row went unanswered, and not before`, async () => {
-    const { transport, clock, workers } = start();
+describe('SharedWorkerTransport, when its worker ends', () => {
+  it('starts a new worker at once, and says hello there with what it takes part in', async () => {
+    const { transport, workers } = await start();
     transport.attach('Reader');
-    worker(workers, 0).isAlive = false;
 
-    // The first heartbeat still follows the answer to hello; the next three go unanswered.
-    await clock.advance(MAX_UNANSWERED_HEARTBEATS * HEARTBEAT_INTERVAL_MS);
-    expect(workers).toHaveLength(1);
-    await clock.advance(HEARTBEAT_INTERVAL_MS);
+    worker(workers, 0).end();
+    await flushMicrotasks();
+
+    // The new broker learns this context from its hello, which restores what it takes part in. No
+    // owner-claimed: the port did not change hands.
     expect(workers).toHaveLength(2);
-
-    // The new broker learns this context from its hello and a heartbeat, which restores what it
-    // takes part in and owns. No owner-claimed: the port did not change hands.
     expect(worker(workers, 1).posted).toEqual([
-      expect.objectContaining({ type: 'hello' }),
-      expect.objectContaining({
-        type: 'heartbeat',
-        configNames: ['Reader'],
-      }),
+      expect.objectContaining({ type: 'hello', configNames: ['Reader'] }),
     ]);
     expect(worker(workers, 0).closed).toBe(true);
   });
 
-  it('notices a dead worker with its timers held back too, only later', async () => {
-    const { clock, workers } = start({ throttle: true });
-    worker(workers, 0).isAlive = false;
+  it('asks the client to restate itself once the new worker has welcomed it', async () => {
+    const rec = await start();
+    let reconnects = 0;
+    Object.assign(rec.request, { onReconnected: () => (reconnects += 1) });
 
-    await clock.advance(MAX_UNANSWERED_HEARTBEATS * THROTTLED_TIMER_MS);
-    expect(workers).toHaveLength(1);
-    await clock.advance(THROTTLED_TIMER_MS);
-    expect(workers).toHaveLength(2);
+    worker(rec.workers, 0).end();
+    await flushMicrotasks();
+
+    expect(reconnects).toBe(1);
   });
 
-  it('delivers through the new worker, and nothing from the one it gave up on', async () => {
-    const { transport, clock, workers, messages, transportErrors } = start();
-    worker(workers, 0).isAlive = false;
-    await clock.advance(DETECTION_MS);
+  it('delivers through the new worker, and nothing from the one that ended', async () => {
+    const { transport, workers, messages, transportErrors } = await start();
+    worker(workers, 0).end();
+    await flushMicrotasks();
 
     transport.send({
       type: 'status-request',
       v: PROTOCOL_VERSION,
       from: SELF,
-      to: 'owner',
+      to: 'all',
       configName: 'Reader',
+      retry: false,
     } as ProtocolMessage);
     worker(workers, 0).deliver(envelope(PEER, SELF, { type: 'status-request', configName: 'A' }));
     worker(workers, 0).failToClone();
@@ -226,55 +236,56 @@ describe('SharedWorkerTransport, when its broker stops answering', () => {
 
     expect(worker(workers, 1).posted.at(-1)).toMatchObject({ type: 'status-request' });
     expect(messages).toEqual([expect.objectContaining({ configName: 'B' })]);
+    // The loss itself, reported once.
     expect(transportErrors).toHaveLength(1);
   });
 
-  it('reports the lost broker once, however many new workers stay silent', async () => {
-    const { clock, workers, workerErrors, transportErrors } = start({ workersAnswer: false });
-    // The first worker answered hello; it dies, and so is every one started after it.
-    worker(workers, 0).isAlive = true;
-    worker(workers, 0).deliver({ v: PROTOCOL_VERSION, from: 'b', to: SELF, type: 'welcome' });
-    worker(workers, 0).isAlive = false;
+  it('reports the lost worker once, however many new workers do not answer', async () => {
+    const { clock, workers, workerErrors, transportErrors } = await start({ silentFrom: 1 });
 
-    await clock.advance(10 * DETECTION_MS);
+    worker(workers, 0).end();
+    await flushMicrotasks();
+    await clock.advance(10 * HANDSHAKE_DEADLINE_MS);
     for (const fail of workerErrors) {
       fail({ type: 'error' });
     }
 
+    // A new worker that does not answer in time is given up on, and another one started.
     expect(workers.length).toBeGreaterThan(2);
     expect(transportErrors).toHaveLength(1);
   });
 
-  it('reports a second loss once a broker has answered in between', async () => {
-    const { clock, workers, transportErrors } = start();
+  it('reports a second loss once a worker has answered in between', async () => {
+    const { workers, transportErrors } = await start();
 
-    worker(workers, 0).isAlive = false;
-    await clock.advance(DETECTION_MS);
-    expect(workers).toHaveLength(2);
-    worker(workers, 1).isAlive = false;
-    await clock.advance(DETECTION_MS);
+    worker(workers, 0).end();
+    await flushMicrotasks();
+    worker(workers, 1).end();
+    await flushMicrotasks();
 
     expect(workers).toHaveLength(3);
     expect(transportErrors).toHaveLength(2);
   });
 
-  it('stops watching once closed', async () => {
-    const { transport, clock, workers } = start();
-    worker(workers, 0).isAlive = false;
+  it('stops waiting once closed', async () => {
+    const { transport, clock, locks, workers } = await start();
 
     transport.close();
-    await clock.advance(10 * DETECTION_MS);
+    await flushMicrotasks();
+    worker(workers, 0).end();
+    await flushMicrotasks();
 
     expect(workers).toHaveLength(1);
+    expect(locks.queueLength(workerLockName('worker-0'))).toBe(0);
     expect(clock.pendingTimerCount).toBe(0);
   });
 });
 
 describe('SharedWorkerTransport, when its worker never answers at all', () => {
-  it('reports the worker as unusable, so what was sent can be sent elsewhere', async () => {
+  it('reports the worker as unusable at the handshake deadline, so a fallback can take over', async () => {
     const reasons: WorkerLoadFailure[] = [];
-    const { clock, workers, transportErrors } = start({
-      workersAnswer: false,
+    const { clock, workers, transportErrors } = await start({
+      silentFrom: 0,
       startup: {
         onReady: () => undefined,
         onLoadFailed: (_event, reason) => reasons.push(reason),
@@ -282,7 +293,7 @@ describe('SharedWorkerTransport, when its worker never answers at all', () => {
     });
 
     // A fetch that hangs, or a script from before the frozen handshake (ADR-0024).
-    await clock.advance(MAX_UNANSWERED_HEARTBEATS * HEARTBEAT_INTERVAL_MS - 1);
+    await clock.advance(HANDSHAKE_DEADLINE_MS - 1);
     expect(reasons).toEqual([]);
     await clock.advance(1);
 
@@ -290,33 +301,38 @@ describe('SharedWorkerTransport, when its worker never answers at all', () => {
     expect(workers).toHaveLength(1);
     expect(transportErrors).toEqual([]);
   });
+
+  it('starts another worker at the deadline when nothing can take over', async () => {
+    const { clock, workers, transportErrors } = await start({ silentFrom: 0 });
+
+    await clock.advance(HANDSHAKE_DEADLINE_MS);
+
+    expect(workers).toHaveLength(2);
+    expect(transportErrors).toHaveLength(1);
+  });
 });
 
 /**
  * A worker whose script runs another protocol version, where nothing falls back to
  * `BroadcastChannel` (ADR-0024, amended).
  *
- * Such a worker answers `hello` and nothing else, so its silence is no sign of a crash. A new worker
- * from the same URL runs the same script, and starting one every three heartbeats would only fill
- * the log.
+ * Such a worker answers `hello` and nothing else. A new worker from the same URL runs the same
+ * script, and starting one at every deadline would only fill the log.
  */
 describe('SharedWorkerTransport, when its worker runs another protocol version', () => {
   it('gives up on the worker for good when nothing falls back', async () => {
     const { logger, records } = recordingLogger();
-    const { clock, workers, decodeFailures, transportErrors } = start({
+    const { clock, workers, decodeFailures, transportErrors } = await start({
       otherVersionFrom: 0,
       logger,
     });
 
-    await clock.advance(10 * DETECTION_MS);
+    await clock.advance(10 * HANDSHAKE_DEADLINE_MS);
 
     // `transport: 'sharedworker'`: the mismatch is reported once, and is the only report.
     expect(decodeFailures).toEqual([expect.objectContaining({ reason: 'version-mismatch' })]);
     expect(transportErrors).toEqual([]);
     expect(workers).toHaveLength(1);
-    expect(worker(workers, 0).posted).not.toContainEqual(
-      expect.objectContaining({ type: 'heartbeat' }),
-    );
     expect(worker(workers, 0).closed).toBe(true);
     expect(clock.pendingTimerCount).toBe(0);
     expect(fieldsOfEvent(records, 'transport.worker-other-protocol-version')).toEqual([
@@ -325,14 +341,16 @@ describe('SharedWorkerTransport, when its worker runs another protocol version',
     expect(fieldsOfEvent(records, 'transport.worker-restarted')).toEqual([]);
   });
 
-  it('gives up on a worker of another version started in place of one that died', async () => {
-    const { clock, workers, decodeFailures, transportErrors } = start({ otherVersionFrom: 1 });
-    worker(workers, 0).isAlive = false;
+  it('gives up on a worker of another version started in place of one that ended', async () => {
+    const { clock, workers, decodeFailures, transportErrors } = await start({
+      otherVersionFrom: 1,
+    });
 
     // The application was deployed again under the same worker URL while the tab stayed open.
-    await clock.advance(DETECTION_MS);
+    worker(workers, 0).end();
+    await flushMicrotasks();
     expect(workers).toHaveLength(2);
-    await clock.advance(10 * DETECTION_MS);
+    await clock.advance(10 * HANDSHAKE_DEADLINE_MS);
 
     expect(workers).toHaveLength(2);
     expect(transportErrors).toHaveLength(1);
@@ -343,7 +361,7 @@ describe('SharedWorkerTransport, when its worker runs another protocol version',
   it('reports the worker as unusable once when whoever created it keeps it anyway', async () => {
     const reasons: WorkerLoadFailure[] = [];
     // What `FallbackTransport` does when it cannot build a `BroadcastChannel` either.
-    const { clock, workers, transportErrors } = start({
+    const { clock, workers, transportErrors } = await start({
       otherVersionFrom: 0,
       startup: {
         onReady: () => undefined,
@@ -351,20 +369,20 @@ describe('SharedWorkerTransport, when its worker runs another protocol version',
       },
     });
 
-    await clock.advance(10 * DETECTION_MS);
+    await clock.advance(10 * HANDSHAKE_DEADLINE_MS);
 
     expect(reasons).toEqual(['worker-other-protocol-version']);
     expect(workers).toHaveLength(1);
     expect(transportErrors).toEqual([]);
   });
 
-  it('still starts a new worker when a worker of this version dies later', async () => {
-    const { clock, workers, transportErrors } = start({ otherVersionFrom: 2 });
+  it('still starts a new worker when a worker of this version ends later', async () => {
+    const { workers, transportErrors } = await start({ otherVersionFrom: 2 });
 
-    worker(workers, 0).isAlive = false;
-    await clock.advance(DETECTION_MS);
-    worker(workers, 1).isAlive = false;
-    await clock.advance(DETECTION_MS);
+    worker(workers, 0).end();
+    await flushMicrotasks();
+    worker(workers, 1).end();
+    await flushMicrotasks();
 
     // Only a worker that said it runs another version is given up on for good.
     expect(workers).toHaveLength(3);

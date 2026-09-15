@@ -21,7 +21,7 @@ import {
   MAX_CONFIG_NAME_LENGTH,
   MAX_ERROR_CHARACTERS,
   MAX_ERROR_VALUES,
-  MAX_HEARTBEAT_CONFIGURATIONS,
+  MAX_HELLO_CONFIGURATIONS,
   MAX_IDENTIFIER_LENGTH,
   MAX_LOG_RECORD_CHARACTERS,
   MAX_LOG_RECORD_VALUES,
@@ -171,8 +171,8 @@ class FieldReader {
     if (!Array.isArray(value)) {
       return malformed(this.type, field);
     }
-    if (value.length > MAX_HEARTBEAT_CONFIGURATIONS) {
-      return exceeded(this.type, field, 'MAX_HEARTBEAT_CONFIGURATIONS');
+    if (value.length > MAX_HELLO_CONFIGURATIONS) {
+      return exceeded(this.type, field, 'MAX_HELLO_CONFIGURATIONS');
     }
     const names: string[] = [];
     for (const name of value as readonly unknown[]) {
@@ -422,9 +422,10 @@ function decodeChecked(raw: unknown): ProtocolMessage {
 
   switch (type) {
     case 'hello':
+      return { type, v, from, to, configNames: read.nameList('configNames') };
+
     case 'welcome':
-    case 'goodbye':
-      return { type, v, from, to };
+      return { type, v, from, to, worker: read.identifier('worker') };
 
     case 'worker-log': {
       // One character budget for the record, so what the message spends of it the fields no longer
@@ -433,13 +434,6 @@ function decodeChecked(raw: unknown): ProtocolMessage {
       const message = read.logMessage();
       return { type, v, from, to, level, message, fields: read.logFields(message.length) };
     }
-
-    case 'heartbeat':
-      return { type, v, from, to, configNames: read.nameList('configNames') };
-
-    case 'attach':
-    case 'detach':
-      return { type, v, from, to, configName: read.configName() };
 
     case 'status-request': {
       const configName = read.configName();

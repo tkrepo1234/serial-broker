@@ -15,10 +15,6 @@ import type { Transport, TransportRequest } from './transport.js';
 const BROKER_MESSAGE_TYPES: ReadonlySet<ProtocolMessageType> = new Set([
   'hello',
   'welcome',
-  'heartbeat',
-  'goodbye',
-  'attach',
-  'detach',
   'worker-log',
 ]);
 

@@ -17,7 +17,7 @@ export interface BrokerHost {
  * The broker is deliberately ignorant. It does not touch the port, does not decide or even know who
  * owns it, does not interpret payloads, and holds no state that would be painful to lose. Its entire
  * job is to resolve the two delivery targets - `'all'` participants of a configuration, and one
- * participant - and to forget contexts that have gone away.
+ * participant - from what each participant's latest `hello` says it takes part in.
  *
  * Everything that requires judgement lives elsewhere:
  *
@@ -26,7 +26,8 @@ export interface BrokerHost {
  *   on it (ADR-0040): a claim of ownership the broker believed would be one anybody could forge.
  * - **What happens to a write when the owner dies** is decided by the context that issued it
  *   (ADR-0013), which is the only context that knows whether repeating the command is safe.
- * - **Who is still there** is decided by the ports, which the worker holds (`worker-ports.ts`).
+ * - **Who is still there** is decided by the Web Locks the contexts hold, which the worker waits
+ *   on (`worker-ports.ts`, ADR-0041).
  *
  * The same is what lets the `BroadcastChannel` fallback do without a broker at all: each tab
  * resolves the same targets from the envelope for itself (ADR-0006, ADR-0007).
@@ -40,42 +41,23 @@ export class Broker {
     this.#once = new OnceLog(host.logger);
   }
 
-  /** Forgets a participant that has gone: its last port said goodbye or fell silent. */
+  /** Forgets a participant that has gone. */
   handleDisconnect(clientId: ClientId): void {
-    for (const [configName, participants] of this.#configurations) {
-      participants.delete(clientId);
-      if (participants.size === 0) {
-        this.#configurations.delete(configName);
-      }
-    }
+    this.#takePart(clientId, []);
   }
 
   /** Routes one decoded message from `clientId`. */
   handleMessage(clientId: ClientId, message: ProtocolMessage): void {
     switch (message.type) {
-      case 'heartbeat':
-        // Idempotent, so it changes nothing while the broker is in step, and it heals a participant
-        // the broker forgot while it was only silent (ADR-0021).
-        for (const configName of message.configNames) {
-          this.#participantsOf(configName)?.add(clientId);
-        }
-        return;
-
-      case 'attach':
-        this.#participantsOf(message.configName)?.add(clientId);
-        return;
-
-      case 'detach':
-        this.#leave(clientId, message.configName);
-        return;
-
       case 'hello':
-      case 'goodbye':
+        // Says everything the sender takes part in, so it replaces what an earlier one said.
+        this.#takePart(clientId, message.configNames);
+        return;
+
       case 'welcome':
       case 'worker-log':
-        // The first two concern the port and are handled where the ports are. The last two only the
-        // worker sends: one arriving here came from something else, and is never passed on - a tab
-        // takes a forwarded record for the worker's own (ADR-0029).
+        // Only the worker sends these: one arriving here came from something else, and is never
+        // passed on - a tab takes a forwarded record for the worker's own (ADR-0029).
         return;
 
       case 'diagnostics-request':
@@ -99,6 +81,22 @@ export class Broker {
     this.#configurations.clear();
   }
 
+  /** Makes `clientId` a participant of exactly `configNames`. */
+  #takePart(clientId: ClientId, configNames: readonly string[]): void {
+    const names = new Set(configNames);
+    for (const [configName, participants] of this.#configurations) {
+      if (!names.has(configName)) {
+        participants.delete(clientId);
+        if (participants.size === 0) {
+          this.#configurations.delete(configName);
+        }
+      }
+    }
+    for (const configName of names) {
+      this.#participantsOf(configName)?.add(clientId);
+    }
+  }
+
   /**
    * The participants of a configuration, created on first use.
    *
@@ -116,14 +114,6 @@ export class Broker {
       this.#configurations.set(configName, participants);
     }
     return participants;
-  }
-
-  #leave(clientId: ClientId, configName: string): void {
-    const participants = this.#configurations.get(configName);
-    participants?.delete(clientId);
-    if (participants?.size === 0) {
-      this.#configurations.delete(configName);
-    }
   }
 
   /**

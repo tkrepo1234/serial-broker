@@ -48,49 +48,35 @@ interface Envelope {
 
 // --- Participant -> broker ---------------------------------------------------------------
 
-/** Announces a context to the broker. Always the first message a participant sends on a port. */
+/**
+ * Announces a context to the broker, and what it takes part in.
+ *
+ * Always the first message a participant sends on a port, and sent again whenever the configurations
+ * it takes part in change: the broker routes a configuration's messages to the contexts whose latest
+ * `hello` names it. A tab that reaches a new worker says it once more, which restores all of its
+ * participation there (ADR-0041).
+ */
 export interface HelloMessage extends Envelope {
   readonly type: 'hello';
+  /** Every configuration the sender takes part in. */
+  readonly configNames: readonly string[];
 }
 
 /**
  * The broker's answer to `hello`, addressed to the context that said it.
  *
- * Its arrival proves that the worker script loaded and runs. Until then a context keeps what it
- * has sent, so that it can send it again over `BroadcastChannel` should the script fail to load
- * (ADR-0007).
+ * Its arrival proves that the worker script loaded and runs. It names the Web Lock the worker holds
+ * for its lifetime, which the tab waits on: the browser grants it the moment the worker has ended,
+ * however it ended (ADR-0041).
  */
 export interface WelcomeMessage extends Envelope {
   readonly type: 'welcome';
+  /** The identity of the worker, which its lifetime lock is named after (`workerLockName`). */
+  readonly worker: string;
 }
 
 /** The sender identity the broker uses. It is not a context and never appears in a report. */
 export const BROKER_ID = 'serial-broker/broker' as ClientId;
-
-/**
- * Tells the broker, periodically, that a participant is still there and what it takes part in.
- *
- * A `MessagePort` reports nothing when the tab behind it dies, so a participant that stops sending
- * heartbeats is forgotten (ADR-0021). Carrying its configurations lets a heartbeat also restore a
- * participant the broker forgot while it was only silent.
- */
-export interface HeartbeatMessage extends Envelope {
-  readonly type: 'heartbeat';
-  /** Every configuration the sender takes part in. */
-  readonly configNames: readonly string[];
-}
-
-/** Declares interest in a configuration, so its events are routed to this context. */
-export interface AttachMessage extends Envelope {
-  readonly type: 'attach';
-  readonly configName: string;
-}
-
-/** Withdraws interest. The broker stops routing that configuration's events here. */
-export interface DetachMessage extends Envelope {
-  readonly type: 'detach';
-  readonly configName: string;
-}
 
 /** Announces that this context now holds the ownership lock for a configuration. */
 export interface OwnerClaimedMessage extends Envelope {
@@ -256,11 +242,6 @@ export interface DiagnosticsReportMessage extends Envelope {
   readonly report: ParticipantDiagnostics;
 }
 
-/** Sent by a context that is shutting down gracefully. */
-export interface GoodbyeMessage extends Envelope {
-  readonly type: 'goodbye';
-}
-
 /**
  * One diagnostic record of the worker, sent to a tab so that its logger can write it (ADR-0029).
  *
@@ -288,9 +269,6 @@ export interface WorkerLogMessage extends Envelope {
 export type ProtocolMessage =
   | HelloMessage
   | WelcomeMessage
-  | HeartbeatMessage
-  | AttachMessage
-  | DetachMessage
   | OwnerClaimedMessage
   | OwnerReleasedMessage
   | WriteRequestMessage
@@ -303,7 +281,6 @@ export type ProtocolMessage =
   | StatusRequestMessage
   | DiagnosticsRequestMessage
   | DiagnosticsReportMessage
-  | GoodbyeMessage
   | WorkerLogMessage;
 
 /** Discriminator values, for exhaustiveness checks. */

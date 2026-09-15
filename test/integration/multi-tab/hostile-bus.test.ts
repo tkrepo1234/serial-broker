@@ -407,8 +407,7 @@ describe('a script on the SharedWorker that uses the identity of a tab', () => {
     // A participant of its own that claims the port in a term it made up. A broker that routed what
     // is meant for the owner to the last claimant would hand it every write (ADR-0040).
     const forged = { v: PROTOCOL_VERSION, from: 'mallory', to: 'all', configName: 'Reader' };
-    mallory.post({ ...forged, type: 'hello' });
-    mallory.post({ ...forged, type: 'attach' });
+    mallory.post({ ...forged, type: 'hello', configNames: ['Reader'] });
     mallory.post({ ...forged, type: 'owner-claimed', term: 't-forged', maxTabs: 1 });
     await harness.settle();
     const writing = other.client.send('Reader', 'PING');
@@ -419,15 +418,15 @@ describe('a script on the SharedWorker that uses the identity of a tab', () => {
     expect(other.client.getStatus('Reader').status).toBe(SerialBrokerStatus.Open);
   });
 
-  it('does not cut a tab off by saying goodbye in its name', async () => {
+  it('does not make the worker forget a tab by leaving under its identity', async () => {
     const { harness, device, other, records } = await twoTabs('sharedworker');
     const mallory = harness.bus.workerHost.connectForeign();
 
     // Identities are no secret. The port that says hello as the tab is one more port of that
-    // identity, and its goodbye ends that port alone, not the tab's own (ADR-0040).
+    // identity (ADR-0040); what ends the tab's participation is the tab's own lock, which a script
+    // cannot let go of (ADR-0041).
     const forged = { v: PROTOCOL_VERSION, from: other.client.clientId, to: 'all' };
-    mallory.post({ ...forged, type: 'hello' });
-    mallory.post({ ...forged, type: 'goodbye' });
+    mallory.post({ ...forged, type: 'hello', configNames: ['Reader'] });
     await harness.settle();
     device.emit('STILL HERE');
     await harness.settle();
@@ -441,13 +440,19 @@ describe('a script on the SharedWorker that uses the identity of a tab', () => {
     const mallory = harness.bus.workerHost.connectForeign();
 
     // An identity of its own: the port is served, and is held to the identity it said hello as.
-    mallory.post({ v: PROTOCOL_VERSION, from: 'mallory', to: 'all', type: 'hello' });
+    mallory.post({
+      v: PROTOCOL_VERSION,
+      from: 'mallory',
+      to: 'all',
+      type: 'hello',
+      configNames: [],
+    });
     mallory.post({
       v: PROTOCOL_VERSION,
       from: other.client.clientId,
       to: 'all',
-      type: 'detach',
-      configName: 'Reader',
+      type: 'hello',
+      configNames: [],
     });
     await harness.settle();
     device.emit('STILL HERE');

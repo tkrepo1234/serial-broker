@@ -18,7 +18,7 @@ import {
   exceedsStructureBudget,
   MAX_CONFIG_NAME_LENGTH,
   MAX_CONFIGURATIONS,
-  MAX_HEARTBEAT_CONFIGURATIONS,
+  MAX_HELLO_CONFIGURATIONS,
   MAX_IDENTIFIER_LENGTH,
   MAX_LOG_RECORD_CHARACTERS,
   MAX_LOG_RECORD_VALUES,
@@ -82,30 +82,28 @@ describe('decodeMessage within its limits', () => {
   });
 
   it('accepts a configuration name as long as setup() accepts, and not one more', () => {
-    const attach = validMessages().attach;
+    const request = validMessages()['status-request'];
 
-    expect(failureOf({ ...attach, configName: 'n'.repeat(MAX_CONFIG_NAME_LENGTH) })).toBe(
+    expect(failureOf({ ...request, configName: 'n'.repeat(MAX_CONFIG_NAME_LENGTH) })).toBe(
       'accepted',
     );
-    expect(failureOf({ ...attach, configName: 'n'.repeat(MAX_CONFIG_NAME_LENGTH + 1) })).toEqual(
-      exceeding('attach', 'configName', 'MAX_CONFIG_NAME_LENGTH'),
+    expect(failureOf({ ...request, configName: 'n'.repeat(MAX_CONFIG_NAME_LENGTH + 1) })).toEqual(
+      exceeding('status-request', 'configName', 'MAX_CONFIG_NAME_LENGTH'),
     );
   });
 
-  it('accepts a heartbeat naming MAX_HEARTBEAT_CONFIGURATIONS configurations, and not one more', () => {
-    const heartbeat = validMessages().heartbeat;
+  it('accepts a hello naming MAX_HELLO_CONFIGURATIONS configurations, and not one more', () => {
+    const hello = validMessages().hello;
     const names = (count: number): string[] =>
       Array.from({ length: count }, (_, index) => `c-${String(index)}`);
 
-    expect(failureOf({ ...heartbeat, configNames: names(MAX_HEARTBEAT_CONFIGURATIONS) })).toBe(
-      'accepted',
+    expect(failureOf({ ...hello, configNames: names(MAX_HELLO_CONFIGURATIONS) })).toBe('accepted');
+    expect(failureOf({ ...hello, configNames: names(MAX_HELLO_CONFIGURATIONS + 1) })).toEqual(
+      exceeding('hello', 'configNames', 'MAX_HELLO_CONFIGURATIONS'),
     );
-    expect(
-      failureOf({ ...heartbeat, configNames: names(MAX_HEARTBEAT_CONFIGURATIONS + 1) }),
-    ).toEqual(exceeding('heartbeat', 'configNames', 'MAX_HEARTBEAT_CONFIGURATIONS'));
-    expect(
-      failureOf({ ...heartbeat, configNames: ['n'.repeat(MAX_CONFIG_NAME_LENGTH + 1)] }),
-    ).toEqual(exceeding('heartbeat', 'configNames', 'MAX_CONFIG_NAME_LENGTH'));
+    expect(failureOf({ ...hello, configNames: ['n'.repeat(MAX_CONFIG_NAME_LENGTH + 1)] })).toEqual(
+      exceeding('hello', 'configNames', 'MAX_CONFIG_NAME_LENGTH'),
+    );
   });
 
   it('accepts a payload of MAX_PAYLOAD_BYTES, and not one byte more', () => {
@@ -276,10 +274,13 @@ describe('decodeMessage within its limits', () => {
   });
 
   it('names the limit when describing why a message was dropped', () => {
-    const result = decodeMessage({ ...validMessages().attach, configName: 'n'.repeat(500) });
+    const result = decodeMessage({
+      ...validMessages()['status-request'],
+      configName: 'n'.repeat(500),
+    });
 
     expect(!result.ok && describeDecodeFailure(result.failure)).toBe(
-      'message "attach" exceeds MAX_CONFIG_NAME_LENGTH in its "configName" field',
+      'message "status-request" exceeds MAX_CONFIG_NAME_LENGTH in its "configName" field',
     );
   });
 });
@@ -379,23 +380,17 @@ describe('exceedsStructureBudget', () => {
     expect(exceedsStructureBudget(['a'.repeat(10), 'b'.repeat(11)], budget)).toBe('characters');
   });
 
-  it('counts the bytes of binary data, including the whole buffer a view keeps alive', () => {
-    expect(exceedsStructureBudget(new Uint8Array(20), budget)).toBeUndefined();
-    expect(exceedsStructureBudget(new Uint8Array(new ArrayBuffer(21), 0, 1), budget)).toBe(
-      'characters',
-    );
-  });
-
-  it('counts the entries of maps and sets', () => {
-    const map = new Map([
-      [1, 2],
-      [3, 4],
-    ]);
-
-    expect(exceedsStructureBudget(map, budget)).toBeUndefined();
-    expect(
-      exceedsStructureBudget(new Set(Array.from({ length: 10 }, (_, index) => index)), budget),
-    ).toBe('values');
+  it.each([
+    ['binary data', new Uint8Array(1)],
+    ['a buffer', new ArrayBuffer(1)],
+    ['a map', new Map([[1, 2]])],
+    ['a set', new Set([1])],
+    ['a regular expression', /x/],
+    ['a date', new Date(0)],
+  ])('refuses %s, which is no tree of plain values', (_label, value) => {
+    // What a sender adds to such an object does not survive the next clone, so a message holding one
+    // would not be the same message in the next tab. Nothing the library sends holds one.
+    expect(exceedsStructureBudget({ nested: [value] }, budget)).toBe('values');
   });
 
   it('refuses a cycle, and a value shared between two places, without looping', () => {
@@ -524,24 +519,25 @@ describe('Broker within MAX_CONFIGURATIONS', () => {
     const bob = 'bob' as ClientId;
     const message = (from: ClientId, body: Record<string, unknown>): ProtocolMessage =>
       envelope(from, 'all', body) as ProtocolMessage;
-    for (let index = 0; index < MAX_CONFIGURATIONS; index += 1) {
-      broker.handleMessage(
-        alice,
-        message(alice, { type: 'attach', configName: `c-${String(index)}` }),
-      );
-    }
+    const names = Array.from({ length: MAX_CONFIGURATIONS }, (_, index) => `c-${String(index)}`);
+    broker.handleMessage(alice, message(alice, { type: 'hello', configNames: names }));
 
-    broker.handleMessage(bob, message(bob, { type: 'attach', configName: 'Overflow' }));
-    broker.handleMessage(alice, message(alice, { type: 'attach', configName: 'Overflow' }));
+    broker.handleMessage(bob, message(bob, { type: 'hello', configNames: ['Overflow'] }));
+    broker.handleMessage(
+      alice,
+      message(alice, { type: 'hello', configNames: [...names, 'Overflow'] }),
+    );
     broker.handleMessage(alice, message(alice, { type: 'status-request', configName: 'Overflow' }));
     expect(delivered).toEqual([]);
     expect(fieldsOfEvent(records, 'broker.limit-exceeded')).toEqual([
       expect.objectContaining({ limit: 'MAX_CONFIGURATIONS' }),
     ]);
 
-    broker.handleMessage(alice, message(alice, { type: 'detach', configName: 'c-0' }));
-    broker.handleMessage(bob, message(bob, { type: 'attach', configName: 'Overflow' }));
-    broker.handleMessage(alice, message(alice, { type: 'attach', configName: 'Overflow' }));
+    broker.handleMessage(
+      alice,
+      message(alice, { type: 'hello', configNames: [...names.slice(1), 'Overflow'] }),
+    );
+    broker.handleMessage(bob, message(bob, { type: 'hello', configNames: ['Overflow'] }));
     broker.handleMessage(alice, message(alice, { type: 'status-request', configName: 'Overflow' }));
     expect(delivered).toEqual([bob]);
   });

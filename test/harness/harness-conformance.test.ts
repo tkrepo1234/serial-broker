@@ -4,12 +4,12 @@ import { runInNewContext } from 'node:vm';
 import { describe, expect, it } from 'vitest';
 
 import { NOOP_LOGGER, ScopedLogger } from '../../src/core/logger.js';
-import { SILENT_PARTICIPANT_TIMEOUT_MS, SWEEP_INTERVAL_MS } from '../../src/protocol/heartbeat.js';
 import type { ClientId, ProtocolMessage, TermId } from '../../src/protocol/messages.js';
-import { PROTOCOL_VERSION } from '../../src/protocol/version.js';
+import { PROTOCOL_VERSION, workerLockName } from '../../src/protocol/version.js';
 
 import { BrowserHarness, TRANSPORT_MODES } from './browser-harness.js';
 import { READER, READER_OPTIONS } from './devices.js';
+import { FakeWorkerHost } from './fake-bus.js';
 import { FakeClock, flushMicrotasks } from './fake-clock.js';
 import { FakeLockManager } from './fake-locks.js';
 import { FakeSerialRegistry } from './fake-serial.js';
@@ -412,13 +412,15 @@ describe('BrowserHarness frozen contexts', () => {
   }
 
   function listeningTransport(harness: BrowserHarness, contextId: string, heard: string[]) {
-    return harness.createEnvironment(contextId).createTransport({
+    const environment = harness.createEnvironment(contextId);
+    return environment.createTransport({
       clientId: contextId as ClientId,
       onMessage: (message) => heard.push(`${message.type} from ${message.from}`),
       onDecodeFailure: () => undefined,
       onTransportError: () => undefined,
       logger: new ScopedLogger(NOOP_LOGGER, {}),
       clock: harness.busClock,
+      locks: environment.locks,
     });
   }
 
@@ -561,15 +563,18 @@ describe('BrowserHarness throttled timers', () => {
       onTransportError: () => undefined,
       logger: new ScopedLogger(NOOP_LOGGER, {}),
       clock: harness.busClock,
+      locks: environment.locks,
     });
     hidden.attach('Reader');
-    const sender = harness.createEnvironment('sender').createTransport({
+    const senderEnvironment = harness.createEnvironment('sender');
+    const sender = senderEnvironment.createTransport({
       clientId: 'sender' as ClientId,
       onMessage: () => undefined,
       onDecodeFailure: () => undefined,
       onTransportError: () => undefined,
       logger: new ScopedLogger(NOOP_LOGGER, {}),
       clock: harness.busClock,
+      locks: senderEnvironment.locks,
     });
     await harness.settle();
     heard.splice(0);
@@ -770,6 +775,22 @@ describe('FakeSerialRegistry', () => {
   });
 });
 
+describe('FakeWorkerHost', () => {
+  it('holds a lock for its lifetime, which is let go of when the worker is terminated', async () => {
+    const locks = new FakeLockManager();
+    const host = new FakeWorkerHost(locks);
+    await flushMicrotasks();
+    const heldWhileRunning = locks.holderOf(workerLockName(host.workerId));
+
+    // What the browser does for a `SharedWorker` that crashed or was terminated, and what every tab
+    // waiting on the lock learns the worker's end from (ADR-0041).
+    host.crash();
+
+    expect(heldWhileRunning).toBe(host.workerId);
+    expect(locks.holderOf(workerLockName(host.workerId))).toBeUndefined();
+  });
+});
+
 describe.each(TRANSPORT_MODES)('FakeBus (%s)', (transport) => {
   /**
    * A full garbage collection, from inside the ordinary suite.
@@ -817,10 +838,8 @@ describe.each(TRANSPORT_MODES)('FakeBus (%s)', (transport) => {
         await (ending === 'closed' ? leaving.close() : leaving.kill());
         return new WeakRef(leaving.client);
       })();
-      // Long enough for the worker to forget a tab that went silent (ADR-0021) - until then it keeps
-      // the port by design, as it would a throttled tab's - and a task later, so that nothing of
-      // this job keeps the client alive.
-      await harness.busClock.advance(SILENT_PARTICIPANT_TIMEOUT_MS + SWEEP_INTERVAL_MS);
+      // The worker forgets the tab once the browser lets go of its lock (ADR-0041), and a task
+      // later nothing of this job keeps the client alive.
       await harness.advance(1_000);
       await new Promise((resolve) => setTimeout(resolve, 0));
       collectGarbage();
