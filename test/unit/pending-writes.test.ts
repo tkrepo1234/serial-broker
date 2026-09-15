@@ -19,6 +19,8 @@ interface Harness {
   readonly clock: FakeClock;
   /** Every request handed out for sending, in order, with its term. A repeat here is a repeated command. */
   readonly dispatched: string[];
+  /** What was left of each dispatched request's deadline when it was handed out, in the same order. */
+  readonly remaining: number[];
   /** The term of the tab holding the port, as far as the tracker is told. */
   setCurrentTerm(value: TermId | undefined): void;
   /** Ends a term, as its lock being freed does. */
@@ -32,6 +34,7 @@ interface Harness {
 function createHarness(options: { writeTimeoutMs?: number } = {}): Harness {
   const clock = new FakeClock();
   const dispatched: string[] = [];
+  const remaining: number[] = [];
   let current: TermId | undefined = FIRST;
   const ended = new Set<TermId>();
 
@@ -39,7 +42,10 @@ function createHarness(options: { writeTimeoutMs?: number } = {}): Harness {
     clock,
     configName: 'Reader',
     writeTimeoutMs: options.writeTimeoutMs ?? 5_000,
-    dispatch: (requestId, _payload, to) => dispatched.push(`${requestId}@${to}`),
+    dispatch: (requestId, _payload, to, remainingMs) => {
+      dispatched.push(`${requestId}@${to}`);
+      remaining.push(remainingMs);
+    },
     canDispatch: () => true,
     currentTerm: () => current,
     isTermEnded: (value) => ended.has(value),
@@ -50,6 +56,7 @@ function createHarness(options: { writeTimeoutMs?: number } = {}): Harness {
     writes,
     clock,
     dispatched,
+    remaining,
     setCurrentTerm: (value) => {
       current = value;
     },
@@ -307,6 +314,25 @@ describe('PendingWrites', () => {
 
     expect(await first).toBe('resolved');
     expect(await second).toMatchObject({ code: SerialBrokerErrorCode.WRITE_FAILED });
+  });
+
+  it('hands a write on with what is left of its deadline, not the whole of it (ADR-0013)', async () => {
+    const harness = createHarness({ writeTimeoutMs: 5_000 });
+    harness.setCurrentTerm(undefined);
+    const outcome = outcomeOf(harness.writes.add(id('w1'), PAYLOAD));
+
+    // Held for 3 s while no tab holds the port: the tab that gets it may begin it for 2 s more.
+    await harness.clock.advance(3_000);
+    harness.setCurrentTerm(FIRST);
+    harness.writes.dispatchWaiting();
+    // Declined by that term and handed on 1 s later: 1 s is left.
+    await harness.clock.advance(1_000);
+    harness.writes.handleResult(id('w1'), FIRST, notConnected());
+
+    expect(harness.dispatched).toEqual(['w1@t1', 'w1@t1']);
+    expect(harness.remaining).toEqual([2_000, 1_000]);
+    harness.writes.settle(id('w1'), undefined);
+    expect(await outcome).toBe('resolved');
   });
 
   it('resolves a mixture of started and unstarted writes correctly when a term ends', async () => {

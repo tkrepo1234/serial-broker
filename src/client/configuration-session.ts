@@ -170,8 +170,8 @@ export class ConfigurationSession {
       clock: environment.clock,
       configName: configuration.name,
       writeTimeoutMs: configuration.connection.writeTimeoutMs,
-      dispatch: (requestId, payload, term) => {
-        this.#dispatchWrite(requestId, payload, term);
+      dispatch: (requestId, payload, term, remainingMs) => {
+        this.#dispatchWrite(requestId, payload, term, remainingMs);
       },
       // A write can only go anywhere while there is a connection to write to. Asking here
       // rather than tracking it in two places keeps one source of truth for the answer.
@@ -630,7 +630,13 @@ export class ConfigurationSession {
   #apply(message: ProtocolMessage): void {
     switch (message.type) {
       case 'write-request':
-        this.#performWriteForPeer(message.from, message.requestId, message.payload, message.term);
+        this.#performWriteForPeer(
+          message.from,
+          message.requestId,
+          message.payload,
+          message.term,
+          message.remainingMs,
+        );
         return;
 
       case 'write-started':
@@ -883,14 +889,19 @@ export class ConfigurationSession {
    * is the first attempt or a re-dispatch after ownership moved. The decision lives there;
    * this method only knows *how* to send, not *whether* to.
    */
-  #dispatchWrite(requestId: RequestId, payload: Uint8Array, term: TermId): void {
+  #dispatchWrite(
+    requestId: RequestId,
+    payload: Uint8Array,
+    term: TermId,
+    remainingMs: number,
+  ): void {
     const supervisor = this.#supervisor;
     if (this.#election.isOwner && supervisor !== undefined && term === this.#term) {
       // Straight to the port, with no round trip across the bus - but through the same record as
       // a peer's write: a late `NOT_CONNECTED` from a former owner hands this write on again, and
       // it may already be queued here. A write that found no open connection never started, so it
       // goes back to wait for the next one, in the tab holding the port exactly as in any other.
-      this.#performWrite(supervisor, this.transport.clientId, requestId, payload, {
+      this.#performWrite(supervisor, this.transport.clientId, requestId, payload, remainingMs, {
         started: () => {
           this.#writes.markStarted(requestId, term);
         },
@@ -911,6 +922,7 @@ export class ConfigurationSession {
       requestId,
       payload,
       term,
+      remainingMs,
     });
   }
 
@@ -920,6 +932,7 @@ export class ConfigurationSession {
     requestId: RequestId,
     payload: Uint8Array,
     requestedTerm: TermId,
+    remainingMs: number,
   ): void {
     const supervisor = this.#supervisor;
     const term = this.#term;
@@ -930,7 +943,7 @@ export class ConfigurationSession {
       return;
     }
 
-    this.#performWrite(supervisor, origin, requestId, payload, {
+    this.#performWrite(supervisor, origin, requestId, payload, remainingMs, {
       started: () => {
         this.transport.send({
           type: 'write-started',
@@ -954,12 +967,15 @@ export class ConfigurationSession {
    * A repeat of a write still being written is ignored, since its own outcome is on the way; a
    * repeat of a finished one is answered with the known outcome, for an issuer that may have
    * missed it.
+   *
+   * @param remainingMs - What was left of the issuer's deadline when it handed the write on.
    */
   #performWrite(
     supervisor: PortSupervisor,
     origin: ClientId,
     requestId: RequestId,
     payload: Uint8Array,
+    remainingMs: number,
     report: WriteReport,
   ): void {
     const accepted = this.#acceptedWrites;
@@ -980,7 +996,7 @@ export class ConfigurationSession {
       return;
     }
 
-    void supervisor.write(payload, report.started).then(
+    void supervisor.write(payload, remainingMs, report.started).then(
       () => {
         accepted.finish(origin, requestId, undefined);
         // The outcome goes to the issuer before any tab hears `onSend`. A listener may release the

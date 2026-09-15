@@ -196,7 +196,7 @@ what it keeps in the same way: participants, ports per participant, and configur
 | `owner-claimed`, `owner-released`           | the owner               | A term of holding the port began; it ended, as its last message.            |
 | `status-request`                            | a tab that just set up  | Asks the owner to restate the status, or to retry where it gave up.         |
 | `status`                                    | the owner               | The connection status changed, with the owner's tab limit, device and term. |
-| `write-request`                             | a participant           | Asks the owner in one term to write.                                        |
+| `write-request`                             | a participant           | Asks the owner in one term to write, with the time left of its deadline.    |
 | `write-started`, `write-result`             | the owner               | The write began, in a term; how it ended.                                   |
 | `data-received`, `data-sent`                | the owner               | Traffic, to every participant.                                              |
 | `error`                                     | the owner               | A failure every participant should know about.                              |
@@ -253,6 +253,12 @@ when the term reports the result. The owner reports `write-started` the moment i
 marks the write as not repeatable. Because this decision lives in the issuing tab, it is the same on
 both transports and does not depend on the broker. The owner records the writes it accepted in its
 term (`AcceptedWrites`), so a request handed to it twice is answered, not written twice.
+
+The issuing tab's `writeTimeoutMs` decides when a write that has not begun is given up, and the tab
+holding the port must not begin it afterwards, whatever its own setting. So each request carries
+`remainingMs`, what was left of the issuer's deadline when it was sent - a duration, since the clocks
+of two contexts do not compare. The owner does not begin a write once that long has passed since it
+received the request, or once its own `writeTimeoutMs` has if that is shorter [ADR-0013].
 
 A new claim does not decide anything by itself: the former term's result may still be on its way. A
 term ends when the browser frees its lock, or - for a holder that is letting go cleanly - at its

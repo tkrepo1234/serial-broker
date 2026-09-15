@@ -19,7 +19,7 @@ const REQUIRED_FIELDS: Record<ProtocolMessageType, readonly string[]> = {
   'owner-claimed': ['configName', 'maxTabs'],
   'owner-released': ['configName'],
   'status-request': ['configName'],
-  'write-request': ['configName', 'requestId', 'payload'],
+  'write-request': ['configName', 'requestId', 'payload', 'remainingMs'],
   'write-started': ['configName', 'requestId'],
   'write-result': ['configName', 'requestId', 'ok'],
   'data-received': ['configName', 'payload', 'timestamp'],
@@ -194,6 +194,18 @@ describe('decode matrix', () => {
       expect(decodeMessage({ ...VALID[type], term: undefined }).ok).toBe(false);
     },
   );
+
+  it.each([-1, Number.NaN, Number.POSITIVE_INFINITY, '5000'])(
+    'rejects a write request whose remainingMs is %s (ADR-0013)',
+    (remainingMs) => {
+      // Read as a time left, anything else would let a write begin after its issuer gave up on it.
+      expect(decodeMessage({ ...VALID['write-request'], remainingMs }).ok).toBe(false);
+    },
+  );
+
+  it('accepts a write request with no time left, which is never begun', () => {
+    expect(decodeMessage({ ...VALID['write-request'], remainingMs: 0 }).ok).toBe(true);
+  });
 
   it('accepts a write result without a term, from a tab that never held the port', () => {
     expect(decodeMessage({ ...VALID['write-result'], term: undefined }).ok).toBe(true);

@@ -61,6 +61,27 @@ the device, so it is held and handed to the next term. The tab holding the port 
 `write-started` the moment it begins a write, and that report is what makes the write not
 repeatable.
 
+**A write is never begun after its issuer's deadline.** The issuing tab rejects a write that no
+`write-started` has arrived for with `WRITE_TIMEOUT` and `started: false` when its own
+`writeTimeoutMs` runs out, counted from the `send()`. So the tab holding the port must not begin it
+later, whatever it was handed and whatever it is set to:
+
+- `write-request` carries `remainingMs`, what was left of the issuer's deadline when the request was
+  sent. A write held while no port was open, or handed on after `NOT_CONNECTED`, has spent part of
+  its time, and only the rest is handed on.
+- The tab holding the port never begins the write once `remainingMs` has passed since it received
+  the request, nor once its own `writeTimeoutMs` has, and fails it then with `WRITE_TIMEOUT` and
+  `started: false`. The shorter of the two decides: a peer's number never keeps a payload waiting
+  longer than this tab keeps its own ([ADR-0031](./0031-bound-and-rate-limit-what-the-bus-can-cost-a-tab.md)).
+- The tab holding the port's own writes go through the same rule, with their time left.
+
+A duration, not a moment: the monotonic clocks of two contexts have origins of their own and cannot
+be compared, and the wall clock, which could, may be set while a write waits
+([ADR-0014](./0014-dependency-injection-of-the-environment.md)). Counted from receipt, the holder's
+limit falls later than the issuer's deadline by the time the request took to be handled - its
+transit, and however long the holder's main thread was busy meanwhile. That is the window the
+existing mechanism already accepts for `write-started` (see Negative).
+
 **Where this lives.** The lifecycle of a write belongs to the context that issued it
 (`PendingWrites`), not to the broker. That context addresses each request to the term of holding
 the port it knows of, holds it until a term exists, marks it non-repeatable on `write-started`,
@@ -111,6 +132,16 @@ closing it works.
   `writeTimeoutMs` first, which is exactly the memory the bound exists to deny.
 - **Refuse the write in the issuing tab, from a queue depth in the status.** The depth would be
   stale on arrival, and it would put the port's insides into a message every tab reads.
+- **Make `connection` settings part of the configuration tabs must agree on.** A tab whose
+  `writeTimeoutMs` differs would be refused a configuration it may reasonably run differently, and
+  it would not help: a write held for a port, or handed on after `NOT_CONNECTED`, reaches the holder
+  part way through its time with equal settings too, and was written after its issuer gave up.
+- **Carry the issuer's deadline as a moment.** `monotonicNow()` readings of two contexts do not
+  compare; `Date.now()` readings do, but a clock set forward would refuse writes still in time, which
+  `browser-lifecycle.test.ts` pins against, and a clock set back would let lapsed ones through.
+- **Let the holder ask the issuer before it begins.** Sound against any delay, and it would close the
+  crash window below too - but it adds a round trip before every write from another tab, and holds
+  the queue on an issuer that may be busy or gone.
 
 ## Consequences
 
@@ -129,6 +160,12 @@ closing it works.
 - A tab that crashes between handing bytes to the device and its `write-started` arriving leaves a
   write that looks unstarted; it is handed on and may reach the device twice. The window is the
   transit of one message against the teardown of a crashed renderer (ADR-0030).
+- The tab holding the port counts `remainingMs` from when it handles the request. A request that
+  waited before it was handled - the holder's main thread was busy, or the machine slept with the
+  request on its way - can have its write begun after the issuer reported `started: false`, by as
+  long as it waited; so can a write begun just before the limit whose `write-started` crosses the
+  issuer's deadline. Reproduced in the in-process harness with the holder's messages held for 4 s.
+  Closing it needs the holder to ask the issuer before it begins (see Alternatives).
 - While a chunk is stuck, the status stays `open` and reads go on, but every write fails. No status
   says so; `WRITE_TIMEOUT` does.
 - Releasing a configuration while a chunk is stuck still cannot close the port; it stays held until
@@ -142,7 +179,9 @@ Scenario matrix rows 4, 7 and 15. `test/unit/pending-writes.test.ts`,
 `test/unit/accepted-writes.test.ts` and `test/unit/write-queue.test.ts`;
 `test/integration/multi-tab/failover.test.ts` kills the tab holding the port between queued and
 started, and after started; `handover-races.test.ts` and `peer-write-regressions.test.ts`;
-`write-backlog.test.ts` for `WRITE_QUEUE_FULL`; `test/integration/connection-regressions.test.ts`,
+`write-backlog.test.ts` for `WRITE_QUEUE_FULL`; `write-deadlines.test.ts` for tabs with different
+`writeTimeoutMs` and writes that reach the port part way through their time;
+`test/integration/connection-regressions.test.ts`,
 "a device that stops taking writes"; and `test/browser/hardware/emulator.spec.ts`, which pins the
 measured browser behaviour so a Chromium that changes it fails.
 
@@ -153,3 +192,7 @@ measured browser behaviour so a Chromium that changes it fails.
   writes bounded, `WRITE_QUEUE_FULL` (ADR-0031).
 - 2026-09-15: A write the device has not taken stays in flight, and a resolved `send()` means the
   browser took the bytes (ADR-0038, folded in).
+- 2026-09-15: A write is never begun after its issuer's deadline - `write-request` carries
+  `remainingMs`, protocol version 14. A documentation review found writes rejected with
+  `started: false` written afterwards: from tabs with a shorter `writeTimeoutMs` than the holder's,
+  and, with equal settings, from writes held for a port or handed on after `NOT_CONNECTED`.

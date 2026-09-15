@@ -123,6 +123,15 @@ export interface WriteRequestMessage extends Envelope {
    * and the sender hands it to another term only once this one has ended (ADR-0026).
    */
   readonly term: TermId;
+  /**
+   * Milliseconds left of the sender's deadline for this write when it sent the request: a duration,
+   * because the clocks of two contexts cannot be compared.
+   *
+   * The receiving tab never begins the write once this long has passed since it received the
+   * request, nor once its own `writeTimeoutMs` has. By then the sender has told its caller that the
+   * write did not start, whatever deadline the receiving tab runs (ADR-0013).
+   */
+  readonly remainingMs: number;
 }
 
 /**
