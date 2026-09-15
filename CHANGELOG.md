@@ -16,6 +16,24 @@ a lock or a bus; they detect each other and report `PROTOCOL_VERSION_MISMATCH`. 
 of an application after deploying it. Configurations remembered by an earlier build are not
 migrated (see below).
 
+### Documentation and examples, reworked
+
+- **The documentation is organised around what an application can rely on.** A new chapter,
+  Guarantees, is the single home of every promise - what a resolved `send()` means, ordering, the
+  write outcomes with the one crash exception to at-most-once, failover, reconnecting, collecting
+  received bytes, and the limits. Quickstart became First connection, with the permission and user
+  gesture material; Known limits collects what the library cannot do; Configuration documents every
+  option with its cost and when to change it. The README went from 419 to 99 lines and links the
+  chapters instead of repeating them. `test/unit/documentation.test.ts` checks the documented option
+  defaults, ranges and log events against the source.
+- **Drift fixed across the chapters, TSDoc, remediation texts and example READMEs**: `setup()` starts a
+  `failed` configuration again from any tab; a device plugged in again does not revive a configuration
+  with `autoReconnect: false`; `onSend` and a resolved `send()` mean the browser took the bytes;
+  received data is collected until the line is quiet; `persist` is `remember`.
+- **The example applications try a failed configuration again with `setup()`** and release first only
+  after a withdrawal over a different `maxTabs`. The OpenUI5 Reader runs in auto mode, so it no longer
+  takes the Printer's port, and its module option `restorePersisted` is `restoreRemembered`.
+
 ### Changed in the source reduction, part 2 (protocol 12)
 
 - **Who is still there is told by Web Locks, not heartbeats** (ADR-0041, superseding ADR-0021). A
@@ -26,7 +44,7 @@ migrated (see below).
   sweep, no count of unanswered heartbeats; the one timer left is the 45-second handshake deadline for
   a worker that never answers. After a crash of the tab that started the worker, the other tabs are
   back within the time the browser takes to free a lock: the browser benchmark's `handover/crash`
-  `everyTab` went from 60 s to 325 ms at the median, and the documented limit is gone.
+  `everyTab` went from 60 s to about 0.4 s at the median, and the documented limit is gone.
 - **`hello` carries every configuration a tab takes part in** and is sent again whenever that
   changes; `attach`, `detach`, `heartbeat` and `goodbye` are gone, and `welcome` names the worker:
   **19 message types become 15.** `MAX_HEARTBEAT_CONFIGURATIONS` is now `MAX_HELLO_CONFIGURATIONS`.
@@ -81,8 +99,7 @@ migrated (see below).
 ### Added
 
 - **Received bytes are collected until the line is quiet** (ADR-0039). A device that answers byte
-  by byte - writing `1234
-` to the Arduino echo port gave six `onReceive` events - now produces
+  by byte - writing `1234\r\n` to the Arduino echo port gave six `onReceive` events - now produces
   one event in every tab. `receive.idleMs` (default 50 ms, `0` for every chunk as it is read) and
   `receive.maxWaitMs` (default 500 ms) set when a delivery ends; the tab holding the port collects,
   and its settings apply everywhere. The debugging surface offers both under _Receiving_.

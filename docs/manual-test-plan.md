@@ -380,8 +380,7 @@ Against the build with ADR-0039 (received bytes collected until the line is quie
 version 10, both hardware suites at once, each device on its own COM port.
 
 - **Arduino on COM3, 7 tests green** (the 64 KiB round trip skipped as usual). New: writing
-  `1234
-` to the echo sketch, which returns the bytes one at a time, now arrives as **one**
+  `1234\r\n` to the echo sketch, which returns the bytes one at a time, now arrives as **one**
   `onReceive` event - before, it was six (Tim's report of 2026-09-15).
 - **Emulator on COM4, 11 tests green**, among them the same check with `chunk 1`, where every read
   returns a single byte, and step 21 with `receive.idleMs: 0`, so that the decoder still has to join
