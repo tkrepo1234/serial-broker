@@ -1,6 +1,6 @@
 # ADR-0031: Bound and rate-limit what the bus can cost a tab
 
-- **Status:** Accepted
+- **Status:** Accepted, amended 2026-09-15
 - **Date:** 2026-09-14
 - **Amends:** ADR-0018, ADR-0013
 
@@ -116,3 +116,12 @@ request the port has accepted is never refused.
 `test/integration/multi-tab/diagnostics-observer.test.ts` answers a collection from a script of the
 origin, under invented identities, and holds what it keeps to `MAX_REPORTS_PER_COLLECTION` - and,
 with a report as large as the decoder allows, to `MAX_REPORT_CHARACTERS_PER_COLLECTION`.
+
+## Amendment (2026-09-15): once per key
+
+What a flood would repeat is logged through one `OnceLog`, once per key, instead of a flag per case.
+A malformed message is logged once per kind of fault, so `MALFORMED_MESSAGE_WARNING_RATE` is gone.
+`REMOTE_ERROR_RATE` is gone as well: errors are believed only from the tab holding the port
+(ADR-0030, amended). `MAX_REPORTED_CONFIGURATIONS` was covered by `MAX_REPORT_VALUES`, and a record
+of an exceeded limit no longer carries the limit's value. Every bound on payloads, queues and reports
+stays.

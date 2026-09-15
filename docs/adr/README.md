@@ -36,7 +36,7 @@ because of a decision references it in a comment (`// See ADR-0005.`).
 | [0025](./0025-limit-the-tabs-using-a-configuration.md)                   | Limit how many tabs use a configuration at once                                     | Amended by 0030                         |
 | [0026](./0026-attribute-messages-to-a-term-of-holding-the-port.md)       | Attribute ownership, write and status messages to a term of holding the port        | Amended by 0030                         |
 | [0027](./0027-keep-a-remembered-configuration-while-a-tab-runs-it.md)    | Keep a remembered configuration while any tab runs it                               | Amended by 0033                         |
-| [0028](./0028-bind-an-identity-on-the-worker-to-a-secret.md)             | Bind an identity on the worker to a secret sent in `hello`                          | Accepted                                |
+| [0028](./0028-bind-an-identity-on-the-worker-to-a-secret.md)             | Bind an identity on the worker to a secret sent in `hello`                          | Superseded by 0040                      |
 | [0029](./0029-forward-the-workers-records-to-the-tabs.md)                | Forward the worker's warnings to the tabs that are connected to it                  | Accepted                                |
 | [0030](./0030-hold-a-web-lock-for-every-term-of-holding-the-port.md)     | Hold a Web Lock for every term of holding the port                                  | Accepted                                |
 | [0031](./0031-bound-and-rate-limit-what-the-bus-can-cost-a-tab.md)       | Bound and rate-limit what the bus can cost a tab                                    | Accepted                                |
@@ -48,3 +48,4 @@ because of a decision references it in a comment (`// See ADR-0005.`).
 | [0037](./0037-measure-performance-against-expectations-written-first.md) | Measure performance against expectations written first                              | Accepted                                |
 | [0038](./0038-leave-a-write-the-device-has-not-taken-in-flight.md)       | Leave a write the device has not taken in flight                                    | Accepted                                |
 | [0039](./0039-collect-received-bytes-until-the-line-is-quiet.md)         | Collect received bytes until the line is quiet                                      | Accepted                                |
+| [0040](./0040-route-to-all-participants-drop-the-identity-secret.md)     | Route to all participants; drop the identity secret                                 | Accepted                                |

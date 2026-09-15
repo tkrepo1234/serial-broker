@@ -1,6 +1,6 @@
 # ADR-0021: Forget tabs that stop sending heartbeats
 
-- **Status:** Accepted
+- **Status:** Accepted, amended 2026-09-13 and 2026-09-15
 - **Date:** 2026-09-13
 
 ## Context
@@ -156,3 +156,11 @@ frees the lock, but every other tab stays `reconnecting` until its heartbeats gi
 60 seconds in the measurement, with a write issued meanwhile ending in `WRITE_TIMEOUT`. The lock the
 worker holds for its lifetime, listed above as the upgrade path, would bring that down to the time
 the browser takes to free a lock. Until then it is a documented limit (`docs/site/performance.md`).
+
+## Amendment (2026-09-15): one liveness clock
+
+When a participant was last heard from is kept in one place, per port, in `WorkerPorts`. The broker
+keeps no timestamps and no list of clients of its own: it forgets a participant when the last port
+of that identity has said goodbye or fallen silent, and answers no `hello` or heartbeat itself - the
+ports do, on the port the message came from. A heartbeat restores only what a tab takes part in;
+with no owner routed to (ADR-0040), there is no ownership to restore.

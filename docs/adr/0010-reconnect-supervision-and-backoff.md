@@ -1,6 +1,6 @@
 # ADR-0010: Supervise the connection with bounded exponential backoff
 
-- **Status:** Accepted, amended 2026-09-14 and 2026-09-15
+- **Status:** Accepted, amended 2026-09-14 and 2026-09-15 (twice)
 - **Date:** 2026-09-12
 
 ## Context
@@ -146,3 +146,11 @@ points make it precise.
 
 _Alternative rejected:_ `maxAttempts: 0` as the way to switch reconnecting off. It would still revive
 on a `connect` event, and it hides a yes-or-no decision in a number.
+
+## Amendment (2026-09-15, protocol 11): `setup()` tries again from any tab
+
+`setup()` with equal options on a `failed` configuration now tries again in whichever tab it is
+called. A tab that does not hold the port sends the existing `status-request` with `retry: true`, and
+the tab holding the port calls its supervisor's retry, which leaves a working or reconnecting
+connection alone. No new message type. `test/integration/multi-tab/session-regressions.test.ts`
+covers it in both transport modes.

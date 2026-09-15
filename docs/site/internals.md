@@ -90,16 +90,16 @@ term, the tab speaking for it, and the tab limit that tab runs. Every other tab 
 The bus is an interface, `Transport`, with two implementations [ADR-0006, ADR-0007]:
 
 - **`SharedWorkerTransport`** connects to a `SharedWorker` running the `Broker`. The broker tracks
-  which tabs participate in which configuration and which tab last claimed ownership, and routes
-  each message to `all` participants of a configuration, to its `owner`, or to one tab. A tab that
+  which tabs participate in which configuration, and routes each message to `all` participants of a
+  configuration or to one tab. It knows no owner: a write request goes to every participant, and only
+  the tab holding the addressed term acts on it [ADR-0040]. A tab that
   dies sends no goodbye, so every tab on the worker also sends a heartbeat, and the broker forgets
   one that stays silent for three minutes. The worker can die too, and tells nobody: the broker
   answers every heartbeat, and a tab whose last three heartbeats went unanswered reports
   `BROKER_UNAVAILABLE`, starts a new worker, and restores its part there with a heartbeat
   [ADR-0021].
 - **`BroadcastChannelTransport`** sends every message to every tab; each tab keeps a message only
-  if it is addressed to a configuration it participates in, to a configuration it owns, or to its
-  own identifier.
+  if it is addressed to a configuration it participates in, or to its own identifier.
 
 Because routing depends only on the addressed envelope, and ownership only on the Web Lock, the two
 behave identically. Messages meant only for a broker, or written by one - `hello`, `welcome`,
@@ -107,23 +107,19 @@ behave identically. Messages meant only for a broker, or written by one - `hello
 
 Every script of the origin can reach the bus as well, so the worker trusts a port with no more than
 it said about itself (`WorkerPorts`). A port's first message must be `hello`, and names the identity
-the port speaks as from then on; a message before it, or in another sender's name, is dropped. That
-`hello` also carries a secret the transport generated and sends nowhere else: the worker binds the
-identity to the first secret it sees and refuses a later `hello` naming that identity with another
-one, so a script that heard the identity on the bus cannot connect as that tab [ADR-0028]. An
+the port speaks as from then on; a message before it, or in another sender's name, is dropped. An
 identity may have several ports - a tab that gave up on a worker that hung connects to it again on a
-new one, showing the same secret - so a later port never takes an identity's messages from its
-earlier ports: each of them receives them, until the sweep finds a port silent. A `goodbye` ends only
-the port it arrived on, and lets the identity be bound again. On `BroadcastChannel` no secret is sent
-and none would help: every context of the origin receives every message. The test harness routes
+new one - so a later port never takes an identity's messages from its earlier ports: each of them
+receives them, until the sweep finds a port silent. A `goodbye` ends only the port it arrived on.
+Nothing the worker routes depends on believing an identity [ADR-0040]. The test harness routes
 through the same class. `SECURITY.md` lists what this does and does not protect.
 
 The worker can reach no logger: it is a context of its own, and the logger an application configured
 belongs to a tab. It therefore sends its `warn` and `error` records to the contexts connected to it,
 as `worker-log` messages, and each tab writes them to its own logger under the worker's own events -
-`worker.message-refused`, `worker.limit-exceeded`, `broker.limit-exceeded` and the rest. At most
-eight records a minute are forwarded; the surplus is counted and reported as `worker.records-dropped`
-[ADR-0029].
+`worker.message-refused`, `worker.limit-exceeded`, `broker.limit-exceeded` and the rest. The worker
+writes each kind of warning once, so what it forwards is bounded without a budget [ADR-0029,
+amended].
 
 In the default mode the worker transport is wrapped in a `FallbackTransport`. A `SharedWorker`
 whose script answers 404 is still created; the browser reports the failure afterwards. So until
@@ -153,18 +149,18 @@ the same way: participants, ports per participant, and configurations.
 
 | Message                                     | Sent by                 | Purpose                                                                     |
 | ------------------------------------------- | ----------------------- | --------------------------------------------------------------------------- |
-| `hello`, `goodbye`                          | every tab               | Announce a tab to the broker, with its secret on a worker; leave cleanly.   |
+| `hello`, `goodbye`                          | every tab on the worker | Announce a tab to the broker; leave cleanly.                                |
 | `welcome`                                   | the broker              | Answers `hello` and every `heartbeat`: the worker script runs and is alive. |
 | `worker-log`                                | the broker              | One of the worker's own records, for the tab's logger [ADR-0029].           |
 | `heartbeat`                                 | every tab on the worker | Keeps a tab known to the broker, and restores what it takes part in.        |
 | `attach`, `detach`                          | every tab               | Start or stop participating in a configuration.                             |
 | `owner-claimed`, `owner-released`           | the owner               | A term of holding the port began; it ended, as its last message.            |
-| `status-request`                            | a tab that just set up  | Asks the owner to restate the status.                                       |
+| `status-request`                            | a tab that just set up  | Asks the owner to restate the status, or to retry where it gave up.         |
 | `status`                                    | the owner               | The connection status changed, with the owner's tab limit, device and term. |
 | `write-request`                             | a participant           | Asks the owner in one term to write.                                        |
 | `write-started`, `write-result`             | the owner               | The write began, in a term; how it ended.                                   |
 | `data-received`, `data-sent`                | the owner               | Traffic, to every participant.                                              |
-| `error`                                     | any tab                 | A failure every participant should know about.                              |
+| `error`                                     | the owner               | A failure every participant should know about.                              |
 | `diagnostics-request`, `diagnostics-report` | an observer; every tab  | The diagnostics collection [ADR-0018].                                      |
 
 The protocol version is part of every message, of the lock names, and of the name of the worker and
@@ -290,7 +286,7 @@ and the [Performance](performance.md) chapter records the results [ADR-0037].
 | 0025 | Limit how many tabs use a configuration at once                                     |
 | 0026 | Attribute ownership, write and status messages to a term of holding the port        |
 | 0027 | Keep a remembered configuration while any tab runs it                               |
-| 0028 | Bind an identity on the worker to a secret sent in `hello`                          |
+| 0028 | Bind an identity on the worker to a secret sent in `hello` (superseded by 0040)     |
 | 0029 | Forward the worker's warnings to the tabs that are connected to it                  |
 | 0032 | Measure durations on a monotonic clock, timestamp events on the wall clock          |
 | 0033 | One storage key per configuration, with an index of the names                       |
@@ -300,3 +296,4 @@ and the [Performance](performance.md) chapter records the results [ADR-0037].
 | 0037 | Measure performance against expectations written first                              |
 | 0038 | Leave a write the device has not taken in flight                                    |
 | 0039 | Collect received bytes until the line is quiet                                      |
+| 0040 | Route to all participants; drop the identity secret                                 |
