@@ -11,315 +11,179 @@ coordinate with each other. See
 
 ## [Unreleased]
 
-**Wire protocol version 13.** Tabs of this build and tabs of an earlier one do not share a worker,
-a lock or a bus; they detect each other and report `PROTOCOL_VERSION_MISMATCH`. Reload every tab
-of an application after deploying it. Configurations remembered by an earlier build are not
-migrated (see below).
+The first release verified against real hardware - an Arduino echo board and the USB/IP device
+emulator attached by usbip-win2 - in Microsoft Edge on Windows. Still before 1.0: a minor version
+may break the API, and every break is listed below.
 
-### Changed after the reduction (protocol 13)
+**Wire protocol version 13** (7 in 0.1.0-alpha.1). Tabs of this build and tabs of an earlier one do
+not share a worker, a lock or a bus; they detect each other and report `PROTOCOL_VERSION_MISMATCH`.
+Remembered configurations moved from **storage version 1 to 2** and are not migrated.
 
+### Upgrading from 0.1.0-alpha.1
+
+- **Reload every tab after deploying.** Tabs of the alpha and of this release do not coordinate.
+- **Remembered configurations are not carried over.** The first `restore()` finds none of the
+  alpha's; set them up again. The browser keeps the device permissions, so no prompt reappears. The
+  alpha's key `serial-broker/configurations/v1` is left in `localStorage`, unread.
+- **`persist` is now `remember`.** An options object that still says `persist` is read with the
+  default, `remember: true`; an `INVALID_ARGUMENT` names `options.remember`.
+- **`onReceive` delivers what the device sent once the line is quiet**, not every read on its own:
+  `receive.idleMs` (50 ms) of silence ends a delivery, `receive.maxWaitMs` (500 ms) bounds it. Set
+  `receive: { idleMs: 0 }` to receive every chunk as it is read, as before.
 - **A new `onStatusChange` listener is told the current status once**, right after `subscribe()`
-  returns, with `previousStatus` equal to `status`. No application has to call `getStatus()` after
-  subscribing any more; the documentation's examples, the task counts and the example applications
-  no longer do.
-- **`requestAccess()` works from any tab taking part in a configuration**, not only the one holding the
-  port: the permission belongs to the origin. A tab that does not hold the port shows the picker and
-  asks the holding tab to look for the port again with `status-request`, which now carries the device
-  chosen in auto mode (`device`); the holding tab adopts it (ADR-0036). A supervisor waiting for
-  permission looks again too. Only a `queued` tab, or one that withdrew, is refused with
-  `PERMISSION_REQUIRED`.
-
-### The complexity and code reduction, in numbers
-
-Requested by Tim on 2026-09-14 and done on 2026-09-15; the inventory before and after is in
-`docs/reviews/2026-09-15-reduction-inventory.md`.
-
-- `src/`: 54 files and 14 533 lines → 51 files and 13 267 lines; protocol message types 19 → 15.
-- Tests: 1 390 → 1 407 in-process (22 of them the opt-in extreme suite), about twice as fast; spec
-  and test files 23 865 → 21 900 lines, the examples' smoke tests included.
-- Tests, second pass over every test file: 1 410 → 1 345 in-process (22 of them the opt-in extreme
-  suite), the warm run unchanged at about 3.2 s; spec and test files 21 974 → 21 270 lines. Gone:
-  tests of the removed goodbye and attach messages, duplicates across unit and integration, and
-  assertions on the worker's undocumented records; added: conformance of the fake BroadcastChannel
-  (no echo) and of `LockManager.query()`.
-- ADRs: rolled up into 24 current decisions and 17 superseded stubs that point forward, about
-  4 040 → 2 832 lines; ADR-0001 states that rule. `docs/architecture.md` is merged into Internals,
-  and the usability review moved to `docs/reviews/`.
-- Markdown in the repository: 14 148 → 12 875 lines, with two new chapters (Guarantees, Known limits).
-
-### Documentation and examples, reworked
-
-- **The documentation is organised around what an application can rely on.** A new chapter,
-  Guarantees, is the single home of every promise - what a resolved `send()` means, ordering, the
-  write outcomes with the one crash exception to at-most-once, failover, reconnecting, collecting
-  received bytes, and the limits. Quickstart became First connection, with the permission and user
-  gesture material; Known limits collects what the library cannot do; Configuration documents every
-  option with its cost and when to change it. The README went from 419 to 99 lines and links the
-  chapters instead of repeating them. `test/unit/documentation.test.ts` checks the documented option
-  defaults, ranges and log events against the source.
-- **Drift fixed across the chapters, TSDoc, remediation texts and example READMEs**: `setup()` starts a
-  `failed` configuration again from any tab; a device plugged in again does not revive a configuration
-  with `autoReconnect: false`; `onSend` and a resolved `send()` mean the browser took the bytes;
-  received data is collected until the line is quiet; `persist` is `remember`.
-- **The example applications try a failed configuration again with `setup()`** and release first only
-  after a withdrawal over a different `maxTabs`. The OpenUI5 Reader runs in auto mode, so it no longer
-  takes the Printer's port, and its module option `restorePersisted` is `restoreRemembered`.
-
-### Changed in the source reduction, part 2 (protocol 12)
-
-- **Who is still there is told by Web Locks, not heartbeats** (ADR-0041, superseding ADR-0021). A
-  tab holds `serial-broker/context/v12/<clientId>` for its lifetime and says `hello` only once it
-  holds it; the worker waits on that lock and forgets the tab the moment it is granted. The worker
-  holds `serial-broker/worker/v12/<workerId>`, named in its `welcome`, and starts no port before it
-  holds it; every tab waits on it and starts a new worker as soon as it is granted. No heartbeat, no
-  sweep, no count of unanswered heartbeats; the one timer left is the 45-second handshake deadline for
-  a worker that never answers. After a crash of the tab that started the worker, the other tabs are
-  back within the time the browser takes to free a lock: the browser benchmark's `handover/crash`
-  `everyTab` went from 60 s to about 0.4 s at the median, and the documented limit is gone.
-- **`hello` carries every configuration a tab takes part in** and is sent again whenever that
-  changes; `attach`, `detach`, `heartbeat` and `goodbye` are gone, and `welcome` names the worker:
-  **19 message types become 15.** `MAX_HEARTBEAT_CONFIGURATIONS` is now `MAX_HELLO_CONFIGURATIONS`.
-  `SILENT_PARTICIPANT_TIMEOUT_MS`, `SWEEP_INTERVAL_MS`, `HEARTBEAT_INTERVAL_MS` and
-  `MAX_UNANSWERED_HEARTBEATS` are gone; `TransportRequest` takes the context's `locks`.
-- **The fallback to `BroadcastChannel` restates instead of replaying** (ADR-0007, amended): it attaches
-  what the tab takes part in and has the client restate its status or ask for it, as after reaching
-  a new worker. `MAX_REPLAYED_MESSAGES` and the `replayedMessages`/`droppedMessages` log fields are
-  gone; traffic sent before the switch is lost.
-- **The tab holding the port bounds and answers its writes in the supervisor**: `PortSupervisor`
-  refuses a write beyond `MAX_WAITING_WRITES` or `MAX_WAITING_WRITE_BYTES` (the record is now
-  `supervisor.write-queue-full`), and its `stop()` resolves once every write has been answered. The
-  writes of an ended term are handed on through `dispatchWaiting`, and `owner-claimed` no longer
-  triggers a dispatch.
-- **A diagnostics report is filed, not validated in full** (ADR-0018, amended): only its sender, transport,
-  version, time and named configurations are checked; the debugging surface reads the rest
-  defensively. The structure budget admits only trees of plain values - no `Map`, `Set`, binary data,
-  dates or regular expressions in a report or an error.
-- `SharedWorkerTransport`'s state is one phase; `PortSupervisor`'s connect is split into finding,
-  opening and reading. The browser suite's "the broker dies" no longer needs two and a half minutes.
-- `src` went from 13 383 to 13 260 lines.
-
-### Changed in the source reduction (protocol 11)
-
-- **The broker routes to all participants and believes no claim of ownership** (ADR-0040). A forged
-  `owner-claimed` on the `SharedWorker` used to divert every other tab's writes to the claimant; a
-  write request now goes to every participant, and only the tab holding its term acts on it. The
-  `'owner'` target, `Transport.setOwnership` and `ownedConfigNames` in the heartbeat are gone.
-- **The identity secret is removed** (ADR-0040, superseding ADR-0028): no secret in `hello`, no
-  binding on the worker, no `MAX_BOUND_IDENTITIES`, no `newSecret` in the environment. A port is still
-  held to the identity it said hello as.
-- **`error` messages are believed only from the tab holding the port**, like device data;
-  `REMOTE_ERROR_RATE` is gone. A tab withdrawing over a different tab limit reports the conflict in
-  that tab only (ADR-0025, amended).
-- **`setup()` retries a `failed` configuration from any tab**: `status-request` carries an optional
-  `retry` (ADR-0010, amended).
-- Every Web Lock is held through one `HeldLock`; the term lock is taken inside the election, so a
-  refused term lock retries both locks and no tab holds the ownership lock without a term (ADR-0030,
-  amended). `session.term-lock-failed` is gone; the refusal is `election.failed`.
-- What a flood would repeat is logged once per key (`OnceLog`); malformed messages once per kind of
-  fault (`MALFORMED_MESSAGE_WARNING_RATE`, `client.malformed-messages-unlogged` gone). Limit records
-  no longer carry `limitValue`; `MAX_REPORTED_CONFIGURATIONS` is gone (ADR-0031, amended).
-- The worker writes each warning once per key and forwards records without a budget
-  (`worker.records-dropped` gone, ADR-0029 amended); liveness is timed in `WorkerPorts` only (ADR-0021,
-  amended). `OwnerTerms` keeps one flood bound, `MAX_TERM_FLOOD` (ADR-0030, amended).
-- The `BroadcastChannel` transport no longer posts `hello`, `goodbye`, `attach` or `detach`, which
-  nobody read. Diagnostics report the connection state `listing` instead of mapping it to `opening`.
-  The discarding of storage keys of older formats is removed.
-- Test-only API removed: `WriteQueue.enqueue`, `Broker.clientCount`, `WorkerPorts.clientCount`.
-- `src` shrank from 14 533 to 13 405 lines.
+  returns, with `previousStatus` equal to `status`. A listener that counts events, or treats every
+  event as a change, has to allow for that one.
+- **`setup()` without `device` no longer rejects** with `INVALID_ARGUMENT`: it waits in
+  `awaiting-permission` for the user to choose a port. `getStatus()` gains `deviceKind`.
+- **`setup()` with the same options starts a `failed` configuration again**, from any tab. Before,
+  it did nothing; code that released first to try again still works but no longer needs to.
+- **`requestAccess()` works in any tab taking part in a configuration.** `PERMISSION_REQUIRED` is
+  left for a tab `queued` under `maxTabs` or one that withdrew.
+- **A write the device does not take in time no longer ends the connection.** `send()` still rejects
+  with `WRITE_TIMEOUT`; the port stays open, the writes behind it fail at their deadline with
+  `started: false`, and writing carries on when the device takes data again.
+- **`send()` can reject with the new code `WRITE_QUEUE_FULL`**: a `switch` over every
+  `SerialBrokerErrorCode` needs a case for it.
+- **A resolved `send()` means the browser took the bytes for the port** - it always did; the
+  documentation no longer says they reached the device.
+- **The debugging surface needs `dist/debug/debug.css`** served next to `dist/debug/index.html`;
+  serving `dist/` as a whole is unaffected.
+- **Diagnostics:** a report's settings carry `remember`, `receive`, `connection.autoReconnect` and
+  the full `DeviceFilter` as `device`; the connection reports `stalledWriteSince` and the state
+  `listing`; other tabs' reports are checked at the top level only, so read nested fields defensively.
+- **Log events:** `storage.migrated` and the `broker.*` ownership records are gone, and new ones
+  arrive (see Changed). The Diagnostics chapter lists every current event.
 
 ### Added
 
-- **Received bytes are collected until the line is quiet** (ADR-0039). A device that answers byte
-  by byte - writing `1234\r\n` to the Arduino echo port gave six `onReceive` events - now produces
-  one event in every tab. `receive.idleMs` (default 50 ms, `0` for every chunk as it is read) and
-  `receive.maxWaitMs` (default 500 ms) set when a delivery ends; the tab holding the port collects,
-  and its settings apply everywhere. The debugging surface offers both under _Receiving_.
+- **Automatic device mode** (ADR-0036): `device` may be omitted, or `{ auto: true }`; the
+  configuration takes its device from the port the user picks in an unfiltered picker - its vendor
+  and product ID, or no USB identity - remembers it, and shares it with the other tabs.
+  `requestAccess()` may follow `setup()` in the same click. New types `AutoDeviceFilter`,
+  `ResolvedDeviceFilter` and `DeviceKind`.
+- **`{ nonUsb: true }`** (`NonUsbDeviceFilter`) accepts only ports without a USB identity, and
+  `getStatus()` reports **`deviceKind`**: `'usb'`, `'non-usb'`, `'any'` or `'auto'`.
+- **Received bytes are collected until the line is quiet** (ADR-0039): `receive.idleMs` and
+  `receive.maxWaitMs` (`ReceiveSettings`); the tab holding the port collects, and its settings apply
+  everywhere.
 - **`connection.autoReconnect`** (default `true`): with `false`, a lost connection or failed attempt
-  ends in `failed` and nothing is retried, not even when the device is plugged in again, until the
-  application sets the configuration up again (ADR-0010, amended). The debugging surface shows
-  _Reconnect automatically_ next to _Remember across reloads_, outside the folded options.
-- `test/browser/hardware/emulator.spec.ts` runs the library in a real browser against the USB/IP
-  emulator attached by usbip-win2, with `SERIAL_BROKER_HARDWARE=emulator`. The spec starts and
-  drives the emulator itself - unplug and plug, a hung device, one byte per read, an owner killed
-  while its write is held - and counts the bytes that reached the device. The Arduino spec now
-  shares its browser launch with it.
-- The emulator logs a transfer the host cancels (`transfer N cancelled by the host`), which is how a
-  write aborted at the device shows up.
-- Framework integrations as runnable examples, each with a reusable module, a README on taking it
-  into an application of your own and a smoke test: `examples/react` (a `useSerialBroker` hook on
-  `useSyncExternalStore`, safe under StrictMode and hot updates and shared by several components),
-  `examples/vue` (a `useSerialBroker` composable returning refs; composables of one name follow one
-  configuration), `examples/svelte` (`createSerialBroker()` with rune-based state; a connection
-  releases only what it set up) and `examples/angular` (an injectable `SerialBrokerService` with
-  signals in a zoneless Angular 22 application). The examples table and the documentation's
-  examples page list all nine applications.
-- A documentation chapter, **Tasks, counted**, shows the code for seven common tasks with
-  serial-broker and with the Web Serial API alone, and counts their calls, options and concepts.
-  The usability review behind it (`docs/reviews/usability-review-2026-09-14.md`) answered the questions a
-  cold read of the examples raised in the documentation: Installing names the `serial-broker/worker`
-  export and recommends naming the worker URL, and the TSDoc of `setup()`, `release()`, the `queued`
-  and `released` statuses and `ErrorEvent.name` now say what they left open.
-- **Automatic device mode** (ADR-0036): `device` is optional in `setup()`. Without it, or with
-  `{ auto: true }`, the configuration waits in `awaiting-permission` until `requestAccess()` opens
-  an unfiltered port picker, and takes its device from the port the user picks: its vendor and
-  product ID when the port reports both, otherwise a port without a USB identity. The resolved
-  device is remembered, so `restore()` reconnects without a prompt, and shared with the other tabs:
-  a tab in auto mode adopts the device of the tab holding the port. `requestAccess()` may be called
-  right after `setup()` in the same click. An auto-mode configuration waits for the user even when
-  exactly one port is granted, because that port may belong to another configuration. A later
-  visit that calls only `setup()` opens the device remembered for that name without a prompt, and
-  saving an unresolved configuration keeps a resolution already remembered under its name.
-- A new device filter, `{ nonUsb: true }`, accepts only ports without a USB identity.
-- `getStatus()` reports `deviceKind`: `'usb'`, `'non-usb'`, `'any'` or `'auto'`.
-- The debugging surface's **Choose a device…** uses the automatic mode: it asks only for a name and
-  the line settings, sets the configuration up and opens the picker in the same click; a dismissed
-  picker releases the configuration again. **New configuration** defaults to automatic.
-- `npm run bench`: benchmarks of throughput, latency, handover, start and a simulated hour on the
-  in-process harness, over both transports, judged against expectations written down before the
-  first measurement (ADR-0037), in about six seconds. An opt-in real-browser run
-  (`SERIAL_BROKER_BENCH_BROWSER=1 npm run bench:browser`, never in CI) measures the same in Edge
-  with the Web Serial stand-in. A new Performance chapter holds both sets of results, the build
-  sizes (reported, not enforced) and the documented limits; the size report includes the worker
-  script.
-- `npm run test:extreme`: an opt-in extreme-usage suite (`SERIAL_BROKER_EXTREME=1`, never in CI) of
-  eleven scenarios on both transports - 100 tabs, sustained traffic of 41 MB to 10 tabs, 10 000
-  writes under owner crashes, 50 000 writes through one holder, a simulated week - that bounds heap,
-  timers, listeners, locks, pending writes and messages and checks that every tab still works at the
-  end; and an opt-in real-browser run of 20 Edge pages for five minutes with the page holding the
-  port closed every 30 s, its page and SharedWorker memory read over CDP. Both found no leak or
-  stall in the library; the last runs are recorded in their `RESULTS.md`.
-- The Web Serial stand-in can push bytes without a prior write (`emit()`), and the test harness
-  counts bus messages and keeps nothing of closed or crashed tabs.
-- `examples/openui5`: a runnable OpenUI5 application and a reusable integration module that
-  exposes serial-broker as a bindable `JSONModel` - status, errors with remediation, traffic, send,
-  connect and release - on OpenUI5 1.148 (long-term maintenance) with UI5 Tooling and TypeScript,
-  running without an SAP system. Its German texts use real umlauts.
-- Runnable example applications, each with its own README, a fixed port and a Playwright smoke
-  test against the Web Serial stand-in: `examples/minimal` (a Vite page that connects, prints what
-  arrives and sends text), `examples/multi-tab-dashboard` (permission, remembering and restoring,
-  what the other tabs see, the diagnostics entry point), `examples/exclusive` (`maxTabs: 1`,
-  `queued` shown as a wait, the takeover) and `examples/no-bundler` (a static page loading
-  `serial-broker/min` from an import map, with a smoke test that checks the worker is really
-  served). `examples/README.md` sets the contract every example keeps; `npm run test:examples`
-  starts each example and runs its smoke test, and CI installs, type-checks and smoke-tests every
-  example in one job.
-- The built package is tested in a real browser on every CI run (`npm run test:browser`, Playwright,
-  ADR-0035): three tabs of one origin sharing a port through a real `SharedWorker`, failover when
-  the tab holding the port closes or its renderer is killed, recovery when that crash takes the
-  broker with it, the `BroadcastChannel` fallback, a worker script of another protocol version, the
-  port picker from a real click, an unplugged device coming back, and `dist/index.min.js`
-  coordinating with tabs on the readable build. Locally the suite drives the installed Microsoft
-  Edge; CI installs Chromium.
-- First run against real hardware: an Arduino echoing at 9600 baud on a COM port - echo round trip,
-  two and three tabs sharing the real port, failover when the tab holding it closes, a 5 000-byte
-  payload byte for byte, 64 KiB complete and in order, and setting a configuration up again after
-  releasing it. Opt-in with `SERIAL_BROKER_HARDWARE=arduino`, never in CI; the browser is handed the
-  port through a throwaway profile written before it starts, so nothing answers a permission prompt
-  and no machine-wide setting is touched. Recorded in `docs/manual-test-plan.md`.
-- A reusable Web Serial stand-in (`test/browser/stand-in/`) installs a granted loopback device into
-  any page before its own scripts run - for the browser tests, and for example applications that
-  have to run without a device attached.
-- The debugging surface connects to a device you pick: **Choose a device…** opens the browser's
-  port picker with no filter and fills the setup in from the chosen port - its USB IDs, or _any
-  port_ where it reports none, a free name, 9600 baud and the defaults for the rest. One
-  **Connect** opens the port without a second prompt, because the picker just granted the
-  permission. No vendor ID, product ID or device type is needed to get started (ADR-0034). The baud
-  rate list offers 1200 to 921600; a dismissed picker changes nothing; the dialog warns before
-  connecting when several granted ports match.
-- The debugging surface ships a strict `Content-Security-Policy` in its markup: nothing but
-  same-origin script, worker, style and fetch. `frame-ancestors` still has to
-  come from the server as a header. Its styles now live in `dist/debug/debug.css`, which must be
-  served next to `dist/debug/index.html`; serving `dist/` as a whole is unaffected.
-- The SharedWorker's own diagnostics reach applications: it sends its `warn` records to the
-  connected tabs, which log them through the configured logger as `worker.message-refused`,
+  ends in `failed`, and nothing is retried - not even on replug - until `setup()` is called again
+  (ADR-0010).
+- **`WRITE_QUEUE_FULL`**: the tab holding the port keeps at most 4096 writes and 64 MiB of payload
+  waiting, from every tab together; a write beyond that is refused, and nothing of it was written.
+- **The worker's records reach the application's logger** (ADR-0018): `worker.message-refused`,
   `worker.limit-exceeded`, `broker.limit-exceeded`, `worker.other-protocol-version` and
-  `worker.message-error` (ADR-0029). Forwarding is throttled to eight records a minute; what
-  exceeds that is counted and reported as `worker.records-dropped`. Such a record carries
-  `clientId` for the context it concerns and `reportedBy` for the tab that wrote this copy.
-- New error code `WRITE_QUEUE_FULL`: the tab holding the port keeps at most 4096 writes and 64 MiB
-  of payload waiting at once, from every tab together; a write beyond that is refused, and nothing
-  of it was written.
-- `Clock` has a monotonic reading for durations (ADR-0032). The at-a-glance illustration was
-  reworked in the documentation's style (`design/at-a-glance.svg`, `design/README.md`); it stays a
-  draft, not yet referenced from the documentation.
+  `worker.message-error`, each once per key, with `clientId` and `reportedBy`.
+- The debugging surface's **Choose a device…** sets a configuration up in auto mode and opens the
+  picker in the same click, and the page carries a strict `Content-Security-Policy` (ADR-0019).
+- **Nine example applications**, each with a README and a Playwright smoke test against a Web Serial
+  stand-in: `minimal`, `multi-tab-dashboard`, `exclusive`, `no-bundler`, `openui5`, `react`, `vue`,
+  `svelte` and `angular` (`npm run test:examples`, in CI).
+- **Test suites beyond the in-process one:** the built package in a real browser on every CI run
+  (`npm run test:browser`, ADR-0035); opt-in hardware runs against an Arduino and the USB/IP emulator
+  (`SERIAL_BROKER_HARDWARE=arduino|emulator`); an opt-in extreme-usage suite
+  (`npm run test:extreme`) in-process and in 20 Edge pages, with results in `RESULTS.md`.
+- **Benchmarks** judged against expectations written down first (`npm run bench`,
+  `npm run bench:browser`, ADR-0037), with build sizes, in a new Performance chapter.
+- **Documentation chapters:** Guarantees (every promise in one place), First connection (replacing
+  Quickstart), Known limits, Tasks, counted, and Performance. `test/unit/documentation.test.ts` checks
+  documented option defaults, ranges and log events against the source.
 
 ### Changed
 
-- The test suites are smaller and no weaker: no two tests pin the same behaviour, log wording is no
-  longer asserted where an event name or error field is the contract, and every row of the scenario
-  matrix is still covered - rows 11 and 13 now with two real tabs each. The in-process suite went
-  from 1 390 tests in 6.6 s to 1 354 in 3.1 s, and the test and spec files from 23 288 lines to
-  22 335 (plus the 200 of `examples/smoke-support.ts`, the steps the examples' smoke tests now
-  share). Four slow browser and hardware tests that faster suites cover are gone, among them the
-  Arduino's quarter-hour 64 KiB round trip; `SERIAL_BROKER_HARDWARE_LARGE` no longer does anything.
-- **`persist` is now `remember`**, the word the debugging surface and the documentation already
-  used. Remembered configurations need no migration: an entry written with `persist` is read with
-  the default, `remember: true`. Diagnostics reports carry `remember`, `receive` and
-  `connection.autoReconnect`, hence protocol version 10.
-- **`setup()` with the same options starts a `failed` configuration again** in the tab holding the
-  port (ADR-0010, amended), so a "try again" button needs no `release()` first. A working
-  configuration is still left alone.
-- **A write the device does not take in time no longer ends the connection** (ADR-0038). `send()`
-  still rejects with `WRITE_TIMEOUT`, but the chunk stays in flight and holds the write queue: the
-  writes behind it are not begun and fail at their deadline with `started: false`, and writing
-  carries on when the device takes data again. Tearing the connection down made recovery
-  impossible: in Chromium on Windows a port with a write outstanding neither closes nor opens again
-  until the page is gone, however soon the device recovers - measured against the USB/IP emulator.
-- The documentation of `send()`, `onSend` and `serial.bufferSize` no longer says the bytes reached
-  the device: a `send()` resolves once the browser has taken them for the port, and one that fits
-  in `bufferSize` resolves even while the device takes nothing.
-- **Breaking:** the `status` message carries the device of the tab holding the port (protocol
-  version 9). `SerialBrokerStatusSnapshot` has the extra key `deviceKind`,
-  `EffectiveSettings.device` in diagnostics is the full `DeviceFilter` union, and the context of
-  `DEVICE_MISMATCH` gains `expectedDevice`. A `setup()` without `device`, which used to fail with
-  `INVALID_ARGUMENT`, now waits for the user.
-- A tab proves its identity to the SharedWorker with a random secret sent only in its `hello`
-  (ADR-0028). Another script of the origin can no longer connect to the worker under a tab's
-  identity, so it no longer receives what is addressed to that tab alone. A tab that replaces a
-  worker that hung shows the same secret and keeps working. On `BroadcastChannel` no such protection
-  is possible, and `SECURITY.md` says so.
-- Every time of holding a port is a Web Lock of its own (ADR-0030). A tab believes a claim, a
-  status or a goodbye about a term only while that lock is held, so a script of the origin can no
-  longer end a term another tab is writing in, invent a term that makes other tabs address their
-  writes into the void, or make a tab withdraw from a configuration by claiming another `maxTabs`.
-  Failover after a crashed tab no longer waits out a grace period of one second: the term ends the
-  moment the browser frees its lock. A word from a crashed tab still on its way when the browser
-  freed its lock is now too late, which the documentation states.
-- A write is reported started, or answered, only by the term it was addressed to and only by the
-  tab that holds that term; device data is delivered only from a tab that speaks for a term the
-  receiving tab knows of. A `write-result` forged with a request id read off the bus no longer
-  resolves a write whose bytes are still waiting at the port.
-- Answers to status requests and diagnostics requests, records of malformed messages, errors from
-  other tabs and the reports one diagnostics collection keeps are rate-limited by named limits
-  (ADR-0031); what is dropped is logged once per tab. Status requests beyond the rate are answered
-  together, so no tab is left without a status.
-- Remembered configurations are stored one per `localStorage` key,
-  `serial-broker/configurations/v2/entry/<name>`, listed in `serial-broker/configurations/v2/index`
-  (ADR-0033). Two tabs remembering different configurations at the same moment can no longer
-  overwrite each other's entry, and one unreadable entry no longer risks the others.
-  `STORAGE_CORRUPT` is reported per remembered configuration, with its `configName`. The diagnostics
-  event `storage.migrated` is gone; `storage.old-format-discarded` reports the keys of earlier
-  formats being removed.
-- **Breaking:** configurations stored by earlier versions are not migrated. The keys
-  `serial-broker/configurations/v1` and `serial-broker/v1/configurations` to
-  `serial-broker/v4/configurations` are removed, unread, the first time `restore()` runs; those
-  configurations have to be set up once more. The Web Lock that keeps a remembered configuration
-  while a tab runs it is now `serial-broker/persisted/v2/<name>`.
-- Setting the system clock no longer disturbs anything the library times. Durations - the
-  `connection.stableAfterMs` stability window, how long a write has waited at the tab holding the
-  port, how late a deadline ran, how long a tab has been silent, how much of a rate allowance has
-  come back - are measured on `performance.now()`. Timestamps in events, errors and diagnostics
-  remain system-clock readings.
-- No published type definition names an ambient Web Serial type any more, including the
-  definitions behind a deep import, so the package type-checks in an application without
-  `@types/w3c-web-serial` under `skipLibCheck: false`. The public API types are unchanged in
-  meaning; the build checks every emitted declaration.
-- The README says who the library is for - industrial production interfaces - and what was run
-  against real hardware, instead of saying it was never verified against a device.
-- `owner-claimed` carries `maxTabs`, `HelloMessage` gains `secret`, the message type `worker-log`
-  joins the protocol, and the internal export `FORMER_OWNER_GRACE_MS` is gone. For anyone
-  constructing internals directly, `SerialBrokerEnvironment` and `TransportRequest` gain a
-  required `newSecret()`.
+- **Breaking:** wire protocol version 13 and storage version 2; see Upgrading.
+- **Breaking:** the option `persist` is `remember`, and received data is collected by default.
+- **Breaking:** `SerialBrokerOptions.device` is optional; `SerialBrokerStatusSnapshot` has the key
+  `deviceKind` and reports `vendorId`/`productId` only for `'usb'`; `EffectiveSettings.device` is the
+  full `DeviceFilter` union; the context of `DEVICE_MISMATCH` gains `expectedDevice`.
+- **Breaking:** a new `onStatusChange` listener receives the current status once.
+- **`setup()` retries a `failed` configuration** in whichever tab it is called (ADR-0010), and
+  **`requestAccess()` is allowed in any participating tab**: the tab holding the port looks for the
+  granted port again, in auto mode with the device chosen there (ADR-0036).
+- **Who is still there is told by Web Locks, not heartbeats** (ADR-0041): the worker forgets a tab
+  the moment the browser frees that tab's lock, instead of after three silent minutes, and tabs
+  replace a worker the moment its lock is freed, instead of after three unanswered heartbeats.
+- **Every term of holding the port is a Web Lock** (ADR-0030): a tab believes a claim, a status or
+  a release about a term only while its lock is held, and a crashed holder's term ends when the
+  browser frees the lock, with no one-second grace period.
+- **The `BroadcastChannel` fallback restates instead of replaying**: after a switch the tab attaches
+  what it takes part in and restates or asks for its status; traffic sent before the switch is lost.
+- **Remembered configurations are stored one per key** (ADR-0033),
+  `serial-broker/configurations/v2/entry/<name>` listed in `serial-broker/configurations/v2/index`;
+  the Web Lock keeping a remembered configuration is `serial-broker/persisted/v2/<name>`.
+- **Answers to status and diagnostics requests are rate-limited, and a diagnostics collection is
+  bounded** (ADR-0031); status requests beyond the rate are answered together.
+- **Log events:** new `session.device-resolved`, `session.term-not-held`, `session.term-flood`,
+  `session.term-check-failed`, `session.term-watch-failed`, `session.data-without-a-term`,
+  `session.status-answers-throttled`, `client.diagnostics-answers-dropped`,
+  `diagnostics.limit-exceeded`, `supervisor.write-queue-full`, `supervisor.write-stalled`,
+  `storage.lookup-failed`, `storage.stale-name`, `transport.context-lock-failed`,
+  `transport.worker-watch-failed` and `worker.lock-failed`.
+- `PERMISSION_REQUIRED`, `DEVICE_DISCONNECTED` and `RECONNECT_EXHAUSTED` have new remediation texts;
+  the package describes itself as built for industrial production interfaces, and the README went
+  from 364 to 99 lines, linking the chapters instead of repeating them.
+
+### Removed
+
+- The option `persist` (now `remember`).
+- Migration of configurations remembered under `serial-broker/configurations/v1` and the
+  protocol-versioned keys before it.
+- The replay of messages sent before a switch to `BroadcastChannel`, with the log fields
+  `replayedMessages` and `droppedMessages`.
+- Log events `storage.migrated`, `broker.owner-claimed`, `broker.owner-gone`,
+  `broker.owner-restored`, `broker.no-owner` and `broker.forgot-silent`.
+- The Quickstart chapter (now First connection) and `docs/architecture.md` (merged into Internals).
+
+### Fixed
+
+- **The tabs recover within about half a second when a crash takes the `SharedWorker` with it** -
+  as the crash of the tab that started the worker does - where the alpha's heartbeats needed 45 to
+  60 seconds to notice the dead worker (browser benchmark `handover/crash`, `everyTab` median 0.4 s).
+- **A forged `owner-claimed` can no longer divert other tabs' writes** on the `SharedWorker`: the
+  broker believed any claim and sent `'owner'`-addressed writes to the claimant; it now routes to
+  all participants and only the tab holding the term acts (ADR-0006).
+- **A script of the origin can no longer steer a configuration through the bus** (ADR-0030): end a
+  term another tab is writing in, invent one that sends writes into the void, make a tab withdraw
+  by claiming another `maxTabs`, resolve a write with a forged `write-result`, or have device data
+  and errors believed from a context that holds no term.
+- **A write the device did not take in time made the port unusable**: the connection was torn down,
+  and in Chromium on Windows a port with a write outstanding neither closes nor opens again until
+  the page is gone - measured against the USB/IP emulator (ADR-0013).
+- **Two tabs remembering different configurations at the same moment** no longer overwrite each
+  other's entry, and one unreadable entry no longer risks the others (ADR-0033).
+- **Setting the system clock no longer disturbs durations** - the stability window, write expiry,
+  late deadlines - which are now measured on `performance.now()`; timestamps stay wall-clock
+  (ADR-0014).
+- **Every emitted type declaration type-checks without `@types/w3c-web-serial`** under
+  `skipLibCheck: false`, not only those the entry points reach.
+
+### Internals
+
+- **Message types 18 → 15**: `heartbeat`, `attach`, `detach` and `goodbye` are gone, `worker-log`
+  is new. `hello` carries every configuration a tab takes part in and is sent again when that
+  changes; `welcome` names the worker; `owner-claimed` carries `maxTabs`; `status` carries the
+  device; `status-request` carries `retry` and the chosen `device`. The `'owner'` target,
+  `Transport.setOwnership` and `ownedConfigNames` are gone (ADR-0006).
+- **Web Locks for liveness** (ADR-0041): `serial-broker/context/v13/<clientId>` per tab,
+  `serial-broker/worker/v13/<workerId>` per worker; `TransportRequest` takes the context's `locks`.
+  **Term locks** `serial-broker/term/v13/<maxTabs>/<term>/<clientId>/<name>` (ADR-0030). Every lock
+  is held through `HeldLock`, and what a flood would repeat is logged once per key through `OnceLog`.
+- Internal exports removed: `HEARTBEAT_INTERVAL_MS`, `SILENT_PARTICIPANT_TIMEOUT_MS`,
+  `SWEEP_INTERVAL_MS`, `MAX_UNANSWERED_HEARTBEATS`, `FORMER_OWNER_GRACE_MS`, `MAX_REPLAYED_MESSAGES`,
+  `MAX_REPORTED_CONFIGURATIONS`, `LIMITS`, `LimitWarnings`, `LEGACY_STORAGE_KEYS`;
+  `MAX_HEARTBEAT_CONFIGURATIONS` is `MAX_HELLO_CONFIGURATIONS`. New: `MAX_WAITING_WRITES`,
+  `MAX_WAITING_WRITE_BYTES`, `STATUS_ANSWER_RATE`, `DIAGNOSTICS_ANSWER_RATE`,
+  `MAX_REPORTS_PER_COLLECTION`, `MAX_LOG_RECORD_VALUES`.
+- The environment seam (ADR-0014): `Clock.monotonicNow()`, and Web Serial described structurally
+  (`SerialPortLike`, `SerialOptionsLike` and friends) instead of through ambient types.
+- `PortSupervisor` bounds and answers the writes it holds; a diagnostics report is filed after a
+  top-level check, not validated in full (ADR-0018).
+- **ADRs rolled up**: 0028 to 0041 are new; of 41 decisions, 24 are current and 17 are superseded
+  stubs pointing forward (ADR-0001). The reduction inventory is in `docs/reviews/`.
+- **In numbers, 0.1.0-alpha.1 → now:** `src/` 51 files, 11 847 → 13 343 lines (14 533 at its peak
+  before the reduction of 2026-09-15); in-process tests 1 068 → 1 345, 22 of them the opt-in extreme
+  suite; test and spec files 73 → 110, 15 888 → 21 851 lines; ADRs 2 318 → 2 874 lines; Markdown
+  7 209 → 12 955 lines.
 
 ## [0.1.0-alpha.1] - 2026-09-14
 
@@ -449,7 +313,7 @@ The first release, marked as an alpha: it has not yet been verified against a re
 
 ### Notes
 
-- Wire protocol version: **7** (8 since the hardening after this release, see above). Version 1 was
+- Wire protocol version: **7**.
   never released; 2 added the diagnostics request and
   report, 3 the broker's `welcome`, 4 the `heartbeat`, and 5 has the broker answer every heartbeat
   with a `welcome` and freezes the shape of `hello` and `welcome` for every later version
