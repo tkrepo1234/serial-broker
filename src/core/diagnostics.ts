@@ -48,7 +48,7 @@ export const CONNECTION_STATES = [
  * | `'opening'` | An attempt found the port and is opening it. |
  * | `'open'` | The port is open and being read. |
  * | `'reconnecting'` | The last attempt or connection failed, and the next attempt is scheduled. |
- * | `'failed'` | `maxAttempts` attempts failed; revived when the device is plugged in again. |
+ * | `'failed'` | Gave up: after `maxAttempts`, after an attempt that cannot succeed, or at the first failure with `autoReconnect: false`. Revived by `setup()` with the same options or, with auto-reconnect, when the device is plugged in again. |
  * | `'stopped'` | This tab stopped holding the port. |
  */
 export type ConnectionStateName = (typeof CONNECTION_STATES)[number];
@@ -153,16 +153,28 @@ export interface ParticipantDiagnostics {
 /** A Web Lock this library holds or is waiting for. */
 export interface LockDiagnostics {
   /**
-   * The lock name: `serial-broker/owner/v<protocol version>/<configuration name>` for the ownership
-   * of a port, `serial-broker/tab-slot/…` or `serial-broker/tab-slot-gate/…` for the places of a
-   * configuration with a tab limit (ADR-0025), and `serial-broker/persisted/v<storage schema
-   * version>/<configuration name>` for a tab running a remembered configuration (ADR-0027).
+   * The lock name. Every lock this library takes starts with `serial-broker/`:
+   *
+   * - `serial-broker/owner/v<protocol version>/<configuration name>` - the ownership of a port
+   *   (ADR-0005);
+   * - `serial-broker/term/v<protocol version>/…/<configuration name>` - one term of holding a port
+   *   (ADR-0030);
+   * - `serial-broker/tab-slot/…` and `serial-broker/tab-slot-gate/…` - the places of a configuration
+   *   with a tab limit, and the queue before them (ADR-0025);
+   * - `serial-broker/persisted/v<storage schema version>/<configuration name>` - a tab running a
+   *   remembered configuration (ADR-0033);
+   * - `serial-broker/context/v<protocol version>/<client id>` - a context on the `SharedWorker`,
+   *   for as long as it lives, and `serial-broker/worker/v<protocol version>/<worker id>` - a
+   *   worker, for as long as it runs (ADR-0041).
    */
   readonly name: string;
   /**
-   * The lock mode. Ownership and the places of a tab limit are `exclusive`. Every tab running a
-   * remembered configuration holds its `persisted` lock `shared`, and a tab about to forget the
-   * entry asks for it `exclusive` without waiting, to learn whether any other tab still holds it.
+   * The lock mode. The holders of ownership, of a term, of a place and of the gate hold `exclusive`,
+   * and so do a context and a worker of their own lifetime lock. The others are `shared`: every tab
+   * running a remembered configuration holds its `persisted` lock so, and a tab about to forget the
+   * entry asks for it `exclusive` without waiting, to learn whether any other tab still holds it; a
+   * tab checks and watches a term, the worker waits on a context's lock, and a tab waits on its
+   * worker's lock, each `shared`.
    */
   readonly mode: 'exclusive' | 'shared';
   /**

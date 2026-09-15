@@ -1025,7 +1025,7 @@ export class ConfigurationSession {
    * different tab limit (ADR-0025).
    *
    * Two limits cannot both be kept, and silently keeping the looser one would defeat the point of
-   * a limit. The tab holding the port decides; this one reports the conflict to every tab, leaves
+   * a limit. The tab holding the port decides; this one reports the conflict in this tab only, leaves
    * the bus, the election and its place, and stays `failed` until the application releases the
    * configuration and sets it up with the same limit.
    */

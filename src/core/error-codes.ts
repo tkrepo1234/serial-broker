@@ -33,8 +33,9 @@ export const SerialBrokerErrorCode = {
 
   // --- Permission ------------------------------------------------------------------------
   /**
-   * `requestAccess()` was called in a tab that does not hold the port, while the device is not
-   * connected. Only the tab holding the port can act on the user's choice.
+   * `requestAccess()` was called in a tab that does not take part in the configuration: one queued
+   * under `maxTabs`, or one that withdrew because the tab holding the port runs a different tab
+   * limit. Any tab that takes part may ask, whichever holds the port (ADR-0036).
    */
   PERMISSION_REQUIRED: 'PERMISSION_REQUIRED',
   /**
@@ -54,7 +55,10 @@ export const SerialBrokerErrorCode = {
   OPEN_TIMEOUT: 'OPEN_TIMEOUT',
   /** The device went away: unplugged, powered off, or the stream errored. */
   DEVICE_DISCONNECTED: 'DEVICE_DISCONNECTED',
-  /** Reconnection gave up after `maxAttempts`. Terminal until the device reappears. */
+  /**
+   * Reconnection gave up after `maxAttempts`. Terminal until the device reappears, which with
+   * auto-reconnect starts it again, or until `setup()` is called again with the same options.
+   */
   RECONNECT_EXHAUSTED: 'RECONNECT_EXHAUSTED',
   /** The read loop failed for a reason other than a clean disconnect. */
   READ_FAILED: 'READ_FAILED',

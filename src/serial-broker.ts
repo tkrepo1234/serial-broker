@@ -171,8 +171,8 @@ export interface SerialBrokerApi {
    *   `WRITE_TIMEOUT` only once that buffer is full (ADR-0038).
    * @throws A `SerialBrokerError` with code `UNKNOWN_CONFIGURATION`, `INVALID_ARGUMENT` for a
    *   string while an `encoding` other than UTF-8 is configured or for more than 16 MiB of data,
-   *   `WRITE_FAILED`, `WRITE_TIMEOUT`,
-   *   `CONFIGURATION_RELEASED` when the configuration is released while the write waits,
+   *   `WRITE_FAILED`, `WRITE_TIMEOUT`, `WRITE_QUEUE_FULL` when the tab holding the port already
+   *   keeps as many waiting writes as it may, `CONFIGURATION_RELEASED` when the configuration is released while the write waits,
    *   `CONFIGURATION_CONFLICT` once this tab has withdrawn because the tab holding the port runs
    *   a different `maxTabs`, or `OWNER_LOST_DURING_WRITE` when the owning tab closed mid-write
    *   and it is unknowable whether the device received the bytes. The library never retries
