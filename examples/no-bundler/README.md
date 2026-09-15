@@ -57,11 +57,11 @@ npm install
 npm start          # serves http://localhost:8154/
 ```
 
-| Command             | What it does                                                                                                                                 |
-| ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
-| `npm start`         | `serve.mjs`: `public/` at `/`, and `node_modules/serial-broker/dist/` at `/serial-broker/`. `PORT` overrides the port.                       |
-| `npm run typecheck` | `tsc --noEmit` over the plain JavaScript, with `checkJs`, against the library's type definitions. See [Design decisions](#design-decisions). |
-| `npm run build`     | Copies the page and the four library files into `dist/`, a folder any static web server serves as it is.                                     |
+| Command             | What it does                                                                                                                                                                                          |
+| ------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `npm start`         | `serve.mjs`: `public/` at `/`, and `node_modules/serial-broker/dist/` at `/serial-broker/`. `PORT` overrides the port.                                                                                |
+| `npm run typecheck` | `tsc --noEmit` over the plain JavaScript, with `checkJs`, against the library's type definitions. See [Design decisions](#design-decisions).                                                          |
+| `npm run build`     | Copies the page into `dist/`, and four library files - `index.min.js`, `serial-broker.worker.js` and their `.map` files - into `dist/serial-broker/`: a folder any static web server serves as it is. |
 
 Chrome or Edge is required - Web Serial exists nowhere else - and a secure context, which
 `localhost` counts as. Without a device attached you still see the whole page: the status is
@@ -69,10 +69,15 @@ Chrome or Edge is required - Web Serial exists nowhere else - and a secure conte
 
 ## Taking it into a page of your own
 
-1. **Get the library files.** `npm install serial-broker`, or download the package; the two files
-   the page needs are `dist/index.min.js` and `dist/serial-broker.worker.js` (plus their `.map`
-   files, if you want readable stack traces). Put them on your own origin, under one directory:
-   this example uses `/serial-broker/`.
+1. **Get the library files.** `npm install serial-broker` on a machine with npm, and copy four files
+   from `node_modules/serial-broker/dist/` - the same four `npm run build` copies:
+   - `index.min.js`, the library;
+   - `serial-broker.worker.js`, the worker script;
+   - `index.min.js.map` and `serial-broker.worker.js.map`, optional, for readable stack traces.
+
+   Put them on your own origin, under one directory: this example uses `/serial-broker/`.
+   [Deploying to a web server](../../docs/site/deploying.md) has the headers - content security
+   policy, MIME types, caching - and a checklist for after deploying.
 
 2. **Map the import** in the HTML, before the first module script:
 
@@ -101,7 +106,14 @@ Chrome or Edge is required - Web Serial exists nowhere else - and a secure conte
 
    Every tab must use the same worker URL, or the tabs get separate workers and never see each
    other. Serving the library under a sub-path (`https://host/scale/serial-broker/`) means both
-   the import map and `workerUrl` change together.
+   the import map and `workerUrl` change together. To keep the path in the import map alone, derive
+   the worker URL from where the map puts the library:
+
+   ```js
+   SerialBroker.configure({
+     workerUrl: new URL('serial-broker.worker.js', import.meta.resolve('serial-broker/min')),
+   });
+   ```
 
 4. **Subscribe to the status.** A new listener is told the current status once, right after
    `subscribe()` returns, with `previousStatus` equal to `status`, so nothing is missed between
@@ -113,8 +125,9 @@ Chrome or Edge is required - Web Serial exists nowhere else - and a secure conte
 6. **Show `error.code` and `error.remediation`**, from `onError` and from every rejected promise.
    Branch on `code`, never on `message`.
 
-7. **Deploy the folder.** `npm run build` shows what that folder contains; a content security
-   policy has to allow `worker-src 'self'`.
+7. **Deploy the folder.** `npm run build` shows what that folder contains. A content security
+   policy has to allow `worker-src 'self'`, and the inline import map needs its hash in
+   `script-src`; see [Deploying to a web server](../../docs/site/deploying.md).
 
 ## What a developer needs to know
 
@@ -147,9 +160,11 @@ page says nothing that claims otherwise.
 | `released`            | Given up in this tab.                        | Offers _Set up again_; the other tabs are unaffected.                           |
 
 **Errors carry their own remediation.** `remediation` is written for the developer and specific to
-the code; the page shows it next to the code. `isRetryable` means the library is already
-recovering - the page shows that as information, headed _Recovering_, and removes it once the
-status is `open` again.
+the code; the page shows it next to the code. An operator needs a sentence of the application's
+own. `isRetryable` means the library is already recovering - the page shows that as information,
+headed _Recovering_, and removes it once the status is `open` again. That reading holds with
+`connection.autoReconnect` on, the default: with it off, the same codes still carry
+`isRetryable: true`, nothing recovers, and the status becomes `failed`, so watch the status instead.
 
 ## Stable element ids
 

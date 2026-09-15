@@ -1,5 +1,7 @@
 import { SerialBroker } from 'serial-broker';
 
+import { onLines } from '../features/lines.js';
+
 /**
  * A scale and a label printer, driven from the same tabs.
  *
@@ -18,20 +20,15 @@ export async function weighAndLabel(): Promise<() => Promise<void>> {
     serial: { baudRate: 115_200, flowControl: 'hardware' },
   });
 
-  let pending = '';
-  const stopListening = SerialBroker.subscribe('Scale', 'onReceive', (event) => {
-    const lines = (pending + (event.text ?? '')).split('\r\n');
-    pending = lines.pop() ?? '';
-    for (const line of lines) {
-      // "ST,GS,+  12.345kg": stable, gross weight.
-      if (line.startsWith('ST,')) {
-        const weight = line.slice(6).trim();
-        SerialBroker.send('Printer', `^XA^FO50,50^A0N,60^FD${weight}^FS^XZ`).catch(
-          (error: unknown) => {
-            console.error('The label was not printed', error);
-          },
-        );
-      }
+  const stopListening = onLines('Scale', (line) => {
+    // "ST,GS,+  12.345kg": stable, gross weight.
+    if (line.startsWith('ST,')) {
+      const weight = line.slice(6).trim();
+      SerialBroker.send('Printer', `^XA^FO50,50^A0N,60^FD${weight}^FS^XZ`).catch(
+        (error: unknown) => {
+          console.error('The label was not printed', error);
+        },
+      );
     }
   });
 

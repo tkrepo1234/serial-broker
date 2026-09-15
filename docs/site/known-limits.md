@@ -85,6 +85,36 @@ the port then end in `WRITE_TIMEOUT`, and what the device sends reaches only the
 port, until the page is reloaded. Only a worker that never answers when a tab connects is caught, by
 the handshake deadline.
 
+## Tabs on different message buses do not see each other
+
+Tabs reach each other through the `SharedWorker` of their worker URL. A tab whose worker script did
+not load — a transient network error, a page with a stricter content security policy — uses a
+`BroadcastChannel` instead; tabs that name different worker URLs, or tabs left open across a deploy
+that moved the URL, use different workers. Tabs on different buses exchange no messages. What rests
+on Web Locks still holds, because the lock names depend on the configuration and the protocol
+version, not on the bus:
+
+- **Only one tab has the port open.** Tabs on every bus wait for the same ownership lock.
+- **`maxTabs` counts every tab**, on whichever bus: the places are Web Locks as well.
+
+What rests on messages does not:
+
+- A tab on another bus than the tab holding the port receives nothing from the device, hears no
+  status or error from that tab, and does not show `open`.
+- Its writes never reach the tab holding the port. They wait, and reject with `WRITE_TIMEOUT` and
+  `started: false`; nothing is written.
+- When the tab holding the port goes away, whichever tab the browser grants the lock next opens the
+  port, on its own bus. The tabs on the old holder's bus then show `reconnecting`, and their writes
+  time out, until that tab goes away too.
+- The [diagnostics entry point](diagnostics.md#the-diagnostics-entry-point) sees the tabs of its own
+  bus only.
+
+A tab that moved to a `BroadcastChannel` logs `environment.transport-fallback`; tabs on two workers
+log nothing, and `chrome://inspect/#workers` lists both workers.
+
+**What to do:** check a deployment as [After deploying](deploying.md#after-deploying) describes, fix
+the cause, and reload the tabs on the wrong bus.
+
 ## Messages on their way when the bus changes are lost
 
 When a tab moves to a new worker, or to a `BroadcastChannel` because the worker script failed, what

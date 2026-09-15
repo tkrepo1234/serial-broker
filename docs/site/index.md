@@ -19,6 +19,7 @@ and devices come and go, every option and error code, and the generated API refe
 
 introduction
 installing
+deploying
 first-connection
 ```
 

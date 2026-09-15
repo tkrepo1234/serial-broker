@@ -5,6 +5,8 @@ import { SerialBroker } from 'serial-broker';
  *
  * Every other window that opens the page waits with the status `queued`, and the one that has
  * waited longest takes over as soon as the operating window is closed, crashes, or calls `stop`.
+ * A waiting window receives nothing from the press, so it cannot show it. For windows that all show
+ * the machine while one operates it, see `advanced/operator-station.ts`.
  */
 export async function operateAlone(banner: HTMLElement): Promise<() => Promise<void>> {
   await SerialBroker.setup('Press', {

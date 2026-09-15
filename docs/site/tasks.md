@@ -222,3 +222,9 @@ crashes; the port is closed before the callback returns.
 
 **Several tabs:** this is the one task Web Serial and a Web Lock do almost as briefly. What they do
 not give the waiting tabs is a status to show, or the device's traffic once they may use it.
+
+Neither way lets a waiting tab show the device while it waits. Where every window shows the machine
+and one of them operates it, set the configuration up without `maxTabs` and decide who may send with
+a Web Lock of the application's, as
+[One window operates, every window watches](examples/advanced.md#one-window-operates-every-window-watches)
+does.
