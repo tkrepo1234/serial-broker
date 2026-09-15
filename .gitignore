@@ -10,9 +10,6 @@ coverage/
 .DS_Store
 Thumbs.db
 .idea/
-.vscode/*
-!.vscode/extensions.json
-!.vscode/settings.json
 
 # Browser tests: Playwright's traces, reports and the throwaway browser profiles under them
 # (ADR-0035)
@@ -22,9 +19,6 @@ playwright-report/
 # Logs
 *.log
 npm-debug.log*
-
-# Local toolchain (portable runtimes are not part of the repository)
-tools/
 
 # Documentation site: Python environment, generated reference, build output (ADR-0020)
 docs/.venv/
@@ -40,8 +34,4 @@ bench/.build/
 # Example applications: their dependencies, builds and caches
 examples/*/node_modules/
 examples/*/dist/
-examples/*/build/
 examples/*/.angular/
-examples/*/.svelte-kit/
-examples/*/.vite/
-test-results/
