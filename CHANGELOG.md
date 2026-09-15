@@ -16,6 +16,19 @@ a lock or a bus; they detect each other and report `PROTOCOL_VERSION_MISMATCH`. 
 of an application after deploying it. Configurations remembered by an earlier build are not
 migrated (see below).
 
+### The complexity and code reduction, in numbers
+
+Requested by Tim on 2026-09-14 and done on 2026-09-15; the inventory before and after is in
+`docs/reviews/2026-09-15-reduction-inventory.md`.
+
+- `src/`: 54 files and 14 533 lines → 51 files and 13 267 lines; protocol message types 19 → 15.
+- Tests: 1 390 → 1 407 in-process (22 of them the opt-in extreme suite), about twice as fast; spec
+  and test files 23 865 → 21 900 lines, the examples' smoke tests included.
+- ADRs: rolled up into 24 current decisions and 17 superseded stubs that point forward, about
+  4 040 → 2 832 lines; ADR-0001 states that rule. `docs/architecture.md` is merged into Internals,
+  and the usability review moved to `docs/reviews/`.
+- Markdown in the repository: 14 148 → 12 875 lines, with two new chapters (Guarantees, Known limits).
+
 ### Documentation and examples, reworked
 
 - **The documentation is organised around what an application can rely on.** A new chapter,

@@ -174,17 +174,24 @@ after this many iterations is what hardens the product now.
 
 ### Definition of done
 
-- [ ] A written inventory before the work starts: what each protocol mechanism protects against,
-      what each ADR decides, what each test file pins; and the same inventory afterwards.
-- [ ] `src/` is materially smaller with every scenario of docs/guidelines/testing.md still green,
-      the real-browser and hardware suites included; the numbers before and after are in the
-      CHANGELOG.
-- [ ] Every fact in the documentation lives in exactly one place; a drift check (docs against
-      code, code against tests) is recorded with its findings resolved.
-- [ ] The ADR index shows only current decisions plus a short superseded trail.
-- [ ] No two tests pin the same behaviour; no test covers code that is gone.
-- [ ] The repository root and every directory contain only what is used, and a reader can tell
-      what each is for from the top-level README.
+**Status, 2026-09-15:** done in one pass the same day; the inventory before and after is
+`docs/reviews/2026-09-15-reduction-inventory.md`.
+
+- [x] A written inventory before the work starts, and the same inventory afterwards.
+- [x] `src/` is materially smaller - 14 533 → 13 267 lines, 19 → 15 message types - with every
+      scenario of docs/guidelines/testing.md green, the real-browser, emulator, Arduino, extreme and
+      example suites included; the numbers are in the CHANGELOG.
+- [x] Every fact in the documentation lives in one place (Guarantees for the promises, Configuration
+      for the options); the drift found was fixed, and `test/unit/documentation.test.ts` checks
+      documented defaults, ranges and log events against the source.
+- [x] The ADR index shows only current decisions (24) plus a superseded trail (17 stubs).
+- [ ] No two tests pin the same behaviour; no test covers code that is gone. The duplicates the
+      inventory named were removed; a full second pass over every test file was not made.
+- [x] The repository root and every directory contain only what is used, and the top-level README
+      describes the layout.
+
+Still open from the usability review: P3 (a new `onStatusChange` listener receives the current status
+once) and P4 (`requestAccess()` from any tab).
 
 ---
 
@@ -450,7 +457,7 @@ prose sprinkled on top.
 
 ### Relationship to what exists now
 
-The current `README.md`, `docs/architecture.md` and the ADRs are the raw material and are
+The current `README.md`, `docs/site/internals.md` and the ADRs are the raw material and are
 accurate. They are not a substitute: the README is a decision aid for someone evaluating the
 library, and the ADRs record reasoning rather than teach use.
 

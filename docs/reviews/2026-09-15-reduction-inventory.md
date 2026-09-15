@@ -82,3 +82,44 @@ duplicates `docs/site/internals.md`; the dated usability review sits among livin
 entries in `.gitignore` and `.prettierignore`; `typedoc.json` only serves as the base of
 `typedoc.site.json`; the README does not describe the layout. `design/` waits for Tim's assessment of
 the illustration and stays.
+
+## After the work
+
+**Date:** 2026-09-15, later the same day, at the merge of the ADR roll-up (protocol version 12).
+
+| Measure                     | Before                  | After                                                         |
+| --------------------------- | ----------------------- | ------------------------------------------------------------- |
+| `src/`                      | 54 files, 14 533 lines  | 51 files, 13 267 lines                                        |
+| Protocol message types      | 19                      | 15                                                            |
+| Tests (spec and test files) | 107 files, 23 865 lines | 108 files, 21 900 lines, the examples' smoke tests included   |
+| In-process tests            | 1 390, 6.6 s warm       | 1 407 (1 385 run, 22 opt-in extreme), about 3 s warm          |
+| Markdown                    | 14 148 lines            | 12 875 lines                                                  |
+| ADRs                        | 39, about 4 040 lines   | 41: 24 current decisions and 17 superseded stubs, 2 832 lines |
+
+What the protocol review proposed and what became of it:
+
+- **Done:** routing to every participant instead of to an owner the worker believed, which closes the
+  forged-claim hole; the identity secret removed; liveness through Web Locks instead of heartbeats and
+  a sweep, which also ended the one-minute stall after the crash of the tab that started the worker;
+  19 message types down to 15; one held-lock helper for the election, tab slots, persistence holds and
+  the term lock; one once-log instead of nine flags; worker records once per key; one authorisation
+  table for who may say what, with `error` accepted only from the tab holding the port; the write bound
+  and "all answered" in the supervisor; a diagnostics report checked at the top level only; the
+  fallback restating instead of replaying; dead code, test-only API and a never-released storage format
+  removed.
+- **Not reproduced:** the suspected `NOT_CONNECTED` re-dispatch loop during a release; a test pins that
+  it does not happen.
+- **Kept on purpose:** the frozen handshake and announcement stay separate contracts; every payload,
+  queue and report size bound stays.
+- **Traded, and documented as known limits:** a worker that hangs after answering is no longer noticed,
+  and messages on their way when a tab changes bus are not repeated.
+
+The line count of `src/` fell by less than the review estimated, because liveness through locks needs
+code of its own. What went is mechanism - timers, a sweep, counters, a replay log, four message types -
+and the special cases that came with it.
+
+For the ADRs, tests, documentation and directory, see the CHANGELOG entries of the same date: the ADR
+index shows only current decisions with a superseded trail; duplicated and slow tests were removed and
+two coverage gaps closed; the documentation keeps each promise in one chapter (Guarantees), and a test
+checks documented defaults, ranges and log events against the source; the README describes the
+repository layout; `docs/architecture.md` is merged into Internals.
