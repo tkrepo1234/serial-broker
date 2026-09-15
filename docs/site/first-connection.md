@@ -79,7 +79,7 @@ and the browser refuses to show the picker (`USER_GESTURE_REQUIRED`). `requestAc
 
 Every tab shows `awaiting-permission`, and the button works in each of them: the permission belongs to
 the origin, and the tab holding the port opens the port the user chose. Only a tab `queued` under
-`maxTabs` rejects with `PERMISSION_REQUIRED`, so show the error rather than dropping it. The rules
+`maxTabs`, or one that withdrew, rejects with `PERMISSION_REQUIRED`, so show the error rather than dropping it. The rules
 are in [Permission, and remembering devices](shared-ports.md#permission-and-remembering-devices).
 
 Once the user has chosen the port, the browser remembers the choice for your origin. On every later

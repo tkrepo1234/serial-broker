@@ -93,7 +93,8 @@ reloaded or crashes forgets nothing. Details are in [`remember`](configuration.m
 Any tab taking part in a configuration can ask the user for permission: the permission belongs to the
 origin. A tab that does not hold the port shows the picker, and the tab holding the port then looks for
 the granted port again and opens it - in auto mode with the device the user chose, which it adopts.
-`requestAccess()` resolves `true` without asking when the status is already `open`. A tab that has just
+In a tab that does not hold the port, `requestAccess()` resolves `true` without asking when the status
+is already `open`; the tab holding the port shows the picker whatever its status. A tab that has just
 set the configuration up may ask at once — `setup()` and `requestAccess()` in one click. Only a tab
 `queued` under `maxTabs`, or one that withdrew, rejects with `PERMISSION_REQUIRED`.
 [First connection](first-connection.md#3-ask-for-permission-once) shows the usual pattern.
@@ -126,8 +127,9 @@ port makes opening it wait, but takes no place.
 Tabs exchange messages through a `SharedWorker` by default. The worker only passes messages on: it
 does not open the port, decide which tab holds it, or keep writes. Where no `SharedWorker` is
 available, the browser refuses to create one, or its script does not load, serial-broker uses a
-`BroadcastChannel` instead, and behaves the same. What a tab sent before its worker script failed is
-sent again over the channel, once and in order.
+`BroadcastChannel` instead, and behaves the same. Nothing a tab sent before the switch is repeated:
+over the channel, the tab restates its status, or asks for the status of the tab holding the port,
+as it does after reaching a new worker. Traffic sent in between is lost.
 
 Every tab must load the worker script from **the same URL**. Tabs that load it from different URLs
 are connected to different workers, cannot see each other, and compete for the device; see
@@ -168,8 +170,8 @@ data as several calls, between which writes from other tabs may come.
 ## Tabs that run for a long time
 
 A tab of an operator's screen may stay open for weeks. Browsers do several things to such a tab that
-it is told about late, or not at all. serial-broker measures every wait with a timer, never by
-comparing clock readings.
+it is told about late, or not at all. serial-broker waits with timers, and measures durations on
+`performance.now()`, which the system clock moving does not change.
 
 ### Hidden tabs
 

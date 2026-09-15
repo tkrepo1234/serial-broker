@@ -139,8 +139,9 @@ does not count. `release()` and `unsubscribe()` of a name that is not set up do 
 : **Raised by** `setup()` for a name already set up in this tab with a different device, baud rate,
 data bits, stop bits, parity, flow control, buffer size or `maxTabs`; see
 [Calling `setup()` again](configuration.md#calling-setup-again).
-**Delivered through `onError`**, in every tab, when a tab finds the tab holding the port running the
-configuration with a different `maxTabs`. That tab withdraws and shows `failed`; its pending writes,
+**Delivered through `onError`** in a tab that finds the tab holding the port running the configuration
+with a different `maxTabs`, and only in that tab: the other tabs are not told. That tab withdraws and
+shows `failed`; its pending writes,
 and every `send()` there until it is released, are rejected with this error.
 **Context:** from `setup()`, `existing` and `requested`, the two device filters in their normalised
 form (`{ kind: 'usb', vendorId, productId }`, `{ kind: 'non-usb' }`, `{ kind: 'any' }` or
@@ -297,7 +298,8 @@ received it, so treat it like `OWNER_LOST_DURING_WRITE`. If timeouts are frequen
 `WRITE_FAILED`
 : **Arises** when the device or the browser rejects the write.
 **Context:** `bytesWritten` of `byteLength` — how much was handed over before the failure. The tab
-holding the port reconnects.
+holding the port reconnects, with `connection.autoReconnect` on; otherwise the configuration ends
+`failed`.
 **Do:** decide, for the command, whether a partial write is safe to repeat.
 
 `WRITE_QUEUE_FULL`
@@ -366,7 +368,8 @@ list of remembered names itself cannot be read. What could not be read is discar
 reported once; every other configuration is restored as usual. A remembered name with no
 configuration left under it is only logged (`storage.stale-name`): that is what a removal in another
 tab looks like.
-**Context:** `configName`, for a single entry; absent when the list itself was unreadable.
+**Context:** none. `error.configName` names the entry that was discarded; it is absent when the list
+itself was unreadable.
 **Do:** set the configuration up again, and it is remembered afresh.
 
 ### serial-broker itself

@@ -12,8 +12,8 @@ and origin. Show the button while — and only while — the status is `awaiting
 ```
 
 Any tab that uses the configuration can ask: the permission belongs to the origin, and the tab holding
-the port opens the port the user chose. Only a tab `queued` under `maxTabs` rejects with
-`PERMISSION_REQUIRED`; see
+the port opens the port the user chose. Only a tab `queued` under `maxTabs`, or one that
+withdrew, rejects with `PERMISSION_REQUIRED`; see
 [Permission, and remembering devices](../shared-ports.md#permission-and-remembering-devices).
 
 ## Showing the status

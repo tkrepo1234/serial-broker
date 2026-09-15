@@ -14,7 +14,9 @@ decoding produces replacement characters at chunk boundaries.
 ## Decision
 
 **Sending.** `send(name, data)` accepts `string` or `BufferSource` (`ArrayBuffer` or any
-`ArrayBufferView`). A string is encoded with the configured encoding, UTF-8 by default.
+`ArrayBufferView`). A string is always encoded as UTF-8, the only encoding `TextEncoder`
+produces. With another `encoding` configured, `send()` rejects a string with `INVALID_ARGUMENT`
+rather than send bytes the device would misread; the caller encodes the text and passes bytes.
 Nothing is appended - no terminator, no newline, ever. What the caller passes is what the
 device receives.
 
@@ -58,3 +60,9 @@ compile time.
 
 Unit tests for the streaming decoder across chunk boundaries and across reconnects;
 scenario matrix row 15 for chunked writes.
+
+## History
+
+- 2026-09-12: Accepted.
+- 2026-09-15: A string is always encoded as UTF-8, and refused with another encoding configured
+  (was: encoded with the configured encoding).

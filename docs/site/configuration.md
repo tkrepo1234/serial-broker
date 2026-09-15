@@ -195,9 +195,9 @@ these settings feed are in [Reconnecting](guarantees.md#reconnecting).
 : Whether the tab holding the port reconnects by itself. With `false`, a lost connection or a failed
 attempt ends in `failed` with the error reported, and nothing is tried again — not after a delay,
 and not when the device is plugged in again. The application decides when to try: calling `setup()`
-again with the same options, in any tab, starts the configuration again. A configuration that never
-found its device still connects when the device appears; that is its first connection, not a
-reconnect. **Set it to `false`** on a production line where a lost device must be acknowledged by a
+again with the same options, in any tab, starts the configuration again. Only a configuration still in
+`awaiting-permission` — it never found its device — connects when the device appears; that is its
+first connection, not a reconnect. A first attempt that fails ends in `failed` too. **Set it to `false`** on a production line where a lost device must be acknowledged by a
 person before the application talks to it again. **Cost:** every glitch — a loose cable, an adapter
 reset on wake — needs the application to act.
 
