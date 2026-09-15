@@ -169,9 +169,13 @@ describe('SerialBroker', () => {
     await SerialBroker.setup('Reader', READER_OPTIONS);
     await settle();
 
-    expect(records.some(([, message]) => message.includes('configuration registered'))).toBe(true);
+    expect(fieldsOfEvent(records, 'client.setup')).toEqual([
+      expect.objectContaining({ configName: 'Reader' }),
+    ]);
     // Every record carries the fields that let several tabs be correlated in one console.
-    expect(records[0]?.[2]).toHaveProperty('clientId');
+    for (const [, , fields] of records) {
+      expect(fields).toHaveProperty('clientId');
+    }
   });
 
   it('warns when configure() comes too late to reach the client, and applies it after dispose()', async () => {
@@ -190,9 +194,7 @@ describe('SerialBroker', () => {
     await SerialBroker.dispose();
     await SerialBroker.setup('Reader', READER_OPTIONS);
 
-    expect(second.records.some(([, message]) => message.includes('configuration registered'))).toBe(
-      true,
-    );
+    expect(fieldsOfEvent(second.records, 'client.setup')).toHaveLength(1);
   });
 
   it('passes logPayloads through, so traffic records carry the bytes', async () => {
