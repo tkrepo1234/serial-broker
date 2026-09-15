@@ -13,10 +13,10 @@ const ERROR_PAYLOAD = new SerialBrokerError(SerialBrokerErrorCode.WRITE_FAILED, 
 
 /** A valid instance of every message type, which every mutation below starts from. */
 const VALID: Record<ProtocolMessageType, Record<string, unknown>> = {
-  hello: { ...BASE, type: 'hello', secret: 's-1' },
+  hello: { ...BASE, type: 'hello' },
   goodbye: { ...BASE, type: 'goodbye' },
   welcome: { ...BASE, to: 'c-2', type: 'welcome' },
-  heartbeat: { ...BASE, type: 'heartbeat', configNames: ['Reader'], ownedConfigNames: [] },
+  heartbeat: { ...BASE, type: 'heartbeat', configNames: ['Reader'] },
   attach: { ...BASE, type: 'attach', configName: 'Reader' },
   detach: { ...BASE, type: 'detach', configName: 'Reader' },
   'owner-claimed': {
@@ -99,12 +99,11 @@ const VALID: Record<ProtocolMessageType, Record<string, unknown>> = {
 
 /** Every message type paired with the fields it must have to be accepted. */
 const REQUIRED_FIELDS: Record<ProtocolMessageType, readonly string[]> = {
-  // `secret` is optional: a hello on `BroadcastChannel` carries none (ADR-0028).
   hello: [],
   'worker-log': ['level', 'message', 'fields'],
   goodbye: [],
   welcome: [],
-  heartbeat: ['configNames', 'ownedConfigNames'],
+  heartbeat: ['configNames'],
   attach: ['configName'],
   detach: ['configName'],
   'owner-claimed': ['configName', 'maxTabs'],

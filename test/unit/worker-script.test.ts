@@ -39,7 +39,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-const HEARTBEAT = { type: 'heartbeat', configNames: ['Reader'], ownedConfigNames: [] };
+const HEARTBEAT = { type: 'heartbeat', configNames: ['Reader'] };
 
 /** What was routed to a port: everything but the worker's own records, which every port gets. */
 const routed = (port: FakeMessagePort): unknown[] =>
@@ -175,7 +175,7 @@ describe('serial-broker.worker', () => {
     // would cut the owner off for good, with nothing to tell it so (ADR-0021).
     alice.failToClone();
     bob.deliver(
-      envelope('bob', 'owner', {
+      envelope('bob', 'all', {
         type: 'write-request',
         configName: 'Reader',
         requestId: 'w-1',
@@ -272,7 +272,7 @@ describe('serial-broker.worker', () => {
     expect(alice.posted).toHaveLength(0);
   });
 
-  it('routes a write request to whichever port claimed ownership', () => {
+  it('routes a write request to every participant, whatever was claimed', () => {
     const alice = join('alice');
     const bob = join('bob');
     alice.deliver(
@@ -285,7 +285,7 @@ describe('serial-broker.worker', () => {
     );
 
     bob.deliver(
-      envelope('bob', 'owner', {
+      envelope('bob', 'all', {
         type: 'write-request',
         configName: 'Reader',
         requestId: 'w-1',

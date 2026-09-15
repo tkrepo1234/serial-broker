@@ -38,17 +38,6 @@ export interface Transport {
   /** Withdraws interest. */
   detach(configName: string): void;
 
-  /**
-   * Tells the transport whether this context currently owns a configuration.
-   *
-   * The `BroadcastChannel` fallback needs this to route: with no central router, each context has
-   * to decide for itself whether a message addressed to `owner` is meant for it. The
-   * `SharedWorker` implementation sends nothing for it, because the broker learns ownership from
-   * `owner-claimed`, but repeats it in every heartbeat, so that a broker which forgot this context,
-   * or a new worker, can restore it (ADR-0021).
-   */
-  setOwnership(configName: string, isOwner: boolean): void;
-
   /** Closes the bus and releases everything it holds. Idempotent. */
   close(): void;
 }
@@ -77,12 +66,4 @@ export interface TransportRequest {
   readonly logger: ScopedLogger;
   /** Time, for the heartbeats a `SharedWorker` participant sends (ADR-0021). */
   readonly clock: Clock;
-  /**
-   * Produces the secret a `SharedWorker` transport proves its identity to the worker with.
-   *
-   * Called once per transport that uses a worker, at construction. Nothing else uses it: a
-   * `BroadcastChannel` reaches every context of the origin, where a secret would be none
-   * (ADR-0028).
-   */
-  readonly newSecret: () => string;
 }

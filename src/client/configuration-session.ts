@@ -720,7 +720,6 @@ export class ConfigurationSession {
     this.#term = term;
     this.#lastTerm = term;
 
-    this.transport.setOwnership(this.#configuration.name, true);
     this.transport.send({
       type: 'owner-claimed',
       v: PROTOCOL_VERSION,
@@ -796,14 +795,10 @@ export class ConfigurationSession {
     this.#acceptedWrites = new AcceptedWrites();
 
     if (supervisor === undefined || term === undefined) {
-      // Not holding the port, so there is no ownership to give up. This matters: the election
-      // reports the lock lost after `release()` has already stopped being owner, and by then a
-      // session set up again under the same name may hold the port - clearing the transport's
-      // ownership for the name here would cut that session off from every write.
+      // Not holding the port, so there is nothing to give up: the election reports the lock lost
+      // after `release()` has already stopped being owner.
       return;
     }
-
-    this.transport.setOwnership(this.#configuration.name, false);
 
     await supervisor.stop();
     // `owner-released` is the term's last word, and a tab that hears it concludes that a write the
@@ -901,11 +896,12 @@ export class ConfigurationSession {
       return;
     }
 
+    // To every participant: only the tab holding `term` acts on it (ADR-0040).
     this.transport.send({
       type: 'write-request',
       v: PROTOCOL_VERSION,
       from: this.transport.clientId,
-      to: 'owner',
+      to: 'all',
       configName: this.#configuration.name,
       requestId,
       payload,
@@ -920,17 +916,21 @@ export class ConfigurationSession {
     payload: Uint8Array,
     requestedTerm: TermId,
   ): void {
+    if (requestedTerm !== this.#lastTerm) {
+      // Addressed to a term this tab does not hold and never held: every participant hears a write
+      // request, and only the tab holding its term acts on it (ADR-0040).
+      return;
+    }
     const supervisor = this.#supervisor;
     const term = this.#term;
-    if (supervisor === undefined || term === undefined || requestedTerm !== term) {
-      // Ownership moved between the peer sending and this message arriving, or the request was
-      // meant for another term: that term may be writing it, so this one must not (ADR-0026).
-      // Saying so lets the originator hand it on once it is safe to, rather than waiting out its
-      // deadline.
+    if (supervisor === undefined || term === undefined) {
+      // This tab held the term the request was addressed to, and has let go of the port: nobody will
+      // write it in that term (ADR-0026). Saying so lets the originator hand it on once that term
+      // has ended.
       this.#sendWriteResult(
         origin,
         requestId,
-        term ?? this.#lastTerm,
+        requestedTerm,
         new SerialBrokerError(
           SerialBrokerErrorCode.NOT_CONNECTED,
           'This context does not hold the port in the term the write was addressed to',
@@ -1260,7 +1260,7 @@ export class ConfigurationSession {
       type: 'status-request',
       v: PROTOCOL_VERSION,
       from: this.transport.clientId,
-      to: 'owner',
+      to: 'all',
       configName: this.#configuration.name,
     });
   }

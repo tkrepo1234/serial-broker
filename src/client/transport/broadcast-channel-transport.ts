@@ -43,12 +43,9 @@ export type BroadcastChannelFactory = (name: string) => BroadcastChannelLike;
  * | `to` | Accepted when |
  * | --- | --- |
  * | `'all'` | this context has attached to the configuration |
- * | `'owner'` | this context currently holds the ownership lock for it |
  * | a client id | it is this context's id |
  *
- * That is the whole of it. The addressing decision is possible locally because the envelope
- * carries everything it depends on, and because ownership is a Web Lock this context either
- * holds or does not (ADR-0005) - there is nothing to agree with anyone else about.
+ * That is the whole of it: the envelope carries everything the decision depends on.
  */
 export class BroadcastChannelTransport implements Transport {
   readonly kind = 'broadcastchannel' as const;
@@ -58,7 +55,6 @@ export class BroadcastChannelTransport implements Transport {
   readonly #disposal = new DisposalStack();
   readonly #request: TransportRequest;
   readonly #attached = new Set<string>();
-  readonly #owned = new Set<string>();
   readonly #once: OnceLog;
 
   constructor(request: TransportRequest, createChannel: BroadcastChannelFactory) {
@@ -101,16 +97,6 @@ export class BroadcastChannelTransport implements Transport {
   /** {@inheritDoc Transport.detach} */
   detach(configName: string): void {
     this.#attached.delete(configName);
-    this.#owned.delete(configName);
-  }
-
-  /** {@inheritDoc Transport.setOwnership} */
-  setOwnership(configName: string, isOwner: boolean): void {
-    if (isOwner) {
-      this.#owned.add(configName);
-    } else {
-      this.#owned.delete(configName);
-    }
   }
 
   /** {@inheritDoc Transport.close} */
@@ -120,7 +106,6 @@ export class BroadcastChannelTransport implements Transport {
     }
 
     this.#attached.clear();
-    this.#owned.clear();
     for (const failure of this.#disposal.disposeAll()) {
       this.#request.logger.warn('a cleanup step failed while closing the bus', {
         event: 'transport.dispose-failed',
@@ -169,18 +154,11 @@ export class BroadcastChannelTransport implements Transport {
   }
 
   #isAddressedToUs(message: ProtocolMessage): boolean {
-    const configName = configNameOf(message);
-
-    switch (message.to) {
-      case 'all':
-        // Messages with no configuration - `hello`, `goodbye` - concern every context.
-        return configName === undefined || this.#attached.has(configName);
-
-      case 'owner':
-        return configName !== undefined && this.#owned.has(configName);
-
-      default:
-        return message.to === this.clientId;
+    if (message.to !== 'all') {
+      return message.to === this.clientId;
     }
+    // A message with no configuration - a diagnostics request - concerns every context.
+    const configName = configNameOf(message);
+    return configName === undefined || this.#attached.has(configName);
   }
 }

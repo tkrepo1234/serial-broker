@@ -101,8 +101,8 @@ describe('decodeMessage within its limits', () => {
       'accepted',
     );
     expect(
-      failureOf({ ...heartbeat, ownedConfigNames: names(MAX_HEARTBEAT_CONFIGURATIONS + 1) }),
-    ).toEqual(exceeding('heartbeat', 'ownedConfigNames', 'MAX_HEARTBEAT_CONFIGURATIONS'));
+      failureOf({ ...heartbeat, configNames: names(MAX_HEARTBEAT_CONFIGURATIONS + 1) }),
+    ).toEqual(exceeding('heartbeat', 'configNames', 'MAX_HEARTBEAT_CONFIGURATIONS'));
     expect(
       failureOf({ ...heartbeat, configNames: ['n'.repeat(MAX_CONFIG_NAME_LENGTH + 1)] }),
     ).toEqual(exceeding('heartbeat', 'configNames', 'MAX_CONFIG_NAME_LENGTH'));
@@ -518,7 +518,7 @@ describe('Broker within MAX_CONFIGURATIONS', () => {
     const broker = new Broker({
       deliver: (to) => delivered.push(to),
       logger: new ScopedLogger(logger, {}),
-      monotonicNow: () => 0,
+      clients: () => [],
     });
     const alice = 'alice' as ClientId;
     const bob = 'bob' as ClientId;

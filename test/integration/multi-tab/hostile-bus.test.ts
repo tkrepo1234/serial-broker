@@ -403,78 +403,48 @@ describe('a script of the origin that floods the bus with well-formed messages',
 });
 
 describe('a script on the SharedWorker that uses the identity of a tab', () => {
-  it('hears nothing addressed to the tab holding the port by saying hello as it', async () => {
-    const { harness, device, owner, other, records } = await twoTabs('sharedworker');
+  it('diverts no write, and delays none, by claiming to hold the port', async () => {
+    const { harness, device, other } = await twoTabs('sharedworker');
     const mallory = harness.bus.workerHost.connectForeign();
 
-    // The identity is no secret - it is in every message the tab sends - but the secret the tab
-    // showed the worker in its hello is (ADR-0028).
-    mallory.post({
-      v: PROTOCOL_VERSION,
-      from: owner.client.clientId,
-      to: 'all',
-      type: 'hello',
-      secret: 'guessed',
-    });
+    // A participant of its own that claims the port in a term it made up. A broker that routed what
+    // is meant for the owner to the last claimant would hand it every write (ADR-0040).
+    const forged = { v: PROTOCOL_VERSION, from: 'mallory', to: 'all', configName: 'Reader' };
+    mallory.post({ ...forged, type: 'hello' });
+    mallory.post({ ...forged, type: 'attach' });
+    mallory.post({ ...forged, type: 'owner-claimed', term: 't-forged', maxTabs: 1 });
     await harness.settle();
     const writing = other.client.send('Reader', 'PING');
     await harness.settle();
 
-    expect(device.writtenText()).toBe('PING');
     await expect(writing).resolves.toBeUndefined();
-    expect(mallory.received).toEqual([]);
-    // The worker has no logger of its own, so the tabs write its records for it (ADR-0029).
-    expect(fieldsOfEvent(records, 'worker.message-refused')).toEqual([
-      expect.objectContaining({
-        reason: 'secret-mismatch',
-        claimedClientId: owner.client.clientId,
-        reportedBy: owner.client.clientId,
-      }),
-      expect.objectContaining({ reason: 'secret-mismatch', reportedBy: other.client.clientId }),
-    ]);
+    expect(device.writtenText()).toBe('PING');
+    expect(other.client.getStatus('Reader').status).toBe(SerialBrokerStatus.Open);
   });
 
   it('does not cut a tab off by saying goodbye in its name', async () => {
-    const { harness, device, owner, other, records } = await twoTabs('sharedworker');
+    const { harness, device, other, records } = await twoTabs('sharedworker');
     const mallory = harness.bus.workerHost.connectForeign();
 
-    mallory.post({
-      v: PROTOCOL_VERSION,
-      from: other.client.clientId,
-      to: 'all',
-      type: 'hello',
-      secret: 'guessed',
-    });
-    mallory.post({ v: PROTOCOL_VERSION, from: other.client.clientId, to: 'all', type: 'goodbye' });
+    // Identities are no secret. The port that says hello as the tab is one more port of that
+    // identity, and its goodbye ends that port alone, not the tab's own (ADR-0040).
+    const forged = { v: PROTOCOL_VERSION, from: other.client.clientId, to: 'all' };
+    mallory.post({ ...forged, type: 'hello' });
+    mallory.post({ ...forged, type: 'goodbye' });
     await harness.settle();
     device.emit('STILL HERE');
     await harness.settle();
 
     expect(other.receivedText('Reader')).toBe('STILL HERE');
-    // The hello is refused for its secret, so the port never holds the identity and the goodbye that
-    // follows is a message before a hello. That a goodbye ends the port that sent it and not the
-    // identity a tab still has ports for is held by test/unit/worker-ports.test.ts.
-    expect(fieldsOfEvent(records, 'worker.message-refused')).toEqual([
-      expect.objectContaining({ reason: 'secret-mismatch', reportedBy: owner.client.clientId }),
-      expect.objectContaining({ reason: 'secret-mismatch', reportedBy: other.client.clientId }),
-      expect.objectContaining({ reason: 'before-hello', reportedBy: owner.client.clientId }),
-      expect.objectContaining({ reason: 'before-hello', reportedBy: other.client.clientId }),
-    ]);
+    expect(fieldsOfEvent(records, 'worker.message-refused')).toEqual([]);
   });
 
   it('cannot speak for a tab from a port that said hello as something else', async () => {
     const { harness, device, owner, other, records } = await twoTabs('sharedworker');
     const mallory = harness.bus.workerHost.connectForeign();
 
-    // An identity of its own, with a secret of its own: the port is served, and is held to the
-    // identity it bound. Saying hello as the tab instead would end at the tab's secret (ADR-0028).
-    mallory.post({
-      v: PROTOCOL_VERSION,
-      from: 'mallory',
-      to: 'all',
-      type: 'hello',
-      secret: 'mallory-secret',
-    });
+    // An identity of its own: the port is served, and is held to the identity it said hello as.
+    mallory.post({ v: PROTOCOL_VERSION, from: 'mallory', to: 'all', type: 'hello' });
     mallory.post({
       v: PROTOCOL_VERSION,
       from: other.client.clientId,

@@ -108,7 +108,6 @@ export class DiagnosticsObserver {
       },
       logger: this.#logger,
       clock: environment.clock,
-      newSecret: () => environment.newSecret(),
     });
   }
 

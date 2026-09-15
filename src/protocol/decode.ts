@@ -422,10 +422,6 @@ function decodeChecked(raw: unknown): ProtocolMessage {
 
   switch (type) {
     case 'hello':
-      // Optional: a `hello` on `BroadcastChannel` carries none, because every context would hear it
-      // (ADR-0028). The worker refuses such a `hello` on a port; nothing else reads it.
-      return { type, v, from, to, secret: read.optionalIdentifier('secret') };
-
     case 'welcome':
     case 'goodbye':
       return { type, v, from, to };
@@ -439,14 +435,7 @@ function decodeChecked(raw: unknown): ProtocolMessage {
     }
 
     case 'heartbeat':
-      return {
-        type,
-        v,
-        from,
-        to,
-        configNames: read.nameList('configNames'),
-        ownedConfigNames: read.nameList('ownedConfigNames'),
-      };
+      return { type, v, from, to, configNames: read.nameList('configNames') };
 
     case 'attach':
     case 'detach':

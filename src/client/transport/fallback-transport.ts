@@ -28,8 +28,7 @@ const FALLBACK_LOG_MESSAGES: Readonly<Record<WorkerLoadFailure, string>> = {
 /** Something the application's side of the bus asked for, in the order it asked. */
 type Operation =
   | { readonly kind: 'send'; readonly message: ProtocolMessage }
-  | { readonly kind: 'attach' | 'detach'; readonly configName: string }
-  | { readonly kind: 'ownership'; readonly configName: string; readonly isOwner: boolean };
+  | { readonly kind: 'attach' | 'detach'; readonly configName: string };
 
 /**
  * A `SharedWorker` transport that moves to `BroadcastChannel` when the worker script turns out
@@ -106,12 +105,6 @@ export class FallbackTransport implements Transport {
     this.#active.detach(configName);
   }
 
-  /** {@inheritDoc Transport.setOwnership} */
-  setOwnership(configName: string, isOwner: boolean): void {
-    this.#keep({ kind: 'ownership', configName, isOwner });
-    this.#active.setOwnership(configName, isOwner);
-  }
-
   /** {@inheritDoc Transport.close} */
   close(): void {
     this.#isClosed = true;
@@ -171,9 +164,6 @@ export class FallbackTransport implements Transport {
           break;
         case 'detach':
           fallback.detach(operation.configName);
-          break;
-        case 'ownership':
-          fallback.setOwnership(operation.configName, operation.isOwner);
           break;
       }
     }

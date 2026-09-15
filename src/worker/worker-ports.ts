@@ -4,21 +4,14 @@ import { decodeMessage, describeDecodeFailure, type DecodeFailure } from '../pro
 import { helloSenderOf, welcomeFor } from '../protocol/handshake.js';
 import { SILENT_PARTICIPANT_TIMEOUT_MS } from '../protocol/heartbeat.js';
 import {
-  MAX_BOUND_IDENTITIES,
   MAX_PARTICIPANTS,
   MAX_PORTS_PER_PARTICIPANT,
   warnLimitExceeded,
 } from '../protocol/limits.js';
-import {
-  BROKER_ID,
-  type ClientId,
-  type HelloMessage,
-  type ProtocolMessage,
-} from '../protocol/messages.js';
+import { BROKER_ID, type ClientId, type ProtocolMessage } from '../protocol/messages.js';
 import { PROTOCOL_VERSION } from '../protocol/version.js';
 
 import { Broker } from './broker.js';
-import { FORWARD_INTERVAL_MS, RecordForwarder } from './record-forwarding.js';
 
 /** The part of a `MessagePort` the worker uses. */
 export interface WorkerPort {
@@ -28,8 +21,16 @@ export interface WorkerPort {
 
 /** What the ports need from the worker hosting them. */
 export interface WorkerPortsHost {
-  readonly logger: ScopedLogger;
-  /** A reading of a monotonic clock in milliseconds, as `BrokerHost.monotonicNow()` takes (ADR-0032). */
+  /**
+   * Where the worker's own records go in the worker itself: nowhere in a browser, the test's logger
+   * in the suite. Its warnings are forwarded to the connected tabs as well (ADR-0029).
+   */
+  readonly logger: Logger;
+  /**
+   * A reading of a monotonic clock in milliseconds, to tell how long ago a port was last heard from.
+   * Only differences are used: no participant may fall silent because the system clock was set
+   * forward (ADR-0032).
+   */
   monotonicNow(): number;
 }
 
@@ -39,50 +40,37 @@ export interface WorkerPortsHost {
  * - `before-hello`: the port has not said who it is (ADR-0024: a tab's first message is `hello`).
  * - `sender-mismatch`: the port said `hello` as one context and now speaks as another.
  * - `broker-identity`: the port said `hello` as the broker itself.
- * - `secret-missing`: the `hello` carries no secret, which every tab on a worker sends (ADR-0028).
- * - `secret-mismatch`: the `hello` names an identity bound to another secret.
  */
-type Refusal =
-  'before-hello' | 'sender-mismatch' | 'broker-identity' | 'secret-missing' | 'secret-mismatch';
+type Refusal = 'before-hello' | 'sender-mismatch' | 'broker-identity';
 
 const REFUSAL_MESSAGES: Readonly<Record<Refusal, string>> = {
   'before-hello': 'refused a message from a port that has not said hello',
   'sender-mismatch': 'refused a message that names another sender than its port said hello as',
   'broker-identity': "refused a hello that names the broker's own identity",
-  'secret-missing': 'refused a hello that carries no secret',
-  'secret-mismatch': 'refused a hello that names an identity bound to another secret',
 };
 
 /**
- * The worker's side of every port: who is behind each one, and what reaches the broker from it.
+ * The worker's side of every port: who is behind each one, when it was last heard from, and what
+ * reaches the broker from it.
  *
- * A port is anybody's. Every script of the origin can start the worker and say anything on its
- * port, and the envelope's `from` is whatever the sender wrote (SECURITY.md). What the worker does
- * know is which port a message arrived on, so it holds each port to one identity:
+ * A port is anybody's. Every script of the origin can start the worker and say anything on its port,
+ * and the envelope's `from` is whatever the sender wrote (SECURITY.md). Nothing routed here needs to
+ * be believed: the broker tracks no owner, and what is meant for the owner goes to every participant
+ * (ADR-0040). The worker still keeps each port to one identity, which is cheap:
  *
  * - **A port says who it is once.** Its first message must be `hello`, and names the identity the
- *   port speaks as from then on. A message before it, or one naming another sender, is dropped. So
- *   one port cannot speak for many contexts, nor end another's participation with a `goodbye` in its
- *   name.
+ *   port speaks as from then on. A message before it, or one naming another sender, is dropped.
  * - **An identity can have several ports.** A tab that gave up on a worker that hung connects again
- *   on a new port under the same identity (ADR-0021), and nothing distinguishes that from another
- *   script saying `hello` under an identity it saw on the bus - identities are no secret. So a later
- *   port never takes an identity's messages away from the ports it already has: everything addressed
- *   to the identity goes to each of them. Such a script can listen to what is addressed to the tab,
- *   which it could mostly hear on the bus anyway, and cannot cut the tab off. A port the tab closed
- *   receives nothing, and is forgotten once the sweep finds it silent.
+ *   on a new port under the same identity (ADR-0021). Everything addressed to the identity goes to
+ *   each of its ports; a port its tab closed receives nothing, and is forgotten once found silent.
  * - **A goodbye ends one port.** The identity leaves the broker when its last port has gone.
- * - **An identity belongs to whoever first showed its secret.** Every `hello` on a port carries a
- *   secret the tab generated and sends nowhere else, and the worker binds the identity to the first
- *   one it sees (ADR-0028). A `hello` naming that identity with another secret is refused, so a
- *   script that heard the identity on the bus cannot connect as that tab - while the tab itself,
- *   connecting again to a worker that hung, shows the same secret and is served.
  *
- * The number of identities, of ports per identity and of bound secrets is bounded (`limits.ts`).
- * Kept apart from the worker script so that the harness routes through exactly this code (ADR-0014).
+ * The number of identities and of ports per identity is bounded (`limits.ts`). Kept apart from the
+ * worker script so that the harness routes through exactly this code (ADR-0014).
  *
- * What the worker records about all this would be seen by nobody - a `SharedWorker` cannot reach an
- * application's logger - so its warnings are forwarded to the connected contexts (ADR-0029).
+ * What the worker records would be seen by nobody - a `SharedWorker` cannot reach an application's
+ * logger - so its warnings go to the connected contexts (ADR-0029). Every warning is written once per
+ * key, so what is forwarded is bounded without a budget of its own.
  */
 export class WorkerPorts<Port extends WorkerPort> {
   readonly #broker: Broker;
@@ -90,52 +78,31 @@ export class WorkerPorts<Port extends WorkerPort> {
   readonly #identities = new WeakMap<Port, ClientId>();
   /** The ports of each identity the broker knows, with when each was last heard from. */
   readonly #ports = new Map<ClientId, Map<Port, number>>();
-  /**
-   * The secret each identity is bound to, oldest first (ADR-0028).
-   *
-   * Kept after the identity itself is forgotten, so that a tab the sweep dropped for its silence is
-   * still the only one that can connect as itself. Bounded: past {@link MAX_BOUND_IDENTITIES} the
-   * oldest binding of an identity with no port left is forgotten.
-   */
-  readonly #secrets = new Map<ClientId, string>();
-  readonly #once: OnceLog;
-  readonly #forwarder: RecordForwarder;
-  /** The worker's own logger, which also forwards its warnings to the tabs (ADR-0029). */
   readonly #logger: ScopedLogger;
-  /** The port whose message the broker is handling, so that its answer goes back there alone. */
-  #answering: Port | undefined;
+  readonly #once: OnceLog;
 
   constructor(private readonly host: WorkerPortsHost) {
-    this.#forwarder = new RecordForwarder({
-      monotonicNow: () => host.monotonicNow(),
-      forward: (level, message, fields) => {
-        this.#forward(level, message, fields);
+    this.#logger = new ScopedLogger(
+      {
+        log: (level, message, fields) => {
+          host.logger.log(level, message, fields);
+          if (level === 'warn' || level === 'error') {
+            this.#forward(level, message, fields);
+          }
+        },
       },
-      reportDropped: (count) => {
-        this.#logger.warn(
-          `did not forward ${String(count)} records; they exceeded what one interval forwards`,
-          {
-            event: 'worker.records-dropped',
-            droppedRecords: count,
-            intervalMs: FORWARD_INTERVAL_MS,
-          },
-        );
-      },
-    });
-    this.#logger = new ScopedLogger(this.#forwarder.wrap(sinkOf(host.logger)), {});
+      {},
+    );
     this.#once = new OnceLog(this.#logger);
     this.#broker = new Broker({
       deliver: (clientId, message) => {
-        this.#deliver(clientId, message);
+        for (const port of [...(this.#ports.get(clientId)?.keys() ?? [])]) {
+          post(port, message);
+        }
       },
+      clients: () => this.#ports.keys(),
       logger: this.#logger,
-      monotonicNow: () => host.monotonicNow(),
     });
-  }
-
-  /** How many identities the broker knows. */
-  get clientCount(): number {
-    return this.#ports.size;
   }
 
   /** Handles one message as it arrived on `port`. Never throws. */
@@ -157,16 +124,9 @@ export class WorkerPorts<Port extends WorkerPort> {
         this.#refuse('broker-identity', port, message);
         return;
       }
-      if (!this.#bindSecret(port, message)) {
-        return;
-      }
       this.#identities.set(port, message.from);
     } else if (message.from !== identity) {
       this.#refuse('sender-mismatch', port, message);
-      return;
-    } else if (message.type === 'hello' && !this.#bindSecret(port, message)) {
-      // A port that has already said hello says it again - a tab whose transport reconnected on it.
-      // Its secret has to be the one this identity is bound to, as for any other hello.
       return;
     }
 
@@ -174,47 +134,38 @@ export class WorkerPorts<Port extends WorkerPort> {
       this.#leave(port, message.from);
       return;
     }
-
     if (!this.#register(port, message.from)) {
       return;
     }
-
-    this.#answering = port;
-    try {
-      this.#broker.handleMessage(message.from, message);
-    } finally {
-      this.#answering = undefined;
+    if (message.type === 'hello' || message.type === 'heartbeat') {
+      // The answer tells the port that sent it that this worker runs: a tab whose hello or
+      // heartbeats go unanswered gives up on this worker (ADR-0007, ADR-0021).
+      post(port, welcomeFor(message.from));
     }
+    this.#broker.handleMessage(message.from, message);
   }
 
   /**
    * Forgets every port, and every identity, that has sent nothing for the silence timeout.
    *
-   * A port reports nothing when the tab behind it dies (ADR-0021). Its identity is kept, so that a
-   * tab that was only throttled comes back with its next message, without saying hello again; the
-   * port itself is never closed, since closing it would cut such a tab off for good.
+   * A port reports nothing when the tab behind it dies (ADR-0021). The port's identity is kept, so
+   * that a tab that was only throttled comes back with its next message, without saying hello again;
+   * the port itself is never closed, since closing it would cut such a tab off for good.
    */
   sweep(): void {
-    // Also the moment at which records dropped by the forwarding budget are reported, so that a
-    // count is never left waiting for a record that may never come (ADR-0029).
-    this.#forwarder.flush();
     const now = this.host.monotonicNow();
-    for (const ports of this.#ports.values()) {
+    for (const [clientId, ports] of [...this.#ports]) {
       for (const [port, heardAt] of [...ports]) {
         if (now - heardAt >= SILENT_PARTICIPANT_TIMEOUT_MS) {
           ports.delete(port);
         }
       }
-    }
-    for (const clientId of this.#broker.forgetSilent(SILENT_PARTICIPANT_TIMEOUT_MS)) {
-      this.#ports.delete(clientId);
-    }
-    // The broker last heard an identity through one of its ports, so an identity whose ports all fell
-    // silent was forgotten above. Checked all the same: a participant without a port receives nothing.
-    for (const [clientId, ports] of [...this.#ports]) {
       if (ports.size === 0) {
-        this.#ports.delete(clientId);
-        this.#broker.handleDisconnect(clientId);
+        this.#logger.info('forgot a participant that fell silent', {
+          clientId,
+          event: 'broker.forgot-silent',
+        });
+        this.#forget(clientId);
       }
     }
   }
@@ -222,87 +173,42 @@ export class WorkerPorts<Port extends WorkerPort> {
   /** Drops all state. Ports are left as they are. */
   dispose(): void {
     this.#ports.clear();
-    this.#secrets.clear();
     this.#broker.dispose();
   }
 
   /**
    * Reports a message that could not be cloned into this worker, as the worker script's
    * `messageerror` listener hears it.
-   *
-   * Kept here rather than in the script so that the record goes through the worker's logger, which
-   * forwards it to the tabs (ADR-0029), and names the identity behind the port.
    */
   reportMessageError(port: Port): void {
-    this.#logger.warn('dropped a message that could not be cloned', {
+    this.#once.warn('message-error', 'dropped a message that could not be cloned', {
       clientId: this.#identities.get(port),
       event: 'worker.message-error',
     });
   }
 
   /**
-   * Holds a `hello` to the secret its identity is bound to, binding it on the first one (ADR-0028).
+   * Sends one of the worker's records to every context connected to it (ADR-0029).
    *
-   * @returns `false` for a `hello` that carries no secret, or one whose identity is bound to
-   *   another. Both are refused: only the context that bound an identity speaks as it here.
+   * Only as a tab would accept it: the decoder's bounds on a record are the bounds here, and fields a
+   * tab would refuse - an `undefined` one - are left out.
    */
-  #bindSecret(port: Port, message: HelloMessage): boolean {
-    const secret = message.secret;
-    if (secret === undefined) {
-      this.#refuse('secret-missing', port, message);
-      return false;
-    }
-    const bound = this.#secrets.get(message.from);
-    if (bound !== undefined && bound !== secret) {
-      this.#refuse('secret-mismatch', port, message);
-      return false;
-    }
-    if (bound !== undefined) {
-      // Moved to the end: a binding shown again is the one least worth forgetting.
-      this.#secrets.delete(message.from);
-    }
-    this.#secrets.set(message.from, secret);
-    this.#forgetOldestBindings();
-    return true;
-  }
-
-  /**
-   * Forgets the oldest bindings of identities that have no port left, down to the limit.
-   *
-   * A binding outlives its participant on purpose, so bindings only ever accumulate; any script of
-   * the origin can say `hello` under any number of identities, so they are bounded like everything
-   * else the worker keeps. An identity whose binding is forgotten can be claimed again - by the tab
-   * itself, which is the common case, or by a script that outlasted it.
-   */
-  #forgetOldestBindings(): void {
-    if (this.#secrets.size <= MAX_BOUND_IDENTITIES) {
+  #forward(level: 'warn' | 'error', message: string, fields: LogFields): void {
+    const decoded = decodeMessage({
+      type: 'worker-log',
+      v: PROTOCOL_VERSION,
+      from: BROKER_ID,
+      to: BROKER_ID,
+      level,
+      message,
+      fields: Object.fromEntries(Object.entries(fields).filter(([, value]) => value !== undefined)),
+    });
+    if (!decoded.ok) {
       return;
     }
-    warnLimitExceeded(this.#once, 'worker.limit-exceeded', 'MAX_BOUND_IDENTITIES');
-    for (const clientId of this.#secrets.keys()) {
-      if (this.#secrets.size <= MAX_BOUND_IDENTITIES) {
-        return;
-      }
-      if (!this.#ports.has(clientId)) {
-        this.#secrets.delete(clientId);
-      }
-    }
-  }
-
-  /** Sends one of the worker's records to every context connected to it (ADR-0029). */
-  #forward(level: 'warn' | 'error', message: string, fields: LogFields): void {
     for (const [clientId, ports] of [...this.#ports]) {
-      const record: ProtocolMessage = {
-        type: 'worker-log',
-        v: PROTOCOL_VERSION,
-        from: BROKER_ID,
-        to: clientId,
-        level,
-        message,
-        fields,
-      };
       for (const port of [...ports.keys()]) {
-        post(port, record);
+        post(port, { ...decoded.message, to: clientId });
       }
     }
   }
@@ -322,7 +228,7 @@ export class WorkerPorts<Port extends WorkerPort> {
       }
       ports = new Map();
       this.#ports.set(clientId, ports);
-      this.#broker.handleConnect(clientId);
+      this.#logger.debug('participant connected', { clientId, event: 'broker.connect' });
     } else if (!ports.has(port) && ports.size >= MAX_PORTS_PER_PARTICIPANT) {
       warnLimitExceeded(this.#once, 'worker.limit-exceeded', 'MAX_PORTS_PER_PARTICIPANT', {
         clientId,
@@ -338,13 +244,7 @@ export class WorkerPorts<Port extends WorkerPort> {
     this.#identities.delete(port);
     const ports = this.#ports.get(clientId);
     if (ports?.delete(port) === true && ports.size === 0) {
-      this.#ports.delete(clientId);
-      this.#broker.handleDisconnect(clientId);
-    }
-    if (!this.#ports.has(clientId)) {
-      // A context that said goodbye is gone for good - its identity is generated once per context -
-      // so its binding is let go of with it, rather than kept against the bound (ADR-0028).
-      this.#secrets.delete(clientId);
+      this.#forget(clientId);
     }
     try {
       port.close();
@@ -353,21 +253,11 @@ export class WorkerPorts<Port extends WorkerPort> {
     }
   }
 
-  #deliver(clientId: ClientId, message: ProtocolMessage): void {
-    const answering = this.#answering;
-    if (
-      message.type === 'welcome' &&
-      answering !== undefined &&
-      this.#identities.get(answering) === clientId
-    ) {
-      // An answer to a hello or a heartbeat tells the port that sent it that this worker runs. Another
-      // port of the identity learns nothing from it that it has not learnt from its own.
-      post(answering, message);
-      return;
-    }
-    for (const port of [...(this.#ports.get(clientId)?.keys() ?? [])]) {
-      post(port, message);
-    }
+  /** Forgets an identity whose last port has gone. */
+  #forget(clientId: ClientId): void {
+    this.#ports.delete(clientId);
+    this.#broker.handleDisconnect(clientId);
+    this.#logger.debug('participant disconnected', { clientId, event: 'broker.disconnect' });
   }
 
   #drop(port: Port, raw: unknown, failure: DecodeFailure): void {
@@ -379,7 +269,7 @@ export class WorkerPorts<Port extends WorkerPort> {
     const otherVersionSender =
       failure.reason === 'version-mismatch' ? helloSenderOf(raw) : undefined;
     if (otherVersionSender !== undefined) {
-      this.#logger.warn('answered a tab on another protocol version', {
+      this.#once.warn('other-protocol-version', 'answered a tab on another protocol version', {
         clientId: otherVersionSender,
         event: 'worker.other-protocol-version',
         reason: describeDecodeFailure(failure),
@@ -414,32 +304,10 @@ export class WorkerPorts<Port extends WorkerPort> {
       reason: refusal,
       messageType: message.type,
       // What the refused message claimed to be: the only thing known about a port that has said
-      // nothing the worker accepted. Never the secret it showed.
+      // nothing the worker accepted.
       claimedClientId: message.from,
     });
   }
-}
-
-/** The worker's own logger as a plain sink, so that the forwarder can wrap it. */
-function sinkOf(logger: ScopedLogger): Logger {
-  return {
-    log: (level, message, fields) => {
-      switch (level) {
-        case 'debug':
-          logger.debug(message, fields);
-          return;
-        case 'info':
-          logger.info(message, fields);
-          return;
-        case 'warn':
-          logger.warn(message, fields);
-          return;
-        default:
-          logger.error(message, fields);
-          return;
-      }
-    },
-  };
 }
 
 function post(port: WorkerPort, message: ProtocolMessage): void {

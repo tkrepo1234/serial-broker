@@ -19,8 +19,7 @@ import type { LogFields } from '../core/types.js';
  */
 
 /**
- * The longest identifier accepted: a client id, a request id, a term, a diagnostics request id, the
- * secret of a `hello`.
+ * The longest identifier accepted: a client id, a request id, a term, a diagnostics request id.
  *
  * This library creates identifiers as a prefix, a counter and a UUID, about 50 characters. An
  * identifier appears in every message and is kept as a map key in the broker and the sessions, so
@@ -119,17 +118,6 @@ export const MAX_PORTS_PER_PARTICIPANT = 8;
  * part in it.
  */
 export const MAX_CONFIGURATIONS = 4 * MAX_HEARTBEAT_CONFIGURATIONS;
-
-/**
- * The most identities the worker remembers a `hello` secret for (ADR-0028).
- *
- * A binding outlives the participant, so that a tab forgotten for its silence is still served when
- * it comes back. Any script of the origin can say `hello` under any number of identities, so the
- * bindings are bounded: past this many, the oldest binding of an identity with no port left is
- * forgotten, and that identity can be claimed again. Four times as many identities as the broker
- * keeps participants, so an origin's tabs never reach it.
- */
-export const MAX_BOUND_IDENTITIES = 4 * MAX_PARTICIPANTS;
 
 /**
  * The most fields, counting their values, one forwarded worker record may carry (ADR-0029).

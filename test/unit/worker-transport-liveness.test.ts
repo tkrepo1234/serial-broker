@@ -178,7 +178,6 @@ describe('SharedWorkerTransport, when its broker stops answering', () => {
   it(`starts a new worker once ${String(MAX_UNANSWERED_HEARTBEATS)} heartbeats in a row went unanswered, and not before`, async () => {
     const { transport, clock, workers } = start();
     transport.attach('Reader');
-    transport.setOwnership('Reader', true);
     worker(workers, 0).isAlive = false;
 
     // The first heartbeat still follows the answer to hello; the next three go unanswered.
@@ -194,24 +193,9 @@ describe('SharedWorkerTransport, when its broker stops answering', () => {
       expect.objectContaining({
         type: 'heartbeat',
         configNames: ['Reader'],
-        ownedConfigNames: ['Reader'],
       }),
     ]);
     expect(worker(workers, 0).closed).toBe(true);
-  });
-
-  it('shows the new worker the secret it showed the old one, so the identity is still its own', async () => {
-    const { clock, workers } = start();
-    worker(workers, 0).isAlive = false;
-
-    await clock.advance((MAX_UNANSWERED_HEARTBEATS + 1) * HEARTBEAT_INTERVAL_MS);
-
-    // A worker that hung may still be running, holding this tab's identity to the secret it saw. A
-    // new secret would be refused there, and the tab would be cut off from its own identity
-    // (ADR-0028).
-    const secretOf = (port: WorkerPort): unknown =>
-      (port.posted[0] as { readonly secret?: unknown }).secret;
-    expect(secretOf(worker(workers, 1))).toBe(secretOf(worker(workers, 0)));
   });
 
   it('notices a dead worker with its timers held back too, only later', async () => {
