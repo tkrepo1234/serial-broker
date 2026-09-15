@@ -55,7 +55,11 @@ provides:
 - **`smoke.spec.ts`** next to `example.json`: a Playwright test that loads the page with the Web
   Serial stand-in installed (`test/browser/stand-in/`), connects, sends a line and sees it come back
   from the loopback device. It imports the stand-in and its helpers with relative paths
-  (`../../test/browser/...`), uses the ids above, and passes when run through the root:
+  (`../../test/browser/...`), uses the ids above, and passes when run through the root. The steps
+  every example shares - opening a granted device, connecting with a click, living through an
+  unplugged device, releasing and setting up again - live in `examples/smoke-support.ts`: a spec
+  names its elements once and composes its tests from those steps, keeping only what its example
+  alone does:
 
   ```sh
   npm run build            # once, at the repository root

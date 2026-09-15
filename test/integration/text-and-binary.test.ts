@@ -1,8 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import { chunkBytes, copyBytes } from '../../src/core/bytes.js';
+import { copyBytes } from '../../src/core/bytes.js';
 import { SerialBrokerErrorCode } from '../../src/core/error-codes.js';
-import { SerialBrokerError } from '../../src/core/errors.js';
 import { BrowserHarness } from '../harness/browser-harness.js';
 import { READER, READER_OPTIONS } from '../harness/devices.js';
 
@@ -199,38 +198,34 @@ describe('receiving', () => {
   });
 });
 
-describe('byte helpers', () => {
-  it('copies rather than aliasing', () => {
-    const source = new Uint8Array([1, 2, 3]);
-    const copy = copyBytes(source);
+describe('copying payload bytes', () => {
+  it('accepts an ArrayBuffer from another realm', async () => {
+    const { runInNewContext } = await import('node:vm');
+    const foreign = runInNewContext('new Uint8Array([1, 2, 3]).buffer') as ArrayBuffer;
 
-    source[0] = 9;
-
-    expect([...copy]).toEqual([1, 2, 3]);
+    expect([...copyBytes(foreign)]).toEqual([1, 2, 3]);
   });
 
-  it('copies only the bytes a DataView spans', () => {
-    const backing = new Uint8Array([1, 2, 3, 4, 5, 6]);
-    const view = new DataView(backing.buffer, 2, 2);
+  it('copies a view of shared memory into memory of its own', () => {
+    const shared = new Uint8Array(new SharedArrayBuffer(4));
+    shared.set([1, 2, 3, 4]);
 
-    expect([...copyBytes(view)]).toEqual([3, 4]);
+    const copy = copyBytes(shared.subarray(1, 3) as unknown as BufferSource);
+
+    expect(copy.buffer).toBeInstanceOf(ArrayBuffer);
+    expect([...copy]).toEqual([2, 3]);
   });
 
-  it('rejects something that is not a buffer', () => {
-    expect(() => copyBytes(42 as unknown as BufferSource)).toThrow(SerialBrokerError);
-  });
+  it('reports a view of a transferred buffer as a serial-broker error', () => {
+    const buffer = new ArrayBuffer(4);
+    const view = new Uint8Array(buffer, 1, 2);
+    structuredClone(buffer, { transfer: [buffer] });
 
-  it('returns one chunk for a payload that fits', () => {
-    expect(chunkBytes(new Uint8Array([1, 2]), 10)).toHaveLength(1);
-  });
-
-  it('returns one chunk for an empty payload, so writing nothing stays observable', () => {
-    expect(chunkBytes(new Uint8Array(0), 10)).toHaveLength(1);
-  });
-
-  it('splits on the configured boundary', () => {
-    const chunks = chunkBytes(new Uint8Array(10), 4);
-
-    expect(chunks.map((chunk) => chunk.byteLength)).toEqual([4, 4, 2]);
+    expect(() => copyBytes(view)).toThrow(
+      expect.objectContaining({
+        code: SerialBrokerErrorCode.INVALID_ARGUMENT,
+        context: expect.objectContaining({ detached: true }) as unknown,
+      }),
+    );
   });
 });

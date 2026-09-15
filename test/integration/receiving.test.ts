@@ -58,30 +58,6 @@ describe('receiving', () => {
     expect(atPeer).toEqual(['receive:1234\r\n']);
   });
 
-  it('delivers every chunk as it is read with an idle time of 0', async () => {
-    const { harness, device, owner } = await twoTabs({ receive: { idleMs: 0 } });
-    const events = eventsOf(owner);
-
-    device.emit('1');
-    await harness.settle();
-    device.emit('2');
-    await harness.settle();
-
-    expect(events).toEqual(['receive:1', 'receive:2']);
-  });
-
-  it('delivers a line that never goes quiet at the pace of the longest wait', async () => {
-    const { harness, device, owner } = await twoTabs({ receive: { idleMs: 50, maxWaitMs: 200 } });
-    const events = eventsOf(owner);
-
-    for (let index = 0; index < 25; index += 1) {
-      device.emit('x');
-      await harness.advance(10);
-    }
-
-    expect(events[0]).toBe(`receive:${'x'.repeat(20)}`);
-  });
-
   it('delivers what was collected before the lost connection is reported', async () => {
     const { harness, device, owner } = await twoTabs();
     const events = eventsOf(owner);

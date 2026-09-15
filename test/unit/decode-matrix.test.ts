@@ -1,101 +1,15 @@
 import { describe, expect, it } from 'vitest';
 
-import { SerialBrokerErrorCode } from '../../src/core/error-codes.js';
-import { SerialBrokerError } from '../../src/core/errors.js';
 import { decodeMessage, describeDecodeFailure } from '../../src/protocol/decode.js';
 import type { ProtocolMessageType } from '../../src/protocol/messages.js';
 import { PROTOCOL_VERSION } from '../../src/protocol/version.js';
 
-import { sampleReport } from './fixtures/diagnostics-report.js';
+import { ERROR_PAYLOAD, validMessages } from './fixtures/valid-messages.js';
 
 const BASE = { v: PROTOCOL_VERSION, from: 'c-1', to: 'all' };
-const ERROR_PAYLOAD = new SerialBrokerError(SerialBrokerErrorCode.WRITE_FAILED, 'x').toJSON();
 
 /** A valid instance of every message type, which every mutation below starts from. */
-const VALID: Record<ProtocolMessageType, Record<string, unknown>> = {
-  hello: { ...BASE, type: 'hello', secret: 's-1' },
-  goodbye: { ...BASE, type: 'goodbye' },
-  welcome: { ...BASE, to: 'c-2', type: 'welcome' },
-  heartbeat: { ...BASE, type: 'heartbeat', configNames: ['Reader'], ownedConfigNames: [] },
-  attach: { ...BASE, type: 'attach', configName: 'Reader' },
-  detach: { ...BASE, type: 'detach', configName: 'Reader' },
-  'owner-claimed': {
-    ...BASE,
-    type: 'owner-claimed',
-    configName: 'Reader',
-    term: 't-1',
-    maxTabs: Number.POSITIVE_INFINITY,
-  },
-  'owner-released': { ...BASE, type: 'owner-released', configName: 'Reader', term: 't-1' },
-  'status-request': { ...BASE, type: 'status-request', configName: 'Reader' },
-  'write-request': {
-    ...BASE,
-    type: 'write-request',
-    configName: 'Reader',
-    requestId: 'w-1',
-    payload: new Uint8Array([1]),
-    term: 't-1',
-  },
-  'write-started': {
-    ...BASE,
-    type: 'write-started',
-    configName: 'Reader',
-    requestId: 'w-1',
-    term: 't-1',
-  },
-  'write-result': {
-    ...BASE,
-    type: 'write-result',
-    configName: 'Reader',
-    requestId: 'w-1',
-    ok: true,
-    error: undefined,
-    term: 't-1',
-  },
-  'data-received': {
-    ...BASE,
-    type: 'data-received',
-    configName: 'Reader',
-    payload: new Uint8Array([1]),
-    text: 'a',
-    timestamp: 1,
-  },
-  'data-sent': {
-    ...BASE,
-    type: 'data-sent',
-    configName: 'Reader',
-    payload: new Uint8Array([1]),
-    originClientId: 'c-2',
-    timestamp: 1,
-  },
-  status: {
-    ...BASE,
-    type: 'status',
-    configName: 'Reader',
-    status: 'open',
-    maxTabs: Number.POSITIVE_INFINITY,
-    device: { kind: 'usb', vendorId: 0x1a86, productId: 0x7523 },
-    term: 't-1',
-    timestamp: 1,
-  },
-  error: { ...BASE, type: 'error', configName: 'Reader', error: ERROR_PAYLOAD, timestamp: 1 },
-  'diagnostics-request': { ...BASE, type: 'diagnostics-request', requestId: 'd-1' },
-  'worker-log': {
-    ...BASE,
-    to: 'c-2',
-    type: 'worker-log',
-    level: 'warn',
-    message: 'refused a message from a port that has not said hello',
-    fields: { event: 'worker.message-refused', reason: 'before-hello', limitValue: 8 },
-  },
-  'diagnostics-report': {
-    ...BASE,
-    to: 'c-2',
-    type: 'diagnostics-report',
-    requestId: 'd-1',
-    report: sampleReport(),
-  },
-};
+const VALID = validMessages();
 
 /** Every message type paired with the fields it must have to be accepted. */
 const REQUIRED_FIELDS: Record<ProtocolMessageType, readonly string[]> = {
@@ -253,7 +167,66 @@ describe('decode matrix', () => {
     }
   });
 
-  it('rejects a message whose type is not a string', () => {
-    expect(decodeMessage({ ...BASE, type: 99 }).ok).toBe(false);
+  it.each([
+    ['a primitive', 42],
+    ['null', null],
+    ['a string', 'hello'],
+    ['an array', []],
+  ])('rejects %s', (_label, raw) => {
+    expect(decodeMessage(raw).ok).toBe(false);
+  });
+
+  it.each([
+    ['no sender', { ...VALID.attach, from: undefined }],
+    ['no recipient', { ...VALID.attach, to: undefined }],
+  ])('rejects a message with %s', (_label, raw) => {
+    expect(decodeMessage(raw).ok).toBe(false);
+  });
+
+  it('accepts an ArrayBuffer payload and normalises it to bytes', () => {
+    const result = decodeMessage({
+      ...VALID['write-request'],
+      payload: new Uint8Array([1, 2, 3]).buffer,
+    });
+
+    expect(result.ok).toBe(true);
+    if (result.ok && result.message.type === 'write-request') {
+      expect(result.message.payload).toBeInstanceOf(Uint8Array);
+      expect([...result.message.payload]).toEqual([1, 2, 3]);
+    }
+  });
+
+  it.each(['owner-claimed', 'owner-released', 'write-started', 'status'] as const)(
+    'rejects %s that names no term (ADR-0026)',
+    (type) => {
+      expect(decodeMessage({ ...VALID[type], term: undefined }).ok).toBe(false);
+    },
+  );
+
+  it('accepts a write result without a term, from a tab that never held the port', () => {
+    expect(decodeMessage({ ...VALID['write-result'], term: undefined }).ok).toBe(true);
+  });
+
+  it('rejects a failed write result that carries no error', () => {
+    // Accepting it would settle the caller's promise as a rejection with nothing to report.
+    expect(decodeMessage({ ...VALID['write-result'], ok: false, error: undefined }).ok).toBe(false);
+  });
+
+  it('rejects a status message carrying a status that is not one', () => {
+    expect(decodeMessage({ ...VALID.status, status: 'gloriously-open' }).ok).toBe(false);
+  });
+
+  it('never throws, whatever it is handed', () => {
+    const hostile: Record<string, unknown> = { ...BASE, type: 'attach' };
+    hostile['self'] = hostile;
+    Object.defineProperty(hostile, 'configName', {
+      get() {
+        throw new Error('no');
+      },
+      enumerable: true,
+    });
+
+    expect(() => decodeMessage(hostile)).not.toThrow();
+    expect(decodeMessage(hostile).ok).toBe(false);
   });
 });

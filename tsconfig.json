@@ -36,7 +36,8 @@
     "test/**/*.ts",
     "debug/**/*.ts",
     "*.config.ts",
-    "examples/*/smoke.spec.ts"
+    "examples/*/smoke.spec.ts",
+    "examples/smoke-support.ts"
   ],
   "exclude": ["node_modules", "dist"]
 }

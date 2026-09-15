@@ -6,11 +6,18 @@
 
 import { expect, test, type Page } from '@playwright/test';
 
-import { GRANTED_DEVICE, installStandIn } from '../../test/browser/support/tab.js';
+import { ExampleTab, installLoopback, USUAL_IDS, type ExampleUi } from '../smoke-support.js';
 
 const ORIGIN = 'http://localhost:8154';
 /** What app.js configures: the worker script next to the library, on the page's own origin. */
 const WORKER_URL = `${ORIGIN}/serial-broker/serial-broker.worker.js`;
+
+const UI: ExampleUi = {
+  ...USUAL_IDS,
+  url: `${ORIGIN}/`,
+  sendButton: '#send',
+  setUpAgain: '#setup-again',
+};
 
 /**
  * The scripts of the shared workers Chromium hosts for this page's browser context.
@@ -47,37 +54,23 @@ async function sharedWorkerUrlsOf(page: Page): Promise<readonly string[]> {
 test('connects to a granted device, sends a line and sees it echoed', async ({ context }) => {
   // The device was granted on an earlier visit, so the page opens it with no click: that is the
   // normal case in production, and `?stand-in` is not needed - the stand-in comes from the test.
-  await installStandIn(context, GRANTED_DEVICE);
+  await installLoopback(context, true);
+  const tab = await ExampleTab.open(context, UI);
 
-  const page = await context.newPage();
-  const pageErrors: string[] = [];
-  const consoleNoise: string[] = [];
-  page.on('pageerror', (error) => pageErrors.push(error.message));
-  page.on('console', (message) => {
-    if (message.type() === 'warning' || message.type() === 'error') {
-      consoleNoise.push(`${message.type()}: ${message.text()}`);
-    }
-  });
+  await tab.expectOpenWithoutClick();
+  await expect(tab.locator('#error')).toBeHidden();
 
-  await page.goto(`${ORIGIN}/`);
-  await expect(page.locator('#status')).toHaveText('open');
-  await expect(page.locator('#connect')).toBeHidden();
-  await expect(page.locator('#error')).toBeHidden();
-
-  await page.fill('#send-input', 'HELLO FROM THE PAGE');
-  await page.click('#send');
   // The loopback device echoes what is written, line ending included.
-  await expect(page.locator('#received')).toContainText('HELLO FROM THE PAGE');
-  await expect(page.locator('#sent')).toContainText('this tab');
+  await tab.sendLine('HELLO FROM THE PAGE');
+  await expect(tab.locator('#sent')).toContainText('this tab');
 
   // The worker script is served from this origin at the configured URL, and the library runs on
   // it. Were the file missing - a wrong prefix in serve.mjs, a renamed file in a later dist/ - the
   // library would have fallen back to a BroadcastChannel and everything above would still pass.
-  expect(await sharedWorkerUrlsOf(page)).toEqual([WORKER_URL]);
+  expect(await sharedWorkerUrlsOf(tab.page)).toEqual([WORKER_URL]);
   // The fallback, like every other warning, would have opened the page's library log.
-  await expect(page.locator('#log-section')).toBeHidden();
+  await expect(tab.locator('#log-section')).toBeHidden();
 
   // The page and the library are quiet: nothing uncaught, nothing on the console.
-  expect(pageErrors).toEqual([]);
-  expect(consoleNoise).toEqual([]);
+  tab.expectQuiet();
 });

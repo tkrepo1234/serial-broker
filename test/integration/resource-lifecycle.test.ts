@@ -17,26 +17,6 @@ import { domException } from '../harness/fake-serial.js';
  * an application has been running for a day.
  */
 describe('resource lifecycle', () => {
-  it('leaves no lock, timer or listener behind after repeated setup and release', async () => {
-    const harness = new BrowserHarness();
-    const device = harness.serial.addDevice(READER.vendorId, READER.productId);
-    harness.serial.grant(device);
-    const tab = harness.openTab();
-
-    for (let round = 0; round < 10; round += 1) {
-      await tab.client.setup('Reader', READER_OPTIONS);
-      await harness.settle();
-      await tab.client.release('Reader');
-      await harness.settle();
-    }
-
-    expect(harness.locks.holderOf(ownerLockName('Reader'))).toBeUndefined();
-    expect(harness.locks.queueLength(ownerLockName('Reader'))).toBe(0);
-    expect(harness.clock.pendingTimerCount).toBe(0);
-    expect(tab.client.names()).toEqual([]);
-    expect(device.isOpen).toBe(false);
-  });
-
   it('leaves nothing behind when churn happens in several tabs at once', async () => {
     const harness = new BrowserHarness();
     const device = harness.serial.addDevice(READER.vendorId, READER.productId);

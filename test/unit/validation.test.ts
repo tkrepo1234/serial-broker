@@ -39,15 +39,16 @@ describe('validateName', () => {
     expect(() => validateName(value)).toThrow(SerialBrokerError);
   });
 
-  it('rejects a name longer than the documented limit', () => {
-    expect(() => validateName('x'.repeat(129))).toThrow(/at most 128/);
+  it('rejects a name longer than the documented limit of 128 characters', () => {
+    expect(validateName('x'.repeat(128))).toBe('x'.repeat(128));
+    expect(argumentOf(() => validateName('x'.repeat(129)))).toBe('name');
   });
 
   it('rejects control characters', () => {
     // The name ends up in a lock name, a storage key and every log record; a newline in any
     // of those is a corruption waiting to be debugged by someone else.
-    expect(() => validateName(`Reader${String.fromCharCode(10)}`)).toThrow(/control characters/);
-    expect(() => validateName(String.fromCharCode(0))).toThrow(/control characters/);
+    expect(argumentOf(() => validateName(`Reader${String.fromCharCode(10)}`))).toBe('name');
+    expect(argumentOf(() => validateName(String.fromCharCode(0)))).toBe('name');
   });
 
   it('accepts non-ASCII names', () => {

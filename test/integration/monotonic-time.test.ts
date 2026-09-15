@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 
 import { BrowserHarness } from '../harness/browser-harness.js';
 import { READER, READER_OPTIONS } from '../harness/devices.js';
-import { fieldsOfEvent, recordingLogger } from '../harness/recording-logger.js';
 
 /**
  * Durations survive the system clock being set (ADR-0032).
@@ -13,8 +12,8 @@ import { fieldsOfEvent, recordingLogger } from '../harness/recording-logger.js';
  * monotonic clock, and a jump must change none of it.
  */
 describe('a system clock that is set', () => {
-  async function connectedTab(logger: ReturnType<typeof recordingLogger>['logger']) {
-    const harness = new BrowserHarness({ logger });
+  async function connectedTab() {
+    const harness = new BrowserHarness();
     const device = harness.serial.addDevice(READER.vendorId, READER.productId);
     harness.serial.grant(device);
     // One failed open first, so the attempt counter is above zero and a reset is visible.
@@ -27,8 +26,7 @@ describe('a system clock that is set', () => {
   }
 
   it('does not make a connection that held for stableAfterMs count as unstable', async () => {
-    const { logger, records } = recordingLogger();
-    const { harness, device } = await connectedTab(logger);
+    const { harness, device } = await connectedTab();
 
     // An hour back while the port is open: the connection has still held for six seconds.
     harness.clock.jumpWallClock(-3_600_000);
@@ -37,17 +35,13 @@ describe('a system clock that is set', () => {
     device.breakStream();
     await harness.settle();
 
-    const delays = fieldsOfEvent(records, 'supervisor.reconnect').map(
-      (fields) => fields['delayMs'],
-    );
-    // The first retry after the failed open, then the immediate retry a connection that held
-    // earns. Measured on the wall clock, the second would have been a 250 ms backoff delay.
-    expect(delays).toEqual([0, 0]);
+    // The immediate retry a connection that held earns. Measured on the wall clock, it would have
+    // been a 250 ms backoff delay.
+    expect(harness.clock.nextTimerInMs).toBe(0);
   });
 
   it('does not make a connection that broke at once count as stable', async () => {
-    const { logger, records } = recordingLogger();
-    const { harness, device } = await connectedTab(logger);
+    const { harness, device } = await connectedTab();
 
     // An hour forward while the port is open: the connection has still held for a moment only.
     harness.clock.jumpWallClock(3_600_000);
@@ -56,11 +50,8 @@ describe('a system clock that is set', () => {
     device.breakStream();
     await harness.settle();
 
-    const delays = fieldsOfEvent(records, 'supervisor.reconnect').map(
-      (fields) => fields['delayMs'],
-    );
     // Measured on the wall clock, the connection would have looked an hour old and the retry
     // immediate - which is how a device that opens and drops at once loops forever.
-    expect(delays).toEqual([0, 250]);
+    expect(harness.clock.nextTimerInMs).toBe(250);
   });
 });

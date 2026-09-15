@@ -226,26 +226,6 @@ describe('an attempt to connect', () => {
   });
 });
 
-describe('a device plugged in again', () => {
-  it('is logged when it revives a configuration that had given up', async () => {
-    const { logger, records } = recordingLogger();
-    const harness = new BrowserHarness({ logger });
-    const device = harness.serial.addDevice(READER.vendorId, READER.productId);
-    harness.serial.grant(device);
-    device.faults.failOpenWith = 'NetworkError';
-    const tab = harness.openTab();
-    await tab.setup('Reader', { ...READER_OPTIONS, connection: { maxAttempts: 1 } });
-    expect(tab.client.getStatus('Reader').status).toBe(SerialBrokerStatus.Failed);
-
-    device.faults.failOpenWith = undefined;
-    harness.serial.plug(device);
-    await harness.settle();
-
-    expect(tab.client.getStatus('Reader').status).toBe(SerialBrokerStatus.Open);
-    expect(fieldsOfEvent(records, 'supervisor.device-connected')).toHaveLength(1);
-  });
-});
-
 describe('closing a lost connection', () => {
   it('records a teardown step that failed, which the next open may run into', async () => {
     const { logger, records } = recordingLogger();

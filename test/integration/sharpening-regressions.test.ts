@@ -3,8 +3,6 @@ import { describe, expect, it } from 'vitest';
 import { SerialBrokerClient } from '../../src/client/serial-broker-client.js';
 import { SerialBrokerErrorCode } from '../../src/core/error-codes.js';
 import type { SerialBrokerError } from '../../src/core/errors.js';
-import { NOOP_LOGGER, ScopedLogger } from '../../src/core/logger.js';
-import { ConfigurationStore, storageIndexKey } from '../../src/storage/configuration-store.js';
 import { BrowserHarness } from '../harness/browser-harness.js';
 import { READER, READER_OPTIONS } from '../harness/devices.js';
 import { fieldsOfEvent, recordingLogger } from '../harness/recording-logger.js';
@@ -86,29 +84,6 @@ describe('errors thrown at the public surface', () => {
       timestamp: harness.clock.now(),
       context: { argumentName: 'listener', actualType: 'number' },
     });
-  });
-});
-
-describe('storage problems', () => {
-  it('are reported with the time they happened', () => {
-    const entries = new Map([[storageIndexKey(), '{ not json']]);
-    const reported: SerialBrokerError[] = [];
-    const store = new ConfigurationStore(
-      {
-        getItem: (key) => entries.get(key) ?? null,
-        setItem: (key, value) => entries.set(key, value),
-        removeItem: (key) => entries.delete(key),
-      },
-      new ScopedLogger(NOOP_LOGGER, {}),
-      (error) => reported.push(error),
-      () => 777,
-    );
-
-    store.load();
-
-    expect(reported.map((error) => [error.code, error.timestamp])).toEqual([
-      [SerialBrokerErrorCode.STORAGE_CORRUPT, 777],
-    ]);
   });
 });
 

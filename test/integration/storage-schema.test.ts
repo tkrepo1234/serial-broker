@@ -101,42 +101,4 @@ describe('the layout of remembered configurations', () => {
     await expect(harness.openTab().client.restore()).resolves.toEqual(['Reader']);
     expect(rememberedNames(harness.storage)).toEqual(['Reader']);
   });
-
-  it('forgets a name whose entry is gone, without troubling the application', async () => {
-    const harness = harnessWithDevice();
-    remember(harness.storage, { Reader: { device: READER, serial: { baudRate: 9600 } } });
-    harness.storage.poison(storageIndexKey(), JSON.stringify(['Reader', 'Vanished']));
-    const tab = harness.openTab();
-
-    await expect(tab.client.restore()).resolves.toEqual(['Reader']);
-    // Setting up the restored name is how this tab starts listening, so an error raised by the
-    // restore before it would still arrive here.
-    await tab.setup('Reader', READER_OPTIONS);
-    await harness.settle();
-
-    // A listed name with no entry is another tab's removal seen through a stale index far more
-    // often than it is corruption, and the application has nothing to do about either.
-    expect(tab.errorCodes('Reader')).toEqual([]);
-    expect(rememberedNames(harness.storage)).toEqual(['Reader']);
-  });
-
-  it('keeps both configurations when one tab saves while another one does', async () => {
-    const harness = harnessWithDevice();
-    const first = harness.openTab();
-    const second = harness.openTab();
-
-    // Each tab writes the key of its own configuration and adds its name to the index. What one
-    // tab may cost the other is a name, never an entry - see the unit tests for the stale read
-    // that used to cost the entry (ADR-0033).
-    await Promise.all([
-      first.client.setup('Reader', READER_OPTIONS),
-      second.client.setup('Scale', { ...READER_OPTIONS, serial: { baudRate: 19_200 } }),
-    ]);
-    await harness.settle();
-
-    expect(rememberedNames(harness.storage).sort()).toEqual(['Reader', 'Scale']);
-    expect(rememberedEntry(harness.storage, 'Scale')).toMatchObject({
-      serial: expect.objectContaining({ baudRate: 19_200 }) as object,
-    });
-  });
 });

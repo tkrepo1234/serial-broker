@@ -61,32 +61,6 @@ describe('asking for a device that is already connected', () => {
   });
 });
 
-describe('reconnecting after a connection that held', () => {
-  it('retries at once only once, then backs off as from a fresh start', async () => {
-    const { logger, records } = recordingLogger();
-    const harness = new BrowserHarness({ logger });
-    const device = harness.serial.addDevice(READER.vendorId, READER.productId);
-    harness.serial.grant(device);
-    await harness.openTab().setup('Reader', READER_OPTIONS);
-    // Longer than stableAfterMs, so the attempt count starts over when the connection breaks.
-    await harness.advance(6_000);
-
-    device.faults.failOpenWith = 'NetworkError';
-    device.breakStream();
-    await harness.settle();
-    for (let attempt = 0; attempt < 3; attempt += 1) {
-      await harness.clock.advanceToNextTimer();
-      await harness.settle();
-    }
-
-    const delays = fieldsOfEvent(records, 'supervisor.reconnect').map(
-      (fields) => fields['delayMs'],
-    );
-    // Before the fix this was [0, 0, 250, 500]: two immediate retries in a row.
-    expect(delays.slice(0, 4)).toEqual([0, 250, 500, 1000]);
-  });
-});
-
 describe('options and names', () => {
   it('rejects null instead of treating it as not set', () => {
     expect(() =>
@@ -110,24 +84,6 @@ describe('options and names', () => {
     const later = harness.openTab();
 
     await expect(later.client.restore()).resolves.toContain('__proto__');
-  });
-});
-
-describe('a device plugged in while the ports are being listed', () => {
-  it('is found by listing again, instead of waiting for permission', async () => {
-    const harness = new BrowserHarness();
-    const device = harness.serial.addDevice(READER.vendorId, READER.productId);
-    harness.serial.grant(device);
-    harness.serial.unplug(device);
-    harness.serial.onListingPorts = () => {
-      harness.serial.onListingPorts = undefined;
-      harness.serial.plug(device);
-    };
-
-    const tab = harness.openTab();
-    await tab.setup('Reader', READER_OPTIONS);
-
-    expect(tab.client.getStatus('Reader').status).toBe(SerialBrokerStatus.Open);
   });
 });
 

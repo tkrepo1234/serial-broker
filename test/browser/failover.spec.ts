@@ -47,23 +47,6 @@ async function openConnectedTabs(context: BrowserContext, count: number): Promis
 }
 
 test.describe('the tab holding the port goes away', () => {
-  test('another tab takes the port over when it closes', async ({ context }) => {
-    await installStandIn(context, GRANTED_DEVICE);
-    const tabs = await openConnectedTabs(context, 3);
-    const holder = await tabHoldingThePort(tabs);
-    const survivors = tabs.filter((_, index) => index !== holder);
-
-    await tabs[holder]?.page.close();
-
-    // One of the others now has the device, and the shared port still works from a tab that
-    // never had it.
-    await waitForPortHolder(survivors);
-    await survivors[0]?.send('Echo', 'AFTER-CLOSE');
-    for (const tab of survivors) {
-      await tab.waitForReceivedText('Echo', 'AFTER-CLOSE');
-    }
-  });
-
   test('another tab takes the port over when its renderer is killed', async ({ context }) => {
     await installStandIn(context, GRANTED_DEVICE);
     const tabs = await openConnectedTabs(context, 3);

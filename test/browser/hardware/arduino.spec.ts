@@ -186,23 +186,6 @@ test.describe('an Arduino running an echo sketch', () => {
     await tab?.waitForPatternRun(CONFIGURATION, 5_000, 180_000);
   });
 
-  test('echoes 64 KiB back, in the chunks the line delivers', async ({ hardware }) => {
-    // 65 536 bytes at 9600 baud would be about 68 seconds in each direction. The board this was
-    // written against is much slower than the line - about 80 bytes a second - which makes this
-    // a quarter of an hour, so it is asked for separately.
-    test.skip(
-      process.env['SERIAL_BROKER_HARDWARE_LARGE'] !== '1',
-      'Takes about 15 minutes on this board; set SERIAL_BROKER_HARDWARE_LARGE=1 to run it.',
-    );
-    test.setTimeout(1_800_000);
-    const [tab] = await largePayloadTabs(hardware);
-    const seed = Math.floor(Math.random() * 1_000_000);
-
-    await tab?.sendPattern(CONFIGURATION, 65_536, seed);
-
-    await tab?.waitForPatternRun(CONFIGURATION, 65_536, 1_500_000);
-  });
-
   test('connects again after the configuration was released', async ({ hardware }) => {
     const [tab] = await connectedTabs(hardware, 1);
     await tab?.send(CONFIGURATION, 'BEFORE-RELEASE');

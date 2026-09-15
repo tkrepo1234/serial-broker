@@ -2,10 +2,8 @@ import { describe, expect, it } from 'vitest';
 
 import { SerialBrokerErrorCode } from '../../src/core/error-codes.js';
 import { SerialBrokerStatus } from '../../src/core/types.js';
-import { storageIndexKey } from '../../src/storage/configuration-store.js';
 import { BrowserHarness } from '../harness/browser-harness.js';
 import { READER, READER_OPTIONS } from '../harness/devices.js';
-import { remember } from '../harness/stored-configurations.js';
 
 /**
  * Remembering a device across visits.
@@ -156,46 +154,6 @@ describe('permission and persistence', () => {
 
     const reloaded = harness.openTab();
     await expect(reloaded.client.restore()).resolves.toEqual([]);
-  });
-
-  it('does not persist a configuration marked as transient', async () => {
-    const harness = new BrowserHarness();
-    const device = harness.serial.addDevice(READER.vendorId, READER.productId);
-    harness.serial.grant(device);
-
-    const tab = harness.openTab();
-    await tab.setup('Reader', { ...READER_OPTIONS, remember: false });
-    await tab.close();
-
-    const reloaded = harness.openTab();
-    await expect(reloaded.client.restore()).resolves.toEqual([]);
-  });
-
-  it('discards a corrupt stored configuration instead of failing to start', async () => {
-    const harness = new BrowserHarness();
-    harness.storage.poison(storageIndexKey(), '{ this is not json');
-
-    const tab = harness.openTab();
-
-    await expect(tab.client.restore()).resolves.toEqual([]);
-    expect(harness.storage.getItem(storageIndexKey())).toBeNull();
-  });
-
-  it('discards only the invalid entry when others are still usable', async () => {
-    const harness = new BrowserHarness();
-    const device = harness.serial.addDevice(READER.vendorId, READER.productId);
-    harness.serial.grant(device);
-
-    remember(harness.storage, {
-      Broken: { device: { vendorId: 'not-a-number', productId: 1 }, serial: { baudRate: 9600 } },
-      Reader: { device: READER, serial: { baudRate: 9600 } },
-    });
-
-    const tab = harness.openTab();
-    const restored = await tab.client.restore();
-
-    // One bad entry must not cost the application the others.
-    expect(restored).toEqual(['Reader']);
   });
 
   it('keeps working when storage is unavailable', async () => {

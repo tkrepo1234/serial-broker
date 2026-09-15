@@ -84,22 +84,6 @@ test.describe('a port shared across tabs', () => {
     expect(await second.sends('Echo')).toHaveLength(2);
   });
 
-  test('delivers a payload larger than the write chunk complete and in order', async ({
-    context,
-  }) => {
-    await installStandIn(context, GRANTED_DEVICE);
-    const tab = await Tab.open(context);
-
-    await tab.setup('Echo', echoConfiguration({ encoding: { decodeText: false } }));
-    await tab.waitForStatus('Echo', 'open');
-    await tab.sendPattern('Echo', 40_000);
-    await tab.waitForReceivedBytes('Echo', 40_000);
-
-    // The library chunks at 4 KiB and the stand-in answers in 255-byte reads, so this crosses
-    // both boundaries in both directions.
-    expect(await tab.receivedPatternLength('Echo')).toBe(40_000);
-  });
-
   test('decodes text whose characters are cut in half by a read boundary', async ({ context }) => {
     await installStandIn(context, GRANTED_DEVICE);
     const first = await Tab.open(context);

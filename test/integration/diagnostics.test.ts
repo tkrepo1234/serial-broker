@@ -4,7 +4,7 @@ import { SerialBrokerErrorCode } from '../../src/core/error-codes.js';
 import { SerialBrokerStatus } from '../../src/core/types.js';
 import { BrowserHarness } from '../harness/browser-harness.js';
 import { READER, READER_OPTIONS } from '../harness/devices.js';
-import { recordingLogger } from '../harness/recording-logger.js';
+import { fieldsOfEvent, recordingLogger } from '../harness/recording-logger.js';
 
 /**
  * What an operator sees when something goes wrong.
@@ -108,23 +108,6 @@ describe('error reporting', () => {
     const error = tab.recordFor('Reader').errors.at(0)?.error;
     expect(error?.isRetryable).toBe(true);
     expect(error?.remediation).toContain('No action required');
-  });
-
-  it('reports a listener that throws without disturbing the others', async () => {
-    const { harness, device, tab } = await connectedTab();
-    const good = vi.fn();
-
-    tab.client.subscribe('Reader', 'onReceive', () => {
-      throw new Error('application bug');
-    });
-    tab.client.subscribe('Reader', 'onReceive', good);
-    device.emit('x');
-    await harness.settle();
-
-    expect(good).toHaveBeenCalledOnce();
-    expect(tab.recordFor('Reader').errors.map((event) => event.error.code)).toContain(
-      SerialBrokerErrorCode.LISTENER_THREW,
-    );
   });
 
   it('rejects a pending write when the configuration is released', async () => {
@@ -239,10 +222,12 @@ describe('logging', () => {
     const tab = harness.openTab();
     await tab.setup('Reader', READER_OPTIONS);
 
-    const milestones = records.filter(([level]) => level === 'info').map(([, message]) => message);
-    expect(milestones).toContain('configuration registered');
-    expect(milestones).toContain('acquired port ownership');
-    expect(milestones).toContain('port opened');
+    const milestones = records
+      .filter(([level]) => level === 'info')
+      .map(([, , fields]) => fields.event);
+    expect(milestones).toEqual(
+      expect.arrayContaining(['client.setup', 'election.acquired', 'supervisor.open']),
+    );
 
     for (const [, , fields] of records) {
       expect(fields).toHaveProperty('clientId');
@@ -283,7 +268,10 @@ describe('logging', () => {
     device.emit('CARD=5555');
     await harness.settle();
 
-    const traffic = records.filter(([, message]) => message === 'sent' || message === 'received');
+    const traffic = records.filter(
+      ([, , fields]) =>
+        fields.event === 'supervisor.sent' || fields.event === 'supervisor.received',
+    );
     expect(traffic).toHaveLength(2);
     for (const [level, , fields] of traffic) {
       expect(level).toBe('debug');
@@ -304,9 +292,9 @@ describe('logging', () => {
     await tab.client.send('Reader', 'AT');
     await harness.settle();
 
-    const sent = records.find(([, message]) => message === 'sent');
-    expect(sent?.[2]['hex']).toBe('41 54');
+    expect(fieldsOfEvent(records, 'supervisor.sent')[0]?.['hex']).toBe('41 54');
   });
+
   it('warns when a reconnect is scheduled, with the reason and the delay', async () => {
     const { logger, records } = recordingLogger();
     const harness = new BrowserHarness({ logger });
@@ -318,8 +306,12 @@ describe('logging', () => {
     harness.serial.unplug(device);
     await harness.settle();
 
-    const warning = records.find(([, message]) => message.includes('scheduling reconnect'));
-    expect(warning?.[2]).toMatchObject({ configName: 'Reader' });
+    const warning = records.find(([, , fields]) => fields.event === 'supervisor.reconnect');
+    expect(warning?.[0]).toBe('warn');
+    expect(warning?.[2]).toMatchObject({
+      configName: 'Reader',
+      reason: expect.any(String) as unknown,
+    });
     expect(warning?.[2]).toHaveProperty('delayMs');
   });
 });

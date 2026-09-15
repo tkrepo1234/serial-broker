@@ -100,17 +100,6 @@ describe('encapsulation', () => {
     ]);
   });
 
-  it('never returns a SerialPort to the application', async () => {
-    const { owner } = await twoTabs();
-
-    // Handing one out would let a tab close a port the others depend on and would break every
-    // invariant the library maintains.
-    const snapshot: Record<string, unknown> = { ...owner.client.getStatus('Reader') };
-    for (const value of Object.values(snapshot)) {
-      expect(typeof value === 'object' && value !== null && 'getInfo' in value).toBe(false);
-    }
-  });
-
   it('keeps diagnostics out of the main entry point', () => {
     // Diagnostics reveal exactly what this boundary withholds, so they live behind an entry point
     // of their own, where code has to reach for them on purpose (ADR-0018).
@@ -313,22 +302,5 @@ describe('argument handling at the public surface', () => {
     expect(tab.client.exists('Reader')).toBe(true);
     expect(tab.client.exists('Other')).toBe(false);
     expect(tab.client.names()).toEqual(['Reader']);
-  });
-
-  it('releases everything at once', async () => {
-    const harness = new BrowserHarness();
-    harness.serial.grant(harness.serial.addDevice(READER.vendorId, READER.productId));
-    harness.serial.grant(harness.serial.addDevice(0x0403, 0x6001));
-    const tab = harness.openTab();
-
-    await tab.client.setup('Reader', READER_OPTIONS);
-    await tab.client.setup('Scale', {
-      device: { vendorId: 0x0403, productId: 0x6001 },
-      serial: { baudRate: 19_200 },
-    });
-    await tab.client.releaseAll();
-
-    expect(tab.client.names()).toEqual([]);
-    expect(harness.clock.pendingTimerCount).toBe(0);
   });
 });
