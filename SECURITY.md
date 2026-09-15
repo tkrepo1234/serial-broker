@@ -26,9 +26,9 @@ permission; it only asks the browser which ports the user has already granted. R
 in site settings takes effect immediately.
 
 **What is persisted.** `localStorage` holds only configurations: the options passed to `setup()` —
-a name, the device filter (USB vendor and product IDs, or `any`), line settings, reconnect and
-timeout settings, text encoding and the tab limit. No payload data, no credentials, nothing
-derived from device traffic.
+a name, the device filter (USB vendor and product IDs, `any`, `nonUsb`, or auto mode with the device
+the user chose), line settings, reconnect and timeout settings, text encoding, receive settings,
+`remember` and the tab limit. No payload data, no credentials, nothing derived from device traffic.
 
 **What is logged.** Nothing, unless an application supplies a logger. When one is supplied,
 payload bytes never appear at `info` level or above — serial traffic routinely carries card
@@ -215,18 +215,19 @@ it. How tabs talk to each other is a separate matter.
 
 ### What is stored
 
-`localStorage` holds every remembered configuration — one set up with `persist: true`, the default —
+`localStorage` holds every remembered configuration — one set up with `remember: true`, the default —
 under two kinds of key:
 
 - `serial-broker/configurations/v2/index`, a JSON array of the remembered names;
 - `serial-broker/configurations/v2/entry/<name>`, one per configuration, holding the options passed
   to `setup()`: the device filter — for a configuration in auto mode, the device the user chose,
   as `{ auto: true, resolved: … }` — line settings, reconnect and timeout settings, text encoding,
-  `persist` and `maxTabs`.
+  receive settings, `remember` and `maxTabs`.
 
 Earlier releases stored all of them in one JSON object, under `serial-broker/configurations/v1` and,
 before that, `serial-broker/v1/configurations` to `serial-broker/v4/configurations`. Those keys are
-not read; the first restore of this version removes them.
+neither read nor removed (ADR-0033): a few hundred bytes each, holding nothing sensitive, left until
+the site data is cleared.
 
 - **Any same-origin script can read it, change it and delete it**, and it survives until the site
   data is cleared — also across a user logging out of the application. It holds no payload data,

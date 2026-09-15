@@ -191,7 +191,8 @@ once. A heartbeat on a timer would make every long-hidden tab, the normal state 
 other tabs, vanish from the lists and flicker back; a ping is answered promptly however long the
 tab has been hidden. A tab that left three pings in a row unanswered is taken off the list: a tab
 that crashed within about twenty seconds, and a tab the browser froze as well - it comes back with
-the first ping it answers. The library's message bus does the same, for the same reason.
+the first ping it answers. The library's message bus sends no pings: it learns that a tab or its
+worker has gone from a Web Lock the browser frees (ADR-0041).
 
 **A label is not an identity.** The label survives a reload of its tab because it lives in
 `sessionStorage` - which a browser copies into a tab it duplicates, or opens with an opener; the

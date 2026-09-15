@@ -126,7 +126,6 @@ page and sees _Use the device again_ reach `open`.
    SerialBroker.subscribe('Cutter', 'onStatusChange', (event) => render(event.status));
    SerialBroker.subscribe('Cutter', 'onReceive', (event) => show(event.text));
    SerialBroker.subscribe('Cutter', 'onError', (event) => showError(event.error));
-   render(SerialBroker.getStatus('Cutter').status);
    ```
 
 5. **Render every status**, `queued` as a wait. The table in

@@ -102,8 +102,8 @@ is promised about stored data (CONTRIBUTING.md).
 - An index that could not be read, or a removal racing a write, leaves unreferenced entries behind;
   so do keys of earlier formats. They are a few hundred bytes of JSON, never read again, and hold
   nothing sensitive.
-- One more held lock per remembered configuration per tab, the only lock this library takes in
-  shared mode. The options remembered are those of the tab that saved last.
+- One more held lock per remembered configuration per tab. The options remembered are those of the
+  tab that saved last.
 - A configuration that disappears from storage for a reason nothing else notices is logged, not
   reported: it cannot be told from the far commoner benign case.
 

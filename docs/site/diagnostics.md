@@ -81,6 +81,8 @@ message.
 | `transport.worker-other-protocol-version` | warn  | The worker runs another protocol version; the tab uses no worker until it is reloaded.                                                                                                                                   |
 | `transport.dispose-failed`                | warn  | A cleanup step failed while the message bus was closed.                                                                                                                                                                  |
 | `transport.limit-exceeded`                | warn  | A message beyond a limit of the bus was dropped; once per `limit`.                                                                                                                                                       |
+| `transport.context-lock-failed`           | warn  | The lock that shows the worker this tab is there could not be taken; the tab says hello anyway, and the worker cannot tell when it has gone. Once.                                                                       |
+| `transport.worker-watch-failed`           | warn  | The lock of the `SharedWorker` could not be waited on; the tab does not learn that the worker ended. Once.                                                                                                               |
 | `storage.unavailable`                     | warn  | A read or write to `localStorage` failed; configurations may not be remembered.                                                                                                                                          |
 | `storage.invalid-entry`                   | warn  | A remembered configuration was invalid and discarded.                                                                                                                                                                    |
 | `storage.corrupt`                         | warn  | The list of remembered configurations could not be read and was discarded.                                                                                                                                               |
@@ -103,6 +105,7 @@ message.
 | `broker.limit-exceeded`                   | warn  | The broker keeps as many configurations as it may; further ones are not routed. Once.                                                                                                                                    |
 | `worker.other-protocol-version`           | warn  | A tab of another build reached this worker script and was answered; it takes no part.                                                                                                                                    |
 | `worker.message-error`                    | warn  | A message could not be cloned into the worker and was lost; the port stays open.                                                                                                                                         |
+| `worker.lock-failed`                      | error | The worker could not take the lock it holds for its lifetime; it welcomes no tab, and the tabs treat it as a worker that does not answer.                                                                                |
 
 Payload bytes never appear above `debug`, and at `debug` only with `logPayloads: true`.
 
@@ -171,10 +174,11 @@ answered. A tab answers once it has set up at least one configuration. The snaps
   last error code, the effective settings, the number of listeners per event, and pending writes —
   how many are waiting, how many were handed to the tab holding the port, how many had started.
 - **For the tab holding the port:** the connection's internal state, the attempt count, when the
-  next attempt is due, when the port opened, the writes queued at the port, and bytes in and out.
-  The state is `opening` for the whole of an attempt — while the previous connection finishes
-  closing, while the granted ports are listed, and while the port opens. The next attempt is due
-  only while the state is `reconnecting`; during an attempt nothing is scheduled.
+  next attempt is due, when the port opened, the writes queued at the port, bytes in and out, and
+  `stalledWriteSince` — since when a write has been stuck at the device, while one is. An attempt is
+  `listing` while the previous connection finishes closing and the granted ports are listed, and
+  `opening` while the port it found opens. The next attempt is due only while the state is
+  `reconnecting`; during an attempt nothing is scheduled.
 - **The Web Locks** serial-broker holds and waits for, where the browser can list them. The browser
   identifies the tabs in this list differently from serial-broker, so the two cannot be matched up.
 
@@ -284,8 +288,8 @@ that reported `CONFIGURATION_CONFLICT` over a different `maxTabs` has to be rele
 again with the same limit.
 
 **The status stays at `awaiting-permission`.**
-No port the user granted matches the device. Call `requestAccess()` from a click, in the tab that
-holds the port. If a port was chosen and the status does not change, its USB IDs differ from the
+No port the user granted matches the device. Call `requestAccess()` from a click, in any tab that
+uses the configuration. If a port was chosen and the status does not change, its USB IDs differ from the
 configured ones; the rejection is `DEVICE_MISMATCH` with both sets of IDs in its context.
 
 **Writes time out while the status is `open`.**

@@ -115,11 +115,10 @@ function describeConfiguration(
   if (here !== undefined) {
     actions.add('disconnect');
     actions.add('edit');
-    // Only the owner can act on the picker's result, so the button belongs in its tab alone.
-    if (
-      here.configuration.role === 'owner' &&
-      here.configuration.status === 'awaiting-permission'
-    ) {
+    // The permission is the origin's, so any tab taking part may ask for it; the tab holding the
+    // port then opens the port chosen (ADR-0036). A tab queued for a place or one that withdrew
+    // does not take part, and neither is ever `awaiting-permission`.
+    if (here.configuration.status === 'awaiting-permission') {
       actions.add('choose-device');
     }
   } else if (settings !== undefined) {
@@ -160,9 +159,9 @@ export function thisPageState(view: ConfigurationView): PageState {
  * limit (ADR-0025). It stays `failed`, off the bus, until its settings change.
  *
  * A report has no flag for it, so it is recognised by its traces: `failed` with
- * `CONFIGURATION_CONFLICT`, and a tab limit other than the holder's. The limit is what tells it
- * apart: every tab that hears the conflict records its code, and a tab that follows a holder whose
- * reconnecting gave up is `failed` too.
+ * `CONFIGURATION_CONFLICT`, and a tab limit other than the holder's. The limit is what confirms it:
+ * only the tab that withdraws records the conflict's code, but a report is another context's word,
+ * and a tab running the holder's limit has nothing to withdraw over.
  *
  * @param owner - The tab holding the port, if any tab reports it.
  */

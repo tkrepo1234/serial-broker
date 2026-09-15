@@ -81,7 +81,8 @@ export interface SerialBrokerDiagnostics {
    *
    * Every tab with at least one configuration set up answers with its role, status, effective
    * settings, listener counts and pending writes; the tab that owns a port also describes its
-   * connection - state, reconnect attempts, when the next attempt is due, bytes in and out.
+   * connection - state, reconnect attempts, when the next attempt is due, bytes in and out, and
+   * since when a write has been stalled at the device, while one is.
    *
    * @param windowMs - How long to listen for answers, in milliseconds. Nothing announces how
    *   many tabs exist, so the collection cannot know when the last one has answered.

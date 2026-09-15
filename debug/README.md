@@ -33,8 +33,9 @@ or is only remembered from an earlier visit — with its status, its device, how
 and whether this page is connected to it.
 
 Choosing one shows it in detail, with **one button for the next step**: _Connect_ to use a
-configuration from this page, or _Choose device…_ when this page holds the port but has no device
-yet. The **⋯** menu holds the rest: _Edit settings…_, _Disconnect_, and _Disconnect and forget
+configuration from this page, or _Choose device…_ when the configuration has no device yet and this
+page uses it — whichever tab holds the port, but not while this page is queued for a place or has
+withdrawn. The **⋯** menu holds the rest: _Edit settings…_, _Disconnect_, and _Disconnect and forget
 device_, which also revokes the browser's permission. The detail has three sections:
 
 - **Overview** — every tab that uses it, which one holds the port and which are waiting, when the

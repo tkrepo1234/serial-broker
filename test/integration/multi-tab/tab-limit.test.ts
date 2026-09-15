@@ -89,6 +89,22 @@ describe.each(TRANSPORT_MODES)('tabs beyond the tab limit (%s)', (transport) => 
 
     expect(await writing).toMatchObject({ code: SerialBrokerErrorCode.WRITE_TIMEOUT });
   });
+
+  it('refuse requestAccess() with PERMISSION_REQUIRED while they wait', async () => {
+    const { harness } = await harnessWithDevice(transport);
+    const first = harness.openTab();
+    await first.setup('Reader', { ...READER_OPTIONS, maxTabs: 1 });
+    const second = harness.openTab();
+    await second.setup('Reader', { ...READER_OPTIONS, maxTabs: 1 });
+    await harness.settle();
+    expect(second.client.getStatus('Reader').status).toBe('queued');
+
+    // A queued tab does not take part, so it may not ask for the origin's permission (ADR-0036).
+    await expect(second.client.requestAccess('Reader')).rejects.toMatchObject({
+      code: SerialBrokerErrorCode.PERMISSION_REQUIRED,
+      context: { status: 'queued' },
+    });
+  });
 });
 
 describe.each(TRANSPORT_MODES)('a tab running a different tab limit (%s)', (transport) => {
@@ -130,6 +146,20 @@ describe.each(TRANSPORT_MODES)('a tab running a different tab limit (%s)', (tran
       code: SerialBrokerErrorCode.CONFIGURATION_CONFLICT,
     });
     expect(device.writtenText()).toBe('');
+  });
+
+  it('refuses requestAccess() with PERMISSION_REQUIRED once it has withdrawn', async () => {
+    const { harness } = await harnessWithDevice(transport);
+    const holder = harness.openTab();
+    await holder.setup('Reader', { ...READER_OPTIONS, maxTabs: 1 });
+    const other = harness.openTab();
+    await other.setup('Reader', { ...READER_OPTIONS, maxTabs: 2 });
+    await harness.settle();
+    expect(other.client.getStatus('Reader').status).toBe('failed');
+
+    await expect(other.client.requestAccess('Reader')).rejects.toMatchObject({
+      code: SerialBrokerErrorCode.PERMISSION_REQUIRED,
+    });
   });
 });
 

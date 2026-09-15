@@ -13,7 +13,7 @@ short sentences, no marketing language, no "simply"/"just"/"obviously".
 | **TSDoc in source**        | Developers via IDE and generated API docs       | Every exported symbol.                                                                                        |
 | **README.md**              | Someone deciding whether to use this            | Working example within the first screen.                                                                      |
 | **docs/site/internals.md** | Someone modifying the library                   | Explains the mechanism, not the API.                                                                          |
-| **docs/adr/**              | Future maintainers asking "why is it like this" | One decision per record, immutable once accepted.                                                             |
+| **docs/adr/**              | Future maintainers asking "why is it like this" | One current record per decision; a change is folded in with a History line (ADR-0001).                        |
 | **CHANGELOG.md**           | Upgraders                                       | Keep a Changelog format, every user-visible change.                                                           |
 | **docs/site/**             | Application developers                          | Chapters and examples, built by `npm run docs`, which fails on any warning; the example code is type-checked. |
 | **debug/**                 | Someone operating or testing a deployment       | Ships in `dist/debug/`; type-checked and linted.                                                              |

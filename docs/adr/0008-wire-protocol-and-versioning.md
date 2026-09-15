@@ -90,8 +90,8 @@ storage version of their own ([ADR-0033](./0033-one-storage-key-per-configuratio
   protocol change".
 - One more channel per tab, and message shapes that can never change. They are deliberately
   minimal.
-- The report reads "Another tab runs an incompatible version of this library", which is worded
-  for the announcement; for a stale worker the other version is the script.
+- The report reads "Another tab or the shared worker runs an incompatible version of this library",
+  followed by what was heard: one wording for a mixed deployment and for a stale worker script.
 - Any script of the origin can post to the announcement channel. Announcements are decoded
   strictly, and the worst a forged one can cause is one error report per forged version.
 

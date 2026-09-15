@@ -29,7 +29,8 @@ connection funnels into one handler.
 
 **Backoff.** Reconnect uses exponential backoff with full jitter:
 
-    delay(n) = min(maxDelayMs, initialDelayMs * factor^n) * random(jitter, 1)
+    delay(0) = 0
+    delay(n) = min(maxDelayMs, initialDelayMs * factor^(n-1)) * random(jitter, 1)
 
 Defaults: `initialDelayMs: 250`, `factor: 2`, `maxDelayMs: 30000`, `jitter: 0.5`,
 `maxAttempts: Infinity`, and **attempt 0 is not delayed** - a power-cycled device is usually
@@ -53,7 +54,7 @@ and immediately drops does not produce a tight loop.
   `reconnecting`.
 - **Every `open()`, `close()` and listing is bounded** by `openTimeoutMs` (default 10 s). A hung
   step is a failed attempt, and listing the ports is part of an attempt, never mistaken for one
-  already scheduled. Diagnostics report `listing` as `opening`.
+  already scheduled. Diagnostics report `listing` as its own state.
 - **An attempt waits for the previous connection to be closed.** In Chromium `close()` is a round
   trip to the browser process, and `open()` before it returns fails with `InvalidStateError`.
   Stopping also waits for an `open()` still pending and closes the port once it settles, because the
@@ -121,3 +122,5 @@ both transport modes.
 - 2026-09-13: Unplugged devices, device events, waiting for close and listing made precise.
 - 2026-09-14: Only retryable failures lead to another attempt.
 - 2026-09-15: `connection.autoReconnect`; `setup()` retries a failed configuration, from any tab.
+  Backoff formula stated as implemented (the first retry waits `initialDelayMs`); `listing`
+  reported as a state of its own.

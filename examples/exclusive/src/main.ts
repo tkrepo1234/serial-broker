@@ -251,10 +251,6 @@ async function useTheDevice(): Promise<void> {
   SerialBroker.subscribe(CONFIGURATION, 'onReceive', onReceive);
   SerialBroker.subscribe(CONFIGURATION, 'onSend', onSend);
   SerialBroker.subscribe(CONFIGURATION, 'onError', onError);
-  // The status may have moved on between `setup()` resolving and the subscriptions being made.
-  const { status } = SerialBroker.getStatus(CONFIGURATION);
-  log(`set up, ${status}`);
-  renderStatus(status);
 }
 
 /**

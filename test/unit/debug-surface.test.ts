@@ -92,7 +92,7 @@ describe('debugging surface: configurations', () => {
     expect(view?.settings).toEqual(sampleReport().configurations[0]?.settings);
   });
 
-  it('offers the device picker only to the tab that holds the port and has no device yet', () => {
+  it('offers the device picker to every tab using a configuration that has no device yet', () => {
     const owning = buildConfigurationViews({
       thisTab: tab('c-1', { status: 'awaiting-permission' }),
       snapshot: undefined,
@@ -109,7 +109,29 @@ describe('debugging surface: configurations', () => {
     });
 
     expect([...(owning[0]?.actions ?? [])].sort()).toEqual(['choose-device', 'disconnect', 'edit']);
-    expect([...(waiting[0]?.actions ?? [])].sort()).toEqual(['disconnect', 'edit']);
+    // The permission is the origin's: a tab that does not hold the port may ask as well (ADR-0036).
+    expect([...(waiting[0]?.actions ?? [])].sort()).toEqual([
+      'choose-device',
+      'disconnect',
+      'edit',
+    ]);
+  });
+
+  it('offers a tab that withdrew over its tab limit no device picker', () => {
+    const settings = sampleReport().configurations[0]!.settings;
+    const [view] = buildConfigurationViews({
+      thisTab: tab('c-1', {
+        role: 'participant',
+        status: 'failed',
+        lastErrorCode: SerialBrokerErrorCode.CONFIGURATION_CONFLICT,
+        connection: undefined,
+        settings: { ...settings, maxTabs: 2 },
+      }),
+      snapshot: snapshotOf(tab('c-2', { status: 'awaiting-permission' })),
+      remembered: [],
+    });
+
+    expect([...(view?.actions ?? [])].sort()).toEqual(['disconnect', 'edit']);
   });
 
   it('offers a tab queued for a place to disconnect and edit, never the device picker', () => {
@@ -187,7 +209,8 @@ describe('debugging surface: configurations', () => {
       }),
       snapshot: snapshotOf(
         tab('c-2', { status: 'failed' }),
-        // Heard the conflict, and follows the holder into `failed`, but runs the holder's limit.
+        // Carries the conflict's code and follows the holder into `failed`, but runs the holder's
+        // limit: nothing to withdraw over.
         tab('c-3', { ...participant, status: 'failed', lastErrorCode: conflict }),
         tab('c-4', { ...participant, status: 'queued' }),
       ),
