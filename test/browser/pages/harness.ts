@@ -36,6 +36,11 @@ export interface PageHarness {
   setup(name: string, options: SerialBrokerOptions): Promise<void>;
   release(name: string, forgetDevice?: boolean): Promise<void>;
   /**
+   * Brings back the configurations remembered on an earlier visit, as `restore()` does, and
+   * collects their events like {@link PageHarness.setup}. For a page that set none of them up.
+   */
+  restore(): Promise<readonly string[]>;
+  /**
    * Points the page's "Choose device" button at a configuration.
    *
    * The port picker needs transient activation, which `page.evaluate()` does not have and
@@ -212,41 +217,53 @@ export function installHarness(
     return entry;
   }
 
+  /** Collects the configuration's events into what the harness reports. */
+  function watch(name: string): void {
+    const entry = collect(name);
+
+    api.subscribe(name, 'onStatusChange', (event) => {
+      // The current status a new listener is told once is already the first entry below.
+      if (event.previousStatus === event.status) {
+        return;
+      }
+      entry.statuses.push(event.status);
+    });
+    api.subscribe(name, 'onReceive', (event) => {
+      entry.text += event.text ?? '';
+      for (const byte of event.data) {
+        // A run that breaks starts again where it can: the byte that broke it may itself be
+        // the first byte of the payload.
+        if (byte === patternByteAt(entry.patternRun, entry.patternSeed)) {
+          entry.patternRun += 1;
+        } else {
+          entry.patternRun = byte === patternByteAt(0, entry.patternSeed) ? 1 : 0;
+        }
+        entry.patternLongestRun = Math.max(entry.patternLongestRun, entry.patternRun);
+      }
+      entry.byteCount += event.data.byteLength;
+      entry.receiveEvents += 1;
+    });
+    api.subscribe(name, 'onSend', (event) => {
+      entry.sends.push({ origin: event.origin, byteLength: event.data.byteLength });
+    });
+    api.subscribe(name, 'onError', (event) => {
+      errorCodes.push(event.error.code);
+    });
+
+    entry.statuses.push(api.getStatus(name).status);
+  }
+
   const harness: PageHarness = {
     setup: async (name, options) => {
-      const entry = collect(name);
       await api.setup(name, options);
-
-      api.subscribe(name, 'onStatusChange', (event) => {
-        // The current status a new listener is told once is already the first entry below.
-        if (event.previousStatus === event.status) {
-          return;
-        }
-        entry.statuses.push(event.status);
-      });
-      api.subscribe(name, 'onReceive', (event) => {
-        entry.text += event.text ?? '';
-        for (const byte of event.data) {
-          // A run that breaks starts again where it can: the byte that broke it may itself be
-          // the first byte of the payload.
-          if (byte === patternByteAt(entry.patternRun, entry.patternSeed)) {
-            entry.patternRun += 1;
-          } else {
-            entry.patternRun = byte === patternByteAt(0, entry.patternSeed) ? 1 : 0;
-          }
-          entry.patternLongestRun = Math.max(entry.patternLongestRun, entry.patternRun);
-        }
-        entry.byteCount += event.data.byteLength;
-        entry.receiveEvents += 1;
-      });
-      api.subscribe(name, 'onSend', (event) => {
-        entry.sends.push({ origin: event.origin, byteLength: event.data.byteLength });
-      });
-      api.subscribe(name, 'onError', (event) => {
-        errorCodes.push(event.error.code);
-      });
-
-      entry.statuses.push(api.getStatus(name).status);
+      watch(name);
+    },
+    restore: async () => {
+      const names = await api.restore();
+      for (const name of names) {
+        watch(name);
+      }
+      return names;
     },
     release: async (name, forgetDevice) => {
       await api.release(name, { forgetDevice: forgetDevice ?? false });

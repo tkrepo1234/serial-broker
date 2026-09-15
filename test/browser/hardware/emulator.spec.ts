@@ -116,6 +116,21 @@ test.describe('the USB/IP emulator, attached by usbip-win2', () => {
     await tab?.waitForReceivedText(CONFIGURATION, 'HELLO');
   });
 
+  test('reconnects after a reload from what it remembered, with no prompt (step 4)', async ({
+    hardware,
+  }) => {
+    const [tab] = await connectedTabs(hardware, 1, { remember: true });
+
+    await tab?.reload();
+
+    // No setup(): the configuration comes back from what the library remembered, and the port
+    // opens on the permission the browser kept.
+    expect(await tab?.restore()).toEqual([CONFIGURATION]);
+    await tab?.waitForStatus(CONFIGURATION, 'open', 30_000);
+    await tab?.send(CONFIGURATION, 'AFTER-RELOAD');
+    await tab?.waitForReceivedText(CONFIGURATION, 'AFTER-RELOAD');
+  });
+
   test('writes once for two tabs, and both see the one echo (steps 5, 6)', async ({
     hardware,
     emulator,
@@ -149,6 +164,34 @@ test.describe('the USB/IP emulator, attached by usbip-win2', () => {
     }
   });
 
+  test('hands the port on until one tab is left, and a new tab after the last connects unprompted (steps 11, 12)', async ({
+    hardware,
+  }) => {
+    let tabs = await connectedTabs(hardware, 3, { remember: true });
+
+    while (tabs.length > 1) {
+      const holder = await holderOf(tabs, CONFIGURATION);
+      await tabs[holder]?.page.close();
+      tabs = tabs.filter((_, index) => index !== holder);
+
+      await holderOf(tabs, CONFIGURATION);
+      const marker = `LEFT-${String(tabs.length)}`;
+      await tabs[0]?.send(CONFIGURATION, marker);
+      for (const tab of tabs) {
+        await tab.waitForReceivedText(CONFIGURATION, marker, 30_000);
+      }
+    }
+    await tabs[0]?.page.close();
+
+    // Every tab of the origin is gone; the browser kept the permission and the library the
+    // configuration.
+    const fresh = await Tab.open(hardware);
+    expect(await fresh.restore()).toEqual([CONFIGURATION]);
+    await fresh.waitForStatus(CONFIGURATION, 'open', 30_000);
+    await fresh.send(CONFIGURATION, 'NEW-TAB');
+    await fresh.waitForReceivedText(CONFIGURATION, 'NEW-TAB');
+  });
+
   test('brings every tab back when the device is unplugged and plugged in (steps 13-15)', async ({
     hardware,
     emulator,
@@ -168,6 +211,62 @@ test.describe('the USB/IP emulator, attached by usbip-win2', () => {
     for (const tab of tabs) {
       await tab.waitForReceivedText(CONFIGURATION, 'AFTER-REPLUG');
     }
+  });
+
+  test('slows its retries while the device stays away, and is back as soon as it returns (steps 14, 16)', async ({
+    hardware,
+    emulator,
+  }) => {
+    test.setTimeout(180_000);
+    const [tab] = await connectedTabs(hardware, 1);
+    const reconnectDelays = async (): Promise<number[]> =>
+      ((await tab?.logRecords()) ?? [])
+        .filter((record) => record.event === 'supervisor.reconnect')
+        .map((record) => Number(record.fields['delayMs']));
+
+    await emulator.unplug();
+    await tab?.waitForStatus(CONFIGURATION, 'reconnecting');
+
+    // The default backoff doubles from 250 ms up to 30 s and draws each delay from its upper
+    // half, so every delay is at least the one before, until the cap; the first to reach half of
+    // the cap comes about half a minute after the loss.
+    let delays = await reconnectDelays();
+    const deadline = Date.now() + 120_000;
+    while (!delays.some((delay) => delay >= 15_000)) {
+      expect(Date.now(), `retries slowing down, so far ${delays.join(', ')} ms`).toBeLessThan(
+        deadline,
+      );
+      await tab?.page.waitForTimeout(500);
+      delays = await reconnectDelays();
+    }
+    expect(delays).toEqual([...delays].sort((a, b) => a - b));
+    expect(delays.length).toBeGreaterThanOrEqual(5);
+
+    // Plugged in during that wait, the device is used at once: the browser's connect event cuts
+    // the delay short.
+    const waiting = delays.at(-1) ?? 0;
+    const pluggedAt = Date.now();
+    await emulator.plug();
+    await tab?.waitForStatus(CONFIGURATION, 'open', 30_000);
+    expect(Date.now() - pluggedAt).toBeLessThan(waiting);
+    await tab?.send(CONFIGURATION, 'AFTER-BACKOFF');
+    await tab?.waitForReceivedText(CONFIGURATION, 'AFTER-BACKOFF');
+  });
+
+  test('asks for the device again after releasing it with forgetDevice (step 19)', async ({
+    hardware,
+  }) => {
+    const [tab] = await connectedTabs(hardware, 1);
+
+    await tab?.release(CONFIGURATION, true);
+    await tab?.setup(CONFIGURATION, echoConfiguration({ device: EMULATED_DEVICE }));
+
+    // The browser no longer has a permission for the port: nothing opens until the user picks it,
+    // in this tab or in a new one.
+    await tab?.waitForStatus(CONFIGURATION, 'awaiting-permission');
+    const other = await Tab.open(hardware);
+    await other.setup(CONFIGURATION, echoConfiguration({ device: EMULATED_DEVICE }));
+    await other.waitForStatus(CONFIGURATION, 'awaiting-permission');
   });
 
   test('resolves a write that fits the port buffer, though the hung device took none of it (step 17)', async ({

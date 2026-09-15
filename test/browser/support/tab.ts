@@ -120,6 +120,17 @@ export class Tab {
     );
   }
 
+  /** Restores the remembered configurations; see `PageHarness.restore`. */
+  async restore(): Promise<readonly string[]> {
+    return await this.page.evaluate(() => (window as unknown as HarnessWindow).harness.restore());
+  }
+
+  /** Reloads the page and waits for its harness; what the page collected before is gone. */
+  async reload(): Promise<void> {
+    await this.page.reload();
+    await this.page.waitForFunction(() => 'harness' in window);
+  }
+
   async send(name: string, text: string): Promise<void> {
     await this.page.evaluate(
       ([configName, payload]) =>
