@@ -2,7 +2,7 @@
   "cleanUrls": false,
   "rewrites": [
     { "source": "/", "destination": "/index.html" },
-    { "source": "/api/", "destination": "/api/index.html" },
-    { "source": "/examples/", "destination": "/examples/index.html" }
+    { "source": "api", "destination": "/api/index.html" },
+    { "source": "examples", "destination": "/examples/index.html" }
   ]
 }
