@@ -1,6 +1,6 @@
 import { assertNever } from '../core/assert.js';
 import type { TimerHandle } from '../core/clock.js';
-import { createSignal, withDeadline, type Signal } from '../core/deadline.js';
+import { withDeadline } from '../core/deadline.js';
 import {
   effectiveDevice,
   type NormalizedConfiguration,
@@ -10,7 +10,7 @@ import {
 import { describeSettings, type ConfigurationDiagnostics } from '../core/diagnostics.js';
 import { EventEmitter } from '../core/emitter.js';
 import { SerialBrokerErrorCode } from '../core/error-codes.js';
-import { describeUnknown, deserializeError, SerialBrokerError } from '../core/errors.js';
+import { deserializeError, SerialBrokerError } from '../core/errors.js';
 import type { ScopedLogger } from '../core/logger.js';
 import { RateLimiter } from '../core/rate-limit.js';
 import {
@@ -20,7 +20,7 @@ import {
   type SerialBrokerStatusSnapshot,
 } from '../core/types.js';
 import type { SerialPortLike, SerialBrokerEnvironment } from '../environment/environment.js';
-import { ELECTION_RETRY_DELAY_MS, OwnershipElection } from '../owner/election.js';
+import { OwnershipElection } from '../owner/election.js';
 import {
   describeDevice,
   matchesDevice,
@@ -87,10 +87,6 @@ export class ConfigurationSession {
   readonly #terms: OwnerTerms;
   /** This context's term while it holds the port. */
   #term: TermId | undefined;
-  /** Holds this context's term lock: resolving it lets the term's lock go (ADR-0030). */
-  #termHold: Signal | undefined;
-  /** Set while a term lock the browser refused is being taken again. */
-  #termRetry: TimerHandle | undefined;
   /** The term this context last held the port in, to answer with once it no longer does. */
   #lastTerm: TermId | undefined;
   /**
@@ -166,8 +162,21 @@ export class ConfigurationSession {
       environment.locks,
       configuration.name,
       {
-        onAcquired: () => {
-          this.#becomeOwner();
+        newTerm: () => {
+          const term = environment.newId('t') as TermId;
+          const lockName = termLockName(
+            configuration.name,
+            term,
+            transport.clientId,
+            configuration.maxTabs,
+          );
+          return { term, lockName };
+        },
+        onAcquired: (term) => {
+          // Released while the locks were being granted: the election lets them go right after.
+          if (!this.#isReleased) {
+            this.#startTerm(term);
+          }
         },
         onLost: () => {
           void this.#stopBeingOwner();
@@ -328,7 +337,7 @@ export class ConfigurationSession {
     // successor call `open()` while this context still holds it - which fails with
     // InvalidStateError and drops the successor straight into a reconnect loop.
     await this.#stopBeingOwner();
-    this.#election.stop();
+    await this.#election.stop();
     this.#terms.dispose();
     this.#stopTimers();
 
@@ -710,71 +719,11 @@ export class ConfigurationSession {
   // --- Ownership ----------------------------------------------------------------------------
 
   /**
-   * Takes the lock for a new term of holding the port, and begins the term once it is held.
+   * Begins a term of holding the port: the election holds its lock, so the term can be spoken for.
    *
    * Nothing is said in a term before its lock is held: every other tab checks that lock before it
-   * believes a word of what this tab says about the term, so a claim that outran the lock would be
-   * refused (ADR-0030). The wait is one round trip to the browser for a lock nobody else can want -
-   * its name contains an identifier this tab has just made up.
+   * believes a word of what this tab says about the term (ADR-0030).
    */
-  #becomeOwner(): void {
-    if (this.#isReleased) {
-      return;
-    }
-
-    const term = this.environment.newId('t') as TermId;
-    const hold = createSignal();
-    this.#termHold = hold;
-
-    void this.environment.locks
-      .request(
-        termLockName(
-          this.#configuration.name,
-          term,
-          this.transport.clientId,
-          this.#configuration.maxTabs,
-        ),
-        { mode: 'exclusive' },
-        async () => {
-          if (this.#termHold !== hold || this.#isReleased) {
-            // Released, or no longer the owner, while the lock was being granted. Returning lets
-            // it go at once.
-            return;
-          }
-          this.#startTerm(term);
-          // Holding the lock means keeping this promise pending, as holding ownership does.
-          await hold.promise;
-        },
-      )
-      .catch((error: unknown) => {
-        if (this.#termHold === hold) {
-          this.#termHold = undefined;
-          this.#retryTerm(error);
-        }
-      });
-  }
-
-  /**
-   * Requests the term lock again after the browser refused it.
-   *
-   * This context holds the ownership lock and would otherwise sit on it without opening the port,
-   * which is the one state in which nobody can use the device.
-   */
-  #retryTerm(error: unknown): void {
-    this.logger.warn('could not take the lock for a term of holding the port; trying again', {
-      configName: this.#configuration.name,
-      event: 'session.term-lock-failed',
-      error: describeUnknown(error),
-    });
-    this.#termRetry = this.environment.clock.setTimer(() => {
-      this.#termRetry = undefined;
-      if (!this.#isReleased && this.#election.isOwner) {
-        this.#becomeOwner();
-      }
-    }, ELECTION_RETRY_DELAY_MS);
-  }
-
-  /** Begins a term of holding the port: its lock is held, so the term can be spoken for. */
   #startTerm(term: TermId): void {
     this.#term = term;
     this.#lastTerm = term;
@@ -848,10 +797,8 @@ export class ConfigurationSession {
   async #stopBeingOwner(): Promise<void> {
     const supervisor = this.#supervisor;
     const term = this.#term;
-    const hold = this.#termHold;
     this.#supervisor = undefined;
     this.#term = undefined;
-    this.#termHold = undefined;
     // A later term as owner starts with its own record: a write accepted now has ended, or is
     // turned away as `NOT_CONNECTED`, before this context could write it again.
     this.#acceptedWrites = new AcceptedWrites();
@@ -861,9 +808,6 @@ export class ConfigurationSession {
       // reports the lock lost after `release()` has already stopped being owner, and by then a
       // session set up again under the same name may hold the port - clearing the transport's
       // ownership for the name here would cut that session off from every write.
-      //
-      // A term lock granted while there was nothing to hold it for is let go here.
-      hold?.resolve();
       return;
     }
 
@@ -888,7 +832,8 @@ export class ConfigurationSession {
       configName: this.#configuration.name,
       term,
     });
-    hold?.resolve();
+    // The term's lock and the ownership lock go together, after the term's last word.
+    void this.#election.stop();
     this.#terms.endOwn(term);
   }
 
@@ -1245,7 +1190,7 @@ export class ConfigurationSession {
     this.#writes.failAll(conflict);
     this.#terms.dispose();
     this.#stopTimers();
-    this.#election.stop();
+    void this.#election.stop();
     this.transport.detach(this.#configuration.name);
     this.#slot?.stop();
     this.#setStatus(SerialBrokerStatus.Failed);
@@ -1315,10 +1260,6 @@ export class ConfigurationSession {
     if (this.#delayedStatusAnswer !== undefined) {
       this.environment.clock.clearTimer(this.#delayedStatusAnswer);
       this.#delayedStatusAnswer = undefined;
-    }
-    if (this.#termRetry !== undefined) {
-      this.environment.clock.clearTimer(this.#termRetry);
-      this.#termRetry = undefined;
     }
   }
 

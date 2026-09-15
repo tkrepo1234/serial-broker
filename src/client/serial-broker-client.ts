@@ -4,6 +4,7 @@ import type { ParticipantDiagnostics } from '../core/diagnostics.js';
 import { DisposalStack } from '../core/disposable.js';
 import { SerialBrokerErrorCode } from '../core/error-codes.js';
 import { describeUnknown, SerialBrokerError, withTimestamp } from '../core/errors.js';
+import { HeldLock } from '../core/held-lock.js';
 import type { ScopedLogger } from '../core/logger.js';
 import { RateLimiter } from '../core/rate-limit.js';
 import type {
@@ -43,7 +44,7 @@ import {
 } from '../protocol/messages.js';
 import { PROTOCOL_VERSION } from '../protocol/version.js';
 import { ConfigurationStore } from '../storage/configuration-store.js';
-import { forgetUnlessHeld, PersistenceHold } from '../storage/persistence-hold.js';
+import { forgetUnlessHeld, persistenceLockName } from '../storage/persistence-hold.js';
 
 import { ConfigurationSession } from './configuration-session.js';
 import type { BroadcastChannelLike } from './transport/broadcast-channel-transport.js';
@@ -109,7 +110,7 @@ export class SerialBrokerClient {
    * The holds that tell other tabs this one still runs a remembered configuration, by name
    * (ADR-0027). Only configurations set up with `remember: true` have one.
    */
-  readonly #holds = new Map<string, PersistenceHold>();
+  readonly #holds = new Map<string, HeldLock>();
   readonly #disposal = new DisposalStack();
   readonly #clientId: ClientId;
   readonly #logger: ScopedLogger;
@@ -405,18 +406,28 @@ export class SerialBrokerClient {
       return;
     }
 
-    const hold = new PersistenceHold(
-      this.environment.locks,
-      name,
-      () => {
+    const hold = new HeldLock({
+      locks: this.environment.locks,
+      clock: this.environment.clock,
+      name: persistenceLockName(name),
+      mode: 'shared',
+      hold: async (released) => {
+        // Saved again once held: a tab that forgot the entry while this request was queued behind
+        // its exclusive check has finished forgetting by then.
         if (this.#sessions.get(name) === session) {
           // What the session runs by now, which may carry a device resolved meanwhile.
           this.#store.save(session.definition);
         }
+        await released;
       },
-      this.#logger,
-      this.environment.clock,
-    );
+      onFailed: (error) => {
+        this.#logger.warn('requesting the hold on a remembered configuration failed', {
+          configName: name,
+          event: 'storage.hold-failed',
+          error: describeUnknown(error),
+        });
+      },
+    });
     // Registered before the entry is saved. Storage that fails reports to the listeners of every
     // configuration, and one of them may release this very configuration from there; that release
     // lets go of the hold it finds. A hold registered only afterwards would be found by nobody, and

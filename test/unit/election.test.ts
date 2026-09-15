@@ -1,9 +1,13 @@
 import { describe, expect, it } from 'vitest';
 
+import { LOCK_RETRY_DELAY_MS } from '../../src/core/held-lock.js';
 import { NOOP_LOGGER, ScopedLogger } from '../../src/core/logger.js';
 import type { LockManagerLike } from '../../src/environment/environment.js';
-import { ELECTION_RETRY_DELAY_MS, OwnershipElection } from '../../src/owner/election.js';
+import { OwnershipElection } from '../../src/owner/election.js';
+import type { TermId } from '../../src/protocol/messages.js';
 import { FakeClock, flushMicrotasks } from '../harness/fake-clock.js';
+
+const NEW_TERM = () => ({ term: 't-1' as TermId, lockName: 'term-lock' });
 
 describe('OwnershipElection', () => {
   it('pauses before requesting the lock again after a request failed', async () => {
@@ -20,7 +24,7 @@ describe('OwnershipElection', () => {
     const election = new OwnershipElection(
       locks,
       'Reader',
-      { onAcquired: () => undefined, onLost: () => undefined },
+      { newTerm: NEW_TERM, onAcquired: () => undefined, onLost: () => undefined },
       new ScopedLogger(NOOP_LOGGER, {}),
       clock,
     );
@@ -30,12 +34,12 @@ describe('OwnershipElection', () => {
     // Asking again at once would repeat in an endless chain of microtasks.
     expect(requests).toBe(1);
 
-    await clock.advance(ELECTION_RETRY_DELAY_MS);
+    await clock.advance(LOCK_RETRY_DELAY_MS);
     await flushMicrotasks(20);
     expect(requests).toBe(2);
 
-    election.stop();
-    await clock.advance(ELECTION_RETRY_DELAY_MS * 5);
+    void election.stop();
+    await clock.advance(LOCK_RETRY_DELAY_MS * 5);
     await flushMicrotasks(20);
     expect(requests).toBe(2);
   });
@@ -59,18 +63,18 @@ describe('OwnershipElection', () => {
     const election = new OwnershipElection(
       locks,
       'Reader',
-      { onAcquired: () => undefined, onLost: () => undefined },
+      { newTerm: NEW_TERM, onAcquired: () => undefined, onLost: () => undefined },
       new ScopedLogger(NOOP_LOGGER, {}),
       clock,
     );
 
     election.start();
     await flushMicrotasks(20);
-    await clock.advance(ELECTION_RETRY_DELAY_MS);
+    await clock.advance(LOCK_RETRY_DELAY_MS);
     await flushMicrotasks(20);
 
     // Describing the failure for the log must not be what takes the context out of the election.
     expect(requests).toBe(2);
-    election.stop();
+    void election.stop();
   });
 });

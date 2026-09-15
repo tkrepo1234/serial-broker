@@ -10,6 +10,7 @@ import type {
   SerialPortLike,
 } from '../../src/environment/environment.js';
 import { OwnershipElection } from '../../src/owner/election.js';
+import type { TermId } from '../../src/protocol/messages.js';
 import { ownerLockName } from '../../src/protocol/version.js';
 import { BrowserHarness, VirtualTab } from '../harness/browser-harness.js';
 import { READER, READER_OPTIONS } from '../harness/devices.js';
@@ -555,7 +556,11 @@ describe('leaving the election', () => {
       new OwnershipElection(
         locks.forContext(contextId),
         'Reader',
-        { onAcquired: () => acquired.push(contextId), onLost: () => undefined },
+        {
+          newTerm: () => ({ term: contextId as TermId, lockName: `term/${contextId}` }),
+          onAcquired: () => acquired.push(contextId),
+          onLost: () => undefined,
+        },
         logger,
         clock,
       );
@@ -570,7 +575,7 @@ describe('leaving the election', () => {
 
     // The browser grants the lock to the successor in the same turn in which it stops.
     locks.killContext('tab1');
-    successor.stop();
+    void successor.stop();
     await flushMicrotasks();
 
     expect(locks.holderOf(lockName)).toBeUndefined();
