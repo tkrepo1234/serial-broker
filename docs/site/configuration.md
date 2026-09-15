@@ -404,8 +404,10 @@ served; in production, `'auto'` keeps working without it.
 [Logging](diagnostics.md#logging).
 
 `logPayloads`
-: Adds the bytes of every transfer, as hex, to `debug` records. Off by default, because serial
-traffic can carry card numbers and PINs. Byte counts are logged either way. **Cost:** large records,
+: Adds the first 64 bytes of every transfer, as hex, to `debug` records, next to its full length.
+Off by default, because serial traffic can carry card numbers and PINs. Byte counts are logged
+either way. The setting is read when the library builds its internals, and payload records come from
+the tab holding the port, so every tab has to set it. **Cost:** large records,
 and sensitive data in the log.
 
 ## `release()`

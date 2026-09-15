@@ -205,9 +205,11 @@ default 500 ms window, because nothing announces how many tabs exist. The panel 
 on _Refresh_, and 400 ms after a status change - once per burst - rather than on a timer, so an
 idle page sends nothing.
 
-**Nothing is released on `pagehide`.** The browser lets go of the tab's locks as it unloads, and
-another tab takes the port over; releasing first would only delay that. The panels that hold a
-channel or a bus connection of their own are closed there.
+**Nothing is released on `pagehide`.** The browser closes the tab's port and lets go of its locks
+as it unloads, and another tab takes the port over; the page needs nothing for that.
+`SerialBroker.dispose()` there is optional: it closes the port before the lock goes
+([Leaving the page](../../docs/site/shared-ports.md#leaving-the-page-and-discarded-tabs)). The
+panels that hold a channel or a bus connection of their own are closed there.
 
 **The worker URL is also what the diagnostics panel opens.** `openDiagnostics()` must name the
 same broker script as the application, or it talks to a worker of its own and sees nobody;

@@ -117,7 +117,9 @@ await SerialBroker.setup('Press', {
 A tab beyond the limit shows the status `queued`. It receives nothing, and a write it issues waits
 for its deadline. When a tab releases the configuration, is closed or crashes, the tab that has
 waited longest takes its place and goes on like any other tab — holding the port, if that place is
-free. The places are Web Locks, so the browser frees a crashed tab's place as it frees the port.
+free. The places are Web Locks, so the browser frees a crashed tab's place as it frees the port. A
+tab whose configuration is `failed` keeps its place until it releases the configuration or goes
+away.
 
 Every tab has to pass the same limit. A tab that finds the tab holding the port running a different
 one reports `CONFIGURATION_CONFLICT`, withdraws, and shows `failed` until it is released and set up

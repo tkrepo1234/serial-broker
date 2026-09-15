@@ -44,6 +44,9 @@ message.
 
 ### What is logged
 
+Errors reported through `onError` or a rejected promise are not logged as well: they are the
+application's to log. What is logged is what an application cannot otherwise see.
+
 | Event                                     | Level | When                                                                                                                                                                                                                     |
 | ----------------------------------------- | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `client.setup`                            | info  | A configuration was set up in this tab.                                                                                                                                                                                  |

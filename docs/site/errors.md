@@ -43,8 +43,9 @@ on this.
 : A description for developers. It may change in any release; never parse it.
 
 `remediation`
-: One sentence saying what to do, for every code. Suitable for a support log, and often for the
-user.
+: One sentence saying what to do, for every code, written for the developer or whoever supports
+the application: it names calls and options. Suitable for a support log; an operator's screen needs
+the application's own words.
 
 `isRetryable`
 : `true` when serial-broker is recovering by itself and the application need not act: the status

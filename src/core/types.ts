@@ -286,8 +286,12 @@ export interface SerialBrokerOptions {
 /** Options for {@link SerialBrokerApi.release}. */
 export interface ReleaseOptions {
   /**
-   * Also revoke the browser's permission for the device via `SerialPort.forget()`, so that
-   * the next `setup()` prompts the user again.
+   * Also revoke the browser's permission via `SerialPort.forget()`, so that the next `setup()`
+   * prompts the user again.
+   *
+   * Forgets every granted port that matches the configuration's device - in auto mode, the device
+   * it resolved to - whichever tab calls it. The permission belongs to the port and the origin, so
+   * another configuration using the same port loses it too.
    *
    * @defaultValue false
    */
