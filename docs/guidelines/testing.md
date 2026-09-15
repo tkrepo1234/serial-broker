@@ -51,9 +51,11 @@ Never retried, never `.skip`ped with a TODO.
   the request's filters, `connect`/`disconnect` events, one `SerialPort` object per context, and
   devices whose opens and writes can be made to fail or hang and whose read stream can error or
   end. User activation is not modelled.
-- `navigator.locks` — exclusive mode: FIFO queueing, `ifAvailable`, `signal`, `query()`, and
-  automatic release on context death. Shared mode and `steal` are not modelled, and the library
-  uses neither; a shared request is refused rather than granted as if it were exclusive.
+- `navigator.locks` — exclusive and shared mode: FIFO queueing, `ifAvailable`, `signal`, `query()`,
+  and automatic release on context death. A shared lock is granted to any number of holders while
+  no exclusive one is held, as the library needs it for watching a term of holding the port
+  (`src/client/owner-terms.ts`) and for keeping a remembered configuration while a tab runs it
+  (`src/storage/persistence-hold.ts`). `steal` is not modelled, and the library does not use it.
 - `SharedWorker` / `MessagePort` — the real broker behind a message graph between simulated
   contexts, with the ability to kill a context abruptly, crash the worker, or have its script
   fail to load or run another protocol version.
@@ -114,10 +116,10 @@ $env:SERIAL_BROKER_HARDWARE='arduino'; npm run test:browser -- test/browser/hard
 It needs an Arduino (USB `0x2341`/`0x0078`) on a COM port running a sketch that echoes every byte
 at 9600 baud, and nothing else using that port. The browser is given the permission through a
 throwaway profile written before it starts — no prompt is answered and no machine-wide setting is
-touched. `SERIAL_BROKER_HARDWARE_PORT` picks the port when several boards are attached, and
-`SERIAL_BROKER_HARDWARE_LARGE=1` **in addition to** `SERIAL_BROKER_HARDWARE=arduino` adds the
-64 KiB round trip, which takes about a quarter of an hour on a board that echoes at 80 bytes a
-second: the documented command runs six tests, not seven.
+touched. `SERIAL_BROKER_HARDWARE_PORT` picks the port when several boards are attached. The
+documented command runs seven tests. A 64 KiB round trip is not among them: on a board that echoes
+at 80 bytes a second it took a quarter of an hour, and the emulator below covers it in minutes,
+next to the 5 000-byte round trip that does run on the board.
 
 `SERIAL_BROKER_HARDWARE=emulator` runs `emulator.spec.ts` instead, against the
 [USB/IP emulator](../../emulator/README.md). The spec starts the emulator itself, lets usbip-win2
