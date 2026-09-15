@@ -24,10 +24,13 @@ decisions that look replaceable and are not.
 ```sh
 npm install
 npm test           # a few seconds
-npm run verify     # format, lint, type-check, tests with coverage gates, build: CI's first job
-npm run docs       # the documentation site: CI's second job
-npm run test:browser  # the built package in a real browser: CI's third job
+npm run verify     # format, lint, type-check, tests with coverage gates, build: CI's verify job
+npm run docs       # the documentation site: CI's docs job
+npm run test:browser  # the built package in a real browser: CI's browser job
 ```
+
+CI runs four independent jobs on every push: `verify`, `examples` (every example's type-check and
+smoke test, see [examples/README.md](./examples/README.md)), `browser` and `docs`.
 
 Node 22.13 or newer on the 22 line, or 24 or newer: that is what Vitest and ESLint require. CI
 runs Node 24. The library itself never runs in Node — that is only the toolchain.

@@ -45,7 +45,7 @@ over. Nothing in the code refers to tabs.
 - **Errors with code, message and remediation**, from `onError` and from the calls the page makes.
   A retryable error, one the library is already recovering from, is shown as a note with an amber
   border, not as a problem. The panel clears when the port is open again, and has _Dismiss_.
-- **Traffic in lines.** Received chunks are assembled into lines at the device's line endings; sent
+- **Traffic in lines.** Received text is assembled into lines at the device's line endings; sent
   lines are listed from `onSend`, marked as sent from this tab or from another one. A line the
   device has started but not finished is shown under the list. The list keeps the last 500 lines.
 - **Sending with a chosen line ending**, CR LF by default, enabled only while the port is open.
@@ -119,14 +119,16 @@ npm run test:examples -- examples/vue/smoke.spec.ts
 4. **Call `useSerialBroker(name, options)`** in the component that shows the device. `name` is the
    same in every tab; `options` go to `SerialBroker.setup()` unchanged. Replace
    `device: { any: true }` with the device's USB ids and `baudRate` with its rate. On Windows the ids
-   are in Device Manager under _Hardware Ids_ (`VID_1A86&PID_7523`).
+   are in Device Manager under _Hardware Ids_ (`VID_1A86&PID_7523`). Leaving `device` out instead
+   lets the port the user picks decide.
 5. **Show a connect button only for `awaiting-permission`**, and call `connect()` first thing in
    its click handler, with no `await` before it.
 6. **Show `lastError.code` and `lastError.remediation`**, and branch on `code` where the application
    has to decide - never on `message`. A `send()` that resolves `false` has put its error there.
 7. **Decide what `OWNER_LOST_DURING_WRITE` means for your commands.** When the tab holding the port
    closes in the middle of a write, nobody can tell whether the device got it, and the library does
-   not send it again. Only the application knows whether a command may run twice:
+   not send it again ([Guarantees](../../docs/site/guarantees.md)). Only the application knows
+   whether a command may run twice:
 
    ```ts
    if (!(await send('DISPENSE 1\r\n')) && lastError.value?.code === 'OWNER_LOST_DURING_WRITE') {
@@ -220,15 +222,16 @@ above all for `OWNER_LOST_DURING_WRITE` - reads `lastError.value.code` right aft
 `UNKNOWN` with the original as `cause`, so there is one shape to show.
 
 **Shallow refs for `lastError` and `lines`.** Both are replaced, never changed in place. A deep ref
-would make every field of every line reactive, for each chunk a device sends; a shallow one costs a
-single change per chunk.
+would make every field of every line reactive, for each event a device's data arrives in; a shallow
+one costs a single change per event.
 
-**Lines are assembled in the composable.** serial-broker does no framing: a chunk is an arbitrary
-piece of the byte stream. Nearly every industrial device talks in lines, so the composable splits
-at CR LF, LF or CR, holds a CR at the end of a chunk back for a LF in the next one, and keeps the
-unfinished rest in `partialLine`. A rest longer than 4096 characters becomes a line of its own, so a
-device that never sends a line ending cannot grow memory without end. Without `decodeText`, each
-chunk is listed as hexadecimal.
+**Lines are assembled in the composable.** serial-broker does no framing: an answer usually arrives
+as one `onReceive` event, but event boundaries carry no meaning, and a line can arrive in two.
+Nearly every industrial device talks in lines, so the composable splits at CR LF, LF or CR, holds a
+CR at the end of an event back for a LF in the next one, and keeps the unfinished rest in
+`partialLine`. A rest longer than 4096 characters becomes a line of its own, so a device that never
+sends a line ending cannot grow memory without end. Without `decodeText`, each event is listed as
+hexadecimal.
 
 **Not released when the component unmounts, unless asked.** Releasing on unmount would add a release
 and a set-up, and an interrupted port, for every route change. A closing tab releases its share
@@ -252,9 +255,10 @@ replacement, keeps the device rather than losing it under the new instance.
 `UNKNOWN_CONFIGURATION`. The composable catches that like a failed set-up: the error is shown, the
 status is `failed`, and _Try again_ is there. Nothing rejects unhandled.
 
-**`restart()` releases first when the configuration still exists.** A configuration in `failed` is
-still set up, and `setup()` does nothing for a name that is set up; releasing and setting up again is
-the library's own remediation for `RECONNECT_EXHAUSTED` and `CONFIGURATION_CONFLICT`. The buttons
+**`restart()` releases first when the configuration still exists.** `setup()` with the same options
+starts a `failed` configuration again by itself, but a tab that failed with
+`CONFIGURATION_CONFLICT` stays `failed` until it is released and set up again. Releasing first
+covers both, and one path is simpler than two. The buttons
 that call it are disabled while it runs, so a second click cannot release what the first sets up.
 
 **A setup that fails shows `failed`.** Where Web Serial is missing, `setup()` rejects with
@@ -289,7 +293,8 @@ trace of it). An application of your own drops that block from `main.ts`.
 
 **`vue-tsc` is the type-check, and `npm run build` runs it first.** Plain `tsc` does not read `.vue`
 files, and Vite strips types without checking them. The root ESLint configuration ignores this
-folder, as it does every example except its `smoke.spec.ts`; Prettier still formats it.
+folder, as it does every example, `smoke.spec.ts` included - the root type-checks that file;
+Prettier still formats the folder.
 
 **`<link rel="icon" href="data:,">`.** Without it the browser requests `/favicon.ico`, the dev
 server answers 404, and the console shows an error that is not the application's.

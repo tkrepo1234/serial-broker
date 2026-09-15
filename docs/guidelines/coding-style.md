@@ -60,7 +60,7 @@ Every source file follows this order, top to bottom:
 - Always use ESM `import`/`export`. No `require`, no default exports except in a bundler
   entry point — named exports keep refactors mechanical and tree-shaking predictable.
 - Use `import type { ... }` for type-only imports so the emitted JavaScript is obvious.
-- **Layering is enforced by review** (see [architecture](../architecture.md)). The permitted
+- **Layering is enforced by review** (see [Internals](../site/internals.md#layers)). The permitted
   direction is strictly downward:
 
   ```

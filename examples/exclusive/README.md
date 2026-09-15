@@ -24,7 +24,7 @@ file, [`src/main.ts`](src/main.ts).
 - **A release button, and a way back.** _Release the device_ gives it up in this tab; _Use the
   device again_ sets the configuration up once more, which joins the queue behind whoever took
   over. After `failed` the same button releases the failed configuration first and then sets it
-  up anew - `setup()` alone does nothing for a name that is still set up.
+  up anew - which a `CONFIGURATION_CONFLICT` needs, and which does no harm otherwise.
 - **The connect button only where a click is needed.** _Choose device_ appears in
   `awaiting-permission` and nowhere else, and calls `requestAccess()` synchronously from the click.
 - **Errors with code and remediation.** The `SerialBrokerError` code, its message and the
@@ -80,7 +80,8 @@ npm run test:examples -- examples/exclusive/smoke.spec.ts
 [`smoke.spec.ts`](smoke.spec.ts) starts the page through the root's Playwright configuration, in
 the installed Edge, with the stand-in installed before the page loads. It opens one tab and sees
 it reach `open` without a click, sends a line and sees it echoed; opens a second tab and sees it
-`queued`, releases in the first and sees the second take over and send; closes the first tab
+`queued`, releases in the first and sees the second take over and send, and the first join the
+queue again with _Use the device again_; closes the first tab
 instead of releasing, with the same outcome; and serves a page of the same origin that runs
 "Cutter" with `maxTabs: 2`, sees the example withdraw with `CONFIGURATION_CONFLICT`, closes that
 page and sees _Use the device again_ reach `open`.
@@ -145,9 +146,10 @@ page and sees _Use the device again_ reach `open`.
    tab only: the next tab in the queue takes over, and this tab's status ends at `released`.
    Calling `setup()` again joins the queue.
 
-   A configuration that shows `failed` is still set up, and `setup()` does nothing for a name that
-   is set up with the same options. So a "try again" button releases first when the configuration
-   still exists, and sets up after that:
+   `setup()` with the same options starts a `failed` configuration again, from any tab. The one
+   exception is a tab that failed with `CONFIGURATION_CONFLICT`: it stays `failed` until it is
+   released and set up again. So this page's "try again" button releases first when the
+   configuration still exists, and sets up after that:
 
    ```ts
    if (SerialBroker.exists('Cutter')) {
@@ -167,15 +169,17 @@ page and sees _Use the device again_ reach `open`.
 different limit reports `CONFIGURATION_CONFLICT` and shows `failed` until it is released and set
 up again with the same limit. The remediation sentence says so.
 
-**A `failed` configuration is still set up, and `setup()` does nothing for it.** `setup()` with
-the name and options of an existing configuration is a no-op by design - re-running the connection
-would interrupt a working port - and it is a no-op for a failed one too. The way back is the one
-the library's remediation names for `CONFIGURATION_CONFLICT` and `RECONNECT_EXHAUSTED`: release,
-then set up again; `useTheDevice()` in [`src/main.ts`](src/main.ts) does exactly that. Two
-`failed` cases end by themselves as well: one reached after `connection.maxAttempts` (this page
-keeps the default, `Infinity`, so it never sees one) and one reached by an open failure that is not
-retryable both resume when the device is plugged in again. A withdrawal after a conflict does not:
-the tab has left the bus, and only release and set up bring it back.
+**`setup()` again starts a `failed` configuration over, except after a conflict.** `setup()` with
+the name and options of a working configuration does nothing - re-running the connection would
+interrupt a working port - but for a `failed` one it tries again, from any tab. A withdrawal after
+`CONFIGURATION_CONFLICT` is the exception: the tab has left the bus, and only release and set up
+bring it back. `useTheDevice()` in [`src/main.ts`](src/main.ts) releases first in every case, so
+one button covers both. Two `failed` cases end by themselves as well: one reached after
+`connection.maxAttempts` (this page keeps the default, `Infinity`, so it never sees one) and one
+reached by an open failure that is not retryable both resume when the device is plugged in again -
+with the default `connection.autoReconnect: true`. With `autoReconnect: false` nothing is retried,
+not even on replug, until `setup()` is called again
+([Configuration](../../docs/site/configuration.md#reconnecting)).
 
 **A queued tab receives nothing, and its writes wait.** A `send()` issued while `queued` waits
 for a place up to `connection.writeTimeoutMs` (5 s by default) and then rejects with
@@ -229,7 +233,8 @@ the copy-and-configure route the openui5 example takes.
 
 **`device: { any: true }`.** The example should run with whatever adapter is at hand, and the
 stand-in's loopback device matches it too. An application names its device by USB ids; the
-comment at the option says so.
+comment at the option says so. Leaving `device` out takes the device from the port the user picks
+instead, and shares it with the other tabs.
 
 **`remember: false`.** The page sets the configuration up on every load itself, so remembering it
 would add nothing to what the page shows and would leave an entry in `localStorage` behind. An
@@ -243,7 +248,8 @@ next to it stays useful.
 **_Use the device again_ stays in `failed`, and releases first.** The button could be hidden
 while the configuration is still set up, leaving _Release the device_ as the only way out and a
 second click for the way back. It stays, because the person at the screen wants one thing - the
-device again - and the two library calls behind it are the page's business. It is disabled while
+device again - and the two library calls behind it are the page's business. Releasing first is
+what a `CONFIGURATION_CONFLICT` needs; for any other `failed`, `setup()` alone would do. It is disabled while
 it runs, so that a second click cannot release the configuration the first is setting up.
 
 **A retryable error is information, not a failure.** `isRetryable` means the library is already

@@ -72,11 +72,10 @@ export interface SerialBrokerApi {
    * with an explicit device while it has resolved to nothing.
    *
    * In one tab a name is one configuration, whichever code set it up: a second call joins it, and
-   * one `release()` ends it for every caller. A `failed` configuration is still set up, so this
-   * call does nothing for it; release it first to try again.
-   *
-   * An auto-mode configuration does not look up a device remembered by an earlier visit: call
-   * {@link SerialBrokerApi.restore} first, or it waits for the user again.
+   * one `release()` ends it for every caller. A second call with equivalent options leaves a
+   * working configuration alone, and starts a `failed` one again - in whichever tab it is made, since
+   * a tab that does not hold the port asks the tab that does (ADR-0010). A tab that withdrew over a
+   * different `maxTabs` stays `failed` until it is released.
    *
    * @param name - Identifies this configuration in every other call. Must be non-empty, at
    *   most 128 characters, and free of control characters.
@@ -191,8 +190,8 @@ export interface SerialBrokerApi {
    *
    * | Event | Fires when |
    * | --- | --- |
-   * | `onReceive` | A chunk arrives from the device, in every tab. Chunk boundaries carry no meaning - this library performs no framing (ADR-0002). |
-   * | `onSend` | Bytes reach the device, in every tab. `origin` is `'local'` if this tab issued the write and `'remote'` if another one did. |
+   * | `onReceive` | The tab holding the port delivers what the device sent, collected until the line is quiet (`receive`, ADR-0039), in every tab. Delivery boundaries carry no meaning - this library performs no framing (ADR-0002). |
+   * | `onSend` | The browser took bytes for the port, in every tab. `origin` is `'local'` if this tab issued the write and `'remote'` if another one did. |
    * | `onError` | Anything goes wrong, in every tab that is affected. |
    * | `onStatusChange` | The connection status changes. |
    *
@@ -307,7 +306,7 @@ export interface SerialBrokerApi {
   requestAccess(name: string): Promise<boolean>;
 
   /**
-   * Sets up every configuration persisted by an earlier visit.
+   * Sets up every configuration remembered by an earlier visit (`remember`, on by default).
    *
    * Call this once during initialisation to reconnect without knowing in advance which devices
    * the user has configured. Configurations already set up in this tab are skipped, and an

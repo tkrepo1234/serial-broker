@@ -68,7 +68,8 @@ passed explicitly rather than read from mutable module state.
 ### Idempotency and re-entrancy
 
 Public methods are idempotent where the semantics allow it (`setup` with identical options is
-a no-op, `release` on an unknown name is a no-op) and re-entrancy safe: calling `send()` from
+a no-op for a working configuration and a retry for a `failed` one, `release` on an unknown name
+is a no-op) and re-entrancy safe: calling `send()` from
 inside an `onReceive` handler must not corrupt state. Event dispatch therefore iterates over a
 **copy** of the listener set, and listener exceptions are caught and reported through
 `onError` — one misbehaving application handler must never stop delivery to the others.
@@ -80,8 +81,9 @@ inside an `onReceive` handler must not corrupt state. Event dispatch therefore i
 - Never hand out a view onto an internal buffer. Copy on the way out; the application may
   retain or mutate what it receives.
 - Never assume a `read()` returns a complete logical message. Framing is explicitly **not**
-  this library's job (see [ADR-0002](../adr/0002-scope-transport-only.md)); chunks are
-  delivered as they arrive.
+  this library's job (see [ADR-0002](../adr/0002-scope-transport-only.md)); received bytes are
+  collected until the line is quiet ([ADR-0039](../adr/0039-collect-received-bytes-until-the-line-is-quiet.md)),
+  and the boundaries of a delivery carry no meaning.
 
 ### Forbidden patterns
 

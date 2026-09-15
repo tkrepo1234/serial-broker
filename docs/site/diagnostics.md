@@ -68,7 +68,8 @@ message.
 | `supervisor.teardown-failed`              | debug | Closing a lost connection failed or timed out at `step`; the next open may find it open.                                                                                                                                 |
 | `supervisor.write-stalled`                | warn  | The device did not take a write within `writeTimeoutMs`. The write stays in flight and holds the queue, and the connection stays open (ADR-0038); the tab holding the port reports `stalledWriteSince` until it settles. |
 | `supervisor.write-expired`                | debug | A write waited `writeTimeoutMs` behind others and was not begun; `queuedWrites` remain.                                                                                                                                  |
-| `supervisor.sent`, `.received`            | debug | Traffic, with `byteLength`; with `logPayloads`, also `hex`.                                                                                                                                                              |
+| `supervisor.sent`                         | debug | Bytes the browser took for the port, with `byteLength`; with `logPayloads`, also `hex`.                                                                                                                                  |
+| `supervisor.received`                     | debug | Bytes read from the port, with `byteLength`; with `logPayloads`, also `hex`.                                                                                                                                             |
 | `session.device-resolved`                 | info  | Auto mode took its device from the picker (`source: 'picker'`), the holder (`'holder'`) or the remembered entry (`'remembered'`).                                                                                        |
 | `matcher.none`                            | debug | No granted port matches the configured device, or none is chosen yet (`filter: 'auto'`).                                                                                                                                 |
 | `matcher.ambiguous`                       | warn  | Several granted ports match; the first is used.                                                                                                                                                                          |
@@ -83,7 +84,6 @@ message.
 | `storage.unavailable`                     | warn  | A read or write to `localStorage` failed; configurations may not be remembered.                                                                                                                                          |
 | `storage.invalid-entry`                   | warn  | A remembered configuration was invalid and discarded.                                                                                                                                                                    |
 | `storage.corrupt`                         | warn  | The list of remembered configurations could not be read and was discarded.                                                                                                                                               |
-| `storage.migrated`                        | info  | Remembered configurations were moved from the key an earlier build used.                                                                                                                                                 |
 | `storage.stale-name`                      | info  | A remembered name had no configuration left under it and was forgotten.                                                                                                                                                  |
 | `storage.lookup-failed`                   | debug | `setup()` could not read the remembered configuration of its name; it starts as if none were remembered.                                                                                                                 |
 | `storage.hold-failed`                     | warn  | The lock that keeps a remembered configuration for other tabs could not be requested.                                                                                                                                    |
@@ -276,6 +276,12 @@ transports, or run different versions of serial-broker.
 `maxTabs` tabs use the configuration, and none of them lets go. The debugging surface lists them.
 A tab that is left open in the background holds its place as long as it has the configuration set
 up; closing it, or releasing the configuration there, admits the next tab.
+
+**The status stays at `failed` although the device is back.**
+The configuration runs with `connection.autoReconnect: false`, which retries nothing, or it gave up
+over an attempt the browser refused. Call `setup()` again with the same options, in any tab. A tab
+that reported `CONFIGURATION_CONFLICT` over a different `maxTabs` has to be released and set up
+again with the same limit.
 
 **The status stays at `awaiting-permission`.**
 No port the user granted matches the device. Call `requestAccess()` from a click, in the tab that

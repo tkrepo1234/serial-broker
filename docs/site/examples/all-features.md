@@ -30,8 +30,9 @@ add one, and the application should show it rather than fail.
 :language: ts
 ```
 
-`send()` resolves once the bytes have been handed to the device. Writes from one tab arrive in the
-order they were issued; writes from different tabs have no defined order.
+`send()` resolves once the browser has taken the bytes for the port, not once the device has
+received them. Writes from one tab arrive in the order they were issued; writes from different tabs
+have no defined order. See [Guarantees](../guarantees.md).
 
 ## Reading lines
 

@@ -32,8 +32,13 @@ export const SerialBrokerStatus = {
   /** The connection was lost and is being re-established automatically. */
   Reconnecting: 'reconnecting',
   /**
-   * Reconnection gave up, which is revived automatically if the device is plugged in again; or
-   * this tab withdrew because the tab holding the port runs a different `maxTabs` (ADR-0025).
+   * The connection gave up: after `connection.maxAttempts`, after an attempt the browser refused,
+   * or - with `connection.autoReconnect: false` - after the first lost connection or failed attempt.
+   * It starts again when `setup()` is called again with the same options, in any tab, and, unless
+   * `autoReconnect` is `false`, when the device is plugged in again.
+   *
+   * Also the status of a tab that withdrew because the tab holding the port runs a different
+   * `maxTabs` (ADR-0025); that tab stays here until the configuration is released.
    */
   Failed: 'failed',
   /**
@@ -173,7 +178,8 @@ export interface ConnectionSettings {
   readonly openTimeoutMs?: number;
   /**
    * Deadline for a single `send()`, including time spent waiting for a connection; and, in the tab
-   * holding the port, for each chunk handed to the device.
+   * holding the port, for how long a write may wait behind others before it begins - one that
+   * waited longer is never begun - and for each chunk handed to the device.
    * @defaultValue 5000
    */
   readonly writeTimeoutMs?: number;
@@ -255,7 +261,8 @@ export interface SerialBrokerOptions {
   /** Text encoding and decoding. */
   readonly encoding?: EncodingSettings;
   /**
-   * Persist this configuration so it is restored after a reload.
+   * Remember this configuration in `localStorage`, so that `restore()` sets it up again after a
+   * reload, and `setup()` in auto mode takes the device the user chose from it.
    * @defaultValue true
    */
   readonly remember?: boolean;
@@ -319,16 +326,17 @@ export interface ReceiveEvent {
   /** The configuration name. */
   readonly name: string;
   /**
-   * The bytes exactly as the device produced them.
+   * The bytes exactly as the device produced them, as the tab holding the port collected them
+   * until the line was quiet (`receive`, ADR-0039).
    *
    * This is a copy; the library retains no reference to it, so it is safe to keep or mutate.
-   * Chunk boundaries are those of the underlying stream and carry no meaning - this library
-   * performs no framing (ADR-0002).
+   * Where one delivery ends and the next begins carries no meaning - this library performs no
+   * framing (ADR-0002).
    */
   readonly data: Uint8Array;
-  /** Present only when `encoding.decodeText` is enabled. Decoded across chunk boundaries. */
+  /** Present only when `encoding.decodeText` is enabled. A character split across reads is whole. */
   readonly text: string | undefined;
-  /** Epoch milliseconds at which the owning context read the chunk. */
+  /** Epoch milliseconds at which the tab holding the port delivered the bytes. */
   readonly timestamp: number;
 }
 
@@ -382,7 +390,7 @@ export interface StatusChangeEvent {
 
 /** Maps each event name to its payload type. */
 export interface SerialBrokerEventMap {
-  /** A chunk arrived from the device. Delivered in every tab. */
+  /** The device sent data, collected until the line was quiet. Delivered in every tab. */
   readonly onReceive: ReceiveEvent;
   /** The browser took bytes for the port. Delivered in every tab, including the one that sent them. */
   readonly onSend: SendEvent;

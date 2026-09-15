@@ -2,7 +2,7 @@
 
 One page that connects to a serial device through [serial-broker](../../README.md), prints what
 the device sends, and sends a line. Vite, TypeScript, plain DOM, no framework:
-[`index.html`](index.html) and [`src/main.ts`](src/main.ts), 146 lines including the comments.
+[`index.html`](index.html) and [`src/main.ts`](src/main.ts), 148 lines including the comments.
 This is the integration, with the page's own plumbing left out:
 
 ```ts
@@ -33,8 +33,8 @@ connectButton.addEventListener('click', () => {
   }, showError);
 });
 
-// Nothing is appended: the line ending is the application's decision. Resolves once the bytes
-// were handed to the device, whichever tab holds it.
+// Nothing is appended: the line ending is the application's decision. Resolves once the browser
+// took the bytes for the port, whichever tab holds it - not once the device received them.
 SerialBroker.send('Device', `${line}\r\n`).catch(showError);
 
 // Every error carries a stable code and a remediation sentence; isRetryable means the library is
@@ -61,8 +61,8 @@ holds the port; close it, and the other takes over. Nothing in the script refers
 - **Errors with code, message and remediation**, from `onError` and from the calls the page
   makes. A retryable error - one the library is already recovering from - is shown as a note, not
   as a problem. The box clears when the port is open again.
-- **Received text**, appended as it arrives. A chunk is not a line; the device's line endings make
-  the lines. The last 20 000 characters are kept, because a tab on an operator's screen stays open
+- **Received text**, appended as it arrives. The library delivers it in pieces whose boundaries
+  carry no meaning - a piece is not a line; the device's line endings make the lines. The last 20 000 characters are kept, because a tab on an operator's screen stays open
   for weeks.
 - **Sending**, enabled only while the port is open. A write issued earlier would wait for the port
   and fail with `WRITE_TIMEOUT` after five seconds; saying so up front is clearer.
@@ -120,7 +120,9 @@ npm run test:examples -- examples/minimal/smoke.spec.ts
    `getStatus()` after subscribing.
 4. **Name your device.** Replace `device: { any: true }` with its USB ids, and `baudRate` with the
    device's. On Windows the ids are in Device Manager under _Hardware Ids_ (`VID_1A86&PID_7523`);
-   the library's [debugging surface](../../docs/site/diagnostics.md) reads them off the device.
+   the library's [debugging surface](../../docs/site/diagnostics.md#the-debugging-surface) reads
+   them off the device. Leaving `device` out instead takes the device from the port the user picks,
+   and remembers it ([Configuration](../../docs/site/configuration.md#device)).
 5. **Show a connect button only for `awaiting-permission`**, and call `requestAccess()` first
    thing in its click handler.
 6. **Show `code` and `remediation`** of every `SerialBrokerError`, and branch on `code` where the
@@ -191,7 +193,7 @@ typecheck` is the gate here, and CI runs it. Prettier still formats the folder.
 examples/minimal/
 ├── example.json     port 8151, start command, ready path - read by the root's test runner
 ├── index.html       the page: status, connect button, error box, received text, send form
-├── src/main.ts      the integration, 148 lines with comments
+├── src/main.ts      the integration, with comments
 ├── smoke.spec.ts    Playwright: loads the page against the stand-in, sends a line, sees it echoed,
 │                    unplugs the device and sees the note, plugs it in and sees the port open again
 ├── tsconfig.json    type-check only; vite/client for the ?url import

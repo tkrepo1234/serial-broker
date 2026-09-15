@@ -29,9 +29,10 @@ any window, and every window follows.
 serial-broker picks the window that holds the port and moves the port when that window closes.
 The panel never asks which window it is.
 
-**Traffic from every window appears in every window.** `onReceive` delivers each chunk everywhere,
-and `onSend` reports every command that reached the scale, with `origin` telling this window's
-commands from the others'.
+**Traffic from every window appears in every window.** `onReceive` delivers what the scale sends
+everywhere, and `onSend` reports every command the browser took for the port, with `origin` telling
+this window's commands from the others'. An answer usually arrives in one delivery, but the panel
+still assembles lines, because nothing guarantees it.
 
 **Line settings are the application's to keep consistent.** The window that holds the port opens
 it with its own settings, and serial-broker does not compare settings between windows. The panel

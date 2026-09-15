@@ -15,7 +15,7 @@ export async function sendPayloads(name: string): Promise<void> {
   await SerialBroker.send(name, frame);
 }
 
-/** Logs every received chunk as hex. */
+/** Logs every delivery of received bytes as hex. */
 export function logReceivedBytes(name: string): Unsubscribe {
   return SerialBroker.subscribe(name, 'onReceive', (event) => {
     const hex = [...event.data].map((byte) => byte.toString(16).padStart(2, '0')).join(' ');

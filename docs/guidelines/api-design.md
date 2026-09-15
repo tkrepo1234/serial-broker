@@ -21,7 +21,8 @@ behaviour of the Web platform APIs this library wraps.
    incorrectly, or leak internals through its prototype. The name is the capability.
 
 3. **Idempotent, declarative setup.** `setup()` declares a desired state. Calling it twice
-   with equal options is a no-op, not an error and not a reconnect. Calling it with options that
+   with equal options is a no-op for a working configuration, not an error and not a reconnect;
+   for a `failed` one it is how the application says "try again", in any tab. Calling it with options that
    would open the port differently, or with a different `maxTabs`, rejects with
    `CONFIGURATION_CONFLICT`: nothing is reconfigured silently, because the port may be open in
    another tab with the old settings.

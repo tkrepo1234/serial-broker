@@ -59,8 +59,9 @@ holds the port; close it, and the other takes over. Nothing in the application r
 - **Errors with code, message, time and remediation**, from `onError` and from the hook's own calls.
   A retryable error - one the library is already recovering from - is a note, and clears itself
   when the port is open again. Any other error stays until it is dismissed.
-- **Received lines.** Chunks are assembled into lines at CR, LF or CR LF, also when a CR LF is cut
-  between two chunks. A line the device has not ended yet - a prompt - is shown greyed. The last 500
+- **Received lines.** Received text is assembled into lines at CR, LF or CR LF, also when a CR LF
+  is cut between two `onReceive` events. An answer usually arrives as one event, but event
+  boundaries carry no meaning. A line the device has not ended yet - a prompt - is shown greyed. The last 500
   lines are kept.
 - **Sending**, enabled only while the port is open, with CR LF appended by the application.
 - **Release and use again.** _Release the device_ gives it up in this tab only; the other tabs keep
@@ -113,8 +114,9 @@ warning or error. It runs through the repository root, which starts the applicat
 npm run test:examples -- examples/react/smoke.spec.ts
 ```
 
-The test itself is checked by the root, not by this folder: it is in the root's TypeScript program
-and ESLint run, as [examples/README.md](../README.md) describes.
+The test itself is type-checked by the root, not by this folder: it is in the root's TypeScript
+program, and like the rest of the folder it is not linted, as [examples/README.md](../README.md)
+describes.
 
 ## Taking the hook into your own application
 
@@ -141,14 +143,16 @@ and ESLint run, as [examples/README.md](../README.md) describes.
 
 4. **Declare the options outside the component**, one constant per device. Name the device by its USB
    ids (`device: { vendorId: 0x0403, productId: 0x6001 }`) and give its baud rate; pass
-   `encoding: { decodeText: true }` to get text lines.
+   `encoding: { decodeText: true }` to get text lines. Leaving `device` out lets the port the user
+   picks decide.
 5. **Call `useSerialBroker(name, options)`** in every component that needs the device. No provider is
    needed.
 6. **Offer _Connect_ only for `awaiting-permission`**, and call `connect()` first thing in the click
    handler, with no `await` before it.
 7. **Render `lastError.code` and `lastError.remediation`**, show a retryable error as a note, and
    branch on `code` where the application has to decide - never on `message`. `OWNER_LOST_DURING_WRITE`
-   is the one that needs a decision: the device may or may not have received the write.
+   is the one that needs a decision: the device may or may not have received the write
+   ([Guarantees](../../docs/site/guarantees.md)).
 8. **Leave `?stand-in` and `src/stand-in.ts` behind.** They reach into this repository's test support.
 
 ### What the hook returns
@@ -159,7 +163,7 @@ and ESLint run, as [examples/README.md](../README.md) describes.
 | `lastError`      | The most recent `SerialBrokerError`, or `null`.                                               |
 | `lines`          | `{ id, text, timestamp, complete }[]`, oldest first; `id` is a stable React key.              |
 | `connect()`      | Shows the port picker. Resolves `true` once a device is available.                            |
-| `send(data)`     | Sends text or bytes, nothing appended. Resolves `true` once handed to the device.             |
+| `send(data)`     | Sends text or bytes, nothing appended. Resolves `true` once the browser took the bytes.       |
 | `release()`      | Stops using the device in this tab. Stays released - across remounts too - until `restart()`. |
 | `restart()`      | Sets the configuration up again, with the options of the latest render.                       |
 | `dismissError()` | Clears `lastError`.                                                                           |
@@ -235,9 +239,9 @@ once: called later, the library logs `facade.late-configure`. In `main.tsx` it r
 load; a hot update of a component does not run it again.
 
 **One tab holds the port; no tab can tell which.** Do not write UI that claims "this tab owns the
-device". In a tab that does not hold the port, the library refuses to show the port picker with
-`PERMISSION_REQUIRED`; `connect()` puts that error in `lastError`, and its remediation says what to
-do.
+device". In a tab that knows another tab holds the port, the library refuses to show the port
+picker with `PERMISSION_REQUIRED`, unless the status is `open`; `connect()` puts that error in
+`lastError`, and its remediation says what to do.
 
 **Lines start when someone looks.** When the last component unmounts, the store forgets the lines:
 kept, they would have a gap nobody could see.
@@ -305,9 +309,9 @@ its remediation is what the user needs.
 **Received lines only, not sent ones.** The list is what the device said. `onSend` is left out, so
 an echo in the list is an echo, and the smoke test's line count means something.
 
-**No batching of renders per animation frame.** Every chunk renders once. For scales, scanners and
-controllers that answer commands, that is nothing. For a device that streams hundreds of chunks a
-second, batch the store's notifications per frame - a change in `#update()` alone.
+**No batching of renders per animation frame.** Every `onReceive` event renders once. For scales,
+scanners and controllers that answer commands, that is nothing. For a device that streams many
+events a second, batch the store's notifications per frame - a change in `#update()` alone.
 
 **The worker URL through Vite's `?url` import, in `main.tsx`.** Vite would find the script without
 it, through the library's `new URL(..., import.meta.url)`. Naming it makes the URL visible in one
@@ -336,8 +340,8 @@ latest is 7.
 **React's file naming, not the root's.** `useSerialBroker.ts` and `App.tsx`, as a React team expects;
 the root's guidelines govern `smoke.spec.ts` only.
 
-**The root ESLint configuration ignores this folder - except the smoke test**, as for every example;
-`npm run typecheck` is the gate here. In your own application, add `eslint-plugin-react-hooks`: the
+**The root ESLint configuration ignores this folder, the smoke test included**, as for every
+example; `npm run typecheck` is the gate here. In your own application, add `eslint-plugin-react-hooks`: the
 hook is written to pass its rules.
 
 **`"type": "module"` in `package.json`.** Playwright reads `smoke.spec.ts` according to the nearest

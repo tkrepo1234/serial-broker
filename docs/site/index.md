@@ -1,24 +1,16 @@
 # serial-broker
 
 **One serial port, every tab.** serial-broker lets every tab of a web application use the same
-serial device through the [Web Serial API][web-serial]: one tab holds the port, every tab reads
-from it and writes to it, another tab takes over when that one closes, and the connection comes
-back on its own when the device does.
+serial device through the [Web Serial API][web-serial]: one tab holds the port, every tab reads from
+it and writes to it, another tab takes over when that one goes away, and the connection comes back
+when the device does.
 
-This is the developer documentation. It explains how to use the library, how it behaves when
-tabs and devices come and go, and every part of its API.
+This is the developer documentation: how to install and use the library, what it promises when tabs
+and devices come and go, every option and error code, and the generated API reference.
 
-```ts
-import { SerialBroker } from 'serial-broker';
-
-await SerialBroker.setup('CardReader', {
-  device: { vendorId: 0x1a86, productId: 0x7523 },
-  serial: { baudRate: 9600 },
-  encoding: { decodeText: true },
-});
-
-SerialBroker.subscribe('CardReader', 'onReceive', (event) => console.log(event.text));
-await SerialBroker.send('CardReader', 'STATUS?\r\n');
+```{include} ../../README.md
+:start-after: <!-- landing-snippet:start -->
+:end-before: <!-- landing-snippet:end -->
 ```
 
 ```{toctree}
@@ -27,24 +19,23 @@ await SerialBroker.send('CardReader', 'STATUS?\r\n');
 
 introduction
 installing
-quickstart
-tasks
+first-connection
 ```
 
 ```{toctree}
 :maxdepth: 2
-:caption: Using serial-broker
+:caption: Behaviour
 
+guarantees
 shared-ports
-examples/index
-configuration
-errors
 ```
 
 ```{toctree}
 :maxdepth: 2
 :caption: Reference
 
+configuration
+errors
 api/index
 ```
 
@@ -53,7 +44,16 @@ api/index
 :caption: Operating and diagnosing
 
 diagnostics
+known-limits
 api/diagnostics
+```
+
+```{toctree}
+:maxdepth: 2
+:caption: Examples
+
+examples/index
+tasks
 ```
 
 ```{toctree}
