@@ -40,7 +40,7 @@ client whose drivers are attestation-signed, and a USB/IP server may answer the 
 
 **A browser suite.** `test/browser/` runs the **built** package in a real Chromium through
 [Playwright](https://playwright.dev/) (pinned to an exact version), started with
-`npm run test:browser`, which builds first. `playwright.config.ts` starts a small static server
+`npm run test:browser`, which builds first. `config/playwright.config.ts` starts a small static server
 (`test/browser/server.mjs`) that serves `dist/` and the test pages, and the tests drive ordinary
 pages that `import` the library. Locally it drives the installed Microsoft Edge
 (`channel: 'msedge'`); CI sets `SERIAL_BROKER_BROWSER_CHANNEL=chromium` and installs that browser in

@@ -69,7 +69,7 @@ provides:
   npm run test:examples -- examples/minimal/smoke.spec.ts
   ```
 
-  The root configuration (`playwright.examples.config.ts`) reads every `example.json`, starts each
+  The root configuration (`config/playwright.examples.config.ts`) reads every `example.json`, starts each
   example with its `start` command on its port, and runs the `smoke.spec.ts` files. CI does the same
   with Chromium, after `npm ci` in every example directory.
 

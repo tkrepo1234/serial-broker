@@ -33,7 +33,7 @@ if (python === undefined) {
 run(process.execPath, [
   join(root, 'node_modules', 'typedoc', 'bin', 'typedoc'),
   '--options',
-  'typedoc.site.json',
+  'config/typedoc.json',
   // TypeDoc's validation - an undocumented export, a {@link} to nothing - only warns on its own,
   // and a warning would pass CI unnoticed while Sphinx below fails on every one of its own.
   '--treatWarningsAsErrors',

@@ -56,6 +56,8 @@ export default defineConfig([
         // CommonJS has no `import.meta.url` to find the worker script with. See
         // scripts/cjs-import-meta.mjs for why the replacement throws instead of guessing.
         options.define = { ...options.define, 'import.meta.url': 'cjsImportMeta.url' };
+        // Resolved from the working directory - the repository root, where the npm script runs -
+        // not from this file's directory (ADR-0042), as `entry` above is.
         options.inject = [...(options.inject ?? []), 'scripts/cjs-import-meta.mjs'];
       }
     },

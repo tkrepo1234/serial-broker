@@ -68,7 +68,7 @@ A `bench/` directory holds both benchmarks and one file of expectations.
   exactly what docs/guidelines/testing.md forbids.
 - **Run the scenarios as a Vitest test file** and write results from it. Works, but a test file
   that is skipped in the normal run and writes files when invoked otherwise is a trap for whoever
-  next touches `vitest.config.ts`. A runner of its own, bundled by esbuild, is ten lines and needs
+  next touches `config/vitest.config.ts`. A runner of its own, bundled by esbuild, is ten lines and needs
   no test-runner state.
 - **Add `tsx` or a loader hook** to run the TypeScript directly. One more development dependency for
   what esbuild, already installed as the build's bundler, does in one call.

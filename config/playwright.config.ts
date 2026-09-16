@@ -22,7 +22,11 @@ const port = Number(process.env['SERIAL_BROKER_BROWSER_TEST_PORT'] ?? '8146');
 const baseURL = `http://localhost:${String(port)}`;
 
 export default defineConfig({
-  testDir: './test/browser',
+  // Playwright resolves these against the directory this file is in, which is config/ (ADR-0042),
+  // so both reach back to the repository root. `outputDir` keeps the traces where CI collects
+  // them and where .gitignore expects them, rather than under config/.
+  testDir: '../test/browser',
+  outputDir: '../test-results',
   testMatch: '**/*.spec.ts',
   // Two at most: other agents and other suites share this machine, and a browser is not cheap.
   workers: 2,
@@ -45,8 +49,10 @@ export default defineConfig({
   },
 
   webServer: {
-    // The same Node that runs the tests, whatever is on PATH.
+    // The same Node that runs the tests, whatever is on PATH. `cwd` is relative to this file, so
+    // the server is started from the repository root as it was before this file moved.
     command: `"${process.execPath}" test/browser/server.mjs`,
+    cwd: '..',
     url: `${baseURL}/tab.html`,
     // Never talk to a server someone else left behind: it may serve another build.
     reuseExistingServer: false,

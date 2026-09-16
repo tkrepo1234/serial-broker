@@ -35,7 +35,7 @@
     "src/**/*.ts",
     "test/**/*.ts",
     "debug/**/*.ts",
-    "*.config.ts",
+    "config/*.ts",
     "examples/*/smoke.spec.ts",
     "examples/smoke-support.ts"
   ],

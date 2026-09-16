@@ -1,7 +1,8 @@
 /**
  * Serves the built package and the test pages for the browser suite.
  *
- * Started by `playwright.config.ts` (`webServer`) and by nothing else. It serves three things:
+ * Started by `config/playwright.config.ts` (`webServer`) and by nothing else. It serves three
+ * things:
  *
  * - `/dist/...` - the built package, exactly the files the published one contains. The tests load
  *   the library the way an application does, `new URL('./serial-broker.worker.js', import.meta.url)`
