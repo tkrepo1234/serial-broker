@@ -116,6 +116,11 @@ Remembered configurations moved from **storage version 1 to 2** and are not migr
   `deviceKind` and reports `vendorId`/`productId` only for `'usb'`; `EffectiveSettings.device` is the
   full `DeviceFilter` union; the context of `DEVICE_MISMATCH` gains `expectedDevice`.
 - **Breaking:** a new `onStatusChange` listener receives the current status once.
+- **The toolchain's configuration moved to `config/`.** The repository root went from 22 tracked
+  files to 14: Prettier, tsup, Vitest, Playwright and TypeDoc keep their configuration there, and
+  each npm script names it with a path flag. `package.json`, the tsconfigs, `eslint.config.js` and
+  `.editorconfig` stay in the root, where the tools that search for them look. Running one of these
+  tools by hand now needs its own `--config` flag (ADR-0042).
 - **`WRITE_TIMEOUT` with `started: true` means the issuing tab let the write begin**, and each tab's
   writes are timed by its own `connection.writeTimeoutMs`; the tab holding the port waits at most its
   own `writeTimeoutMs` for its queue and the approval together. Tabs may set it differently.
