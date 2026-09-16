@@ -141,18 +141,44 @@ describe('permission and persistence', () => {
     expect(tab.client.getStatus('Reader').status).toBe(SerialBrokerStatus.AwaitingPermission);
   });
 
-  it('forgets a released configuration so it is not restored later', async () => {
+  it('keeps a released configuration remembered, and forgets it only when asked to', async () => {
     const harness = new BrowserHarness();
     const device = harness.serial.addDevice(READER.vendorId, READER.productId);
     harness.serial.grant(device);
 
     const tab = harness.openTab();
     await tab.setup('Reader', READER_OPTIONS);
+    // Disconnecting is not deleting. With one tab open - a screen on a production line, which is
+    // the ordinary case - the old rule took the configuration away with the release, and the next
+    // visit had nothing to reconnect to.
     await tab.client.release('Reader');
     await tab.close();
 
     const reloaded = harness.openTab();
-    await expect(reloaded.client.restore()).resolves.toEqual([]);
+    await expect(reloaded.client.restore()).resolves.toEqual(['Reader']);
+    await reloaded.close();
+
+    const forgetting = harness.openTab();
+    await forgetting.setup('Reader', READER_OPTIONS);
+    await forgetting.client.release('Reader', { forget: true });
+    await forgetting.close();
+
+    await expect(harness.openTab().client.restore()).resolves.toEqual([]);
+  });
+
+  it('forgets nothing for a configuration that was never remembered, and reports nothing', async () => {
+    const harness = new BrowserHarness();
+    const device = harness.serial.addDevice(READER.vendorId, READER.productId);
+    harness.serial.grant(device);
+
+    const tab = harness.openTab();
+    await tab.setup('Reader', { ...READER_OPTIONS, remember: false });
+    // Nothing is stored under the name, so there is nothing to forget: a no-op, not an error.
+    await expect(tab.client.release('Reader', { forget: true })).resolves.toBeUndefined();
+    await harness.settle();
+
+    expect(tab.errorCodes('Reader')).toEqual([]);
+    await expect(harness.openTab().client.restore()).resolves.toEqual([]);
   });
 
   it('keeps working when storage is unavailable', async () => {

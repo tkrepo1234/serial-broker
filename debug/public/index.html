@@ -338,16 +338,24 @@
         </dd>
         <dt>Disconnect</dt>
         <dd>
-          Stops using the configuration in this page. Other tabs carry on; if this page held the
-          port, another tab takes it over. Once no other page of this origin runs it with
-          <code>remember</code>, your application's included, it is also removed from what this
-          browser remembers. The browser keeps its permission for the device, so connecting again
-          needs no prompt.
+          Stops using the configuration in this page, and nothing else. Other tabs carry on; if this
+          page held the port, another tab takes it over. The configuration stays in the list, with
+          <b>Connect</b> to start it here again, because this browser goes on remembering it and
+          keeps its permission for the device — a disconnect is not a deletion.
         </dd>
-        <dt>Disconnect and forget device</dt>
+        <dt>Disconnect and forget the configuration</dt>
+        <dd>
+          The same, and also removes the configuration this browser remembers under the name, so it
+          is gone after a reload and your application's <code>restore()</code> no longer brings it
+          back. It is one entry for the whole site, so it is removed only once no other page runs
+          the configuration with <code>remember</code>, your application's included. The permission
+          for the device is kept.
+        </dd>
+        <dt>Disconnect, forget the configuration and the device</dt>
         <dd>
           The same, and also revokes this browser's permission for the device, so the next
-          connection asks for the port again.
+          connection asks for the port again. Nothing about the configuration is left in this
+          browser.
         </dd>
       </dl>
     </div>
@@ -416,8 +424,11 @@
               </button>
               <button data-part="menuEdit" type="button" role="menuitem">Edit settings…</button>
               <button data-part="menuDisconnect" type="button" role="menuitem">Disconnect</button>
-              <button data-part="menuForget" type="button" role="menuitem" class="danger">
-                Disconnect and forget device
+              <button data-part="menuForgetConfiguration" type="button" role="menuitem">
+                Disconnect and forget the configuration
+              </button>
+              <button data-part="menuForgetEverything" type="button" role="menuitem" class="danger">
+                Disconnect, forget the configuration and the device
               </button>
               <hr />
               <button type="button" role="menuitem" popovertarget="help-actions">

@@ -150,7 +150,9 @@ holding the port has to be told to look again.
 ```
 
 **Concepts:** a release is for this tab only, and the other tabs keep the device; it removes this
-tab's listeners for the name, so subscribe again after the next `setup()`. `forgetDevice: true` also
+tab's listeners for the name, so subscribe again after the next `setup()`. It forgets nothing: the
+configuration stays remembered and the permission stays granted, so setting it up again needs no
+prompt. `forget: true` also removes the remembered configuration, and `forgetDevice: true` also
 revokes the browser's permission, for every tab.
 
 In one tab, a name is one configuration, whichever code set it up. Release it when the tab no longer
@@ -195,8 +197,8 @@ With Web Serial alone:
 **Concepts:** the browser keeps the permission, the application keeps the settings; a port is found
 again by its USB IDs, and two identical adapters cannot be told apart.
 
-**Several tabs:** `localStorage` is shared by the origin. A tab that releases must not forget an entry
-another tab still runs.
+**Several tabs:** `localStorage` is shared by the origin. A release forgets nothing by itself, and a
+tab asked to forget an entry must not remove one another tab still runs.
 
 ## Use the device from one tab at a time
 

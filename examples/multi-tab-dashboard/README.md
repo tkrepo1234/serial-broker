@@ -127,9 +127,14 @@ question does not arise: `setup()` opens it with no prompt in whichever tab hold
 entry point says it, and no panel of this page claims "this tab owns the device". The diagnostics
 entry point says it - to an operator, to be looked at, never to branch on.
 
-**A release in one tab is a release in one tab.** The others keep the device, and if the releasing
-tab held the port, another takes it over. What is remembered belongs to the origin: `release()`
-forgets the stored configuration only when no other tab still runs it with `remember: true`.
+**A release in one tab is a release in one tab, and forgets nothing.** The others keep the device,
+and if the releasing tab held the port, another takes it over. The stored configuration stays, so
+with _Remember this device_ on, reloading after _Release in this tab_ restores the device rather
+than starting from nothing — a disconnect is not a deletion. _Forget device_ revokes the browser's
+permission and keeps the configuration; unchecking _Remember this device_ is what drops the
+configuration. An application that wants both gone in one call passes
+`release(name, { forget: true, forgetDevice: true })`. What is remembered belongs to the origin, so
+`forget: true` removes it only when no other tab still runs the configuration with `remember: true`.
 
 **Changing `remember` means setting up again.** A repeated `setup()` with only `remember` changed
 does not apply it - the options count as equivalent - so the checkbox releases and sets up again. The status

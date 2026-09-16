@@ -342,10 +342,11 @@ fails with `INVALID_ARGUMENT`, and the application has to encode the bytes itsel
   device, or one that should not outlive the page. An auto-mode configuration with `remember: false`
   asks the user again on every visit.
 - **Keep in mind:** what is remembered is one entry per name for the whole origin, shared by every
-  tab. `release()` forgets it only once no other tab still runs the configuration with
-  `remember: true`, and a tab that is closed, reloaded or crashes forgets nothing. A tab setting the
-  name up with `remember: false` forgets an entry left behind by an earlier setup, under the same
-  condition. The tab that saved last decides the remembered options.
+  tab. A plain `release()` does not forget it — see [`release()`](#release) — and neither does
+  closing, reloading or crashing a tab. `release(name, { forget: true })` does, but only once no
+  other tab still runs the configuration with `remember: true`. A tab setting the name up with
+  `remember: false` forgets an entry left behind by an earlier setup, under the same condition. The
+  tab that saved last decides the remembered options.
 - **Where it is kept:** one `localStorage` key per configuration,
   `serial-broker/configurations/v2/entry/<name>`, listed in `serial-broker/configurations/v2/index`.
   An entry that cannot be read — hand-edited, truncated, written by a version whose options no longer
@@ -418,8 +419,27 @@ and sensitive data in the log.
 
 | Option         | Type    | Default |
 | -------------- | ------- | ------- |
+| `forget`       | boolean | `false` |
 | `forgetDevice` | boolean | `false` |
+
+`release(name)` stops using the configuration in this tab and closes the port if this tab held it.
+**It forgets nothing**: both options default to `false`, so the configuration stays remembered and
+the browser's permission stays granted, and `restore()` or a later `setup()` brings the connection
+back without a prompt. A disconnect is not a deletion; the application decides when something is
+forgotten.
+
+`forget`
+: `false` keeps the configuration remembered under this name. `true` removes it, so `restore()` no
+longer brings it back and a later `setup()` starts from nothing. The entry belongs to the origin, so
+it is removed only once no tab still runs the configuration with `remember: true`; a configuration
+set up with `remember: false` has nothing stored under its name, and `forget` does nothing for it —
+that is not an error.
 
 `forgetDevice`
 : `false` keeps the browser's permission for the device, so the next `setup()` needs no prompt.
 `true` also revokes it, for every tab of the origin, so the user is asked again.
+
+The two are independent, and each names a different store: serial-broker keeps the configuration,
+the browser keeps the permission. `{ forget: true, forgetDevice: true }` removes every trace of the
+configuration in this browser. `releaseAll()` takes the same options and applies them to every
+configuration of the tab.

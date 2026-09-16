@@ -132,7 +132,9 @@ describe.each(TRANSPORT_MODES)('a deployment left running (%s)', (transport) => 
       }
       await harness.settle();
       for (const tab of tabs) {
-        await tab.client.releaseAll();
+        // Asked to forget: a release keeps what is remembered on purpose, so only this says that
+        // an entry left behind after the round is something nobody wanted.
+        await tab.client.releaseAll({ forget: true });
       }
       await harness.settle();
     }

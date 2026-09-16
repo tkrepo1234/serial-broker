@@ -22,6 +22,7 @@ import type { SerialBrokerEnvironment } from '../../src/environment/environment.
 import { PROTOCOL_VERSION } from '../../src/protocol/version.js';
 import { ConfigurationStore } from '../../src/storage/configuration-store.js';
 
+import { ChooseMessage } from './choose-message.js';
 import { formValuesForChosenDevice } from './chosen-port.js';
 import { ConfigurationDetail, type DetailHost } from './detail.js';
 import { byId, element } from './dom.js';
@@ -135,6 +136,15 @@ function hideSetupActions(): void {
   }
 }
 
+/**
+ * The notice under the header, about the last click on _Choose a device…_.
+ *
+ * Every action the page offers takes it down first (see {@link ChooseMessage}), so a dismissed
+ * picker cannot go on claiming that nothing was set up while the operator connects, disconnects or
+ * creates a configuration.
+ */
+const chooseMessage = new ChooseMessage(byId('chooseMessage'));
+
 // --- Configurations ---------------------------------------------------------------------------
 
 const detailTemplate = byId('detailTemplate') as HTMLTemplateElement;
@@ -172,12 +182,13 @@ const host: DetailHost = {
       await requireClient().setup(name, connectWith);
     });
   },
-  disconnect(name, forgetDevice) {
+  disconnect(name, options) {
     act(name, `disconnect from "${name}"`, async () => {
-      await requireClient().release(name, { forgetDevice });
+      await requireClient().release(name, options);
     });
   },
   chooseDevice(name, chooseAgain) {
+    chooseMessage.clear();
     const detail = details.get(name)?.detail;
     let pending: Promise<boolean>;
     try {
@@ -258,11 +269,12 @@ async function chooseDeviceFor(name: string): Promise<void> {
   }
   if (!granted) {
     await page.release(name);
-    showChooseMessage('The picker was dismissed; nothing was set up.', 'notice');
+    chooseMessage.show('The picker was dismissed; nothing was set up.');
   }
 }
 for (const id of ['newButton', 'emptyNewButton']) {
   byId(id).addEventListener('click', () => {
+    chooseMessage.clear();
     dialog.open();
   });
 }
@@ -347,13 +359,13 @@ window.addEventListener('pagehide', (event) => {
  * dialog, because the browser shows it only for a fresh user gesture.
  */
 function chooseADevice(): void {
-  showChooseMessage('');
+  chooseMessage.clear();
   try {
     // Reported before anything is asked: a page that cannot run a configuration must not ask for
     // a device permission it would then have no use for.
     requireClient();
   } catch (error) {
-    showChooseMessage(describeError(error).text, 'error');
+    chooseMessage.show(describeError(error).text, 'error');
     return;
   }
   dialog.chooseDevice(formValuesForChosenDevice(knownNames()));
@@ -366,13 +378,6 @@ function knownNames(): string[] {
     snapshot,
     remembered: remembered(),
   }).map((view) => view.name);
-}
-
-function showChooseMessage(text: string, kind: 'error' | 'notice' = 'notice'): void {
-  const message = byId('chooseMessage');
-  message.textContent = text;
-  message.className = `message ${kind}`;
-  message.hidden = text === '';
 }
 
 // --- Helpers ----------------------------------------------------------------------------------
@@ -511,6 +516,8 @@ function watch(detail: ConfigurationDetail): Unsubscribe | undefined {
 
 /** Runs an action on a configuration, and shows a failure in its detail view. */
 function act(name: string, action: string, work: () => Promise<void>): void {
+  // The notice about the last click on "Choose a device…" describes an action that is over.
+  chooseMessage.clear();
   void work().then(refreshNow, (error: unknown) => {
     details.get(name)?.detail.showError(error);
     logFailure(action, error);

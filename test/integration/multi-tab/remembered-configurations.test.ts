@@ -6,8 +6,12 @@ import { BrowserHarness, TRANSPORT_MODES } from '../../harness/browser-harness.j
 import { READER, READER_OPTIONS } from '../../harness/devices.js';
 
 /**
- * A remembered configuration is one entry for the whole origin, and it is forgotten only when no
- * tab runs it with `remember: true` any more (ADR-0027).
+ * A remembered configuration is one entry for the whole origin.
+ *
+ * Releasing forgets nothing: a disconnect is not a deletion, and the application says when
+ * something is to be forgotten, with `release(name, { forget: true })`. That path is the one the
+ * hold protects - an entry must not be removed while another tab still runs the configuration with
+ * `remember: true` (ADR-0027, ADR-0033).
  */
 
 describe.each(TRANSPORT_MODES)(
@@ -28,28 +32,64 @@ describe.each(TRANSPORT_MODES)(
       return names;
     }
 
-    it('stays remembered when one tab releases it while another still runs it', async () => {
+    it('stays remembered when the only tab running it releases it, and comes back', async () => {
+      const harness = harnessWithDevice();
+      const only = harness.openTab();
+      await only.setup('Reader', READER_OPTIONS);
+
+      // The case the old default got wrong: one tab, and nobody else to keep the entry alive.
+      await only.client.release('Reader');
+      await harness.settle();
+
+      expect(await restoredByANewTab(harness)).toEqual(['Reader']);
+
+      // And the same tab can set it up again, which is what "Connect" after "Disconnect" does.
+      await only.setup('Reader', READER_OPTIONS);
+      expect(only.client.getStatus('Reader').status).toBe(SerialBrokerStatus.Open);
+      expect(await restoredByANewTab(harness)).toEqual(['Reader']);
+    });
+
+    it('stays remembered when a tab asked to forget it while another still runs it', async () => {
       const harness = harnessWithDevice();
       const first = harness.openTab();
       await first.setup('Reader', READER_OPTIONS);
       const second = harness.openTab();
       await second.setup('Reader', READER_OPTIONS);
 
-      await first.client.release('Reader');
+      await first.client.release('Reader', { forget: true });
       await harness.settle();
 
       expect(await restoredByANewTab(harness)).toEqual(['Reader']);
     });
 
-    it('is forgotten once the last tab running it releases it', async () => {
+    it('is forgotten once the last tab running it is asked to forget it', async () => {
       const harness = harnessWithDevice();
       const first = harness.openTab();
       await first.setup('Reader', READER_OPTIONS);
       const second = harness.openTab();
       await second.setup('Reader', READER_OPTIONS);
 
+      await first.client.release('Reader', { forget: true });
+      await second.client.release('Reader', { forget: true });
+      await harness.settle();
+
+      expect(await restoredByANewTab(harness)).toEqual([]);
+    });
+
+    it('is forgotten by a tab whose hold a plain release let go of', async () => {
+      const harness = harnessWithDevice();
+      const first = harness.openTab();
+      await first.setup('Reader', READER_OPTIONS);
+      const second = harness.openTab();
+      await second.setup('Reader', READER_OPTIONS);
+
+      // A release keeps the entry, but the tab has stopped running the configuration and stops
+      // saying so. A hold kept past that would refuse the other tab's `forget` for ever.
       await first.client.release('Reader');
-      await second.client.release('Reader');
+      await harness.settle();
+      expect(harness.locks.holdersOf(persistenceLockName('Reader'))).toEqual([second.id]);
+
+      await second.client.release('Reader', { forget: true });
       await harness.settle();
 
       expect(await restoredByANewTab(harness)).toEqual([]);
@@ -70,7 +110,7 @@ describe.each(TRANSPORT_MODES)(
       await crashed.kill();
       expect(harness.locks.holdersOf(persistenceLockName('Reader'))).toEqual([first.id]);
 
-      await first.client.release('Reader');
+      await first.client.release('Reader', { forget: true });
       await harness.settle();
 
       expect(await restoredByANewTab(harness)).toEqual([]);
@@ -89,7 +129,7 @@ describe.each(TRANSPORT_MODES)(
       expect(await restoredByANewTab(harness)).toEqual(['Reader']);
     });
 
-    it('stays remembered when releaseAll() in one tab releases it', async () => {
+    it('is left alone by releaseAll(), and forgotten by the options it passes on', async () => {
       const harness = harnessWithDevice();
       const first = harness.openTab();
       await first.setup('Reader', READER_OPTIONS);
@@ -99,11 +139,19 @@ describe.each(TRANSPORT_MODES)(
 
       await first.client.releaseAll();
       await harness.settle();
+      expect(await restoredByANewTab(harness)).toEqual(['Reader', 'Scale']);
+
+      // Passed on to every configuration of the tab: "Scale" runs nowhere else and goes, "Reader"
+      // is still run by the other tab and stays.
+      await first.setup('Reader', READER_OPTIONS);
+      await first.setup('Scale', { ...READER_OPTIONS, serial: { baudRate: 19_200 } });
+      await first.client.releaseAll({ forget: true });
+      await harness.settle();
 
       expect(await restoredByANewTab(harness)).toEqual(['Reader']);
     });
 
-    it('stays remembered when a tab running it releases it and forgets the device', async () => {
+    it('stays remembered when a tab running it forgets the device but not the configuration', async () => {
       const harness = harnessWithDevice();
       const first = harness.openTab();
       await first.setup('Reader', READER_OPTIONS);
@@ -113,8 +161,8 @@ describe.each(TRANSPORT_MODES)(
       await first.client.release('Reader', { forgetDevice: true });
       await harness.settle();
 
-      // The permission is gone for every tab of the origin; the configuration the other tab runs is
-      // not, and a later visit waits for permission with it.
+      // The permission is gone for every tab of the origin; the configuration is a different store
+      // and was not asked about, so a later visit waits for permission with it.
       expect(await restoredByANewTab(harness)).toEqual(['Reader']);
     });
 
@@ -127,11 +175,12 @@ describe.each(TRANSPORT_MODES)(
       await harness.settle();
       expect(await restoredByANewTab(harness)).toEqual(['Reader']);
 
-      await transient.client.release('Reader');
+      // It has nothing stored of its own, and the entry belongs to the tab that remembers it.
+      await transient.client.release('Reader', { forget: true });
       await harness.settle();
       expect(await restoredByANewTab(harness)).toEqual(['Reader']);
 
-      await remembering.client.release('Reader');
+      await remembering.client.release('Reader', { forget: true });
       await harness.settle();
       expect(await restoredByANewTab(harness)).toEqual([]);
     });
@@ -144,7 +193,7 @@ describe.each(TRANSPORT_MODES)(
       // In the same turn: the release checks whether anyone runs the configuration while the new
       // tab has saved the entry but does not hold it yet.
       const joining = harness.openTab();
-      const released = releasing.client.release('Reader');
+      const released = releasing.client.release('Reader', { forget: true });
       const setUp = joining.client.setup('Reader', READER_OPTIONS);
       await Promise.all([released, setUp]);
       await harness.settle();

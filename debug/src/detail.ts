@@ -1,3 +1,4 @@
+import type { ReleaseOptions } from '../../src/core/types.js';
 import type {
   ConfigurationDiagnostics,
   EffectiveSettings,
@@ -20,6 +21,7 @@ import {
   tabLabel,
 } from './format.js';
 import {
+  DISCONNECT_ACTIONS,
   isWithdrawn,
   tabRole,
   thisPageState,
@@ -31,8 +33,11 @@ import {
 export interface DetailHost {
   /** Sets the configuration up in this page, with these settings. */
   connect(name: string, settings: EffectiveSettings): void;
-  /** Releases it in this page, and with `forgetDevice` revokes the device permission too. */
-  disconnect(name: string, forgetDevice: boolean): void;
+  /**
+   * Releases it in this page, with the options saying what should also go: the configuration this
+   * browser remembers (`forget`), its permission for the device (`forgetDevice`), both or neither.
+   */
+  disconnect(name: string, options: ReleaseOptions): void;
   /**
    * Must call `requestAccess` synchronously: the browser only shows the picker in a click. With
    * `chooseAgain`, an auto-mode configuration lets the user choose a different device.
@@ -226,18 +231,15 @@ export class ConfigurationDetail {
         host.chooseDevice(name, true);
       }),
     );
-    part('menuDisconnect').addEventListener(
-      'click',
-      fromMenu(() => {
-        host.disconnect(name, false);
-      }),
-    );
-    part('menuForget').addEventListener(
-      'click',
-      fromMenu(() => {
-        host.disconnect(name, true);
-      }),
-    );
+    // One listener per way of stopping, from the one list the markup is checked against.
+    for (const [partName, options] of Object.entries(DISCONNECT_ACTIONS)) {
+      part(partName).addEventListener(
+        'click',
+        fromMenu(() => {
+          host.disconnect(name, options);
+        }),
+      );
+    }
     parts.editSettings.addEventListener('click', () => {
       this.#clearMessage();
       edit();

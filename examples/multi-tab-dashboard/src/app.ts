@@ -13,6 +13,7 @@ import {
   configureLibrary,
   DEVICE_NAME,
   DEVICE_OPTIONS,
+  forgetTheDevice,
   releaseDevice,
   setRemembered,
   setUpDevice,
@@ -212,7 +213,7 @@ releaseButton.addEventListener('click', () => {
 
 forgetButton.addEventListener('click', () => {
   void run('While forgetting the device', async () => {
-    await releaseDevice(true);
+    await forgetTheDevice();
     renderStatus('released');
   });
 });
