@@ -4,9 +4,13 @@ package-lock.json
 docs/site/_generated
 bench/results
 
-# The OpenUI5 example's generated files, ignored by its own .gitignore, which Prettier does not read.
+# The OpenUI5 examples' generated files, ignored by their own .gitignore, which Prettier does not
+# read. The minimal JavaScript example's extracted page script is generated in the same way.
 examples/openui5/webapp/serial-broker
 examples/openui5/.ui5-tooling-modules
+examples/openui5-js/webapp/serial-broker
+examples/openui5-js/.ui5-tooling-modules
+examples/minimal-js/.typecheck
 
 # The extreme suite's records of its last run, written by the runs themselves.
 test/integration/extreme/RESULTS.md

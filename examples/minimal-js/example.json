@@ -1,0 +1,7 @@
+{
+  "name": "minimal-js",
+  "port": 8159,
+  "start": "npm start",
+  "readyPath": "/",
+  "summary": "One HTML file in plain JavaScript: connect, print what arrives, send a line."
+}

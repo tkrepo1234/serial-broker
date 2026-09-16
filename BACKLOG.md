@@ -267,7 +267,7 @@ do simple things, and whether the documentation explains everything clearly and 
 **Status, 2026-09-15:** done. The benchmarks (`npm run bench`, `bench:browser`, the Performance
 chapter, ADR-0037) and the extreme-usage suites (`npm run test:extreme`, the 20-page browser run)
 found one limit, the crash of the tab that started the worker (under "Follow-ups from the hardening
-round"). All nine example applications exist with smoke tests. The usability review is
+round"). All eleven example applications exist with smoke tests. The usability review is
 `docs/site/tasks.md` and `docs/reviews/usability-review-2026-09-14.md`. What it and the examples left open:
 
 - **P1, a defect in auto mode:** a later visit that calls only `setup()` asks for the device again

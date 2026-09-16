@@ -7,10 +7,12 @@ entry points only, never through `src/`. Each one lives in its own directory wit
 | Directory              | Shows                                                                                     |
 | ---------------------- | ----------------------------------------------------------------------------------------- |
 | `minimal/`             | One page: connect, print what arrives, send text.                                         |
+| `minimal-js/`          | The same page in plain JavaScript, as one HTML file: no modules, no build step.           |
 | `multi-tab-dashboard/` | Several tabs on one device: every status, errors, permission, remembering, diagnostics.   |
 | `exclusive/`           | `maxTabs: 1`: one tab at a time, `queued` shown as a wait, the takeover, a release.       |
 | `no-bundler/`          | Static HTML: `serial-broker/min` from an import map, a static server, no build step.      |
 | `openui5/`             | SAP OpenUI5: a reusable integration module (`JSONModel`) and an application using it.     |
+| `openui5-js/`          | The same application in classic SAPUI5 JavaScript: `sap.ui.define`, no transpile step.    |
 | `react/`               | React 19: a reusable `useSerialBroker` hook, shared by several components.                |
 | `vue/`                 | Vue 3 + Vite: a `useSerialBroker` composable returning refs, and a `<script setup>` app.  |
 | `svelte/`              | Svelte 5: `createSerialBroker()`, reactive state through runes, and an app using it.      |
