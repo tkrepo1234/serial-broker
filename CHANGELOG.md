@@ -89,9 +89,13 @@ Remembered configurations moved from **storage version 1 to 2** and are not migr
   picker in the same click, and the page carries a strict `Content-Security-Policy` (ADR-0019).
   _Choose device…_ is offered in every tab using a configuration that waits for permission, not only
   in the tab holding the port.
-- **Nine example applications**, each with a README and a Playwright smoke test against a Web Serial
-  stand-in: `minimal`, `multi-tab-dashboard`, `exclusive`, `no-bundler`, `openui5`, `react`, `vue`,
-  `svelte` and `angular` (`npm run test:examples`, in CI).
+- **Eleven example applications**, each with a README, a fixed port and a Playwright smoke test
+  against a Web Serial stand-in: `minimal`, `multi-tab-dashboard`, `exclusive`, `no-bundler`,
+  `openui5`, `react`, `vue`, `svelte` and `angular` (`npm run test:examples`, in CI).
+- **Two of them are JavaScript**, beside their TypeScript siblings: `examples/minimal-js` is one HTML
+  file - markup, an import map and a single inline module script, no modules and no build step - and
+  `examples/openui5-js` is the OpenUI5 application and its reusable model in classic `sap.ui.define`
+  JavaScript with no transpile step. Each README links to its sibling.
 - **Test suites beyond the in-process one:** the built package in a real browser on every CI run
   (`npm run test:browser`, ADR-0035); opt-in hardware runs against an Arduino and the USB/IP emulator
   (`SERIAL_BROKER_HARDWARE=arduino|emulator`) that name the manual test plan's steps they run - on
