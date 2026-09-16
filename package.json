@@ -24,7 +24,9 @@
   },
   "homepage": "https://github.com/tkrepo1234/serial-broker#readme",
   "type": "module",
-  "sideEffects": false,
+  "sideEffects": [
+    "./dist/*.global.js"
+  ],
   "devEngines": {
     "runtime": {
       "name": "node",
@@ -38,58 +40,60 @@
     "LICENSE",
     "CHANGELOG.md"
   ],
-  "main": "./dist/index.cjs",
-  "module": "./dist/index.js",
-  "types": "./dist/index.d.ts",
+  "main": "./dist/serial-broker.cjs",
+  "module": "./dist/serial-broker.js",
+  "types": "./dist/serial-broker.d.ts",
   "typesVersions": {
     "*": {
       "diagnostics": [
-        "./dist/diagnostics.d.ts"
+        "./dist/serial-broker.diagnostics.d.ts"
       ],
       "min": [
-        "./dist/index.d.ts"
+        "./dist/serial-broker.d.ts"
       ],
       "diagnostics/min": [
-        "./dist/diagnostics.d.ts"
+        "./dist/serial-broker.diagnostics.d.ts"
       ]
     }
   },
   "exports": {
     ".": {
       "import": {
-        "types": "./dist/index.d.ts",
-        "default": "./dist/index.js"
+        "types": "./dist/serial-broker.d.ts",
+        "default": "./dist/serial-broker.js"
       },
       "require": {
-        "types": "./dist/cjs/index.d.ts",
-        "default": "./dist/index.cjs"
+        "types": "./dist/cjs/serial-broker.d.ts",
+        "default": "./dist/serial-broker.cjs"
       }
     },
     "./diagnostics": {
       "import": {
-        "types": "./dist/diagnostics.d.ts",
-        "default": "./dist/diagnostics.js"
+        "types": "./dist/serial-broker.diagnostics.d.ts",
+        "default": "./dist/serial-broker.diagnostics.js"
       },
       "require": {
-        "types": "./dist/cjs/diagnostics.d.ts",
-        "default": "./dist/diagnostics.cjs"
+        "types": "./dist/cjs/serial-broker.diagnostics.d.ts",
+        "default": "./dist/serial-broker.diagnostics.cjs"
       }
     },
     "./min": {
-      "types": "./dist/index.d.ts",
-      "default": "./dist/index.min.js"
+      "types": "./dist/serial-broker.d.ts",
+      "default": "./dist/serial-broker.min.js"
     },
     "./diagnostics/min": {
-      "types": "./dist/diagnostics.d.ts",
-      "default": "./dist/diagnostics.min.js"
+      "types": "./dist/serial-broker.diagnostics.d.ts",
+      "default": "./dist/serial-broker.diagnostics.min.js"
     },
+    "./global": "./dist/serial-broker.global.js",
+    "./diagnostics/global": "./dist/serial-broker.diagnostics.global.js",
     "./debug/*": "./dist/debug/*",
     "./worker": "./dist/serial-broker.worker.js",
     "./serial-broker.worker.js": "./dist/serial-broker.worker.js",
     "./package.json": "./package.json"
   },
   "scripts": {
-    "build": "tsup --config config/tsup.config.ts && tsup --config config/tsup.debug.config.ts && tsc -p tsconfig.build.json && node scripts/cjs-types.mjs && node scripts/check-dist.mjs",
+    "build": "tsup --config config/tsup.config.ts && tsup --config config/tsup.debug.config.ts && tsc -p tsconfig.build.json && node scripts/entry-declarations.mjs && node scripts/cjs-types.mjs && node scripts/check-dist.mjs",
     "typecheck": "tsc --noEmit && tsc -p emulator && tsc -p docs/site/examples/code && tsc -p bench",
     "bench": "npm run build && node bench/run.mjs",
     "bench:browser": "npm run build && playwright test --config bench/browser/playwright.config.ts",

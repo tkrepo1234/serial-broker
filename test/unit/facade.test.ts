@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { SerialBrokerErrorCode } from '../../src/core/error-codes.js';
 import { SerialBrokerStatus } from '../../src/core/types.js';
-import { SerialBroker } from '../../src/serial-broker.js';
+import { SerialBroker } from '../../src/facade.js';
 import { READER, READER_OPTIONS } from '../harness/devices.js';
 import { flushMicrotasks } from '../harness/fake-clock.js';
 import { FakeLockManager } from '../harness/fake-locks.js';

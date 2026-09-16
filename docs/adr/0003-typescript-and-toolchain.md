@@ -14,11 +14,16 @@ model is "one global environment per file" unless that environment is fully inje
 
 - **TypeScript** in maximally strict mode as the implementation language. See
   [typescript.md](../guidelines/typescript.md).
-- **tsup** (esbuild) for bundling, with three entry points: the library (`index`), the diagnostics
-  observer (`diagnostics`, [ADR-0018](./0018-diagnostics-observer.md)) and the worker script
-  (`serial-broker.worker`, an ES module only). `index` and `diagnostics` are built as ES modules and
-  CommonJS, and once more minified. Declarations are emitted by `tsc`, so the published types are
-  the ones the test suite type-checks against.
+- **tsup** (esbuild) for bundling. The library (`src/index.ts`) and the diagnostics observer
+  (`src/diagnostics.ts`, [ADR-0018](./0018-diagnostics-observer.md)) are built as ES modules and
+  CommonJS, once more minified, and once more as classic scripts
+  ([ADR-0043](./0043-a-classic-script-build-and-published-names.md)); the worker script
+  (`src/worker/serial-broker.worker.ts`) is built as a minified ES module only. **Every published
+  file is minified except the readable ES module and CommonJS builds** — the worker included: it
+  is served to every tab of every installation and nothing reads it, and its source map is
+  published beside it. Every published file is named after the package rather than after its entry
+  file (ADR-0043). Declarations are emitted by `tsc`, so the published types are the ones the test
+  suite type-checks against.
 - **Vitest** as the test runner, in the `node` environment. The library never touches the DOM;
   every browser API it uses is injected (see
   [ADR-0014](./0014-dependency-injection-of-the-environment.md)), so a DOM emulator would add
@@ -69,3 +74,6 @@ model is "one global environment per file" unless that environment is fully inje
 - 2026-09-12: Accepted, with two entry points and Playwright as a manual, future layer.
 - 2026-09-15: Brought up to date - three entry points with minified builds, declarations from
   `tsc`, the browser suite in CI.
+- 2026-09-16: The worker script is minified too, with its source map published beside it: 48.9 KB
+  became 23.0 KB, and 13.4 KB became 8.0 KB gzipped, on every tab of every installation. The
+  classic script builds and the published file names are ADR-0043.

@@ -19,13 +19,13 @@ const OUTPUT = path.join(HERE, 'dist');
 
 /** The library files the page loads. The source maps are optional, and worth their bytes. */
 const LIBRARY_FILES = [
-  'index.min.js',
-  'index.min.js.map',
+  'serial-broker.min.js',
+  'serial-broker.min.js.map',
   'serial-broker.worker.js',
   'serial-broker.worker.js.map',
 ];
 
-if (!existsSync(path.join(LIBRARY_DIRECTORY, 'index.min.js'))) {
+if (!existsSync(path.join(LIBRARY_DIRECTORY, 'serial-broker.min.js'))) {
   process.stderr.write(
     'node_modules/serial-broker/dist/ is missing or incomplete. Run `npm run build` in the ' +
       'repository root, then `npm install` here.\n',

@@ -46,7 +46,7 @@ const OTHER_APPLICATION_HTML = `<!doctype html>
   <head><meta charset="UTF-8" /><title>Another application, maxTabs: 2</title></head>
   <body>
     <script type="module">
-      import { SerialBroker } from '${servedByVite('dist/index.js')}';
+      import { SerialBroker } from '${servedByVite('dist/serial-broker.js')}';
 
       SerialBroker.configure({ workerUrl: '${servedByVite('dist/serial-broker.worker.js')}' });
       await SerialBroker.setup('Cutter', {

@@ -68,31 +68,44 @@ jobs:
       - run: npm pack
 
       # The same files a page loads without a bundler, for whoever has no npm on the machine that
-      # serves them: the minified builds, the worker script beside them, the type declarations and
-      # the licence. The package holds them too; this is the copy you can download and unzip.
+      # serves them: the minified and classic builds, the worker script beside them, the type
+      # declarations and the licence. The package holds them too; this is the copy you can
+      # download and unzip.
       - name: Assemble the browser bundle
         env:
           VERSION: ${{ needs.notes.outputs.version }}
         run: |
           mkdir -p browser/serial-broker
-          cp dist/index.min.js dist/index.min.js.map browser/serial-broker/
-          cp dist/diagnostics.min.js dist/diagnostics.min.js.map browser/serial-broker/
+          cp dist/serial-broker.min.js dist/serial-broker.min.js.map browser/serial-broker/
+          cp dist/serial-broker.global.js dist/serial-broker.global.js.map browser/serial-broker/
+          cp dist/serial-broker.diagnostics.min.js dist/serial-broker.diagnostics.min.js.map browser/serial-broker/
+          cp dist/serial-broker.diagnostics.global.js dist/serial-broker.diagnostics.global.js.map browser/serial-broker/
           cp dist/serial-broker.worker.js dist/serial-broker.worker.js.map browser/serial-broker/
-          cp dist/index.d.ts dist/diagnostics.d.ts LICENSE browser/serial-broker/
+          cp dist/serial-broker.d.ts dist/serial-broker.diagnostics.d.ts LICENSE browser/serial-broker/
           cat > browser/README.txt <<'TEXT'
           serial-broker, the files a page loads without a bundler.
 
-          Copy the serial-broker/ folder to your web server, then in your page:
+          Copy the serial-broker/ folder to your web server. Then, in a page that writes
+          modules:
 
             <script type="importmap">
-              { "imports": { "serial-broker/min": "/serial-broker/index.min.js" } }
+              { "imports": { "serial-broker/min": "/serial-broker/serial-broker.min.js" } }
             </script>
             <script type="module">
               import { SerialBroker } from 'serial-broker/min';
               SerialBroker.configure({ workerUrl: '/serial-broker/serial-broker.worker.js' });
             </script>
 
-          Every tab must load the worker script from the same URL. The headers a strict
+          Or, in a page that writes no modules at all - one global, no import map:
+
+            <script src="/serial-broker/serial-broker.global.js"></script>
+            <script>
+              SerialBroker.configure({ workerUrl: '/serial-broker/serial-broker.worker.js' });
+            </script>
+
+          With the classic build the configure() call is REQUIRED and must come before the
+          first setup(): a classic script cannot find the worker script by itself. Either way,
+          every tab must load the worker script from the same URL. The headers a strict
           deployment needs are in the documentation, under "Deploying to a web server".
           TEXT
           cd browser && zip -qr "../serial-broker-$VERSION-browser.zip" .

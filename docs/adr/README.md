@@ -38,6 +38,7 @@ Internals chapter of the developer documentation (`docs/site/internals.md`).
 | [0037](./0037-measure-performance-against-expectations-written-first.md) | Measure performance against expectations written first                              |
 | [0041](./0041-tell-liveness-through-web-locks.md)                        | Tell who is still there through Web Locks, not heartbeats                           |
 | [0042](./0042-keep-the-toolchains-configuration-in-config.md)            | Keep the toolchain's configuration in config/                                       |
+| [0043](./0043-a-classic-script-build-and-published-names.md)             | Ship a classic script build on one global; name published files after the package   |
 
 ## Superseded
 

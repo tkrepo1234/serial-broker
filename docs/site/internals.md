@@ -43,7 +43,8 @@ Two mechanisms, deliberately separate:
 ## Layers
 
 ```text
-facade        src/serial-broker.ts        SerialBroker: a lazily created client behind named calls
+facade        src/facade.ts               SerialBroker: a lazily created client behind named calls
+entry points  src/index.ts, diagnostics.ts, global*.ts   what the package publishes (ADR-0043)
 diagnostics   src/diagnostics.ts          openDiagnostics: an observer, independent of the facade
   │
 client        src/client/                 one tab's view of every configuration

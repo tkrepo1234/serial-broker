@@ -8,14 +8,14 @@
   <body>
     <h1>serial-broker browser test page (minified build)</h1>
     <p>
-      The same page as tab.html, loading <code>dist/index.min.js</code> - the build a page without a
-      bundler uses. It looks for the same worker script, so its tabs coordinate with tabs on the
-      readable build.
+      The same page as tab.html, loading <code>dist/serial-broker.min.js</code> - the build a page
+      without a bundler uses. It looks for the same worker script, so its tabs coordinate with tabs
+      on the readable build.
     </p>
     <button id="request-access" type="button" data-configuration="">Choose device…</button>
 
     <script type="module">
-      import { PROTOCOL_VERSION, SerialBroker } from '/dist/index.min.js';
+      import { PROTOCOL_VERSION, SerialBroker } from '/dist/serial-broker.min.js';
       import { installHarness } from '/harness.js';
 
       installHarness(SerialBroker, PROTOCOL_VERSION, window.webSerialStandIn);

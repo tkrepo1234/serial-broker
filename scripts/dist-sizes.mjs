@@ -17,10 +17,12 @@ import { gzipSync } from 'node:zlib';
  * (ADR-0006), so its size is part of every installation.
  */
 export const DIST_FILES = [
-  'dist/index.js',
-  'dist/index.min.js',
-  'dist/diagnostics.js',
-  'dist/diagnostics.min.js',
+  'dist/serial-broker.js',
+  'dist/serial-broker.min.js',
+  'dist/serial-broker.global.js',
+  'dist/serial-broker.diagnostics.js',
+  'dist/serial-broker.diagnostics.min.js',
+  'dist/serial-broker.diagnostics.global.js',
   'dist/serial-broker.worker.js',
 ];
 

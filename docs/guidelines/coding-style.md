@@ -76,7 +76,10 @@ Every source file follows this order, top to bottom:
   (`import-x/no-cycle`); the direction itself is kept in review.
 
 - Import a module by its file. `src/index.ts` and `src/diagnostics.ts` gather exports for the
-  package's consumers only; nothing inside the library imports through them.
+  package's consumers only; nothing inside the library imports through them. The two exceptions
+  are `src/global.ts` and `src/global-diagnostics.ts`, the classic script builds' entry points:
+  they are consumers, repackaging an entry point's surface onto one global, and taking it from the
+  entry point is what makes the two the same surface by construction (ADR-0043).
 
 ## Language rules
 

@@ -13,7 +13,7 @@
  */
 
 import type { LogLevel, SerialBrokerOptions } from '../../../src/core/types.js';
-import type { SerialBrokerApi } from '../../../src/serial-broker.js';
+import type { SerialBrokerApi } from '../../../src/facade.js';
 import type { WebSerialStandInControl } from '../stand-in/web-serial-stand-in.js';
 
 /** One `onSend` event, reduced to what a test asserts on. */

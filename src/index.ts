@@ -12,7 +12,7 @@
  * @packageDocumentation
  */
 
-export { SerialBroker, type SerialBrokerApi } from './serial-broker.js';
+export { SerialBroker, type SerialBrokerApi } from './facade.js';
 
 export {
   SerialBrokerError,
@@ -70,7 +70,7 @@ export {
  * published declarations import that module's, and with them the injection seam this library
  * reserves the right to change (ADR-0014).
  */
-export { isSupported } from './serial-broker.js';
+export { isSupported } from './facade.js';
 
 /**
  * Version of the inter-context message protocol.

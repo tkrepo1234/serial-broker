@@ -59,8 +59,11 @@ export function echoConfiguration(
 
 /** Which page and which transport a tab loads with. */
 export interface OpenTabOptions {
-  /** `tab.html` (the readable build) or `tab-min.html` (the minified one). */
-  readonly page?: 'tab.html' | 'tab-min.html';
+  /**
+   * `tab.html` (the readable build), `tab-min.html` (the minified one) or `tab-global.html`
+   * (the classic script build, which needs a `workerUrl`).
+   */
+  readonly page?: 'tab.html' | 'tab-min.html' | 'tab-global.html';
   readonly transport?: 'auto' | 'sharedworker' | 'broadcastchannel';
   readonly workerUrl?: string;
 }

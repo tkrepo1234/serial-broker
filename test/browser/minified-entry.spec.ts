@@ -1,5 +1,5 @@
 /**
- * `dist/index.min.js`, loaded by a page without a bundler.
+ * `dist/serial-broker.min.js`, loaded by a page without a bundler.
  *
  * The minified build is a separate published artefact with its own failure mode: a minifier that
  * renames something the worker script agrees on, or a build that points it at a worker of its

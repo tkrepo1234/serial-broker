@@ -17,8 +17,9 @@ Four claims are outside its reach:
 1. **The platform behaves as `test/harness/` says.** A Web Lock really is released when a renderer
    dies, a `SharedWorker` really is one instance per origin, `BroadcastChannel` really does not
    echo to the sender.
-2. **The built package works.** `dist/index.js` finds `dist/serial-broker.worker.js` through
-   `new URL(..., import.meta.url)`; `dist/index.min.js` coordinates with tabs running the readable
+2. **The built package works.** `dist/serial-broker.js` finds `dist/serial-broker.worker.js`
+   through `new URL(..., import.meta.url)`; `dist/serial-broker.min.js` and
+   `dist/serial-broker.global.js` coordinate with tabs running the readable
    build.
 3. **Two tabs of one origin, in one browser, share one port.** The product claim, end to end.
 4. **Real bytes go through a real serial stack.** Everything else is something we wrote.
