@@ -30,10 +30,10 @@
 
 /*
  * Only where a table says which interface a member came from: that column holds a dotted reference
- * such as `ObservedEventBase.timestamp`, one word the browser cannot break, so it claims more room
- * than the description beside it. Letting it break gives the description back nearly a hundred
- * pixels and takes two fifths off the table's height.
+ * such as `ObservedEventBase.timestamp`, two long words that claimed 221 pixels while the
+ * description beside them was down to 132. Capped, the column wraps at the dot - never inside a
+ * word - the description grows to 200 pixels, and the table loses a third of its height.
  */
-.rst-content .inherits-table td:last-child code.literal {
-  overflow-wrap: anywhere;
+.rst-content .inherits-table td:last-child {
+  max-width: 150px;
 }
