@@ -1,0 +1,211 @@
+<mvc:View
+  controllerName="serialbroker.openui5js.controller.Main"
+  displayBlock="true"
+  height="100%"
+  xmlns="sap.m"
+  xmlns:mvc="sap.ui.core.mvc"
+  xmlns:app="http://schemas.sap.com/sapui5/extension/sap.ui.core.CustomData/1"
+>
+  <!--
+    Every control a test or a user looks for has a stable id. The component id is fixed in
+    index.html, so the DOM ids are stable too; README.md lists them.
+  -->
+  <App id="app">
+    <Page id="page" title="{i18n>appTitle}" class="sapUiContentPadding">
+      <content>
+        <MessageStrip
+          id="unsupportedStrip"
+          class="sapUiSmallMarginBottom"
+          type="Error"
+          showIcon="true"
+          visible="{= !${reader>/supported} }"
+          text="{i18n>unsupportedText}"
+        />
+
+        <MessageStrip
+          id="errorStrip"
+          class="sapUiSmallMarginBottom"
+          showIcon="true"
+          showCloseButton="true"
+          close=".onCloseError"
+          visible="{= ${reader>/lastError} !== null }"
+          type="{path: 'reader>/lastError/retryable', formatter: '.formatter.errorStripType'}"
+          text="{
+            parts: [
+              'reader>/lastError/code',
+              'reader>/lastError/message',
+              'reader>/lastError/remediation'
+            ],
+            formatter: '.formatErrorText'
+          }"
+        />
+
+        <Panel
+          id="connectionPanel"
+          headerText="{i18n>connectionPanel}"
+          class="sapUiResponsiveMargin"
+        >
+          <content>
+            <VBox id="connectionBox" renderType="Bare">
+              <ObjectStatus
+                id="statusIndicator"
+                class="sapUiTinyMarginBottom"
+                title="{i18n>statusLabel}"
+                text="{path: 'reader>/status', formatter: '.formatStatusText'}"
+                state="{path: 'reader>/status', formatter: '.formatter.statusState'}"
+                icon="{path: 'reader>/status', formatter: '.formatter.statusIcon'}"
+              />
+              <Text
+                id="deviceText"
+                class="sapUiTinyMarginBottom"
+                text="{
+                  parts: [
+                    'reader>/device/vendorId',
+                    'reader>/device/productId',
+                    'reader>/device/baudRate'
+                  ],
+                  formatter: '.formatDevice'
+                }"
+              />
+              <Toolbar id="connectionToolbar">
+                <Button
+                  id="connectButton"
+                  type="Emphasized"
+                  icon="sap-icon://key"
+                  text="{i18n>connect}"
+                  press=".onConnect"
+                  app:config="reader"
+                />
+                <Button
+                  id="releaseButton"
+                  icon="sap-icon://disconnected"
+                  text="{i18n>release}"
+                  press=".onRelease"
+                  enabled="{reader>/started}"
+                  app:config="reader"
+                />
+                <Button
+                  id="reconnectButton"
+                  icon="sap-icon://restart"
+                  text="{i18n>reconnect}"
+                  press=".onReconnect"
+                  visible="{= ${reader>/status} === 'released' }"
+                  app:config="reader"
+                />
+                <ToolbarSpacer id="connectionToolbarSpacer" />
+                <BusyIndicator id="busyIndicator" size="1rem" visible="{reader>/busy}" />
+              </Toolbar>
+              <Text id="gestureHint" class="sapUiTinyMarginTop" text="{i18n>gestureHint}" />
+            </VBox>
+          </content>
+        </Panel>
+
+        <Panel id="trafficPanel" headerText="{i18n>trafficPanel}" class="sapUiResponsiveMargin">
+          <content>
+            <VBox id="trafficBox" renderType="Bare">
+              <Toolbar id="sendToolbar">
+                <Input
+                  id="sendInput"
+                  width="20rem"
+                  placeholder="{i18n>sendPlaceholder}"
+                  submit=".onSend"
+                  enabled="{reader>/canSend}"
+                />
+                <CheckBox id="appendNewlineCheckBox" selected="true" text="{i18n>appendNewline}" />
+                <Button
+                  id="sendButton"
+                  type="Emphasized"
+                  icon="sap-icon://paper-plane"
+                  text="{i18n>send}"
+                  press=".onSend"
+                  enabled="{reader>/canSend}"
+                />
+                <ToolbarSpacer id="sendToolbarSpacer" />
+                <Text
+                  id="countersText"
+                  text="{
+                    parts: ['reader>/receivedBytes', 'reader>/sentBytes'],
+                    formatter: '.formatCounters'
+                  }"
+                />
+                <Button
+                  id="clearButton"
+                  icon="sap-icon://clear-all"
+                  text="{i18n>clear}"
+                  press=".onClearTraffic"
+                />
+              </Toolbar>
+              <List
+                id="receivedList"
+                items="{reader>/lines}"
+                growing="true"
+                growingThreshold="50"
+                noDataText="{i18n>noTraffic}"
+              >
+                <StandardListItem
+                  id="receivedListItem"
+                  title="{reader>text}"
+                  info="{path: 'reader>timestamp', formatter: '.formatter.time'}"
+                  icon="{path: 'reader>direction', formatter: '.formatter.directionIcon'}"
+                />
+              </List>
+            </VBox>
+          </content>
+        </Panel>
+
+        <Panel id="printerPanel" headerText="{i18n>printerPanel}" class="sapUiResponsiveMargin">
+          <content>
+            <VBox id="printerBox" renderType="Bare">
+              <Text id="printerHint" class="sapUiTinyMarginBottom" text="{i18n>printerHint}" />
+              <ObjectStatus
+                id="printerStatus"
+                class="sapUiTinyMarginBottom"
+                title="{printer>/name}"
+                text="{path: 'printer>/status', formatter: '.formatStatusText'}"
+                state="{path: 'printer>/status', formatter: '.formatter.statusState'}"
+                icon="{path: 'printer>/status', formatter: '.formatter.statusIcon'}"
+              />
+              <Toolbar id="printerToolbar">
+                <Button
+                  id="printerConnectButton"
+                  icon="sap-icon://key"
+                  text="{i18n>connect}"
+                  press=".onConnect"
+                  app:config="printer"
+                />
+                <Button
+                  id="printerReleaseButton"
+                  icon="sap-icon://disconnected"
+                  text="{i18n>release}"
+                  press=".onRelease"
+                  enabled="{printer>/started}"
+                  app:config="printer"
+                />
+              </Toolbar>
+            </VBox>
+          </content>
+        </Panel>
+
+        <Panel id="sharingPanel" headerText="{i18n>sharingPanel}" class="sapUiResponsiveMargin">
+          <content>
+            <VBox id="sharingBox" renderType="Bare">
+              <MessageStrip
+                id="sharingStrip"
+                class="sapUiTinyMarginBottom"
+                type="Information"
+                showIcon="true"
+                text="{i18n>sharingText}"
+              />
+              <Button
+                id="openSecondTabButton"
+                icon="sap-icon://open-command-field"
+                text="{i18n>openSecondTab}"
+                press=".onOpenSecondTab"
+              />
+            </VBox>
+          </content>
+        </Panel>
+      </content>
+    </Page>
+  </App>
+</mvc:View>

@@ -1,0 +1,2 @@
+# The page's inline script, extracted so that tsc can read it (scripts/extract-page-script.mjs).
+.typecheck/

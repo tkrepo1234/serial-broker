@@ -1,0 +1,183 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>serial-broker: minimal, in plain JavaScript</title>
+    <!-- No icon file: without this the browser asks for /favicon.ico and logs a 404. -->
+    <link rel="icon" href="data:," />
+
+    <!--
+      The only "build": the bare specifier the script below imports is mapped to the library file
+      this origin serves. serve.mjs puts node_modules/serial-broker/dist/ under /serial-broker/,
+      and the worker script sits next to the library there.
+    -->
+    <script type="importmap">
+      {
+        "imports": {
+          "serial-broker": "/serial-broker/index.js"
+        }
+      }
+    </script>
+
+    <style>
+      body {
+        margin: 0 auto;
+        max-width: 44rem;
+        padding: 1.5rem 1rem;
+        font:
+          15px/1.5 system-ui,
+          sans-serif;
+        color: #1f2933;
+      }
+      h1 {
+        font-size: 1.25rem;
+      }
+      #status {
+        font-family: ui-monospace, monospace;
+        background: #dfe4ea;
+        border-radius: 1rem;
+        padding: 0.1rem 0.6rem;
+      }
+      #error {
+        color: #b42318;
+      }
+      #received {
+        min-height: 10rem;
+        max-height: 20rem;
+        overflow: auto;
+        padding: 0.6rem;
+        border: 1px solid #cfd6de;
+        background: #f6f8fa;
+        font-family: ui-monospace, monospace;
+        white-space: pre-wrap;
+        word-break: break-all;
+      }
+      form {
+        display: flex;
+        gap: 0.5rem;
+      }
+      input {
+        flex: 1;
+        font: inherit;
+        padding: 0.35rem 0.5rem;
+      }
+      button {
+        font: inherit;
+        padding: 0.35rem 0.9rem;
+      }
+    </style>
+  </head>
+
+  <body>
+    <h1>serial-broker in plain JavaScript</h1>
+
+    <p>
+      Status: <span id="status">idle</span>
+      <!-- Shown only while the library waits for a port: the browser opens its picker on a click. -->
+      <button id="connect" hidden>Connect…</button>
+    </p>
+
+    <p id="error"></p>
+
+    <pre id="received" aria-label="Received"></pre>
+
+    <form id="send-form">
+      <input id="send-input" placeholder="Line to send" autocomplete="off" />
+      <button id="send-button" disabled>Send</button>
+    </form>
+
+    <p>
+      Open this page in a second tab: both show the same status, both receive, both can send. One of
+      them holds the port; close it, and the other takes over.
+    </p>
+
+    <!--
+      The whole integration, in one script. Nothing else on this page belongs to serial-broker,
+      and nothing is imported from a folder of the example's own: what you read here is what runs.
+    -->
+    <script type="module">
+      import { isSerialBrokerError, SerialBroker } from 'serial-broker';
+
+      /** The configuration name. Every tab addresses the device by it; nothing refers to tabs. */
+      const NAME = 'Device';
+
+      /**
+       * The element with this id. Typed as an input so that `value` and `disabled` below need no
+       * annotation of their own - every id used here is in the markup above, and `npm run
+       * typecheck` checks the rest of the script against the library's own types.
+       *
+       * @param {string} id
+       * @returns {HTMLInputElement}
+       */
+      const el = (id) => /** @type {HTMLInputElement} */ (document.getElementById(id));
+
+      // A SharedWorker is identified by the URL of its script, so every tab has to load the same
+      // one - and it has to come from this origin. Always before the first setup().
+      SerialBroker.configure({ workerUrl: '/serial-broker/serial-broker.worker.js' });
+
+      main().catch(showError);
+
+      async function main() {
+        // Registers the configuration in this tab. It resolves once the configuration is
+        // registered, not once the port is open: opening may need the user to pick a port first.
+        await SerialBroker.setup(NAME, {
+          // Any port the user grants. An application names its device instead, e.g.
+          // { vendorId: 0x1a86, productId: 0x7523 } for a CH340 adapter.
+          device: { any: true },
+          serial: { baudRate: 9600 },
+          // Deliver event.text next to the raw bytes in event.data.
+          encoding: { decodeText: true },
+        });
+
+        // A new listener is told the current status straight away, so nothing is missed between
+        // setup() resolving and this line.
+        SerialBroker.subscribe(NAME, 'onStatusChange', (event) => {
+          el('status').textContent = event.status;
+          // The browser shows its port picker during a click and at no other time, so the button
+          // is offered exactly while the library is waiting for one.
+          el('connect').hidden = event.status !== 'awaiting-permission';
+          el('send-button').disabled = event.status !== 'open';
+        });
+
+        // A chunk is an arbitrary piece of the byte stream, not a line: the device's own line
+        // endings make the lines.
+        SerialBroker.subscribe(NAME, 'onReceive', (event) => {
+          el('received').textContent += event.text ?? '';
+        });
+
+        // Failures with no call of ours to answer for them: the device unplugged, the port not
+        // opening. isRetryable errors are being recovered from already - the status says so.
+        SerialBroker.subscribe(NAME, 'onError', (event) => {
+          showError(event.error);
+        });
+
+        el('connect').addEventListener('click', () => {
+          // The first thing in the handler: anything awaited before it uses the click up, and
+          // without a click the browser shows no picker. `false` means the user closed it.
+          SerialBroker.requestAccess(NAME).then(() => undefined, showError);
+        });
+
+        el('send-form').addEventListener('submit', (event) => {
+          event.preventDefault();
+          // Nothing is appended by the library: the line ending is the application's decision.
+          SerialBroker.send(NAME, `${el('send-input').value}\r\n`).then(() => {
+            el('send-input').value = '';
+          }, showError);
+        });
+      }
+
+      /**
+       * Everything the library reports is a `SerialBrokerError` with a stable `code` to branch on
+       * and a `remediation` sentence to show; anything else is shown as it is.
+       *
+       * @param {unknown} failure
+       */
+      function showError(failure) {
+        el('error').textContent = isSerialBrokerError(failure)
+          ? `${failure.code}: ${failure.message} ${failure.remediation}`
+          : String(failure);
+      }
+    </script>
+  </body>
+</html>

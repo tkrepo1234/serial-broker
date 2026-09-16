@@ -48,6 +48,11 @@ function showError(error: unknown): void {
 Open the page in two tabs: both show the same status, both receive, both can send. One of them
 holds the port; close it, and the other takes over. Nothing in the script refers to tabs.
 
+**The same page in JavaScript** is [`examples/minimal-js`](../minimal-js/README.md): one HTML
+file, an import map and one inline module script, with no toolchain at all. It is the smaller of
+the two - this one adds every status with a sentence explaining it, an error box with code and
+remediation, and a release button.
+
 ## What it shows
 
 - **Every status, named and explained.** `idle`, `queued`, `awaiting-permission`, `connecting`,
