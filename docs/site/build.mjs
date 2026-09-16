@@ -69,6 +69,9 @@ function retitle(path, title) {
  * - **The pipe before a union.** A union TypeDoc considers long is written over several lines, so
  *   it starts with a `|`. In a table cell that line becomes one row, and the union reads as if a
  *   stray character stood in front of it.
+ * - **Where a member was inherited from.** That column holds a dotted reference, one word the
+ *   browser cannot break, so it takes room from the description beside it. The table is marked,
+ *   and the stylesheet lets that one column break; see `_static/serial-broker.css`.
  */
 function tidyReference(directory) {
   for (const entry of readdirSync(directory, { withFileTypes: true })) {
@@ -77,14 +80,39 @@ function tidyReference(directory) {
       tidyReference(path);
     } else if (entry.name.endsWith('.md')) {
       const text = readFileSync(path, 'utf8');
-      const tidied = text
-        .replace(/\.md#(?:property|enumeration-member)-[\w-]+\)/g, '.md)')
-        .replaceAll('| \\| ', '| ');
+      const tidied = markInheritedTables(
+        text
+          .replace(/\.md#(?:property|enumeration-member)-[\w-]+\)/g, '.md)')
+          .replaceAll('| \\| ', '| '),
+      );
       if (tidied !== text) {
         writeFileSync(path, tidied);
       }
     }
   }
+}
+
+/**
+ * Marks every table that says which interface a member came from, so that the stylesheet can
+ * reach its last column.
+ */
+function markInheritedTables(text) {
+  const rows = text.split('\n');
+  const marked = [];
+  for (let index = 0; index < rows.length; index += 1) {
+    if (!rows[index].endsWith(' | Inherited from |')) {
+      marked.push(rows[index]);
+      continue;
+    }
+    const table = [];
+    while (index < rows.length && rows[index].startsWith('|')) {
+      table.push(rows[index]);
+      index += 1;
+    }
+    index -= 1;
+    marked.push(':::{rst-class} inherits-table', ...table, ':::');
+  }
+  return marked.join('\n');
 }
 
 function run(command, args) {
