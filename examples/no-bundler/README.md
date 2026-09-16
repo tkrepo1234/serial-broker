@@ -75,6 +75,9 @@ Chrome or Edge is required - Web Serial exists nowhere else - and a secure conte
    - `serial-broker.worker.js`, the worker script;
    - `index.min.js.map` and `serial-broker.worker.js.map`, optional, for readable stack traces.
 
+   With no npm at hand, download `serial-broker-<version>-browser.zip` from the release instead: it
+   holds the same files, already in a `serial-broker/` folder.
+
    Put them on your own origin, under one directory: this example uses `/serial-broker/`.
    [Deploying to a web server](../../docs/site/deploying.md) has the headers - content security
    policy, MIME types, caching - and a checklist for after deploying.

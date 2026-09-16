@@ -5,8 +5,8 @@ name: Release
 # tag with a pre-release part, such as v1.2.0-alpha.1, gets a release marked as a pre-release.
 # Nothing is published to npm.
 #
-# Started by hand, it is a dry run for the version in package.json: the same checks, and the notes
-# and the package uploaded as an artifact instead of released.
+# Started by hand, it is a dry run for the version in package.json: the same checks, and the notes,
+# the package and the browser bundle uploaded as artifacts instead of released.
 on:
   push:
     tags:
@@ -67,6 +67,36 @@ jobs:
 
       - run: npm pack
 
+      # The same files a page loads without a bundler, for whoever has no npm on the machine that
+      # serves them: the minified builds, the worker script beside them, the type declarations and
+      # the licence. The package holds them too; this is the copy you can download and unzip.
+      - name: Assemble the browser bundle
+        env:
+          VERSION: ${{ needs.notes.outputs.version }}
+        run: |
+          mkdir -p browser/serial-broker
+          cp dist/index.min.js dist/index.min.js.map browser/serial-broker/
+          cp dist/diagnostics.min.js dist/diagnostics.min.js.map browser/serial-broker/
+          cp dist/serial-broker.worker.js dist/serial-broker.worker.js.map browser/serial-broker/
+          cp dist/index.d.ts dist/diagnostics.d.ts LICENSE browser/serial-broker/
+          cat > browser/README.txt <<'TEXT'
+          serial-broker, the files a page loads without a bundler.
+
+          Copy the serial-broker/ folder to your web server, then in your page:
+
+            <script type="importmap">
+              { "imports": { "serial-broker/min": "/serial-broker/index.min.js" } }
+            </script>
+            <script type="module">
+              import { SerialBroker } from 'serial-broker/min';
+              SerialBroker.configure({ workerUrl: '/serial-broker/serial-broker.worker.js' });
+            </script>
+
+          Every tab must load the worker script from the same URL. The headers a strict
+          deployment needs are in the documentation, under "Deploying to a web server".
+          TEXT
+          cd browser && zip -qr "../serial-broker-$VERSION-browser.zip" .
+
       - uses: actions/download-artifact@v4
         with:
           name: release-notes
@@ -86,6 +116,7 @@ jobs:
           --notes-file release-notes.md
           $PRERELEASE
           "serial-broker-$VERSION.tgz"
+          "serial-broker-$VERSION-browser.zip"
 
       - if: github.event_name != 'push'
         uses: actions/upload-artifact@v4
@@ -94,3 +125,4 @@ jobs:
           path: |
             release-notes.md
             serial-broker-${{ needs.notes.outputs.version }}.tgz
+            serial-broker-${{ needs.notes.outputs.version }}-browser.zip

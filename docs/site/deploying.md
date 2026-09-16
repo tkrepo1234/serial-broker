@@ -9,7 +9,9 @@ copied as described in [The worker script](installing.md#the-worker-script).
 ## Which files to copy
 
 On a machine with npm, `npm install serial-broker` and take the files from
-`node_modules/serial-broker/dist/`:
+`node_modules/serial-broker/dist/`. Without npm anywhere, every release attaches
+`serial-broker-<version>-browser.zip`, which holds the same files under `serial-broker/` and a
+short `README.txt`. Either way, the files are these:
 
 | File                          | Needed                                                                                                     |
 | ----------------------------- | ---------------------------------------------------------------------------------------------------------- |
