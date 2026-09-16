@@ -41,7 +41,7 @@ run(process.execPath, [
 // TypeDoc names each module page after its entry file. Readers know them by the import path.
 retitle('docs/site/api/reference/index/index.md', 'serial-broker');
 retitle('docs/site/api/reference/diagnostics/index.md', 'serial-broker/diagnostics');
-unlinkRowAnchors(join(root, 'docs', 'site', 'api', 'reference'));
+tidyReference(join(root, 'docs', 'site', 'api', 'reference'));
 run(python, [
   '-m',
   'sphinx',
@@ -61,21 +61,27 @@ function retitle(path, title) {
 }
 
 /**
- * Points links at a member of another page to that page.
+ * Repairs what TypeDoc's Markdown means for Sphinx, page by page.
  *
- * TypeDoc marks each table row with an HTML anchor and links inherited members to it, but MyST
- * only resolves anchors it generated itself, so every such link would be a broken reference.
+ * - **Row anchors.** TypeDoc marks each table row with an HTML anchor and links inherited members
+ *   to it, but MyST only resolves anchors it generated itself, so every such link would be a
+ *   broken reference. The link points at the page instead.
+ * - **The pipe before a union.** A union TypeDoc considers long is written over several lines, so
+ *   it starts with a `|`. In a table cell that line becomes one row, and the union reads as if a
+ *   stray character stood in front of it.
  */
-function unlinkRowAnchors(directory) {
+function tidyReference(directory) {
   for (const entry of readdirSync(directory, { withFileTypes: true })) {
     const path = join(directory, entry.name);
     if (entry.isDirectory()) {
-      unlinkRowAnchors(path);
+      tidyReference(path);
     } else if (entry.name.endsWith('.md')) {
       const text = readFileSync(path, 'utf8');
-      const unlinked = text.replace(/\.md#(?:property|enumeration-member)-[\w-]+\)/g, '.md)');
-      if (unlinked !== text) {
-        writeFileSync(path, unlinked);
+      const tidied = text
+        .replace(/\.md#(?:property|enumeration-member)-[\w-]+\)/g, '.md)')
+        .replaceAll('| \\| ', '| ');
+      if (tidied !== text) {
+        writeFileSync(path, tidied);
       }
     }
   }

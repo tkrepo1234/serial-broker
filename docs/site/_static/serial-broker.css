@@ -18,6 +18,12 @@
   overflow-wrap: anywhere;
 }
 
+/*
+ * A literal breaks only when it cannot fit a line of its own - never letter by letter.
+ *
+ * `anywhere` would let a column shrink to a single character, which is how a generated table came
+ * to print `readonly` over three lines while its description column had room to spare.
+ */
 .rst-content code.literal {
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word;
 }
