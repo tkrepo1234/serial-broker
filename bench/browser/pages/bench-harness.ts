@@ -12,7 +12,7 @@
  */
 
 import type { SerialBrokerOptions } from '../../../src/core/types.js';
-import type { SerialBrokerApi } from '../../../src/serial-broker.js';
+import type { SerialBrokerApi } from '../../../src/facade.js';
 import type { WebSerialStandInControl } from '../../../test/browser/stand-in/web-serial-stand-in.js';
 
 /** Every chunk the device emits: a time stamp, then filler. The stand-in's default read buffer. */

@@ -14,7 +14,7 @@
     <button id="request-access" type="button" data-configuration="">Choose device…</button>
 
     <script type="module">
-      import { PROTOCOL_VERSION, SerialBroker } from '/dist/index.js';
+      import { PROTOCOL_VERSION, SerialBroker } from '/dist/serial-broker.js';
       import { installHarness } from '/harness.js';
 
       installHarness(SerialBroker, PROTOCOL_VERSION, window.webSerialStandIn);

@@ -48,7 +48,8 @@ holds the port; close it, and the other takes over. Nothing in the script refers
 
 ## What it shows
 
-- **The library from an import map.** `"serial-broker": "/serial-broker/index.js"` in the HTML, a
+- **The library from an import map.** `"serial-broker": "/serial-broker/serial-broker.js"` in the
+  HTML, a
   bare `import` in the script - the same specifier a bundled application writes.
 - **`configure({ workerUrl })` before `setup()`**, spelled out, because the worker script is the
   one thing about deploying this library that is easy to get wrong.
@@ -99,7 +100,7 @@ npm run test:examples -- examples/minimal-js/smoke.spec.ts
 
 Copy the `<script type="module">` block out of `index.html`, and with it the import map. Then:
 
-1. **Get the library files.** `npm install serial-broker`, and copy `index.js`,
+1. **Get the library files.** `npm install serial-broker`, and copy `serial-broker.js`,
    `serial-broker.worker.js` and their `.map` files out of `node_modules/serial-broker/dist/` to
    your own web server, under one directory - this page uses `/serial-broker/`.
    [Deploying to a web server](../../docs/site/deploying.md) has the headers and the checklist.

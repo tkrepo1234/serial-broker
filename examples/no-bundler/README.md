@@ -13,7 +13,7 @@ resolved by a bundler behind the scenes.
 ## What it shows
 
 - **Loading the library from an import map.** `index.html` maps the bare specifier
-  `serial-broker/min` to `/serial-broker/index.min.js`; `app.js` imports it like any module.
+  `serial-broker/min` to `/serial-broker/serial-broker.min.js`; `app.js` imports it like any module.
 - **`configure({ workerUrl })`, explicitly.** The worker script is the second file the library
   needs, and a `SharedWorker` is identified by its URL - so the page names it, before `setup()`.
 - **Every status, explained.** The status word as the library reports it, in the colour of its
@@ -57,11 +57,11 @@ npm install
 npm start          # serves http://localhost:8154/
 ```
 
-| Command             | What it does                                                                                                                                                                                          |
-| ------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `npm start`         | `serve.mjs`: `public/` at `/`, and `node_modules/serial-broker/dist/` at `/serial-broker/`. `PORT` overrides the port.                                                                                |
-| `npm run typecheck` | `tsc --noEmit` over the plain JavaScript, with `checkJs`, against the library's type definitions. See [Design decisions](#design-decisions).                                                          |
-| `npm run build`     | Copies the page into `dist/`, and four library files - `index.min.js`, `serial-broker.worker.js` and their `.map` files - into `dist/serial-broker/`: a folder any static web server serves as it is. |
+| Command             | What it does                                                                                                                                                                                                  |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `npm start`         | `serve.mjs`: `public/` at `/`, and `node_modules/serial-broker/dist/` at `/serial-broker/`. `PORT` overrides the port.                                                                                        |
+| `npm run typecheck` | `tsc --noEmit` over the plain JavaScript, with `checkJs`, against the library's type definitions. See [Design decisions](#design-decisions).                                                                  |
+| `npm run build`     | Copies the page into `dist/`, and four library files - `serial-broker.min.js`, `serial-broker.worker.js` and their `.map` files - into `dist/serial-broker/`: a folder any static web server serves as it is. |
 
 Chrome or Edge is required - Web Serial exists nowhere else - and a secure context, which
 `localhost` counts as. Without a device attached you still see the whole page: the status is
@@ -71,9 +71,9 @@ Chrome or Edge is required - Web Serial exists nowhere else - and a secure conte
 
 1. **Get the library files.** `npm install serial-broker` on a machine with npm, and copy four files
    from `node_modules/serial-broker/dist/` - the same four `npm run build` copies:
-   - `index.min.js`, the library;
+   - `serial-broker.min.js`, the library;
    - `serial-broker.worker.js`, the worker script;
-   - `index.min.js.map` and `serial-broker.worker.js.map`, optional, for readable stack traces.
+   - `serial-broker.min.js.map` and `serial-broker.worker.js.map`, optional, for readable stack traces.
 
    With no npm at hand, download `serial-broker-<version>-browser.zip` from the release instead: it
    holds the same files, already in a `serial-broker/` folder.
@@ -86,13 +86,13 @@ Chrome or Edge is required - Web Serial exists nowhere else - and a secure conte
 
    ```html
    <script type="importmap">
-     { "imports": { "serial-broker/min": "/serial-broker/index.min.js" } }
+     { "imports": { "serial-broker/min": "/serial-broker/serial-broker.min.js" } }
    </script>
    <script type="module" src="/app.js"></script>
    ```
 
    Any specifier works, as long as the script imports the same one. Without an import map, import
-   the file by its URL instead: `import { SerialBroker } from '/serial-broker/index.min.js'`.
+   the file by its URL instead: `import { SerialBroker } from '/serial-broker/serial-broker.min.js'`.
 
 3. **Name the worker script, then set up** - in that order:
 
@@ -138,10 +138,11 @@ Chrome or Edge is required - Web Serial exists nowhere else - and a secure conte
 transient activation of a click, and any `await` before the call consumes it. The library cannot
 work around this - it is the one step it leaves to the page.
 
-**The worker script must come from your origin, under one URL.** Both library builds look for
+**The worker script must come from your origin, under one URL.** The ES module builds look for
 `serial-broker.worker.js` next to their own script, so this page would find the file without
 `configure()`; it names it anyway, so that the requirement is visible and a page that moves the
-library later has one line to change. Where the script cannot be loaded, serial-broker falls back
+library later has one line to change. The classic script build has no choice: it cannot find the
+file by itself, and `configure({ workerUrl })` is required there. Where the script cannot be loaded, serial-broker falls back
 to a `BroadcastChannel` and keeps working, and logs `environment.transport-fallback` at `warn`
 level - which this page shows in its _Library log_ section.
 
@@ -197,10 +198,22 @@ headed _Recovering_, and removes it once the status is `open` again. That readin
 
 ## Design decisions
 
-**An import map, not a URL import.** `import { SerialBroker } from '/serial-broker/index.min.js'`
+**An import map, not a URL import.** `import { SerialBroker } from '/serial-broker/serial-broker.min.js'`
 would work and save the map. The map keeps the script identical to what a bundled application
 writes - a bare specifier - so that `app.js` can be moved into a bundler project unchanged, and
 the one line that knows where the library lives is in the HTML next to the script tag.
+
+**Modules, not the classic script build.** The package also ships
+`serial-broker.global.js`, a classic script that puts the library on the global `SerialBroker`
+with no module, no import map and no bare specifier
+([Installing](../../docs/site/installing.md#classic-script-build)). It is the shorter way in for a
+page that already writes `<script>` blocks, and the one to use where a strict content security
+policy makes an inline import map awkward - an import map is an inline script and needs its hash;
+a `<script src>` does not. This example stays on modules because its point is a page with **no
+build step** rather than a page with **no modules**: `app.js` is written exactly as a bundled
+application would write it, so the step from here to a toolchain is the import map and nothing
+else. With the classic build the two differences are the load and the mandatory
+`configure({ workerUrl })`; everything below about statuses, errors and tabs is the same.
 
 **The library files are served from `node_modules`, not copied.** `serve.mjs` maps `/serial-broker/`
 to `node_modules/serial-broker/dist/`, so a rebuild of the library is visible on reload with
@@ -213,8 +226,9 @@ server is short enough to read, and an example that promises "no toolchain" shou
 start by installing one. The server sends `cache-control: no-store`, so that a developer who
 rebuilds the library sees the new build, not a cached mixture of two.
 
-**`workerUrl` is configured although the default would find the file.** Both the readable and the
-minified build resolve the worker next to their own script, so `/serial-broker/index.min.js`
+**`workerUrl` is configured although the default would find the file.** The readable and the
+minified build both resolve the worker next to their own script, so
+`/serial-broker/serial-broker.min.js`
 already implies `/serial-broker/serial-broker.worker.js`. The example names it anyway: the
 requirement that every tab loads the same worker URL is the one thing about deploying this library
 that is easy to get wrong, and an explicit line is what a reader copies.

@@ -9,9 +9,9 @@
  *   included, so a build that forgets a file fails here rather than in someone's project.
  * - `/*.html`, `/harness.js` - the test pages. `harness.ts` is TypeScript, stripped on the way out
  *   by Node, so the page code is type-checked with the rest of the suite (ADR-0035).
- * - `/other-protocol-version/serial-broker.worker.js` - the built worker with its `PROTOCOL_VERSION`
- *   changed, which is how a tab meets a worker of another version without a second checkout
- *   (ADR-0024).
+ * - `/other-protocol-version/serial-broker.worker.js` - the worker bundled from source with its
+ *   `PROTOCOL_VERSION` changed, which is how a tab meets a worker of another version without a
+ *   second checkout (ADR-0024).
  * - `/bench/*` - the browser benchmark's pages (`bench/browser/pages/`), served the same way: a
  *   `.js` that is TypeScript on disk is stripped on the way out (ADR-0037).
  *
@@ -25,6 +25,8 @@ import { stripTypeScriptTypes } from 'node:module';
 import path from 'node:path';
 import process from 'node:process';
 import { fileURLToPath, URL } from 'node:url';
+
+import { build } from 'esbuild';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPOSITORY = path.resolve(HERE, '..', '..');
@@ -53,20 +55,60 @@ function resolveWithin(root, relative) {
   return resolved === root || resolved.startsWith(root + path.sep) ? resolved : undefined;
 }
 
+/** Built once, then served to every tab that asks for it. */
+let workerOfAnotherVersion;
+
+/**
+ * The worker script, bundled from source with a different `PROTOCOL_VERSION`.
+ *
+ * Bundled rather than patched: the published worker is minified (ADR-0003), so its
+ * `PROTOCOL_VERSION` is a renamed variable whose value esbuild has folded into the two places
+ * that read it - there is no assignment left in the file to replace, and replacing the number
+ * would depend on what the minifier happened to emit. The version is changed in
+ * `src/protocol/version.ts` as it is loaded instead, which no minifier can rename, and the worker
+ * is bundled from there with the settings config/tsup.config.ts uses.
+ */
 async function readWorkerOfAnotherVersion() {
-  const source = await readFile(path.join(DIST, 'serial-broker.worker.js'), 'utf8');
-  const replaced = source.replace(
-    /PROTOCOL_VERSION = \d+;/,
-    `PROTOCOL_VERSION = ${OTHER_PROTOCOL_VERSION};`,
-  );
-  if (replaced === source) {
-    // Loud rather than silent: a worker that still runs this version would make the mismatch
-    // test pass for the wrong reason.
-    throw new Error(
-      'The built worker has no PROTOCOL_VERSION assignment to change; the bundler output changed shape',
-    );
+  workerOfAnotherVersion ??= buildWorkerOfAnotherVersion();
+  return await workerOfAnotherVersion;
+}
+
+async function buildWorkerOfAnotherVersion() {
+  const result = await build({
+    entryPoints: [path.join(REPOSITORY, 'src', 'worker', 'serial-broker.worker.ts')],
+    bundle: true,
+    write: false,
+    format: 'esm',
+    target: 'es2022',
+    platform: 'browser',
+    plugins: [
+      {
+        name: 'other-protocol-version',
+        setup(builder) {
+          builder.onLoad({ filter: /[\\/]protocol[\\/]version\.ts$/ }, async (args) => {
+            const source = await readFile(args.path, 'utf8');
+            const replaced = source.replace(
+              /export const PROTOCOL_VERSION = \d+;/,
+              `export const PROTOCOL_VERSION = ${OTHER_PROTOCOL_VERSION};`,
+            );
+            if (replaced === source) {
+              // Loud rather than silent: a worker that still runs this version would make the
+              // mismatch test pass for the wrong reason.
+              throw new Error(
+                'src/protocol/version.ts has no PROTOCOL_VERSION declaration to change',
+              );
+            }
+            return { contents: replaced, loader: 'ts' };
+          });
+        },
+      },
+    ],
+  });
+  const [output] = result.outputFiles;
+  if (output === undefined) {
+    throw new Error('esbuild produced no worker of another protocol version');
   }
-  return replaced;
+  return output.text;
 }
 
 /** Answers one request, or `undefined` if nothing matches. */
@@ -164,7 +206,7 @@ const server = createServer((request, response) => {
 });
 
 try {
-  await readFile(path.join(DIST, 'index.js'));
+  await readFile(path.join(DIST, 'serial-broker.js'));
 } catch {
   process.stderr.write(
     'dist/ is missing or incomplete. Run `npm run build` before the browser tests.\n',

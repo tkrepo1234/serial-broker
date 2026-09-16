@@ -34,6 +34,7 @@ them holds the port, and every tab receives the data and can send.
 ## Running it
 
 Build `main.ts` with any bundler — or with `tsc` or `esbuild` and an import map pointing
-`serial-broker` at the package's `dist/index.min.js`, as [Deploying](../deploying.md) shows — and
+`serial-broker` at the package's `dist/serial-broker.min.js`, as [Deploying](../deploying.md)
+shows — and
 serve the directory over `localhost`. Web Serial needs a
 secure context, which `localhost` counts as.

@@ -391,7 +391,8 @@ calls are merged.
 
 `workerUrl`
 : The URL of `serial-broker.worker.js`. Needed when the bundler does not emit the script by itself,
-and always with the CommonJS build. Every tab must use the same URL; see
+and **required** with the CommonJS build and the classic script build, neither of which can find
+the script by itself. Every tab must use the same URL; see
 [The worker script](installing.md#the-worker-script).
 
 `transport`
