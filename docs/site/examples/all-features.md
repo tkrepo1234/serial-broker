@@ -65,8 +65,10 @@ Every code is described in [Errors](../errors.md).
 ```
 
 `restore()` sets up every configuration this origin remembers. `release()` stops using a
-configuration in one tab and keeps the browser's permission; `forgetDevice: true` revokes it, so
-the next setup asks the user again.
+configuration in one tab and forgets nothing — the configuration stays remembered and the browser
+keeps its permission, so setting it up again needs no prompt. `forget: true` removes the remembered
+configuration, `forgetDevice: true` revokes the permission so the next setup asks the user again,
+and the two together leave no trace of the configuration in this browser.
 
 ## Using the device from one window at a time
 

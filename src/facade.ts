@@ -124,21 +124,29 @@ export interface SerialBrokerApi {
    * and this tab's listeners for the name are removed with it: subscribe again after the next
    * `setup()`.
    *
-   * The browser's permission for the device is deliberately kept, so a later `setup()` needs
-   * no prompt. Pass `{ forgetDevice: true }` to revoke it as well.
+   * **Nothing is forgotten.** The configuration remembered under this name stays, so `restore()`
+   * and a later `setup()` bring it back, and the browser's permission for the device is kept, so
+   * neither needs a prompt. Forgetting is a decision of its own: `{ forget: true }` removes the
+   * remembered configuration, `{ forgetDevice: true }` revokes the browser's permission, and the
+   * two together remove every trace of the configuration in this browser.
+   *
+   * `{ forget: true }` removes the entry only once no tab still runs the configuration with
+   * `remember: true` - it is one entry per name for the whole origin (ADR-0033) - and does nothing
+   * for a configuration set up with `remember: false`, which has nothing stored under its name.
    *
    * @param name - The configuration name. Releasing one that is not set up is a no-op.
-   * @param options - Whether to also revoke the browser's device permission. Read once, when the
-   *   call is made.
+   * @param options - Whether to also forget the remembered configuration, and whether to revoke the
+   *   browser's device permission. Read once, when the call is made.
    * @throws A `SerialBrokerError` with code `INVALID_ARGUMENT` for an invalid name, for `options`
-   *   that is not an object, or for a `forgetDevice` that is not a boolean. Nothing is released
-   *   then.
+   *   that is not an object, or for a `forget` or `forgetDevice` that is not a boolean. Nothing is
+   *   released then.
    * @returns A promise that resolves once the port has been closed and the lock released.
    *   Teardown is bounded: a device that has stopped answering cannot hold it open.
    * @example
    * ```ts
    * await SerialBroker.release('Scale');
-   * await SerialBroker.release('Scale', { forgetDevice: true });
+   * await SerialBroker.release('Scale', { forget: true });
+   * await SerialBroker.release('Scale', { forget: true, forgetDevice: true });
    * ```
    */
   release(name: string, options?: ReleaseOptions): Promise<void>;
@@ -146,9 +154,11 @@ export interface SerialBrokerApi {
   /**
    * Stops using every configuration in this tab.
    *
-   * @param options - Applied to each configuration in turn.
+   * Forgets nothing by default, as {@link SerialBrokerApi.release} does.
+   *
+   * @param options - Applied to each configuration in turn, `forget` and `forgetDevice` alike.
    * @throws A `SerialBrokerError` with code `INVALID_ARGUMENT` when `options` is not an object or
-   *   `forgetDevice` is not a boolean. Nothing is released then.
+   *   `forget` or `forgetDevice` is not a boolean. Nothing is released then.
    */
   releaseAll(options?: ReleaseOptions): Promise<void>;
 

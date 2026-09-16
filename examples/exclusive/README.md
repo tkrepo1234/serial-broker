@@ -237,6 +237,10 @@ instead, and shares it with the other tabs.
 would add nothing to what the page shows and would leave an entry in `localStorage` behind. An
 application that lets the user configure devices keeps the default and calls `restore()`.
 
+A release forgets nothing by itself, so _Release the device_ has nothing to clean up here either.
+An application that does remember its configuration and wants it gone passes
+`release('Cutter', { forget: true })`; the browser's permission goes with `forgetDevice: true`.
+
 **The connect button, the release button and the set-up button are shown and hidden, not
 disabled.** A disabled button suggests a state the user could reach; a hidden one says the step
 does not apply. Send is the exception: it is disabled while a write would wait, because the input

@@ -50,16 +50,28 @@ outcome of the shared index - another tab removed it while this one's copy was s
 dropped and logged at `info`, not reported. A name whose entry storage itself refused to read stays
 listed.
 
+**Forgetting is asked for, never a side effect of releasing.** `release(name)` stops using the
+configuration in this tab and closes the port if this tab held it; what is remembered stays, so
+`restore()` and a later `setup()` bring it back. `release(name, { forget: true })` removes the
+remembered entry as well. `forgetDevice` revokes the browser's permission and is independent of
+both; the two together remove every trace of the configuration in this browser. Setting the name up
+with `remember: false` still forgets an entry an earlier setup left behind - otherwise `restore()`
+would bring back a configuration the application has just said not to remember.
+
 **An entry is forgotten only when no tab still runs the configuration with `remember: true`.**
 Every such tab holds the Web Lock `serial-broker/persisted/v<storage version>/<name>` in **shared**
-mode while the configuration is set up there. A tab that forgets the entry - on `release()`,
-`releaseAll()`, or setting the name up with `remember: false` - first lets its own hold go, then
-requests the lock **exclusively with `ifAvailable`**, and removes the entry only inside that lock.
-`dispose()`, what a closing tab does, forgets nothing. A tab saves its entry at `setup()` and again
-once its hold is granted, which also repairs a name lost from the index. The lock carries the storage
-version, not the protocol version, because tabs on different protocol versions share the stored
-entries. `release(name, { forgetDevice: true })` follows the same rule for the entry; the browser
-permission it revokes is the origin's.
+mode while the configuration is set up there. A tab that forgets the entry - on
+`release(name, { forget: true })`, `releaseAll({ forget: true })`, or setting the name up with
+`remember: false` - first lets its own hold go, then requests the lock **exclusively with
+`ifAvailable`**, and removes the entry only inside that lock. A release that forgets nothing lets
+its hold go too, and nothing else: the tab has stopped running the configuration, and a hold kept
+past that would refuse every other tab's `forget` for the life of the tab. `dispose()`, what a
+closing tab does, does the same. A tab saves its entry at `setup()` and again once its hold is
+granted, which also repairs a name lost from the index. The lock carries the storage version, not
+the protocol version, because tabs on different protocol versions share the stored entries.
+`forget` on a configuration set up with `remember: false` finds nothing stored under the name and
+does nothing, rather than reporting anything: the option names what must not survive, and nothing
+does.
 
 **Nothing is migrated.** Keys of an earlier format are neither read nor removed. Before 1.0 nothing
 is promised about stored data (CONTRIBUTING.md).
@@ -82,8 +94,17 @@ is promised about stored data (CONTRIBUTING.md).
 - **Ask the broker which tabs are attached.** Unavailable in the fallback, and a round trip to a
   worker that may have ended.
 - **Keep a list of running tabs in the entry.** A crashed tab never removes itself.
-- **Never forget on `release()`.** `release()` is how an application says a configuration is not
-  wanted any more.
+- **Forget on every `release()`.** The rule until 2026-09-16, on the reading that `release()` is how
+  an application says a configuration is not wanted any more. It made a disconnect a deletion: with
+  one tab open - the normal case on a production line - pressing _Disconnect_ took the entry with
+  it, and the next visit had nothing to restore. Closing a port and deleting its configuration are
+  different intentions, and only the caller knows which one it means.
+- **Never forget at all, and let the application clear storage itself.** The entries are in keys
+  this library owns, names and versions; reaching into them from outside is what this record exists
+  to avoid.
+- **Let `forgetDevice: true` imply `forget: true`.** Reads well for "remove everything", and hides a
+  deletion behind an option about the browser's permission. They are two stores, kept by two
+  parties; each is asked for separately.
 
 ## Consequences
 
@@ -94,6 +115,8 @@ is promised about stored data (CONTRIBUTING.md).
   unreadable entry costs that configuration alone.
 - Releasing a configuration in one tab no longer costs the other tabs their configuration on
   reload, and a crashed or closed tab never keeps an entry alive.
+- A tab that disconnects keeps its configuration for the next visit, whether or not any other tab
+  runs it. Only a caller that asked to forget it loses it.
 
 ### Negative
 
@@ -121,8 +144,10 @@ entries, one reading from a copy taken before the other's write, and the newer e
 stale tab's save. `test/integration/storage-schema.test.ts` covers the shape of the keys, an
 unreadable or partly broken index, and a listed name whose entry is gone.
 `test/integration/multi-tab/remembered-configurations.test.ts`, in both transport modes: a release
-while another tab runs the configuration, the last release, a closed and a crashed tab,
-`releaseAll()`, `forgetDevice`, a tab with `remember: false`, and a setup racing a release.
+that forgets nothing and the `restore()` that brings the configuration back, `forget: true` while
+another tab runs the configuration, the last release, a closed and a crashed tab,
+`releaseAll({ forget: true })`, `forgetDevice`, `forget` on a configuration with `remember: false`,
+and a setup racing a release.
 
 ## History
 
@@ -132,3 +157,8 @@ while another tab runs the configuration, the last release, a closed and a crash
   configuration, version 2, older keys removed unread.
 - 2026-09-15: The option is `remember` (was `persist`); older keys are no longer removed. ADR-0022
   and ADR-0027 folded in.
+- 2026-09-16: Releasing forgets nothing by default; `ReleaseOptions.forget` asks for it. A
+  disconnect is not a deletion - with one tab open, the old default deleted the configuration the
+  operator was about to reconnect to - and the application decides when something is forgotten. The
+  hold on a remembered entry is still let go by every release; only the `forget` path takes the
+  exclusive lock (ADR-0027).

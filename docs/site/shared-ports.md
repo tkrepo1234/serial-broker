@@ -86,8 +86,23 @@ Two things are remembered between visits, by two different parties:
   `remember: false`. `restore()` sets up every remembered configuration, and `setup()` in auto mode
   takes the device the user chose from it.
 
-What is remembered belongs to the origin, not to one tab. `release()` in one tab forgets a
-configuration only when no other tab still runs it with `remember: true`, and a tab that is closed,
+**Releasing forgets neither.** `release(name)` stops using the configuration in this tab and closes
+the port if this tab held it; the configuration stays remembered and the permission stays granted,
+so `restore()`, or the next `setup()`, connects again without a prompt. A disconnect is not a
+deletion — a screen on a production line that disconnects in the evening finds its device again in
+the morning.
+
+Forgetting is asked for, one store at a time:
+
+| Call                                                  | What is gone afterwards                         |
+| ----------------------------------------------------- | ----------------------------------------------- |
+| `release(name)`                                       | nothing; this tab stops using the configuration |
+| `release(name, { forget: true })`                     | the remembered configuration                    |
+| `release(name, { forgetDevice: true })`               | the browser's permission for the device         |
+| `release(name, { forget: true, forgetDevice: true })` | both: every trace in this browser               |
+
+What is remembered belongs to the origin, not to one tab: `{ forget: true }` removes the entry only
+when no other tab still runs the configuration with `remember: true`, and a tab that is closed,
 reloaded or crashes forgets nothing. Details are in [`remember`](configuration.md#remember).
 
 Any tab taking part in a configuration can ask the user for permission: the permission belongs to the

@@ -286,6 +286,23 @@ export interface SerialBrokerOptions {
 /** Options for {@link SerialBrokerApi.release}. */
 export interface ReleaseOptions {
   /**
+   * Also forget the configuration remembered under this name, so that `restore()` does not bring
+   * it back and a later `setup()` starts from nothing.
+   *
+   * Left at `false`, releasing stops using the configuration in this tab and closes the port if
+   * this tab held it, and what is remembered stays: a disconnect is not a deletion, and the
+   * application decides when something is forgotten (ADR-0033).
+   *
+   * The entry is one per name for the whole origin, so it is removed only once no tab still runs
+   * the configuration with `remember: true`; a tab that still does keeps it. For a configuration
+   * set up with `remember: false` there is nothing stored under the name, and this does nothing.
+   * Independent of {@link ReleaseOptions.forgetDevice}: pass both to remove every trace of the
+   * configuration in this browser.
+   *
+   * @defaultValue false
+   */
+  readonly forget?: boolean;
+  /**
    * Also revoke the browser's permission via `SerialPort.forget()`, so that the next `setup()`
    * prompts the user again.
    *

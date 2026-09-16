@@ -349,9 +349,15 @@ export class SerialBrokerClient {
     session: ConfigurationSession,
     options: ReleaseOptions,
   ): Promise<void> {
-    // Part of the release a `setup()` of the same name waits for, so the entry that `setup()` saves
-    // comes after anything forgotten here.
-    await this.#forgetUnlessRunElsewhere(name);
+    // This tab stops running the configuration either way, so it stops saying so; what is
+    // remembered is removed only when the caller asked for it (ADR-0033). Both happen before the
+    // session goes, because a `setup()` of the same name waits for this release: the entry that
+    // `setup()` saves has to come after anything forgotten here.
+    if (options.forget === true) {
+      await this.#forgetUnlessRunElsewhere(name);
+    } else {
+      await this.#letGoOfHold(name);
+    }
     await session.release();
 
     // For the same reason, a configuration set up again meanwhile keeps its device permission.
@@ -442,16 +448,30 @@ export class SerialBrokerClient {
   }
 
   /**
+   * Lets go of the hold that says this tab runs a remembered configuration, and keeps the entry.
+   *
+   * What a release does unless it was asked to forget, and what a closing tab does: this tab is not
+   * running the configuration any more, so it must not go on claiming it is - another tab asked to
+   * forget the entry would be refused by a hold nobody needs. The entry itself stays, for
+   * `restore()` and the next `setup()` (ADR-0033).
+   */
+  async #letGoOfHold(name: string): Promise<void> {
+    const hold = this.#holds.get(name);
+    this.#holds.delete(name);
+    await hold?.stop();
+  }
+
+  /**
    * Forgets a remembered configuration, unless another tab still runs it with `remember: true`.
    *
    * The entry is one per name for the whole origin. Forgetting it while another tab runs the
-   * configuration would cost that tab the configuration on its next reload (ADR-0027).
+   * configuration would cost that tab the configuration on its next reload (ADR-0027, ADR-0033).
+   * Reached by `release(name, { forget: true })` and by setting the name up with `remember: false`;
+   * a name with nothing stored under it is left as it is rather than reported.
    */
   async #forgetUnlessRunElsewhere(name: string): Promise<void> {
-    const hold = this.#holds.get(name);
-    this.#holds.delete(name);
     // Let go first: this tab's own hold would otherwise be the one found.
-    await hold?.stop();
+    await this.#letGoOfHold(name);
     await forgetUnlessHeld(
       this.environment.locks,
       name,

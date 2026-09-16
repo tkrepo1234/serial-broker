@@ -167,8 +167,14 @@ await SerialBroker.release('Adapter');
 ```
 
 This tab stops using the configuration, and its listeners for the name are removed. Other tabs that
-still use it keep the port open. The browser's permission for the device is kept, so a later
-`setup()` needs no prompt; `release('Adapter', { forgetDevice: true })` revokes it.
+still use it keep the port open. Nothing is forgotten: the configuration stays remembered and the
+browser keeps its permission for the device, so `restore()` or a later `setup()` connects again with
+no prompt — releasing is disconnecting, not deleting.
+
+Forgetting is asked for separately: `release('Adapter', { forget: true })` also removes the
+remembered configuration, `{ forgetDevice: true }` revokes the browser's permission, and passing
+both removes every trace of the configuration in this browser. See
+[`release()`](configuration.md#release).
 
 ## The shortcut: the debugging surface
 

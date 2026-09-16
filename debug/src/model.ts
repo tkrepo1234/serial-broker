@@ -1,4 +1,5 @@
 import { SerialBrokerErrorCode } from '../../src/core/error-codes.js';
+import type { ReleaseOptions } from '../../src/core/types.js';
 import type {
   ConfigurationDiagnostics,
   DiagnosticsSnapshot,
@@ -41,6 +42,23 @@ export interface ConfigurationView {
   readonly settingsDiffer: boolean;
   readonly actions: ReadonlySet<ConfigurationAction>;
 }
+
+/**
+ * The three ways the ⋯ menu offers to stop using a configuration, by the template part that offers
+ * each, and what each passes to `release()`.
+ *
+ * Releasing forgets nothing on its own (ADR-0033), so the page says which of the two stores - the
+ * remembered configuration, the browser's permission for the device - is meant to go. Kept here, as
+ * data, so the markup and the calls are checked against one list rather than trusted to agree.
+ */
+export const DISCONNECT_ACTIONS: Readonly<Record<string, ReleaseOptions>> = {
+  /** Stop using it here. The configuration stays listed, ready to connect to again. */
+  menuDisconnect: {},
+  /** Stop using it, and forget the configuration this browser remembers under the name. */
+  menuForgetConfiguration: { forget: true },
+  /** The same, and revoke the browser's permission too: no trace of it left in this browser. */
+  menuForgetEverything: { forget: true, forgetDevice: true },
+};
 
 /** A configuration kept in storage from an earlier visit. */
 export interface RememberedConfiguration {

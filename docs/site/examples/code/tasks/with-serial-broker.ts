@@ -44,8 +44,13 @@ export function offerDeviceChoice(button: HTMLButtonElement): void {
 // [/permission]
 
 // [release]
-export async function stopUsingScale(forgetDevice: boolean): Promise<void> {
-  await SerialBroker.release('Scale', { forgetDevice });
+export async function stopUsingScale(): Promise<void> {
+  // Forgets nothing: the configuration stays remembered, the device stays granted.
+  await SerialBroker.release('Scale');
+}
+
+export async function forgetTheScale(): Promise<void> {
+  await SerialBroker.release('Scale', { forget: true, forgetDevice: true });
 }
 // [/release]
 

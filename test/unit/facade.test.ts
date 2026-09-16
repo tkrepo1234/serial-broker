@@ -280,6 +280,19 @@ describe('SerialBroker', () => {
       expect(SerialBroker.exists('Reader')).toBe(true);
     });
 
+    it('rejects a forget that is not a boolean rather than deciding it either way', async () => {
+      await SerialBroker.setup('Reader', READER_OPTIONS);
+      await settle();
+
+      await expect(SerialBroker.release('Reader', { forget: 'yes' } as never)).rejects.toThrow(
+        invalidArgument('options.forget'),
+      );
+      await expect(SerialBroker.releaseAll({ forget: 1 } as never)).rejects.toThrow(
+        invalidArgument('options.forget'),
+      );
+      expect(SerialBroker.exists('Reader')).toBe(true);
+    });
+
     it('checks release options also when nothing is set up', async () => {
       await expect(SerialBroker.release('Reader', 7 as never)).rejects.toThrow(
         invalidArgument('options'),

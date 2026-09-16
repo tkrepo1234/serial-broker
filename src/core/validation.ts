@@ -373,11 +373,18 @@ function normalizeUsbDevice(
  * Read once, before anything is released: a value that fails must leave the configuration running,
  * and one read again after the port has closed could have changed in between.
  *
+ * Both options default to `false`, so a release on its own keeps what is remembered and the
+ * browser's permission alike (ADR-0033).
+ *
  * @throws A {@link SerialBrokerError} with code `INVALID_ARGUMENT`.
  */
-export function normalizeReleaseOptions(options: unknown): { readonly forgetDevice: boolean } {
+export function normalizeReleaseOptions(options: unknown): {
+  readonly forget: boolean;
+  readonly forgetDevice: boolean;
+} {
   const raw = optionalObject(options, 'options');
   return Object.freeze({
+    forget: requireBoolean(orDefault(raw['forget'], false), 'options.forget'),
     forgetDevice: requireBoolean(orDefault(raw['forgetDevice'], false), 'options.forgetDevice'),
   });
 }

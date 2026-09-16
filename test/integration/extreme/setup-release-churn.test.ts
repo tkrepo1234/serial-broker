@@ -63,13 +63,13 @@ describe.skipIf(!IS_EXTREME).each(TRANSPORT_MODES)('setup and release churn (%s)
             await follower.client.setup('Reader', READER_OPTIONS);
             await harness.settle();
             if (cycle % 4 < 2) {
-              await leader.client.release('Reader');
+              await leader.client.release('Reader', { forget: true });
               await harness.settle();
-              await follower.client.release('Reader');
+              await follower.client.release('Reader', { forget: true });
             } else {
-              await follower.client.release('Reader');
+              await follower.client.release('Reader', { forget: true });
               await harness.settle();
-              await leader.client.release('Reader');
+              await leader.client.release('Reader', { forget: true });
             }
             await harness.settle();
             opens = device.openCount;

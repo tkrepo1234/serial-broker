@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { ChooseMessage } from '../../debug/src/choose-message.js';
 import { formValuesForChosenDevice, suggestDeviceName } from '../../debug/src/chosen-port.js';
 import {
   describeError,
@@ -26,6 +27,7 @@ import {
 } from '../../debug/src/library-settings.js';
 import {
   buildConfigurationViews,
+  DISCONNECT_ACTIONS,
   isWithdrawn,
   tabRole,
   thisPageState,
@@ -786,5 +788,78 @@ describe('debugging surface: formatting', () => {
     expect(formatDetail({ data: Uint8Array.of(1, 2), max: Infinity })).toBe(
       '{\n  "data": "01 02",\n  "max": "Infinity"\n}',
     );
+  });
+});
+
+describe('debugging surface: stopping a configuration', () => {
+  it('offers three ways to stop, of which only two forget anything', () => {
+    // Disconnecting keeps the configuration listed, with Connect beside it: the page must not
+    // delete what the operator is about to reconnect to (ADR-0033).
+    expect(DISCONNECT_ACTIONS).toEqual({
+      menuDisconnect: {},
+      menuForgetConfiguration: { forget: true },
+      menuForgetEverything: { forget: true, forgetDevice: true },
+    });
+  });
+
+  it('has a menu item for each of them, and offers no other way to stop', async () => {
+    // The detail view wires one listener per entry above and fails loudly for a part the markup
+    // does not have. This is the other direction: a button the list does not know would call
+    // nothing, and silently do nothing when it was clicked.
+    const html = await import('node:fs/promises').then(
+      async (fs) => await fs.readFile('debug/public/index.html', 'utf8'),
+    );
+
+    const menu = /<div data-part="menu"([\s\S]*?)<\/div>/.exec(html)?.[1] ?? '';
+    const parts = [...menu.matchAll(/data-part="([^"]*)"/g)].map((button) => button[1]);
+
+    expect(parts.filter((part) => part !== 'menuChooseAgain' && part !== 'menuEdit')).toEqual(
+      Object.keys(DISCONNECT_ACTIONS),
+    );
+  });
+
+  it('no longer tells the operator that disconnecting also forgets the configuration', async () => {
+    const html = await import('node:fs/promises').then(
+      async (fs) => await fs.readFile('debug/public/index.html', 'utf8'),
+    );
+
+    const help = /<div id="help-actions"([\s\S]*?)<\/div>\s*<div id="help-send"/.exec(html)?.[1];
+
+    expect(help).toContain('Disconnect and forget the configuration');
+    expect(help).toContain('a disconnect is not a deletion');
+  });
+});
+
+describe('debugging surface: the notice about choosing a device', () => {
+  const target = (): { textContent: string | null; className: string; hidden: boolean } => ({
+    textContent: '',
+    className: '',
+    hidden: true,
+  });
+
+  it('says what came of the last click, and goes away when another action starts', () => {
+    const element = target();
+    const message = new ChooseMessage(element);
+
+    message.show('The picker was dismissed; nothing was set up.');
+    expect(element).toEqual({
+      textContent: 'The picker was dismissed; nothing was set up.',
+      className: 'message notice',
+      hidden: false,
+    });
+
+    // Connecting, disconnecting, sending or creating a configuration all take it down: it
+    // describes an action that is over and must not go on describing the page.
+    message.clear();
+    expect(element).toEqual({ textContent: '', className: 'message notice', hidden: true });
+  });
+
+  it('marks a failure as one rather than as an outcome', () => {
+    const element = target();
+
+    new ChooseMessage(element).show('serial-broker could not start on this page', 'error');
+
+    expect(element.className).toBe('message error');
+    expect(element.hidden).toBe(false);
   });
 });

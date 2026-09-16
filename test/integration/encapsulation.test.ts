@@ -167,6 +167,17 @@ describe('argument handling at the public surface', () => {
       tab.client.release('Nonexistent', { forgetDevice: 'yes' } as never),
     ).rejects.toThrow(invalid);
 
+    // The same for `forget`, which decides whether the remembered configuration survives: a value
+    // that is not a boolean must not be read as either answer.
+    const invalidForget = expect.objectContaining({
+      code: SerialBrokerErrorCode.INVALID_ARGUMENT,
+      context: expect.objectContaining({ argumentName: 'options.forget' }) as unknown,
+    }) as unknown;
+    await expect(tab.client.release('Reader', { forget: 'yes' } as never)).rejects.toThrow(
+      invalidForget,
+    );
+    await expect(tab.client.releaseAll({ forget: 1 } as never)).rejects.toThrow(invalidForget);
+
     expect(tab.client.exists('Reader')).toBe(true);
     expect(device.isOpen).toBe(true);
   });

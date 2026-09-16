@@ -112,11 +112,23 @@ export async function setUpDeviceAgain(remember: boolean): Promise<void> {
  * Stops using the device in this tab. Other tabs keep it, and one of them takes the port over if
  * this tab held it.
  *
- * @param forgetDevice - Also revoke the browser's permission for the port, for every tab, so the
- *   next setup asks the user again.
+ * Nothing is forgotten: with the "remember" checkbox on, the configuration stays in this browser
+ * and the next load restores it. Releasing is disconnecting, not deleting - unchecking the box is
+ * how this page says a configuration should not come back.
  */
-export async function releaseDevice(forgetDevice = false): Promise<void> {
-  await SerialBroker.release(DEVICE_NAME, { forgetDevice });
+export async function releaseDevice(): Promise<void> {
+  await SerialBroker.release(DEVICE_NAME);
+}
+
+/**
+ * Stops using the device and revokes the browser's permission for the port, for every tab, so the
+ * next setup asks the user again.
+ *
+ * The configuration itself is kept, as a plain release keeps it; `{ forget: true }` would remove
+ * that too.
+ */
+export async function forgetTheDevice(): Promise<void> {
+  await SerialBroker.release(DEVICE_NAME, { forgetDevice: true });
 }
 
 /**

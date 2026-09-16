@@ -33,14 +33,27 @@ export async function startUp(): Promise<readonly string[]> {
   return restored;
 }
 
-/** Stops using the scale in this tab. Other tabs keep using it; the permission is kept. */
+/**
+ * Stops using the scale in this tab. Other tabs keep using it, and nothing is forgotten: the
+ * configuration stays remembered and the permission stays granted, so setting it up again — now or
+ * on the next visit — needs no prompt.
+ */
 export async function stopUsingScale(): Promise<void> {
   await SerialBroker.release('Scale');
 }
 
-/** Stops using the scale and revokes the browser's permission for it. */
+/**
+ * Stops using the scale and forgets the configuration, so `restore()` no longer brings it back.
+ *
+ * The browser keeps its permission for the device: a configuration set up again finds the port.
+ */
+export async function forgetTheScaleConfiguration(): Promise<void> {
+  await SerialBroker.release('Scale', { forget: true });
+}
+
+/** Leaves no trace of the scale in this browser: the configuration and the permission both go. */
 export async function forgetScale(): Promise<void> {
-  await SerialBroker.release('Scale', { forgetDevice: true });
+  await SerialBroker.release('Scale', { forget: true, forgetDevice: true });
 }
 
 /** Stops using every configuration in this tab, for instance when leaving a feature area. */
