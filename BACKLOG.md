@@ -40,8 +40,13 @@ Done in the same round:
   the port late. The tab holding the port now asks the issuing tab before it begins a write from it
   (protocol version 14, ADR-0013), which also closes the crash exception to at-most-once.
 - The Arduino suite's first test could not open COM3 on 2026-09-15 evening while a program outside
-  the browser held the port (Web Serial alone failed too); recorded in the manual test plan. Run the
-  Arduino suite again with the port free before the release.
+  the browser held the port (Web Serial alone failed too). Run again with the port free on
+  2026-09-16: **5 of 6 tests pass**, and `echoes a payload larger than the write chunk` fails because
+  the board loses what arrives from roughly 255 bytes on - measured with Web Serial alone, without
+  the library, and recovering for small payloads right afterwards. Both runs are in the manual test
+  plan. **Before the release**, run that test against a board that keeps up (a power cycle, a sketch
+  that reads while it writes, or flow control); the emulator's 64 KiB round trip covers large
+  payloads meanwhile.
 - Documentation: deploying on a web server (files, a strict CSP with the import map, cache headers,
   a checklist), one import-map specifier, operator stations (every window watches, one operates),
   the framing and request/answer examples fixed, and every contradiction the reviewers logged.

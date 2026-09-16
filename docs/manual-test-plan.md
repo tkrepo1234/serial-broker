@@ -432,3 +432,39 @@ library defect. The emulator suite (15 tests) passed at the same time.
 
 The hardware suites now write each tab's statuses, error codes and log records next to a failed
 test's results, which is what told this apart.
+
+### 2026-09-16 — the Arduino suite with the port free: the board drops payloads over about 240 bytes
+
+The port was free again (the program that held it on 2026-09-15 was gone), and **5 of the 6 tests
+passed**, the first one included. What failed was `echoes a payload larger than the write chunk`:
+of 5 000 bytes sent, **137 bytes came back** in one run and **none** in a second, within 180 seconds
+each. No error was reported and the status stayed `open` throughout - the library sent the bytes and
+waited for an echo that never came.
+
+Measured afterwards **with Web Serial alone, no library**, on the same port in the same browser:
+
+| Sent  | Echoed back within 12-15 s |
+| ----- | -------------------------- |
+| 16    | 16                         |
+| 32    | 32                         |
+| 64    | 64                         |
+| 65    | 65                         |
+| 128   | 128                        |
+| 200   | 200                        |
+| 240   | 240                        |
+| 255   | 0                          |
+| 256   | 0                          |
+| 300   | 0                          |
+| 512   | 208                        |
+| 5 000 | 0                          |
+
+After every one of those failures the board echoed 16 bytes again at once. So the board - or the
+sketch on it - loses what arrives faster than it reads, from roughly 255 bytes on, and there is no
+flow control to stop the host. Nothing in the library is involved: the same happens without it.
+The same board echoed 5 000 bytes on 2026-09-14 and 2026-09-15, so this is a state of the board, not
+a property of the test.
+
+**How to tell this apart next time:** run the size probe with Web Serial alone before suspecting the
+library, and read the tab histories the suites write next to a failed test. A release needs this test
+against a board that keeps up - a power cycle, a sketch that reads while it writes, or flow control.
+The 64 KiB round trip on the emulator (steps 20, 22) covers large payloads in the meantime.
