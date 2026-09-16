@@ -199,6 +199,11 @@ Remembered configurations moved from **storage version 1 to 2** and are not migr
 
 ### Fixed
 
+- **Both OpenUI5 examples failed to load.** `ui5-tooling-modules` cuts a resolved path without a
+  query string to the empty string, so bundling any package with a `new URL(…, import.meta.url)` -
+  serial-broker has one, for the worker - fails and the component never resolves. Each example now
+  corrects that one line in its own `node_modules` when it starts or builds, and says so; the
+  library is unchanged (ADR-0044).
 - **With one tab open - the ordinary case on a production line - disconnecting deleted the
   configuration**, and the next visit had nothing to restore. The debugging surface now keeps the
   configuration listed after _Disconnect_, with _Connect_ beside it.

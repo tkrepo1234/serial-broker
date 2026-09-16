@@ -6,10 +6,10 @@
   "description": "OpenUI5 application showing serial-broker through a reusable UI5 integration module.",
   "license": "MIT",
   "scripts": {
-    "prestart": "node scripts/copy-serial-broker-assets.mjs",
+    "prestart": "node scripts/copy-serial-broker-assets.mjs && node scripts/fix-ui5-tooling-modules.mjs",
     "start": "ui5 serve --port 8150",
     "typecheck": "tsc --noEmit",
-    "prebuild": "node scripts/copy-serial-broker-assets.mjs",
+    "prebuild": "node scripts/copy-serial-broker-assets.mjs && node scripts/fix-ui5-tooling-modules.mjs",
     "build": "ui5 build --clean-dest"
   },
   "dependencies": {

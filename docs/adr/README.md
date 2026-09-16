@@ -39,6 +39,7 @@ Internals chapter of the developer documentation (`docs/site/internals.md`).
 | [0041](./0041-tell-liveness-through-web-locks.md)                        | Tell who is still there through Web Locks, not heartbeats                           |
 | [0042](./0042-keep-the-toolchains-configuration-in-config.md)            | Keep the toolchain's configuration in config/                                       |
 | [0043](./0043-a-classic-script-build-and-published-names.md)             | Ship a classic script build on one global; name published files after the package   |
+| [0044](./0044-correct-the-ui5-import-meta-plugin-in-the-examples.md)     | Correct the UI5 import-meta plugin in the two OpenUI5 examples                      |
 
 ## Superseded
 
