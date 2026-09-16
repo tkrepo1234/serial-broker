@@ -35,6 +35,7 @@ shared-ports
 :maxdepth: 2
 :caption: Reference
 
+api/reference/index/interfaces/SerialBrokerApi
 configuration
 errors
 api/index

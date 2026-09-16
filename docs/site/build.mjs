@@ -41,6 +41,8 @@ run(process.execPath, [
 // TypeDoc names each module page after its entry file. Readers know them by the import path.
 retitle('docs/site/api/reference/index/index.md', 'serial-broker');
 retitle('docs/site/api/reference/diagnostics/index.md', 'serial-broker/diagnostics');
+// The interface an application actually calls, named for what it is rather than for its file.
+retitle('docs/site/api/reference/index/interfaces/SerialBrokerApi.md', 'Application API');
 tidyReference(join(root, 'docs', 'site', 'api', 'reference'));
 run(python, [
   '-m',
@@ -69,6 +71,8 @@ function retitle(path, title) {
  * - **The pipe before a union.** A union TypeDoc considers long is written over several lines, so
  *   it starts with a `|`. In a table cell that line becomes one row, and the union reads as if a
  *   stray character stood in front of it.
+ * - **A union in a table cell.** Its alternatives run into one line, so a type reads as prose.
+ *   Each alternative but the first starts a line of its own, with the pipe in front of it.
  * - **Where a member was inherited from.** That column holds a dotted reference, one word the
  *   browser cannot break, so it takes room from the description beside it. The table is marked,
  *   and the stylesheet lets that one column break; see `_static/serial-broker.css`.
@@ -81,15 +85,80 @@ function tidyReference(directory) {
     } else if (entry.name.endsWith('.md')) {
       const text = readFileSync(path, 'utf8');
       const tidied = markInheritedTables(
-        text
-          .replace(/\.md#(?:property|enumeration-member)-[\w-]+\)/g, '.md)')
-          .replaceAll('| \\| ', '| '),
+        breakUnions(
+          text
+            .replace(/\.md#(?:property|enumeration-member)-[\w-]+\)/g, '.md)')
+            .replaceAll('| \\| ', '| '),
+        ),
       );
       if (tidied !== text) {
         writeFileSync(path, tidied);
       }
     }
   }
+}
+
+/** The cells of a Markdown table row, with escaped pipes left inside the cell they belong to. */
+function tableCells(row) {
+  const cells = [];
+  let current = '';
+  let escaped = false;
+  for (const character of row) {
+    if (escaped) {
+      current += character;
+      escaped = false;
+    } else if (character === '\\') {
+      current += character;
+      escaped = true;
+    } else if (character === '|') {
+      cells.push(current);
+      current = '';
+    } else {
+      current += character;
+    }
+  }
+  cells.push(current);
+  return cells;
+}
+
+/**
+ * Starts every alternative of a union on a line of its own, in the columns that hold a type.
+ *
+ * `number | undefined` reads as prose in a narrow column; one alternative per line, each led by
+ * its pipe, reads as a type. Only those columns are touched, so a pipe in a description stays
+ * where it is.
+ */
+function breakUnions(text) {
+  // Declared here rather than beside the other constants: this file calls tidyReference() at
+  // the top, before a const further down would have been initialised.
+  const typeHeadings = new Set(['Type', 'Value', 'Default value']);
+  const rows = text.split('\n');
+  let typeColumns = [];
+  return rows
+    .map((row) => {
+      if (!row.startsWith('|')) {
+        typeColumns = [];
+        return row;
+      }
+      const cells = tableCells(row);
+      const headings = cells.map((cell) => cell.trim());
+      if (headings.some((heading) => typeHeadings.has(heading))) {
+        typeColumns = headings.flatMap((heading, index) =>
+          typeHeadings.has(heading) ? [index] : [],
+        );
+        return row;
+      }
+      if (typeColumns.length === 0) {
+        return row;
+      }
+      for (const index of typeColumns) {
+        if (cells[index] !== undefined) {
+          cells[index] = cells[index].replaceAll(' \\| ', '<br>\\| ');
+        }
+      }
+      return cells.join('|');
+    })
+    .join('\n');
 }
 
 /**
