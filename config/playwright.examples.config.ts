@@ -21,7 +21,8 @@ interface ExampleManifest {
   readonly readyPath: string;
 }
 
-const examplesDir = join(import.meta.dirname, 'examples');
+// This file lives in config/ (ADR-0042); the examples are a directory up.
+const examplesDir = join(import.meta.dirname, '..', 'examples');
 const only = process.argv.slice(2).filter((argument) => argument.startsWith('examples/'));
 
 const examples = readdirSync(examplesDir, { withFileTypes: true })
@@ -45,7 +46,10 @@ const examples = readdirSync(examplesDir, { withFileTypes: true })
   }));
 
 export default defineConfig({
-  testDir: './examples',
+  // Resolved against config/, so both reach back to the repository root; `outputDir` keeps the
+  // traces where CI collects them rather than under config/.
+  testDir: '../examples',
+  outputDir: '../test-results',
   testMatch: '**/smoke.spec.ts',
   testIgnore: '**/node_modules/**',
   // One at a time: each example runs its own dev server, and the machine runs everything else.

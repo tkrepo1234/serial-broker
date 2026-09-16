@@ -79,8 +79,8 @@ lines, generated or checked option tables.
 
 Every script has a caller and CI names no missing path. To clean up: `docs/architecture.md`
 duplicates `docs/site/internals.md`; the dated usability review sits among living documents; stale
-entries in `.gitignore` and `.prettierignore`; `typedoc.json` only serves as the base of
-`typedoc.site.json`; the README does not describe the layout. `design/` waits for Tim's assessment of
+entries in `.gitignore` and `config/prettier-ignore`; `typedoc.json` only serves as the base of
+`config/typedoc.json`; the README does not describe the layout. `design/` waits for Tim's assessment of
 the illustration and stays.
 
 ## After the work

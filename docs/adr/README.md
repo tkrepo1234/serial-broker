@@ -37,6 +37,7 @@ Internals chapter of the developer documentation (`docs/site/internals.md`).
 | [0036](./0036-take-the-device-identity-from-the-chosen-port.md)          | Device identity, permission and auto mode: the port the user chooses                |
 | [0037](./0037-measure-performance-against-expectations-written-first.md) | Measure performance against expectations written first                              |
 | [0041](./0041-tell-liveness-through-web-locks.md)                        | Tell who is still there through Web Locks, not heartbeats                           |
+| [0042](./0042-keep-the-toolchains-configuration-in-config.md)            | Keep the toolchain's configuration in config/                                       |
 
 ## Superseded
 

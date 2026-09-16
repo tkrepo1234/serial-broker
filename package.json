@@ -89,26 +89,26 @@
     "./package.json": "./package.json"
   },
   "scripts": {
-    "build": "tsup && tsup --config tsup.debug.config.ts && tsc -p tsconfig.build.json && node scripts/cjs-types.mjs && node scripts/check-dist.mjs",
+    "build": "tsup --config config/tsup.config.ts && tsup --config config/tsup.debug.config.ts && tsc -p tsconfig.build.json && node scripts/cjs-types.mjs && node scripts/check-dist.mjs",
     "typecheck": "tsc --noEmit && tsc -p emulator && tsc -p docs/site/examples/code && tsc -p bench",
     "bench": "npm run build && node bench/run.mjs",
     "bench:browser": "npm run build && playwright test --config bench/browser/playwright.config.ts",
     "emulator": "node emulator/launch.mjs",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
-    "format": "prettier --write .",
-    "format:check": "prettier --check .",
-    "test": "vitest run",
-    "test:watch": "vitest",
-    "test:coverage": "vitest run --coverage",
-    "test:browser": "npm run build && playwright test",
+    "format": "prettier --config config/prettier.json --ignore-path .gitignore --ignore-path config/prettier-ignore --write .",
+    "format:check": "prettier --config config/prettier.json --ignore-path .gitignore --ignore-path config/prettier-ignore --check .",
+    "test": "vitest run --config config/vitest.config.ts",
+    "test:watch": "vitest --config config/vitest.config.ts",
+    "test:coverage": "vitest run --coverage --config config/vitest.config.ts",
+    "test:browser": "npm run build && playwright test --config config/playwright.config.ts",
     "test:extreme": "node scripts/test-extreme.mjs",
     "docs": "node docs/site/build.mjs",
     "debug": "npm run build && npx --yes serve dist",
     "verify": "npm run format:check && npm run lint && npm run typecheck && npm run test:coverage && npm run build",
     "prepublishOnly": "npm run verify",
     "release:check": "node scripts/release-notes.mjs",
-    "test:examples": "playwright test --config playwright.examples.config.ts --pass-with-no-tests"
+    "test:examples": "playwright test --config config/playwright.examples.config.ts --pass-with-no-tests"
   },
   "overrides": {
     "esbuild": "^0.28.2"

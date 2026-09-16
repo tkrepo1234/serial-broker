@@ -9,7 +9,7 @@
  * was given, inside the code that falls back to a `BroadcastChannel`, so the sentence ends up in
  * the `environment.transport-fallback` log record or as the cause of `BROKER_UNAVAILABLE`.
  *
- * Injected by tsup.config.ts into the CommonJS output only.
+ * Injected by config/tsup.config.ts into the CommonJS output only.
  */
 export const cjsImportMeta = Object.defineProperty({}, 'url', {
   get() {

@@ -1,6 +1,12 @@
+import { fileURLToPath } from 'node:url';
+
 import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
+  // This file lives in config/ (ADR-0042), but every path below names the repository, not the
+  // directory the configuration sits in. Stating the root keeps the globs and the coverage
+  // thresholds meaning what they say, wherever the runner is started from.
+  root: fileURLToPath(new URL('..', import.meta.url)),
   test: {
     // Plain Node: no browser globals exist here on purpose. Every platform API this library
     // uses is injected (ADR-0014), so code that reaches for a global fails loudly in tests
