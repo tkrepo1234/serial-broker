@@ -52,6 +52,18 @@ Remembered configurations moved from **storage version 1 to 2** and are not migr
   `SerialBrokerErrorCode` needs a case for it.
 - **A resolved `send()` means the browser took the bytes for the port** - it always did; the
   documentation no longer says they reached the device.
+- **`release(name)` no longer forgets the remembered configuration.** Closing the port is no longer
+  a deletion: the entry stays, so `restore()` and a later `setup()` bring the configuration back.
+  Code that relied on a release removing it passes `release(name, { forget: true })`, or
+  `releaseAll({ forget: true })` for every configuration of the tab. `forgetDevice` is unchanged and
+  says nothing about what is remembered (ADR-0033).
+- **Only a hard-coded path into the package breaks with the renamed files.** Every import path is
+  unchanged - `serial-broker`, `serial-broker/min`, `serial-broker/diagnostics`,
+  `serial-broker/diagnostics/min`, `serial-broker/worker` - so an application that imports by
+  package name needs no change. What needs one line changed is anything naming a file inside the
+  package: a deployment step that copies `dist/index.min.js`, an import map pointing at it, a server
+  that checks for it. Use `serial-broker.min.js` instead; the worker script keeps its name, so the
+  URL every tab shares does not move.
 - **The debugging surface needs `dist/debug/debug.css`** served next to `dist/debug/index.html`;
   serving `dist/` as a whole is unaffected.
 - **Diagnostics:** a report's settings carry `remember`, `receive`, `connection.autoReconnect` and
@@ -92,6 +104,20 @@ Remembered configurations moved from **storage version 1 to 2** and are not migr
 - **Eleven example applications**, each with a README, a fixed port and a Playwright smoke test
   against a Web Serial stand-in: `minimal`, `multi-tab-dashboard`, `exclusive`, `no-bundler`,
   `openui5`, `react`, `vue`, `svelte` and `angular` (`npm run test:examples`, in CI).
+- **`ReleaseOptions.forget`** (default `false`): removes the configuration remembered under the
+  name, so `restore()` no longer brings it back. Independent of `forgetDevice`; together they leave
+  no trace of the configuration in this browser. A no-op for a configuration set up with
+  `remember: false`.
+- The debugging surface's ⋯ menu offers _Disconnect_, _Disconnect and forget the configuration_, and
+  _Disconnect, forget the configuration and the device_.
+- **A classic script build.** `<script src="serial-broker.global.js"></script>` puts the whole
+  library on one global, `SerialBroker`, for a page that writes no modules: no import map, no bare
+  specifier, and no hash in `script-src` for an inline map. The global is the facade and carries the
+  rest of the surface as properties. `serial-broker.diagnostics.global.js` does the same for the
+  observer, on `SerialBrokerDiagnostics`. New package subpaths `serial-broker/global` and
+  `serial-broker/diagnostics/global`. **`configure({ workerUrl })` is required** with these builds,
+  before the first `setup()`: a classic script cannot locate the worker and never guesses one
+  (ADR-0043).
 - **Two of them are JavaScript**, beside their TypeScript siblings: `examples/minimal-js` is one HTML
   file - markup, an import map and a single inline module script, no modules and no build step - and
   `examples/openui5-js` is the OpenUI5 application and its reusable model in classic `sap.ui.define`
@@ -116,6 +142,16 @@ Remembered configurations moved from **storage version 1 to 2** and are not migr
   `deviceKind` and reports `vendorId`/`productId` only for `'usb'`; `EffectiveSettings.device` is the
   full `DeviceFilter` union; the context of `DEVICE_MISMATCH` gains `expectedDevice`.
 - **Breaking:** a new `onStatusChange` listener receives the current status once.
+- **Releasing forgets nothing by default**: a disconnect is not a deletion, and the application
+  decides when something is forgotten. A release still lets go of the shared hold that says this tab
+  runs a remembered configuration, so another tab's `forget` is never blocked by a tab that has
+  disconnected (ADR-0033, ADR-0027).
+- **The worker script is minified**, with its source map published beside it: 48.9 KB became
+  23.0 KB, and 13.4 KB became 8.0 KB gzipped, on every tab of every installation. Same file, same
+  URL, so tabs on any build still share one worker.
+- **Published files are named after the package, not after the entry file**: `serial-broker.js`,
+  `serial-broker.cjs`, `serial-broker.min.js`, `serial-broker.d.ts` and `serial-broker.diagnostics.*`;
+  every `.map` follows its file, and `serial-broker.worker.js` is unchanged.
 - **The toolchain's configuration moved to `config/`.** The repository root went from 22 tracked
   files to 14: Prettier, tsup, Vitest, Playwright and TypeDoc keep their configuration there, and
   each npm script names it with a path flag. `package.json`, the tsconfigs, `eslint.config.js` and
@@ -163,6 +199,11 @@ Remembered configurations moved from **storage version 1 to 2** and are not migr
 
 ### Fixed
 
+- **With one tab open - the ordinary case on a production line - disconnecting deleted the
+  configuration**, and the next visit had nothing to restore. The debugging surface now keeps the
+  configuration listed after _Disconnect_, with _Connect_ beside it.
+- **The debugging surface's "The picker was dismissed" notice stayed** until _Choose a device_ was
+  clicked again; it is cleared whenever another action starts.
 - **A write rejected with `WRITE_TIMEOUT` and `started: false` is never written afterwards.** It
   could be: when the tab holding the port had a longer `writeTimeoutMs`, when the write reached that
   tab part way through its time, or when its request waited before that tab could handle it. The

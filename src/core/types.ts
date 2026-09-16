@@ -296,7 +296,7 @@ export interface ReleaseOptions {
    * The entry is one per name for the whole origin, so it is removed only once no tab still runs
    * the configuration with `remember: true`; a tab that still does keeps it. For a configuration
    * set up with `remember: false` there is nothing stored under the name, and this does nothing.
-   * Independent of {@link ReleaseOptions.forgetDevice}: pass both to remove every trace of the
+   * Independent of `forgetDevice` below: pass both to remove every trace of the
    * configuration in this browser.
    *
    * @defaultValue false
