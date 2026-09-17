@@ -19,7 +19,8 @@ model is "one global environment per file" unless that environment is fully inje
   CommonJS, once more minified, and once more as classic scripts
   ([ADR-0043](./0043-a-classic-script-build-and-published-names.md)); the worker script
   (`src/worker/serial-broker.worker.ts`) is built as a minified ES module only. **Every published
-  file is minified except the readable ES module and CommonJS builds** — the worker included: it
+  file is minified except the readable ES module and CommonJS builds and the debugging surface's
+  bundle (ADR-0019)** — the worker included: it
   is served to every tab of every installation and nothing reads it, and its source map is
   published beside it. Every published file is named after the package rather than after its entry
   file (ADR-0043). Declarations are emitted by `tsc`, so the published types are the ones the test

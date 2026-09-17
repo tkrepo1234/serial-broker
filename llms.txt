@@ -201,9 +201,13 @@ Codes: `INVALID_ARGUMENT`, `UNKNOWN_CONFIGURATION`, `CONFIGURATION_CONFLICT`,
 - **No automatic reconnect:** `connection: { autoReconnect: false }`; a loss ends in `failed` until
   `setup()` is called again.
 - **Request/answer:** send, then resolve on the next complete line from `onReceive`, with your own
-  timeout; serialise requests within the tab.
+  timeout. Every tab receives every answer, so one request at a time across ALL tabs: hold a Web
+  Lock of your own (`navigator.locks.request('my-app/scale', ...)`) around send-and-wait.
 
 ## Where things are
+
+In the repository (https://github.com/tkrepo1234/serial-broker); the package itself holds `dist/`,
+`README.md`, `CHANGELOG.md` and this file.
 
 - `README.md` - overview. `docs/site/` - the documentation (Sphinx, Markdown): `installing.md`,
   `first-connection.md`, `configuration.md`, `errors.md`, `shared-ports.md`, `guarantees.md`,

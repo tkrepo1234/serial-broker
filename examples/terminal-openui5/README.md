@@ -108,7 +108,11 @@ SerialBroker.configure({
 });
 
 // controller/Terminal.controller.js
-await SerialBroker.setup('Terminal', { serial: { baudRate: 9600 } }); // no device named: auto mode
+// No device named: auto mode. decodeText adds event.text to what is received.
+await SerialBroker.setup('Terminal', {
+  serial: { baudRate: 9600 },
+  encoding: { decodeText: true },
+});
 await SerialBroker.requestAccess('Terminal'); // the picker, still within the click on Connect
 SerialBroker.subscribe('Terminal', 'onReceive', (event) => show(event.text));
 await SerialBroker.send('Terminal', new TextEncoder().encode('PING\r\n'));

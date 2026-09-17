@@ -60,8 +60,9 @@ string matching on the message.
 
 ### Negative
 
-- A mapping table must be maintained as Chromium evolves. It is one file, exhaustively
-  switch-checked by the compiler, with a documented fallback code for the unmapped case.
+- A mapping table must be maintained as Chromium evolves. It is one file of tables keyed
+  by the `DOMException` name, each with a fallback code for the unmapped case; the name is kept in
+  `context.domExceptionName`.
 
 ## Verification
 

@@ -49,7 +49,7 @@ and `src/global-diagnostics.ts`. They are reached from the package as `serial-br
 `.subscribe()`, `.send()`, `.requestAccess()`, `.release()`, `.configure()` read exactly as they
 do in a module, and the package's other exports are properties of that same object:
 `SerialBroker.SerialBrokerError`, `.SerialBrokerErrorCode`, `.SerialBrokerStatus`, `.REMEDIATION`,
-`.isSerialBrokerError()`, `.isSupported()`, `.PROTOCOL_VERSION`. A page needs exactly one name,
+`.isSerialBrokerError()`, `.hasCode()`, `.isSupported()`, `.PROTOCOL_VERSION`. A page needs exactly one name,
 and can say what it took from this library.
 
 `SerialBrokerDiagnostics` is the other way round — a namespace object carrying
@@ -132,7 +132,7 @@ The worker script's minification belongs to the build outputs and is recorded in
   Rejected — a page would either write that, or start with a line of unpacking. The global is the
   facade instead, and the other exports hang off it.
 - **Several globals: `SerialBroker`, `SerialBrokerError`, `SerialBrokerStatus`, …** Closer to what
-  the module exports look like. Rejected: a build that takes seven names off a page cannot be
+  the module exports look like. Rejected: a build that takes nine names off a page cannot be
   reasoned about by whoever maintains that page, and a collision is found at run time, in one
   browser, on one station.
 - **A `SerialBroker.default` or `SerialBroker.SerialBroker` alias for symmetry with the module.**

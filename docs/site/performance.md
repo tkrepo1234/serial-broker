@@ -7,8 +7,9 @@ expectation was written down before the first measurement.
 
 On a production line the serial line itself is the limit. At 9600 baud a device produces about a
 kilobyte a second; at 921 600 baud, about 90 KB/s. The library's own cost stays far below that in
-every scenario. One result does not: after a crash, some tabs can wait a minute before they can
-use the port again - see [Documented limits](#documented-limits).
+every scenario. One result is over its expectation, by less than ten times: a handover after a
+crash takes about 0.4 s, nearly all of it the browser noticing the crash - see
+[Over the expectation](#over-the-expectation-by-less-than-ten-times).
 
 ## What is measured, and where
 
@@ -144,9 +145,9 @@ every tab waits on; the run of 2026-09-15 measured `everyTab` at 413.5 ms at the
 
 ### Over the expectation, by less than ten times
 
-- **A handover after a crash** (`wall` and `everyTab`): 407.4 ms at the median on the `SharedWorker`
-  transport and 396.6 ms on `BroadcastChannel`, against 250 ms, with a 95th percentile of 763.0 ms and
-  716.7 ms (the run of 2026-09-14: 670 and 307 ms, 840 and 640 ms). Almost none of it is the library's: `library` - the same moment against a plain Web Lock the crashed page held, freed by the browser in the same crash - is 8.200 ms and 5.900 ms at the median. The rest is Chromium noticing that the renderer is gone, plus the
+- **A handover after a crash** (`wall` and `everyTab`), in the run of 2026-09-17: 382.3 ms at the
+  median on the `SharedWorker` transport and 349.7 ms on `BroadcastChannel`, against 250 ms, with a
+  95th percentile of 714.6 ms and 645.7 ms. Almost none of it is the library's: `library` - the same moment against a plain Web Lock the crashed page held, freed by the browser in the same crash - is 8.600 ms and 6.300 ms at the median. The rest is Chromium noticing that the renderer is gone, plus the
   DevTools round trip that orders the crash. In a
   separate check, the first crash after the browser started took about twice as long as the ones
   after it. The expectation stays at 250 ms, so that the next run is judged against the same line.
@@ -204,5 +205,4 @@ builds without a benchmark run and the numbers a reader sees are the numbers tha
 the header of each fragment names the commit and the machine, and says when the measured code had
 uncommitted changes. The browser benchmark drives the installed Microsoft Edge, as the browser test
 suite does; `SERIAL_BROKER_BROWSER_CHANNEL` picks another Chromium, and
-`SERIAL_BROKER_BROWSER_TEST_PORT` moves its server off port 8147. Most of its ten minutes are the
-five crashes on the `SharedWorker` transport, each of which waits for the limit above.
+`SERIAL_BROKER_BROWSER_TEST_PORT` moves its server off port 8147.

@@ -3,11 +3,11 @@
 One HTML file: markup, an import map, and one inline module script. No bundler, no compiler, no
 `npm run build` - what you read here is what the browser runs. This is the whole of
 [examples/minimal-js](https://github.com/tkrepo1234/serial-broker/tree/main/examples/minimal-js),
-which is served by a nine-line static server and covered by the same smoke test as every other
+which is served by a short static server and covered by the same smoke test as every other
 example.
 
-It needs two files next to each other on the web server: `serial-broker.js` (or
-`serial-broker.min.js`) and `serial-broker.worker.js`. Every release attaches them as
+It needs two files next to each other on the web server: `serial-broker.min.js` (or the readable
+`serial-broker.js` from the package) and `serial-broker.worker.js`. Every release attaches them as
 `serial-broker-<version>-browser.zip`; [Installing](../installing.md) says which file is which, and
 [Deploying to a web server](../deploying.md) covers the headers and what to check afterwards.
 
@@ -27,7 +27,7 @@ This is what makes the tabs share one port rather than each opening its own.
 
 **The connect button is offered exactly while the status is `awaiting-permission`.** The browser
 shows its port picker during a click and at no other time, so `requestAccess()` is the first thing
-in the handler: anything awaited before it uses the click up.
+in the handler: a click counts as a gesture for a few seconds only.
 
 **The script is checked.** `npm run typecheck` in that example runs `tsc` with `checkJs` over the
 page, against the library's own types, so the JSDoc annotations are not decoration - an example that

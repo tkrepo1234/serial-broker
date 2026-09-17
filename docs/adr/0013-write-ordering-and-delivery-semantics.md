@@ -153,7 +153,7 @@ closing it works.
   it would not help: a write held for a port, or handed on after `NOT_CONNECTED`, reaches the holder
   part way through its time with equal settings too.
 - **Report `write-started` once the write has begun, and trust durations to keep the holder within
-  the issuer's deadline.** What protocol 14 first did: `write-request` carried `remainingMs`, what was
+  the issuer's deadline.** What an earlier design did: `write-request` carried `remainingMs`, what was
   left of the issuer's deadline, and the holder did not begin a write once that long had passed since
   it received the request. Counted from receipt, the limit fell later than the issuer's deadline by
   however long the request waited before it was handled - a busy main thread, a machine asleep - and

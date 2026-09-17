@@ -53,8 +53,9 @@ compiler flag requires an ADR.
 - **Make illegal states unrepresentable** before adding a runtime check for them.
 - **Public option objects are `interface`s with all fields documented in TSDoc.** Internal
   shapes may be `type` aliases.
-- **Deep-freeze what you hand out.** Any object escaping the library (status snapshots,
-  event payloads) is `Readonly<...>` in the type system and frozen at runtime.
+- **Freeze what you hand out and keep.** Status snapshots and error contexts are `Readonly<...>` in
+  the type system and frozen at runtime. Event payloads are `readonly` in the type system, and
+  their `data` is a copy the receiver may keep or change.
   See [Defensive Programming](./defensive-programming.md).
 - **Never widen the public surface accidentally.** Everything exported from `src/index.ts` is
   public API covered by SemVer. Internal symbols are not exported from the entry point, even

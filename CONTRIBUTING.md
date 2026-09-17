@@ -41,7 +41,7 @@ TypeScript sources directly, on Node's built-in type stripping, and so needs a N
 switched on by default — 22.18 or newer on the 22 line.
 
 `npm run docs` also needs Python, in a virtual environment at `docs/.venv` - or, to keep it out of
-the working folder, at `~/.serial-broker/docs-venv`. Create it once with
+the working folder, at `~/.serial-broker/docs-venv` or wherever `SERIAL_BROKER_DOCS_VENV` points. Create it once with
 `python -m venv docs/.venv`, then install `docs/site/requirements.txt` with that environment's
 `pip`. The build fails on any warning, in CI as locally.
 
@@ -156,7 +156,8 @@ pre-release. Nothing is published to npm before 1.0.
 The workflow (`scripts/release-notes.mjs` does the checking) first checks that the tag matches
 `package.json` and that `CHANGELOG.md` has a section for the version. It then runs every CI job on
 the tagged commit — `verify`, `examples`, `browser` and `docs` — and creates the GitHub release with
-the notes and the packed package (`serial-broker-0.2.0.tgz`) attached, marked as a pre-release when
+the notes, the packed package (`serial-broker-0.2.0.tgz`) and the browser files
+(`serial-broker-0.2.0-browser.zip`) attached, marked as a pre-release when
 the version has a pre-release part. Started by hand from the Actions tab, it is a dry run for the
 version in `package.json`: the same checks, with the notes and the package uploaded as a workflow
 artifact instead of released. Nothing is published to npm.

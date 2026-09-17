@@ -74,7 +74,7 @@ does nothing, rather than reporting anything: the option names what must not sur
 does.
 
 **Nothing is migrated.** Keys of an earlier format are neither read nor removed. Before 1.0 nothing
-is promised about stored data (CONTRIBUTING.md).
+is promised about stored data (BACKLOG.md, standing decisions).
 
 ## Alternatives considered
 

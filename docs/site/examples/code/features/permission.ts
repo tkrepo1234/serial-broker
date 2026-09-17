@@ -16,8 +16,8 @@ export function offerDeviceChoice(name: string, button: HTMLButtonElement): () =
   });
 
   const onClick = (): void => {
-    // No `await` before this call: it would use up the click, and the browser would refuse to
-    // show the picker.
+    // Nothing slow before this call: a click counts as a gesture for a few seconds only, and after
+    // them the browser refuses to show the picker.
     SerialBroker.requestAccess(name).then(
       (granted) => {
         button.title = granted ? '' : 'The picker was closed without choosing a port.';

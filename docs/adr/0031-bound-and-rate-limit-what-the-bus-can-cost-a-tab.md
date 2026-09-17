@@ -78,8 +78,8 @@ neither refills it at once nor freezes it.
 ### Negative
 
 - A new public error code, `WRITE_QUEUE_FULL`, which applications may see.
-- A legitimate burst beyond a rate is dropped: a diagnostics page that asks nine times in two
-  seconds gets fewer answers. The values are far above what the library and its debugging surface
+- A legitimate burst beyond a rate is dropped: a diagnostics page that asks nine times at once
+  gets eight answers. The values are far above what the library and its debugging surface
   produce.
 - Once per key means a second, different occurrence of a known fault is not logged again.
 

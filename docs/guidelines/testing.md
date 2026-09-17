@@ -282,7 +282,7 @@ Enforced in CI; the build fails below them.
 | Functions  | 90%    | 95%           | 95%           | 82%          |
 | Lines      | 90%    | 95%           | 94%           | 88%          |
 
-The coordination layer's **branch** bars are lower than the global one, which looks backwards
+The **branch** bars of `src/client/` and `src/owner/` are lower than the global one, which looks backwards
 and is not. Those modules are dense with guards against races that cannot be produced on
 demand - "the configuration was released while this message was in flight", "ownership moved
 between the send and the delivery". Each guard is correct, cheap, and load-bearing; but

@@ -10,8 +10,9 @@ copied as described in [The worker script](installing.md#the-worker-script).
 
 On a machine with npm, `npm install serial-broker` and take the files from
 `node_modules/serial-broker/dist/`. Without npm anywhere, every release attaches
-`serial-broker-<version>-browser.zip`, which holds the same files under `serial-broker/` and a
-short `README.txt`. Either way, the files are these:
+`serial-broker-<version>-browser.zip`: the minified and the classic builds, the worker script, their
+source maps and the type declarations, under `serial-broker/`, with a short `README.txt`. The
+readable build and the debugging surface are in the package only. The files are these:
 
 | File                                          | Needed                                                                                                         |
 | --------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |

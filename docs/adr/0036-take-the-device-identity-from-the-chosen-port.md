@@ -81,9 +81,9 @@ auto filter conflicts with nothing; a resolved one counts as its resolution; two
 conflict unless equal in kind and IDs, `nonUsb` and `any` being distinct kinds. Between tabs, devices
 are not compared: the documentation says to pass the same options for a name in every tab.
 
-**Releasing.** `release(name)` stops using a configuration and forgets its remembered entry under
-the rule of ADR-0033; it does not revoke the browser permission, so the next `setup()` is still
-prompt-free. `release(name, { forgetDevice: true })` also calls `SerialPort.forget()` where the
+**Releasing.** `release(name)` stops using a configuration in this tab and forgets nothing: what is
+remembered stays (ADR-0033) and the browser permission is kept, so the next `setup()` is
+prompt-free. `{ forget: true }` also removes the remembered entry, under the rule of ADR-0033. `release(name, { forgetDevice: true })` also calls `SerialPort.forget()` where the
 browser supports it.
 
 **Choosing again** (2026-09-15). `requestAccess(name, { chooseAgain: true })`, in any tab taking part
@@ -117,8 +117,6 @@ application's decision, and it is set up with the other device instead.
 - **Turn a resolved auto-mode configuration into the explicit one it resolved to.** Tabs of one name
   would diverge once the holder is re-chosen elsewhere; keeping the mode makes every auto-mode tab
   follow the holder.
-- **Share the choice through a message from the choosing tab to the holder.** The holder would act on
-  a device a message named, which a script of the origin could forge. The holder decides and tells.
 - **Derive the configuration in the debugging surface.** What the page did before this decision
   ([ADR-0019](./0019-ship-the-debugging-surface.md)); every application would have to write it again,
   and the result was not shared between tabs.

@@ -6,7 +6,7 @@ entry points only, never through `src/`. Each one lives in its own directory wit
 
 | Directory           | Shows                                                                                  |
 | ------------------- | -------------------------------------------------------------------------------------- |
-| `minimal-js/`       | One page in plain JavaScript, as one HTML file: no modules, no build step. Start here. |
+| `minimal-js/`       | One page in plain JavaScript: an import map, one inline module script, no build step.  |
 | `terminal-openui5/` | A serial terminal in SAP OpenUI5 (`sap_horizon`); its build runs from a file, offline. |
 
 ## The contract every example keeps

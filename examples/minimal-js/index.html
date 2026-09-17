@@ -153,8 +153,8 @@
         });
 
         el('connect').addEventListener('click', () => {
-          // The first thing in the handler: anything awaited before it uses the click up, and
-          // without a click the browser shows no picker. `false` means the user closed it.
+          // Early in the handler: a click counts as a gesture for a few seconds only, and without
+          // one the browser shows no picker. `false` means the user closed it.
           SerialBroker.requestAccess(NAME).then(() => undefined, showError);
         });
 

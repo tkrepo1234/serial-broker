@@ -25,8 +25,8 @@ which device it is, later visits open it with no prompt, and the button never sh
 The status listener is told the current status once as soon as it is registered, so the button is
 right from the start, whatever happened between `setup()` and `subscribe()`.
 
-`requestAccess()` is called directly in the click handler. An `await` in front of it would use up
-the click, and the browser only shows its port picker in response to one.
+`requestAccess()` is called directly in the click handler: the browser only shows its port picker
+in response to a click, and the browser counts a click as a gesture for a few seconds only, and an `await` that outlasts them loses it.
 
 Nothing in the script refers to tabs. Every tab runs the same code; serial-broker decides which of
 them holds the port, and every tab receives the data and can send.

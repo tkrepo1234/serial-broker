@@ -12,7 +12,7 @@ All errors thrown or reported by this library are instances of `SerialBrokerErro
 class SerialBrokerError extends Error {
   readonly code: SerialBrokerErrorCode; // stable, machine-readable, documented
   readonly configName: string | undefined; // which configuration it relates to
-  readonly context: Readonly<Record<string, unknown>>; // structured, serialisable detail
+  readonly context: SerialBrokerErrorContext; // structured, serialisable detail, typed per field
   readonly remediation: string; // what the developer should do
   readonly isRetryable: boolean; // whether the library will retry on its own
   readonly timestamp: number; // epoch ms, from the injected clock

@@ -4,16 +4,17 @@ The configuration of the tools that build, format, test and document this librar
 rather than in the repository root so that what a visitor sees first is the project and not its
 toolchain ([ADR-0042](../docs/adr/0042-keep-the-toolchains-configuration-in-config.md)).
 
-| File                            | Tool                          | Invoked by                                                  |
-| ------------------------------- | ----------------------------- | ----------------------------------------------------------- |
-| `prettier.json`                 | Prettier                      | `npm run format`, `npm run format:check`                    |
-| `prettier-ignore`               | Prettier's ignore list        | the same, as a second `--ignore-path` after `.gitignore`    |
-| `tsup.config.ts`                | tsup: the published bundles   | `npm run build`                                             |
-| `tsup.debug.config.ts`          | tsup: the debugging surface   | `npm run build`                                             |
-| `vitest.config.ts`              | Vitest and its coverage gates | `npm test`, `npm run test:coverage`, `npm run test:extreme` |
-| `playwright.config.ts`          | the browser suite             | `npm run test:browser`                                      |
-| `playwright.examples.config.ts` | the examples' smoke tests     | `npm run test:examples`                                     |
-| `typedoc.json`                  | the API reference             | `npm run docs`                                              |
+| File                            | Tool                                       | Invoked by                                                  |
+| ------------------------------- | ------------------------------------------ | ----------------------------------------------------------- |
+| `prettier.json`                 | Prettier                                   | `npm run format`, `npm run format:check`                    |
+| `prettier-ignore`               | Prettier's ignore list                     | the same, as a second `--ignore-path` after `.gitignore`    |
+| `tsup.config.ts`                | tsup: the published bundles                | `npm run build`                                             |
+| `tsup.debug.config.ts`          | tsup: the debugging surface                | `npm run build`                                             |
+| `vitest.config.ts`              | Vitest and its coverage gates              | `npm test`, `npm run test:coverage`, `npm run test:extreme` |
+| `playwright.config.ts`          | the browser suite                          | `npm run test:browser`                                      |
+| `playwright.examples.config.ts` | the examples' smoke tests                  | `npm run test:examples`                                     |
+| `typedoc.json`                  | the generated interface pages              | `npm run docs`                                              |
+| `serve.json`                    | the static server of the debugging surface | `npm run debug`                                             |
 
 Every one of these is reached through an npm script that names it with a path flag; none of these
 tools discovers a configuration outside the root on its own. A new tool's configuration belongs

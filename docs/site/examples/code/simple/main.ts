@@ -33,7 +33,7 @@ SerialBroker.subscribe(DEVICE, 'onReceive', (event) => {
 });
 
 connectButton.addEventListener('click', () => {
-  // Called directly in the click: an `await` before it would use up the click. It can still fail -
+  // Called directly in the click, which counts as a gesture for a few seconds only. It can still fail -
   // in a tab queued under maxTabs, for one - so the failure is shown rather than dropped.
   SerialBroker.requestAccess(DEVICE).catch((error: unknown) => {
     output.textContent += `\n[${String(error)}]\n`;

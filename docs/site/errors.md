@@ -8,7 +8,7 @@ carries at run time.
 ## How errors reach the application
 
 **As the result of a call.** A call that fails rejects its promise — or, for the synchronous methods
-`subscribe()`, `unsubscribe()`, `getStatus()` and `exists()`, throws. These are failures of that
+`configure()`, `subscribe()`, `unsubscribe()`, `getStatus()` and `exists()`, throws. These are failures of that
 call: an invalid argument, a name that is not set up, a write that did not complete.
 
 **Through `onError`.** Everything that goes wrong without a call to answer for it — the device was

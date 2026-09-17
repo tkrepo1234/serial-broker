@@ -46,7 +46,8 @@ npm run emulator
 It listens on `127.0.0.1:3240` and runs `usbip.exe attach` for you. Within a few seconds Device
 Manager shows **USB Serial Device (COMn)** under _Ports_, and Windows' notification sound plays.
 
-In the debugging surface (`dist/debug/`), set it up with — or pick the _Emulated device_ preset:
+In the debugging surface (`dist/debug/`), pick the _Emulated device (emulator/)_ preset in the
+_Device_ list of _New configuration_ — or _Other USB device_, with:
 
 | Field      | Value    |
 | ---------- | -------- |

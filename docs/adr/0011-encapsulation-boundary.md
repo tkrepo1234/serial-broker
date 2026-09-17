@@ -20,8 +20,8 @@ object.
 
 Concretely:
 
-- `getStatus(name)` returns `{ name, status, deviceKind, vendorId, productId, serialOptions, since,
-observedAt, lastErrorCode }` - the condition of the _connection_ and the device in effect, never
+- `getStatus(name)` returns `{ name, status, deviceKind, vendorId, productId, serialOptions, maxTabs,
+since, observedAt, lastErrorCode }` - the condition of the _connection_ and the device in effect, never
   of the _coordination_.
 - The `status` union describes what an application can act on: `idle`, `queued`,
   `awaiting-permission`, `connecting`, `open`, `reconnecting`, `failed`, `released`. Whether the

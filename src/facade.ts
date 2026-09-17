@@ -290,9 +290,9 @@ export interface SerialBrokerApi {
   /**
    * Shows the browser's serial port picker.
    *
-   * **Must be called synchronously from a user gesture handler.** The browser only shows the
-   * picker during transient activation, and any `await` before this call will have consumed
-   * it. Once the user grants a device, the permission persists across visits and this never
+   * **Must be called from a user gesture handler, before anything slow.** The browser only shows
+   * the picker during transient activation - a few seconds after a click - and an `await` that
+   * outlasts it loses the gesture. Once the user grants a device, the permission persists across visits and this never
    * needs to be called again for that device.
    *
    * The picker is pre-filtered to the configured device, or to the device a configuration in

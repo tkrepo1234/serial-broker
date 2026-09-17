@@ -6,7 +6,7 @@
 
 ## Context
 
-The library is for production interfaces (README, "Who it is for"), and until now nothing said
+The library is for production interfaces (Introduction, "Who it is for"), and until now nothing said
 what it costs: how long a chunk takes to reach ten tabs, how long a write from a tab that does not
 hold the port takes, how long a handover takes after a crash, or whether an hour of traffic leaves
 timers or memory behind. Tim's request of 2026-09-14

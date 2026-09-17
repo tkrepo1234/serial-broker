@@ -99,8 +99,9 @@ The checklist exercises on real hardware what the scenario matrix in
 
 ### First connection
 
-- [ ] **1.** Click _New configuration_, enter the device's IDs, click _Create and connect_. Its detail
-      view shows `awaiting-permission` and _Choose device…_.
+- [ ] **1.** Click _New configuration_, choose the device in the _Device_ list - a preset, or _Other
+      USB device_ and its vendor and product ID - and click _Create and connect_. Its detail view
+      shows `awaiting-permission` and _Choose device…_.
 - [ ] **2.** Click _Choose device…_. Chrome shows its port picker, filtered to the configured
       device. Pick it: status becomes `open`.
 - [ ] **3.** Send `HELLO`. With TX/RX bridged, both a `sent` and a `received` line appear.
@@ -148,15 +149,15 @@ The checklist exercises on real hardware what the scenario matrix in
 
 - [ ] **18.** Revoke the device in Chrome's site settings while connected. The tabs report the
       loss; after a reload the status is `awaiting-permission` again.
-- [ ] **19.** Choose _Disconnect and forget device_ from the configuration's ⋯ menu — verify the next
-      setup prompts again.
+- [ ] **19.** Click _Disconnect…_, tick _Forget the device_ in the dialog and confirm — verify the
+      next setup prompts again.
 
 ### Data
 
 - [ ] **20.** Send a payload larger than 4 KB. It arrives complete and in order.
 - [ ] **21.** Send non-ASCII text (`Grüße, 温度`). It round-trips correctly, including across a
       chunk boundary — send it repeatedly and quickly to make the split likely.
-- [ ] **22.** Send `02 FF 03` with the send box set to _hex_. The traffic shows it as hex.
+- [ ] **22.** Send `02 FF 03` with the send box set to _hex bytes_. The traffic shows it as hex.
 
 ### Diagnostics
 

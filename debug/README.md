@@ -35,10 +35,12 @@ and whether this page is connected to it.
 Choosing one shows it in detail, with **one button for the next step**: _Connect_ to use a
 configuration from this page, or _Choose device…_ when the configuration has no device yet and this
 page uses it — whichever tab holds the port, but not while this page is queued for a place or has
-withdrawn. The **⋯** menu holds the rest: _Edit settings…_ and three ways to stop. _Disconnect_
-stops using the configuration here and nothing else, so it stays in the list with _Connect_ beside
-it; _Disconnect and forget the configuration_ also removes what this browser remembers under the
-name; _Disconnect, forget the configuration and the device_ also revokes the browser's permission.
+withdrawn. Beside it are _Edit settings…_ and _Disconnect…_. _Disconnect…_ stops using the
+configuration here and asks what else should go, in two boxes that are both clear to begin with:
+_Forget the configuration_ removes what this browser remembers under the name, and _Forget the
+device_ revokes the browser's permission. With neither ticked the configuration stays in the list,
+with _Connect_ beside it. The **⋯** menu holds _Choose a different device…_, for a configuration
+that took its device from the port chosen.
 The detail has three sections:
 
 - **Overview** — every tab that uses it, which one holds the port and which are waiting, when the
