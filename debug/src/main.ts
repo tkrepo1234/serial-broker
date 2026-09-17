@@ -3,11 +3,11 @@
  * detail, with what can be done about it from this page.
  *
  * It ships in the package as static content under `dist/debug/`. Nothing serves it unless an
- * operator does. See debug/README.md and ADR-0019.
+ * operator does. See debug/README.md and ADR-0015.
  *
  * What it shows comes from two sources: this page's own client, which acts the way an application
  * does, and the diagnostics observer, which sees every other tab without taking part in ownership
- * (ADR-0018). The page never sets anything up on its own - opening it to look must not move a port.
+ * (ADR-0014). The page never sets anything up on its own - opening it to look must not move a port.
  */
 
 import { SerialBrokerClient } from '../../src/client/serial-broker-client.js';
@@ -263,7 +263,7 @@ const dialog = new SetupDialog(byId('setupDialog') as HTMLDialogElement, async (
 
 /**
  * Opens the browser's port picker for a configuration just set up in auto mode, in the click that
- * set it up (ADR-0036).
+ * set it up (ADR-0022).
  *
  * The configuration takes its device from the port chosen, and the library remembers it. Without a
  * port the configuration is taken back, remembered entry included (`chooseDeviceOrUndo`).
@@ -363,7 +363,7 @@ window.addEventListener('pagehide', (event) => {
  *
  * This is where someone who has not used serial-broker before starts: no vendor ID, no product
  * ID, no device type - confirm the settings, choose the port, and the page is connected to it
- * (ADR-0019, ADR-0036). The picker is opened by `requestAccess()` in the click that submits the
+ * (ADR-0015, ADR-0022). The picker is opened by `requestAccess()` in the click that submits the
  * dialog, because the browser shows it only for a fresh user gesture.
  */
 function chooseADevice(): void {
@@ -431,7 +431,7 @@ async function refresh(): Promise<void> {
 /**
  * Shows everything, and leaves the other tabs' reports out if they cannot be shown.
  *
- * A report from another tab is checked only as far as filing it needs (ADR-0018): one from a
+ * A report from another tab is checked only as far as filing it needs (ADR-0014): one from a
  * build that reports differently, or from a script of the origin, can lack a field the page reads.
  * It costs the view of the other tabs until the next collection, never the page.
  */

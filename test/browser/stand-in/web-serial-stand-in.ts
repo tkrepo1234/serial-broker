@@ -45,7 +45,7 @@
  * const { SerialBroker } = await import('serial-broker');
  * ```
  *
- * See ADR-0035.
+ * See ADR-0021.
  */
 
 /** A device the stand-in offers to the pages of an origin. */
@@ -60,7 +60,7 @@ export interface StandInDeviceOptions {
    * Whether this device reports USB identity at all.
    *
    * A built-in RS-232 interface, a virtual COM port pair and a Bluetooth serial profile report an
-   * empty dictionary from `getInfo()` (ADR-0036). @defaultValue true
+   * empty dictionary from `getInfo()` (ADR-0022). @defaultValue true
    */
   readonly usb?: boolean | undefined;
   /** Whether the origin already has permission for it, as after an earlier visit. @defaultValue false */
@@ -79,7 +79,7 @@ export interface WebSerialStandInOptions {
  *
  * Everything here describes the *device*, never the library: which page holds the port is a
  * property of the hardware, and asking the device is how the manual test plan establishes it
- * too. Nothing in the library's public surface reveals it (ADR-0011).
+ * too. Nothing in the library's public surface reveals it (ADR-0009).
  *
  * Every method takes the device id, and defaults to the first configured device.
  */

@@ -259,7 +259,7 @@ describe('decodeMessage within its limits', () => {
   it('refuses the fields of a worker record without reading past the limit', () => {
     // A proxy is the measuring instrument, not the threat: no structured clone carries one. It
     // counts what the decoder touches while a script of the origin posts a record whose `fields`
-    // hold far more keys than one may - which every tab decodes before dropping it (ADR-0018).
+    // hold far more keys than one may - which every tab decodes before dropping it (ADR-0014).
     const inspected: string[] = [];
     const fields = new Proxy({} as Record<string, unknown>, {
       ownKeys: () => Array.from({ length: 10_000 }, (_, index) => `f${String(index)}`),
@@ -548,7 +548,7 @@ describe('Broker within MAX_CONFIGURATIONS', () => {
 
 describe('the announcement message', () => {
   it('keeps the shape every version has to understand', () => {
-    // Frozen (ADR-0008): a build that changed it could not be detected by any other version.
+    // Frozen (ADR-0007): a build that changed it could not be detected by any other version.
     expect(versionAnnouncement(7, false)).toEqual({
       type: 'serial-broker/protocol-version',
       protocolVersion: 7,

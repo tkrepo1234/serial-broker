@@ -12,9 +12,9 @@ behaviour of the Web platform APIs this library wraps.
    of device, called this"_. It never learns which tab owns the port, that a `SharedWorker`
    exists, that a Web Lock is held, or that a reconnect is in flight beyond a coarse status.
    Anything that would let an application depend on the coordination mechanism is a design
-   defect. See [ADR-0011](../adr/0011-encapsulation-boundary.md). The one deliberate exception is
+   defect. See [ADR-0009](../adr/0009-encapsulation-boundary.md). The one deliberate exception is
    the read-only diagnostics observer, behind an entry point of its own, for operators rather
-   than application code ([ADR-0018](../adr/0018-diagnostics-observer.md)).
+   than application code ([ADR-0014](../adr/0014-diagnostics-observer.md)).
 
 2. **Name-addressed, not handle-addressed.** Every operation takes the configuration `name`.
    No object handle is returned that could outlive its configuration, be shared across tabs
@@ -60,7 +60,7 @@ cb)` existing. Both are supported because the first is ergonomic and the second 
   statuses defensively), a new event payload field.
 - The wire protocol between tabs is versioned independently of the package version; two
   library versions with different protocol versions coexist without corrupting each other by
-  refusing to federate. See [ADR-0008](../adr/0008-wire-protocol-and-versioning.md).
+  refusing to federate. See [ADR-0007](../adr/0007-wire-protocol-and-versioning.md).
 
 ## What this library will never do
 

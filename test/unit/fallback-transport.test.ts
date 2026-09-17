@@ -140,7 +140,7 @@ describe('FallbackTransport', () => {
     failToLoad();
 
     // Nothing sent before the failure reached anyone, and nothing of it is sent again: what the
-    // others need to know, the client states anew (ADR-0041).
+    // others need to know, the client states anew (ADR-0024).
     expect(fallback.operations).toEqual(['attach Reader', 'attach Scale']);
     expect(reconnects()).toBe(1);
     expect(transport.kind).toBe('broadcastchannel');

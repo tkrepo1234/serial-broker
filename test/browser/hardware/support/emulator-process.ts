@@ -7,7 +7,7 @@
  * split its answers at the moment it needs to, and count what reached the device rather than
  * infer it from what came back.
  *
- * Windows only, like usbip-win2. See emulator/README.md and ADR-0035.
+ * Windows only, like usbip-win2. See emulator/README.md and ADR-0021.
  */
 
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';

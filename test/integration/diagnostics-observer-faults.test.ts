@@ -12,7 +12,7 @@ import { recordingLogger } from '../harness/recording-logger.js';
  *
  * Its callbacks run inside `postMessage` handlers, which must never throw, and it has no
  * application `onError` to report through - so what goes wrong on the bus has to reach the log,
- * and nothing else (ADR-0018).
+ * and nothing else (ADR-0014).
  */
 describe('diagnostics observer on a misbehaving bus', () => {
   it('logs a malformed message and a failing bus instead of throwing', () => {

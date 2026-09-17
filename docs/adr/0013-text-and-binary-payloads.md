@@ -1,4 +1,4 @@
-# ADR-0015: Deliver bytes, offer text as a configured convenience
+# ADR-0013: Deliver bytes, offer text as a configured convenience
 
 - **Status:** Accepted
 

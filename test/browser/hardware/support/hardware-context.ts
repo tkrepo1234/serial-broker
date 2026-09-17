@@ -3,7 +3,7 @@
  * tell which tab holds it.
  *
  * Shared by the device-specific specs, which differ in the device and in what they can make it
- * do, not in how the browser gets the port. See ADR-0035.
+ * do, not in how the browser gets the port. See ADR-0021.
  */
 
 import { writeFile } from 'node:fs/promises';

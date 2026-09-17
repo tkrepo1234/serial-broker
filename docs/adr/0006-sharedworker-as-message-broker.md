@@ -34,7 +34,7 @@ context holding a `MessagePort` to every participant. Its job is deliberately na
 It does **not** touch the port, decide or even know who owns it, hold or replay writes, interpret
 payloads, or persist anything. What is meant for the tab holding the port - a `write-request`, a
 `status-request` - is addressed to `all`, and only the tab holding the term it names acts on it
-([ADR-0030](./0030-hold-a-web-lock-for-every-term-of-holding-the-port.md)). A claim of ownership
+([ADR-0018](./0018-hold-a-web-lock-for-every-term-of-holding-the-port.md)). A claim of ownership
 the broker believed would be one any script could forge.
 
 The worker keeps each port to one identity, which is cheap and keeps one port from speaking for
@@ -43,7 +43,7 @@ speaks as; a message before it, one in another sender's name, or a `hello` as th
 dropped. An identity may have several ports, and each receives what is addressed to it. Participants
 and ports per participant are bounded (`MAX_PARTICIPANTS`, `MAX_PORTS_PER_PARTICIPANT`). How the
 worker learns that a tab has gone, and a tab that the worker has, is
-[ADR-0041](./0041-tell-liveness-through-web-locks.md).
+[ADR-0024](./0024-tell-liveness-through-web-locks.md).
 
 The worker script is resolved via `new URL('./serial-broker.worker.js', import.meta.url)` and can be
 overridden with `configure({ workerUrl })`.
@@ -58,19 +58,19 @@ broker's `welcome` proves the script runs, it moves to `BroadcastChannel` when:
 
 - the worker reports an error (`worker-script-failed`),
 - a message in another protocol version arrives on the worker's port
-  (`worker-other-protocol-version`, [ADR-0008](./0008-wire-protocol-and-versioning.md)), or
+  (`worker-other-protocol-version`, [ADR-0007](./0007-wire-protocol-and-versioning.md)), or
 - no `welcome` has arrived within the handshake deadline of 45 seconds (`worker-not-answering`).
 
 Nothing the tab sent before that reached anyone, and nothing is sent again. The new bus is told what
 the tab takes part in, and the client restates itself as after reaching a new worker: the tab holding
 the port its status, every other tab a request for it. Write requests are handed on once the holder
 restates `open`, and the holder recognises a request it has already accepted
-([ADR-0013](./0013-write-ordering-and-delivery-semantics.md)). The switch is logged as
+([ADR-0011](./0011-write-ordering-and-delivery-semantics.md)). The switch is logged as
 `environment.transport-fallback` with the reason. After the `welcome` nothing moves.
 `transport: 'sharedworker'` never falls back; on a worker of another protocol version it stops using
-workers until the page is reloaded (ADR-0008).
+workers until the page is reloaded (ADR-0007).
 
-The write lifecycle lives in the context that **issued** the write, not in the broker (ADR-0013).
+The write lifecycle lives in the context that **issued** the write, not in the broker (ADR-0011).
 Together with ownership by Web Lock, that is what makes the fallback a change of delivery mechanism
 and nothing else.
 

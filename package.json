@@ -90,7 +90,6 @@
     "./diagnostics/global": "./dist/serial-broker.diagnostics.global.js",
     "./debug/*": "./dist/debug/*",
     "./worker": "./dist/serial-broker.worker.js",
-    "./serial-broker.worker.js": "./dist/serial-broker.worker.js",
     "./package.json": "./package.json"
   },
   "scripts": {

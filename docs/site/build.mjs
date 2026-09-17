@@ -2,7 +2,7 @@
  * Builds the documentation site: the API reference from the source comments, then Sphinx.
  *
  * Run through `npm run docs`. Python is only needed here, so it lives in a virtual environment of
- * its own rather than being a requirement of the repository (ADR-0020): at `docs/.venv`, or - to
+ * its own rather than being a requirement of the repository (ADR-0016): at `docs/.venv`, or - to
  * keep a hundred megabytes out of the working folder - at `~/.serial-broker/docs-venv`, or wherever
  * `SERIAL_BROKER_DOCS_VENV` says.
  *

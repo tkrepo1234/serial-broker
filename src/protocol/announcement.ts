@@ -7,7 +7,7 @@ import { isProtocolVersion } from './version.js';
  * Everything else a tab says travels on a bus whose name carries the protocol version, so tabs on
  * different versions never hear one another. This channel's name carries no version,
  * and the shape of its one message is frozen: every later version has to send and understand
- * exactly this, or it could no longer detect the versions before it. See ADR-0008.
+ * exactly this, or it could no longer detect the versions before it. See ADR-0007.
  */
 
 /** The channel every tab announces its protocol version on. Never versioned, never renamed. */

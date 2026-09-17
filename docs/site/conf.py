@@ -2,7 +2,7 @@
 
 Modelled on the open62541 1.3 documentation: the Read the Docs theme, hand-written chapters, and
 an API reference generated from the source comments. Chapters are Markdown (MyST); the API
-reference is produced by typedoc into api/reference/ before Sphinx runs. See ADR-0020.
+reference is produced by typedoc into api/reference/ before Sphinx runs. See ADR-0016.
 """
 
 import json

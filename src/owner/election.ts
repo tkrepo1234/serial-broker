@@ -8,7 +8,7 @@ import { ownerLockName } from '../protocol/version.js';
 
 /** What the election asks of the context taking part, and tells it. */
 export interface ElectionCallbacks {
-  /** A new term of holding the port, and the name of its lock (ADR-0030). */
+  /** A new term of holding the port, and the name of its lock (ADR-0018). */
   readonly newTerm: () => { readonly term: TermId; readonly lockName: string };
   /**
    * This context now holds the port in `term`: the ownership lock and the term's lock are held.
@@ -34,7 +34,7 @@ export interface ElectionCallbacks {
  * always queued and failover needs no cooperation from the context that disappeared.
  *
  * Inside the ownership lock the context takes the lock of a new term before it counts as the owner,
- * so that nothing is said in a term whose lock is not held (ADR-0030). A term lock the browser
+ * so that nothing is said in a term whose lock is not held (ADR-0018). A term lock the browser
  * refuses lets the ownership lock go as well, and both are requested again after a pause: there is
  * no state in which a context holds the ownership lock without a term.
  *

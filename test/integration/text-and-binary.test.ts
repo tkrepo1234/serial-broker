@@ -132,7 +132,7 @@ describe('receiving', () => {
 
     // The trap this feature exists to avoid: a per-chunk decoder produces replacement
     // characters here, and only ever on non-ASCII input, so it survives testing and breaks in
-    // production (ADR-0015).
+    // production (ADR-0013).
     const decoded = tab
       .recordFor('Reader')
       .received.map((event) => event.text ?? '')

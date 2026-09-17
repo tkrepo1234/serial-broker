@@ -44,7 +44,7 @@ function createStore(initial: Record<string, string> = {}): {
  *
  * This is what makes a lost update possible in a browser and impossible in a plain `Map`. Each
  * renderer caches the storage area, so a tab reads what it saw last while another tab's write has
- * already landed; the specification's storage mutex is implemented by no engine (ADR-0033). Writes
+ * already landed; the specification's storage mutex is implemented by no engine (ADR-0020). Writes
  * go through to the shared entries, and into the copy, as a browser's do.
  */
 function withStaleReads(entries: Map<string, string>): KeyValueStorage {
@@ -219,7 +219,7 @@ describe('ConfigurationStore', () => {
     store.save(configuration);
 
     // The index is the one key every tab writes, so a write for nothing is a chance to lose
-    // another tab's name to a stale copy (ADR-0033).
+    // another tab's name to a stale copy (ADR-0020).
     expect(writes).toEqual([storageEntryKey('Reader')]);
   });
 
@@ -249,7 +249,7 @@ describe('ConfigurationStore', () => {
     // ...and the other one, which never saw that write, saves a configuration of its own.
     staleTab.save(normalizeConfiguration('Reader', OPTIONS));
 
-    // The lost update ADR-0033 exists to remove: a save writes the keys it changed and no others,
+    // The lost update ADR-0020 exists to remove: a save writes the keys it changed and no others,
     // so the newer Scale survives a tab that still holds the older one.
     expect(JSON.parse(entries.get(storageEntryKey('Scale')) ?? 'null')).toMatchObject({
       serial: { baudRate: 19_200 },
@@ -265,7 +265,7 @@ describe('ConfigurationStore', () => {
     // Another tab, with a stale copy of the index, has listed only its own configuration, so this
     // tab's name is gone from the index. Its entry is untouched - which is the point of a key per
     // configuration - and saving again, as a tab does once its persistence hold is granted
-    // (ADR-0033), lists the name once more.
+    // (ADR-0020), lists the name once more.
     entries.set(storageIndexKey(), JSON.stringify(['Scale']));
     entries.set(storageEntryKey('Scale'), JSON.stringify(OPTIONS));
     store.save(normalizeConfiguration('Reader', OPTIONS));

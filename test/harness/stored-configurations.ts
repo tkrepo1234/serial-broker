@@ -5,7 +5,7 @@ import type { FakeStorage } from './browser-harness.js';
 /**
  * Reading and writing remembered configurations the way a browser's `localStorage` holds them.
  *
- * Storage is one key per configuration plus an index of their names (ADR-0033). A test that wants
+ * Storage is one key per configuration plus an index of their names (ADR-0020). A test that wants
  * to seed a previous visit, or to check what a tab left behind, says so in names and options here
  * rather than spelling out keys.
  */

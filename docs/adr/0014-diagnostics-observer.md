@@ -1,16 +1,16 @@
-# ADR-0018: Expose coordination internals to operators through a diagnostics observer
+# ADR-0014: Expose coordination internals to operators through a diagnostics observer
 
 - **Status:** Accepted
 
 ## Context
 
-[ADR-0011](./0011-encapsulation-boundary.md) keeps every trace of the coordination mechanism
+[ADR-0009](./0009-encapsulation-boundary.md) keeps every trace of the coordination mechanism
 out of the public API: no owner identity, no participant count, no lock state, no transport.
 Its reasoning holds for **application code** — anything observable becomes load-bearing,
 and code that branches on "am I the owner?" is a race.
 
 It leaves one audience unserved. An **operator** looking at a deployment — a support engineer, a
-developer on a shop floor, the person who owns the machine — has questions ADR-0011 makes
+developer on a shop floor, the person who owns the machine — has questions ADR-0009 makes
 unanswerable: which tab holds the port, whether the owner is reconnecting and when it tries
 next, whether a tab is sitting on writes that never went out, whether every tab even runs the
 same settings. A logger has to be enabled in advance, in every tab, in the application's own code.
@@ -48,7 +48,7 @@ up no configuration, requests no Web Lock, and never answers for a port.
   collection keeps at most `MAX_REPORTS_PER_COLLECTION` reports and
   `MAX_REPORT_CHARACTERS_PER_COLLECTION` characters: the request id is broadcast, so anything on the
   bus can answer it under as many identities as it invents. The values are in
-  [ADR-0031](./0031-bound-and-rate-limit-what-the-bus-can-cost-a-tab.md).
+  [ADR-0019](./0019-bound-and-rate-limit-what-the-bus-can-cost-a-tab.md).
 - **A report is filed, not validated in full.** It is only ever displayed, and the decoder already
   holds it to its structure budget. Only what files it is checked - the sender, its transport,
   version and time, and that its configurations are a list of named entries. What displays a report
@@ -63,15 +63,15 @@ up no configuration, requests no Web Lock, and never answers for a port.
   `clientId` in it stays the identity the record concerns, and `reportedBy` names the tab that wrote
   the copy.
 - **The main entry point carries none of it.** `getStatus()`, the events and every payload have
-  exactly the keys ADR-0011 pins, and a test asserts that nothing diagnostic is exported from it.
+  exactly the keys ADR-0009 pins, and a test asserts that nothing diagnostic is exported from it.
 
-This is the one deliberate exception to ADR-0011, and it is an exception for operators, not for
+This is the one deliberate exception to ADR-0009, and it is an exception for operators, not for
 application code.
 
 ## Alternatives considered
 
 - **Diagnostics on the main facade** (`SerialBroker.inspect(name)`). The simplest to build, and
-  the one ADR-0011 exists to prevent: it puts "who owns the port" one autocomplete away from
+  the one ADR-0009 exists to prevent: it puts "who owns the port" one autocomplete away from
   application code. Rejected.
 - **A second entry point reading the facade's singleton.** Hidden coupling, and broken outright
   when the entry points are bundled separately. Rejected.

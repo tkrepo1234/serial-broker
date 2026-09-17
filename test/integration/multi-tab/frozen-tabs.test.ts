@@ -25,7 +25,7 @@ describe.each(TRANSPORT_MODES)('a tab that was frozen (%s)', (transport) => {
   it('resolves a write that succeeded while it was frozen, when its deadline runs before the result on resume', async () => {
     const { harness, device, participant } = await twoTabs();
 
-    // Let begin before the freeze - a frozen tab lets nothing begin (ADR-0013) - and taken by the
+    // Let begin before the freeze - a frozen tab lets nothing begin (ADR-0011) - and taken by the
     // device while it is frozen.
     device.pauseWrites();
     const outcome = outcomeOf(participant.client.send('Reader', 'PING'));

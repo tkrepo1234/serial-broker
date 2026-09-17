@@ -105,7 +105,7 @@ describe.skipIf(!IS_EXTREME).each(TRANSPORT_MODES)('the largest payloads (%s)', 
             received.push(deviceReceived(device.written, seed));
             device.written.length = 0;
           }
-          // As many at once as the tab holding the port keeps waiting (ADR-0031): all of them
+          // As many at once as the tab holding the port keeps waiting (ADR-0019): all of them
           // are written, in order.
           const outcomes: Promise<unknown>[] = [];
           for (let seed = 100; seed < 100 + atOnce; seed += 1) {

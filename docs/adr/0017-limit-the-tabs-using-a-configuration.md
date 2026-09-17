@@ -1,4 +1,4 @@
-# ADR-0025: Limit how many tabs use a configuration at once
+# ADR-0017: Limit how many tabs use a configuration at once
 
 - **Status:** Accepted
 
@@ -35,12 +35,12 @@ configuration, after leaving the port and the bus; the browser gives it up when 
 the lock names, so tabs that disagree hold separate sets of places. The tab holding the port runs
 its limit as part of the name of its term's Web Lock, and `owner-claimed` and `status` carry it; a
 tab believes the limit only because a held term lock names it
-([ADR-0030](./0030-hold-a-web-lock-for-every-term-of-holding-the-port.md)). A tab that learns of a
+([ADR-0018](./0018-hold-a-web-lock-for-every-term-of-holding-the-port.md)). A tab that learns of a
 different limit that way withdraws: it leaves the election, the bus and its place, reports
 `CONFIGURATION_CONFLICT` to its own listeners, and stays `failed` until the application releases the
 configuration and sets it up with the same limit.
 
-[ADR-0011](./0011-encapsulation-boundary.md) withholds everything about coordination from the
+[ADR-0009](./0009-encapsulation-boundary.md) withholds everything about coordination from the
 application. `queued` is a deliberate exception: it says that the limit the application itself set
 is reached, and nothing about which tab holds the port.
 

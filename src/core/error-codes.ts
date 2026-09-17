@@ -3,7 +3,7 @@
  *
  * These are part of the public API: applications branch on `error.code`, never on
  * `error.message`. Adding a code is a minor change; renaming or repurposing one is breaking.
- * See ADR-0012 and docs/guidelines/error-handling.md.
+ * See ADR-0010 and docs/guidelines/error-handling.md.
  *
  * Declared as a constant object with a string-union type of the same name, not as a TypeScript
  * `enum`: `code === SerialBrokerErrorCode.WRITE_TIMEOUT` and `code === 'WRITE_TIMEOUT'` are both
@@ -39,7 +39,7 @@ export const SerialBrokerErrorCode = {
   /**
    * `requestAccess()` was called in a tab that does not take part in the configuration: one queued
    * under `maxTabs`, or one that withdrew because the tab holding the port runs a different tab
-   * limit. Any tab that takes part may ask, whichever holds the port (ADR-0036).
+   * limit. Any tab that takes part may ask, whichever holds the port (ADR-0022).
    */
   PERMISSION_REQUIRED: 'PERMISSION_REQUIRED',
   /**
@@ -81,18 +81,18 @@ export const SerialBrokerErrorCode = {
   WRITE_TIMEOUT: 'WRITE_TIMEOUT',
   /**
    * The tab holding the port already has as many writes waiting as it keeps, so this one was
-   * refused rather than queued. Nothing was written. See ADR-0031.
+   * refused rather than queued. Nothing was written. See ADR-0019.
    */
   WRITE_QUEUE_FULL: 'WRITE_QUEUE_FULL',
   /**
    * The owning context died while this write was in flight. Whether the bytes reached the
-   * device is unknowable; the library never retries such a write. See ADR-0013.
+   * device is unknowable; the library never retries such a write. See ADR-0011.
    */
   OWNER_LOST_DURING_WRITE: 'OWNER_LOST_DURING_WRITE',
 
   // --- Coordination ----------------------------------------------------------------------
   /**
-   * Another tab, or the worker script, runs an incompatible wire protocol version. See ADR-0008.
+   * Another tab, or the worker script, runs an incompatible wire protocol version. See ADR-0007.
    */
   PROTOCOL_VERSION_MISMATCH: 'PROTOCOL_VERSION_MISMATCH',
 
@@ -190,7 +190,7 @@ export const REMEDIATION: Record<SerialBrokerErrorCode, string> = {
  *
  * The default of `isRetryable`. With `connection.autoReconnect: false` nothing is retried, and the
  * errors the tab holding the port reports for a lost connection or a failed attempt carry
- * `isRetryable: false` instead (ADR-0010).
+ * `isRetryable: false` instead (ADR-0008).
  */
 export const RETRYABLE_CODES: ReadonlySet<SerialBrokerErrorCode> = new Set([
   SerialBrokerErrorCode.DEVICE_DISCONNECTED,

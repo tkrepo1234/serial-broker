@@ -7,7 +7,7 @@ import type { ClientId, RequestId } from '../../src/protocol/messages.js';
 
 /**
  * What the tab holding the port remembers of the writes it accepted, to write each at most once
- * (ADR-0013).
+ * (ADR-0011).
  */
 
 const TAB = 'c-tab' as ClientId;

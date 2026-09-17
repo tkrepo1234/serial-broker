@@ -8,7 +8,7 @@
  * shows a window, with a profile that has never been given the device.
  *
  * **Requires the Arduino echo board, Windows and a desktop**, so it runs only when
- * `SERIAL_BROKER_HARDWARE=picker` is set, and never in CI. See ADR-0035.
+ * `SERIAL_BROKER_HARDWARE=picker` is set, and never in CI. See ADR-0021.
  */
 
 import process from 'node:process';
@@ -116,7 +116,7 @@ test.describe("Chromium's port picker, answered as a user answers it", () => {
     fresh: { context, picker },
   }) => {
     const tab = await Tab.open(context);
-    // Auto mode: no device named, so the picker is unfiltered and the port decides (ADR-0036).
+    // Auto mode: no device named, so the picker is unfiltered and the port decides (ADR-0022).
     const { device: _none, ...automatic } = echoConfiguration();
     await tab.setup(CONFIGURATION, automatic);
     await tab.waitForStatus(CONFIGURATION, 'awaiting-permission');

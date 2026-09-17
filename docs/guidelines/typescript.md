@@ -72,4 +72,4 @@ runtime. The rule is absolute:
 > before any field is read.
 
 The wire format is versioned and lives in `src/protocol/`. See
-[ADR-0008](../adr/0008-wire-protocol-and-versioning.md).
+[ADR-0007](../adr/0007-wire-protocol-and-versioning.md).

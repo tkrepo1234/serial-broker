@@ -39,19 +39,18 @@ the same release; see [Deploying](deploying.md).
 
 The package contains:
 
-| Import path                             | File in `dist/`                         | What it is                                                                       |
-| --------------------------------------- | --------------------------------------- | -------------------------------------------------------------------------------- |
-| `serial-broker`                         | `serial-broker.js`, `serial-broker.cjs` | The library, as ES module and CommonJS, with type definitions.                   |
-| `serial-broker/worker`                  | `serial-broker.worker.js`               | The script that coordinates tabs. It has to be served as a file of its own.      |
-| `serial-broker/serial-broker.worker.js` | the same                                | The same script, under its file name.                                            |
-| `serial-broker/diagnostics`             | `serial-broker.diagnostics.js`          | A read-only view of every tab, for operators. See [Diagnostics](diagnostics.md). |
-| `serial-broker/min`                     | `serial-broker.min.js`                  | The library as a minified ES module, with the same exports and types.            |
-| `serial-broker/diagnostics/min`         | `serial-broker.diagnostics.min.js`      | The diagnostics entry point, minified.                                           |
-| `serial-broker/global`                  | `serial-broker.global.js`               | The library as a classic script, on the global `SerialBroker`. No modules.       |
-| `serial-broker/diagnostics/global`      | `serial-broker.diagnostics.global.js`   | The diagnostics entry point as a classic script, on `SerialBrokerDiagnostics`.   |
+| Import path                        | File in `dist/`                         | What it is                                                                       |
+| ---------------------------------- | --------------------------------------- | -------------------------------------------------------------------------------- |
+| `serial-broker`                    | `serial-broker.js`, `serial-broker.cjs` | The library, as ES module and CommonJS, with type definitions.                   |
+| `serial-broker/worker`             | `serial-broker.worker.js`               | The script that coordinates tabs. It has to be served as a file of its own.      |
+| `serial-broker/diagnostics`        | `serial-broker.diagnostics.js`          | A read-only view of every tab, for operators. See [Diagnostics](diagnostics.md). |
+| `serial-broker/min`                | `serial-broker.min.js`                  | The library as a minified ES module, with the same exports and types.            |
+| `serial-broker/diagnostics/min`    | `serial-broker.diagnostics.min.js`      | The diagnostics entry point, minified.                                           |
+| `serial-broker/global`             | `serial-broker.global.js`               | The library as a classic script, on the global `SerialBroker`. No modules.       |
+| `serial-broker/diagnostics/global` | `serial-broker.diagnostics.global.js`   | The diagnostics entry point as a classic script, on `SerialBrokerDiagnostics`.   |
 
 Every published file is named after the package rather than after the file it was built from, so
-that a file copied onto a web server says what it is ([ADR-0043][adr-0043]). Each build has a
+that a file copied onto a web server says what it is ([ADR-0026][adr-0043]). Each build has a
 source map beside it.
 
 It also ships a debugging surface under `dist/debug/`, as static files that nothing serves unless
@@ -268,4 +267,4 @@ browser that has no Web Serial at all, and during server-side rendering. It is a
 `SerialBroker.isSupported()`.
 
 [shared-worker]: https://developer.mozilla.org/en-US/docs/Web/API/SharedWorker
-[adr-0043]: https://github.com/tkrepo1234/serial-broker/blob/main/docs/adr/0043-a-classic-script-build-and-published-names.md
+[adr-0043]: https://github.com/tkrepo1234/serial-broker/blob/main/docs/adr/0026-a-classic-script-build-and-published-names.md

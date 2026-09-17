@@ -28,9 +28,9 @@ import { sampleReport } from '../../unit/fixtures/diagnostics-report.js';
 const WINDOW_MS = 100;
 
 /**
- * Looking at every tab of an origin without taking part (ADR-0018).
+ * Looking at every tab of an origin without taking part (ADR-0014).
  *
- * Two properties matter above the details of any report. An observer must see what ADR-0011
+ * Two properties matter above the details of any report. An observer must see what ADR-0009
  * keeps from the application - roles, the owner's connection, pending writes - on both
  * transports. And observing must never change what is observed: an observer that could end up
  * owning the port would move it the moment the application's tabs closed.
@@ -208,11 +208,11 @@ describe.each(TRANSPORT_MODES)('diagnostics observer (%s)', (transport) => {
       { name: ownerLockName('Reader'), mode: 'exclusive', browserClientId: peer.id },
     ]);
     // The peer also waits on the lock of the owner's term, which is how it learns that the term is
-    // over the moment the owner lets go of it (ADR-0030).
+    // over the moment the owner lets go of it (ADR-0018).
     expect(snapshot.locks?.pending.filter((lock) => lock.name.includes('/term/'))).toEqual([
       expect.objectContaining({ mode: 'shared', browserClientId: peer.id }),
     ]);
-    // Both tabs run the configuration remembered, and each holds it for the other (ADR-0033).
+    // Both tabs run the configuration remembered, and each holds it for the other (ADR-0020).
     expect(snapshot.locks?.held.filter((lock) => !ownership(lock))).toEqual(
       expect.arrayContaining([
         { name: persistenceLockName('Reader'), mode: 'shared', browserClientId: owner.id },
@@ -341,7 +341,7 @@ describe.each(TRANSPORT_MODES)('diagnostics observer (%s)', (transport) => {
 /**
  * A diagnostics request names its own id on the bus, so anything of the origin can answer it - as
  * often as it invents identities to answer with, and with a report of up to a megabyte each
- * (ADR-0031). What one collection keeps is therefore bounded.
+ * (ADR-0019). What one collection keeps is therefore bounded.
  */
 describe('an observer collecting while a script of the origin answers', () => {
   it('keeps a bounded number of reports, and logs the ones it drops once', async () => {
@@ -397,7 +397,7 @@ describe('an observer collecting while a script of the origin answers', () => {
     });
 
     // Each answer is a well-formed report with as much text attached as the decoder lets one
-    // carry: the count of reports alone would leave the observer holding a gigabyte (ADR-0031).
+    // carry: the count of reports alone would leave the observer holding a gigabyte (ADR-0019).
     const filler = 'x'.repeat(MAX_REPORT_CHARACTERS / 4);
     const answers = 4 * Math.ceil(MAX_REPORT_CHARACTERS_PER_COLLECTION / filler.length);
     const pending = observer.collect(100);

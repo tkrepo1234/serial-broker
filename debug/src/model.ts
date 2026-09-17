@@ -122,13 +122,13 @@ function describeConfiguration(
   }
   if (here !== undefined) {
     // The permission is the origin's, so any tab taking part may ask for it; the tab holding the
-    // port then opens the port chosen (ADR-0036). A tab queued for a place or one that withdrew
+    // port then opens the port chosen (ADR-0022). A tab queued for a place or one that withdrew
     // does not take part, and neither is ever `awaiting-permission`.
     if (here.configuration.status === 'awaiting-permission') {
       actions.add('choose-device');
     }
     // Any tab taking part may let the user choose a different device for a configuration in auto
-    // mode that has one; the tab holding the port switches to it (ADR-0036).
+    // mode that has one; the tab holding the port switches to it (ADR-0022).
     const device = here.configuration.settings.device;
     if (
       'auto' in device &&
@@ -173,7 +173,7 @@ export function thisPageState(view: ConfigurationView): PageState {
 
 /**
  * Whether a tab gave the configuration up because the tab holding the port runs a different tab
- * limit (ADR-0025). It stays `failed`, off the bus, until its settings change.
+ * limit (ADR-0017). It stays `failed`, off the bus, until its settings change.
  *
  * A report has no flag for it, so it is recognised by its traces: `failed` with
  * `CONFIGURATION_CONFLICT`, and a tab limit other than the holder's. The limit is what confirms it:

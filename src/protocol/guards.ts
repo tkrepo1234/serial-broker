@@ -1,7 +1,7 @@
 import { SerialBrokerStatus } from '../core/types.js';
 
 /**
- * The type guards the message-boundary validators are built from (ADR-0008).
+ * The type guards the message-boundary validators are built from (ADR-0007).
  *
  * Both `decode.ts` and `decode-diagnostics.ts` ask the same questions of untrusted values - is
  * this an object, a name, a number, a status - and two private copies of the answers drift
@@ -30,7 +30,7 @@ export function isFiniteNumber(value: unknown): value is number {
   return typeof value === 'number' && Number.isFinite(value);
 }
 
-/** `true` for a tab limit: an integer of at least 1, or `Infinity` for none (ADR-0025). */
+/** `true` for a tab limit: an integer of at least 1, or `Infinity` for none (ADR-0017). */
 export function isTabLimit(value: unknown): value is number {
   return (
     value === Number.POSITIVE_INFINITY ||

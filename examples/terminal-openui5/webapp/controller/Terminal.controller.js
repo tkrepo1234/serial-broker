@@ -665,7 +665,7 @@ sap.ui.define(
        *
        * Deliberately not a protocol: no XMODEM, no acknowledgement, no retry. Each chunk is one
        * `send()`, so the library's own ordering applies - this tab's writes reach the device in the
-       * order this tab issued them (ADR-0013).
+       * order this tab issued them (ADR-0011).
        */
       onSendFile: async function () {
         const library = /** @type {SerialBrokerGlobal} */ (this._library);

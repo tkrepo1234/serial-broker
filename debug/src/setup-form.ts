@@ -28,7 +28,7 @@ const CONNECTION_FIELDS = (
   Object.keys(DEFAULT_CONNECTION_SETTINGS) as (keyof ConnectionSettings)[]
 ).filter((field): field is ConnectionField => field !== 'autoReconnect');
 
-/** How the form names the device: the device list's non-preset entries (ADR-0036). */
+/** How the form names the device: the device list's non-preset entries (ADR-0022). */
 export type DeviceKindChoice = 'auto' | 'usb' | 'non-usb' | 'any';
 
 /** Every field of the form. An empty string means "leave it to the library's default". */
@@ -219,7 +219,7 @@ function deviceOptionFor(values: SetupFormValues): Record<string, unknown> {
       return { nonUsb: true };
     case 'auto':
       // The resolution travels with the configuration, so editing a baud rate does not ask for
-      // the device again (ADR-0036).
+      // the device again (ADR-0022).
       switch (values.resolved) {
         case 'usb':
           return {

@@ -5,7 +5,7 @@ import type { SerialBrokerError } from './errors.js';
  * The condition of a configuration's connection.
  *
  * It describes the *connection*, never the coordination: whether this context or a peer is
- * doing the work is deliberately not representable. See ADR-0011.
+ * doing the work is deliberately not representable. See ADR-0009.
  *
  * @remarks
  * Treat this union as extensible. A future version may add a value, and applications must
@@ -24,7 +24,7 @@ export const SerialBrokerStatus = {
   /**
    * Waiting for a place: `maxTabs` other tabs use the configuration. The tab joins, and moves
    * on from here, as soon as one of them releases it, closes or crashes. Every tab with a limit
-   * starts here, and moves on at once when a place is free. See ADR-0025.
+   * starts here, and moves on at once when a place is free. See ADR-0017.
    */
   Queued: 'queued',
   /** No granted port matches the device. Call `requestAccess()` from a user gesture. */
@@ -42,7 +42,7 @@ export const SerialBrokerStatus = {
    * `autoReconnect` is `false`, when the device is plugged in again.
    *
    * Also the status of a tab that withdrew because the tab holding the port runs a different
-   * `maxTabs` (ADR-0025); that tab stays here until the configuration is released.
+   * `maxTabs` (ADR-0017); that tab stays here until the configuration is released.
    */
   Failed: 'failed',
   /**
@@ -59,7 +59,7 @@ export type SerialBrokerStatus = (typeof SerialBrokerStatus)[keyof typeof Serial
  * Identifies a device by its USB vendor and product IDs.
  *
  * These identify a device *type*, not an individual device: two identical adapters cannot be
- * told apart, because the platform exposes no serial number. See ADR-0036.
+ * told apart, because the platform exposes no serial number. See ADR-0022.
  */
 export interface UsbDeviceFilter {
   /** USB vendor ID, `0x0000`-`0xffff`. For a CH340 adapter this is `0x1a86`. */
@@ -78,7 +78,7 @@ export interface UsbDeviceFilter {
  *
  * The cost is that the library cannot tell two such ports apart. With more than one granted,
  * it uses the first and reports the ambiguity at `warn` level. Use the USB filter whenever
- * the device has IDs. See ADR-0036.
+ * the device has IDs. See ADR-0022.
  */
 export interface AnyDeviceFilter {
   /** Must be `true`. Spelled as a field so the intent is explicit at the call site. */
@@ -91,7 +91,7 @@ export interface AnyDeviceFilter {
  * Narrower than {@link AnyDeviceFilter}: a USB adapter that happens to be granted as well is
  * left alone. A port that reports only one of the two USB IDs counts as having none, since no
  * filter could find it by half an identity. Like `any`, it cannot tell two such ports apart.
- * See ADR-0036.
+ * See ADR-0022.
  */
 export interface NonUsbDeviceFilter {
   /** Must be `true`. */
@@ -110,7 +110,7 @@ export type ResolvedDeviceFilter = UsbDeviceFilter | NonUsbDeviceFilter;
  * both USB IDs, `{ nonUsb: true }` otherwise. The result is remembered with the configuration,
  * reported by `getStatus()`, and adopted by every other tab that set the name up in auto mode.
  * Until the user has chosen, an auto-mode configuration matches no granted port, even when only
- * one is granted. See ADR-0036.
+ * one is granted. See ADR-0022.
  */
 export interface AutoDeviceFilter {
   /** Must be `true`. */
@@ -155,7 +155,7 @@ export interface SerialSettings {
   readonly parity?: 'none' | 'even' | 'odd';
   /**
    * Size of the browser's read and write buffers for the port, in bytes: 1 to 16,777,216 (16 MiB).
-   * The write buffer is what `send()` resolves against (ADR-0013).
+   * The write buffer is what `send()` resolves against (ADR-0011).
    *
    * @defaultValue 255
    */
@@ -168,7 +168,7 @@ export interface SerialSettings {
  * Connection supervision settings.
  *
  * Grouped into their own structure so that reconnect behaviour can grow without widening the
- * top-level options object. See ADR-0010.
+ * top-level options object. See ADR-0008.
  */
 export interface ConnectionSettings {
   /**
@@ -231,7 +231,7 @@ export interface ConnectionSettings {
    *
    * With `false`, a lost connection or a failed attempt ends in the status `failed`, with the error
    * reported, and nothing is tried again - not even when the device is plugged in again - until
-   * the application calls `setup()` for the configuration again. See ADR-0010.
+   * the application calls `setup()` for the configuration again. See ADR-0008.
    *
    * @defaultValue true
    */
@@ -268,7 +268,7 @@ export interface ReceiveSettings {
 /**
  * Text handling.
  *
- * See ADR-0015: received data is always delivered as bytes; text is an addition, decoded with
+ * See ADR-0013: received data is always delivered as bytes; text is an addition, decoded with
  * a streaming decoder so that multi-byte characters split across chunks survive.
  *
  * @remarks
@@ -332,7 +332,7 @@ export interface SerialBrokerOptions {
    *
    * Every tab has to pass the same limit. A tab that finds the tab holding the port running a
    * different one reports `CONFIGURATION_CONFLICT`, withdraws, and shows the status `failed`.
-   * See ADR-0025.
+   * See ADR-0017.
    *
    * @defaultValue Infinity
    */
@@ -347,7 +347,7 @@ export interface ReleaseOptions {
    *
    * Left at `false`, releasing stops using the configuration in this tab and closes the port if
    * this tab held it, and what is remembered stays: a disconnect is not a deletion, and the
-   * application decides when something is forgotten (ADR-0033).
+   * application decides when something is forgotten (ADR-0020).
    *
    * The entry is one per name for the whole origin, so it is removed only once no tab still runs
    * the configuration with `remember: true`; a tab that still does keeps it. For a configuration
@@ -384,7 +384,7 @@ export interface RequestAccessOptions {
    * The picker is opened unfiltered, and the port the user chooses becomes the device of every tab
    * and is remembered, as the first choice was. The tab holding the port closes the old device and
    * opens the new one. A dismissed picker changes nothing. A configuration that names its device
-   * rejects with `INVALID_ARGUMENT`: set it up with the other device instead. See ADR-0036.
+   * rejects with `INVALID_ARGUMENT`: set it up with the other device instead. See ADR-0022.
    *
    * @defaultValue false
    */
@@ -402,7 +402,7 @@ export interface SerialBrokerStatusSnapshot {
   readonly name: string;
   /** The current connection status. */
   readonly status: SerialBrokerStatus;
-  /** What the device is: configured, or resolved from the port the user chose (ADR-0036). */
+  /** What the device is: configured, or resolved from the port the user chose (ADR-0022). */
   readonly deviceKind: DeviceKind;
   /** The USB vendor ID in effect, or `undefined` unless `deviceKind` is `'usb'`. */
   readonly vendorId: number | undefined;
@@ -412,7 +412,7 @@ export interface SerialBrokerStatusSnapshot {
   readonly serialOptions: Required<SerialSettings>;
   /**
    * How many tabs may use the configuration at once, or `Number.POSITIVE_INFINITY` for no limit
-   * (ADR-0025).
+   * (ADR-0017).
    *
    * A status component handed only a name can tell from this whether `queued` is reachable at all,
    * and say what a tab is waiting for, without being passed the options the configuration was set
@@ -464,7 +464,7 @@ export interface SendEvent {
    * `'local'` when this context issued the write, `'remote'` when another one did.
    *
    * This describes the caller's own action, not the coordination topology: no peer identity
-   * is exposed. See ADR-0011.
+   * is exposed. See ADR-0009.
    */
   readonly origin: 'local' | 'remote';
   /** Epoch milliseconds at which the browser took the bytes for the port. */

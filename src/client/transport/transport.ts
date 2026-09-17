@@ -60,13 +60,13 @@ export interface TransportRequest {
   readonly onTransportError: (error: unknown, recovering?: boolean) => void;
   /**
    * Called when the transport has reached a new bus: a new worker after the old one ended, or
-   * `BroadcastChannel` after the worker script turned out unusable (ADR-0041). Whatever was sent or
+   * `BroadcastChannel` after the worker script turned out unusable (ADR-0024). Whatever was sent or
    * broadcast before may be lost, so the client states again what the others need to know.
    */
   readonly onReconnected?: (() => void) | undefined;
   readonly logger: ScopedLogger;
-  /** Time, for the deadline of the worker's handshake (ADR-0041). */
+  /** Time, for the deadline of the worker's handshake (ADR-0024). */
   readonly clock: Clock;
-  /** The context's Web Locks, which tell the worker and the tabs who is still there (ADR-0041). */
+  /** The context's Web Locks, which tell the worker and the tabs who is still there (ADR-0024). */
   readonly locks: LockManagerLike;
 }

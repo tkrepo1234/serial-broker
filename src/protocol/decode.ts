@@ -46,7 +46,7 @@ import { isProtocolVersion, PROTOCOL_VERSION } from './version.js';
  * Anything arriving through `postMessage` or a `BroadcastChannel` is `unknown`: it may come
  * from another build of this library, from an unrelated script that happens to use the same
  * channel name, or from a browser extension. Nothing is read from a message until it has
- * passed through here. See docs/guidelines/defensive-programming.md and ADR-0008.
+ * passed through here. See docs/guidelines/defensive-programming.md and ADR-0007.
  *
  * Validation alone lets a hostile sender make a context hold anything well-typed of any size, so
  * every field is also held to the limits in `limits.ts`. And an accepted message is rebuilt from its
@@ -234,7 +234,7 @@ class FieldReader {
   /**
    * The device of the tab sending a status, rebuilt from its kind and, for USB, its two IDs.
    *
-   * A tab in auto mode adopts what this says (ADR-0036), so a kind this build does not know, or
+   * A tab in auto mode adopts what this says (ADR-0022), so a kind this build does not know, or
    * an ID outside the USB range, is rejected rather than passed on for a filter nobody could have
    * configured.
    */

@@ -39,7 +39,7 @@ const run = spawnSync(
   [
     join(root, 'node_modules', 'vitest', 'vitest.mjs'),
     'run',
-    // The configuration lives in config/ (ADR-0042), where Vitest does not look on its own.
+    // The configuration lives in config/ (ADR-0025), where Vitest does not look on its own.
     '--config',
     'config/vitest.config.ts',
     '--maxWorkers=1',

@@ -8,7 +8,7 @@ import { defineConfig } from '@playwright/test';
  *
  * It answers what the in-process suite cannot: that the platform behaves as `test/harness/`
  * claims, and that the files in `dist/` load and find each other. It is deliberately small - the
- * races live in `test/integration/multi-tab/`, where they are deterministic. See ADR-0035 and
+ * races live in `test/integration/multi-tab/`, where they are deterministic. See ADR-0021 and
  * docs/guidelines/testing.md.
  *
  * Locally it drives the Microsoft Edge that is installed anyway (`channel: 'msedge'`), so
@@ -22,7 +22,7 @@ const port = Number(process.env['SERIAL_BROKER_BROWSER_TEST_PORT'] ?? '8146');
 const baseURL = `http://localhost:${String(port)}`;
 
 export default defineConfig({
-  // Playwright resolves these against the directory this file is in, which is config/ (ADR-0042),
+  // Playwright resolves these against the directory this file is in, which is config/ (ADR-0025),
   // so both reach back to the repository root. `outputDir` keeps the traces where CI collects
   // them and where .gitignore expects them, rather than under config/.
   testDir: '../test/browser',

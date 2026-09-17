@@ -20,7 +20,7 @@ let locks: FakeLockManager;
 beforeEach(async () => {
   const self = {} as { onconnect: ((event: { ports: readonly unknown[] }) => void) | null };
   vi.stubGlobal('self', self);
-  // The worker's own Web Locks: it holds one for its lifetime, and waits on every tab's (ADR-0041).
+  // The worker's own Web Locks: it holds one for its lifetime, and waits on every tab's (ADR-0024).
   locks = new FakeLockManager();
   vi.stubGlobal('navigator', { locks: locks.forContext('worker') });
 
@@ -40,13 +40,13 @@ afterEach(() => {
 const routed = (port: FakeMessagePort): unknown[] =>
   port.posted.filter((message) => (message as { type: unknown }).type !== 'worker-log');
 
-/** The worker's records forwarded to a port (ADR-0018). */
+/** The worker's records forwarded to a port (ADR-0014). */
 const recordsPosted = (port: FakeMessagePort): unknown[] =>
   port.posted.filter((message) => (message as { type: unknown }).type === 'worker-log');
 
 /**
  * Connects a port of a live tab and says hello on it as `id`, taking part in `configNames`, as
- * every tab's transport does first once it holds its own lock (ADR-0008, ADR-0041). What the worker
+ * every tab's transport does first once it holds its own lock (ADR-0007, ADR-0024). What the worker
  * answered is cleared, so a test sees only what follows.
  */
 function join(id: string, configNames: readonly string[] = ['Reader']): FakeMessagePort {
@@ -78,7 +78,7 @@ describe('serial-broker.worker', () => {
     const bob = join('bob');
 
     // A tab of another build that was served this worker script: a copied file that belongs to
-    // another release, or a cached one (ADR-0008).
+    // another release, or a cached one (ADR-0007).
     const otherVersion = { v: PROTOCOL_VERSION + 1, from: 'alice', to: 'all' };
     alice.deliver({ ...otherVersion, type: 'hello' });
     alice.deliver({ ...otherVersion, type: 'status-request', configName: 'Reader', retry: false });
@@ -92,7 +92,7 @@ describe('serial-broker.worker', () => {
       expect.objectContaining({ type: 'welcome', v: PROTOCOL_VERSION, to: 'alice' }),
     ]);
     expect(routed(bob)).toEqual([]);
-    // Bob, on this version, is told what the worker recorded about it (ADR-0018).
+    // Bob, on this version, is told what the worker recorded about it (ADR-0014).
     expect(recordsPosted(bob)).toEqual([
       expect.objectContaining({
         type: 'worker-log',
@@ -151,7 +151,7 @@ describe('serial-broker.worker', () => {
 
     expect(alice.closed).toBe(false);
     expect(routed(alice)).toEqual([expect.objectContaining({ type: 'write-request' })]);
-    // The tab also learns what the worker recorded about the message it lost (ADR-0018).
+    // The tab also learns what the worker recorded about the message it lost (ADR-0014).
     expect(recordsPosted(alice)).toEqual([
       expect.objectContaining({
         fields: expect.objectContaining({ event: 'worker.message-error' }) as unknown,

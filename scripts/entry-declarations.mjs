@@ -2,7 +2,7 @@
  * Names the published entry declarations after the package, as the bundles are named.
  *
  * Every published file is named after the package rather than after the entry file it was built
- * from, so that a file copied onto a web server says what it is (ADR-0043): `serial-broker.js`,
+ * from, so that a file copied onto a web server says what it is (ADR-0026): `serial-broker.js`,
  * `serial-broker.min.js`, `serial-broker.global.js`, `serial-broker.worker.js`. The bundler is
  * told those names directly, through its entry keys. `tsc` cannot be: it names every declaration
  * after its source file, and the source files are `src/index.ts` and `src/diagnostics.ts` - the

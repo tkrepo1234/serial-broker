@@ -13,7 +13,7 @@
  * system clock, and the difference includes the round trip that orders the crash. Everything
  * else is stamped inside the pages.
  *
- * Opt-in only, never in CI: `SERIAL_BROKER_BENCH_BROWSER=1 npm run bench:browser`. See ADR-0037.
+ * Opt-in only, never in CI: `SERIAL_BROKER_BENCH_BROWSER=1 npm run bench:browser`. See ADR-0023.
  */
 
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
@@ -152,7 +152,7 @@ class BenchTab {
       (name) => (window as unknown as BenchWindow).bench.openedAt(name) !== undefined,
       NAME,
       // A page that lost the worker with the crashed page reconnects once the browser lets go of the
-      // worker's lock (ADR-0041); the margin is for a browser that is slow to.
+      // worker's lock (ADR-0024); the margin is for a browser that is slow to.
       { timeout: 180_000 },
     );
     const openedAt = await this.page.evaluate(

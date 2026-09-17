@@ -19,14 +19,14 @@ import {
 
 const TABS = 10;
 
-/** Writes issued together: a burst, far below what the port keeps waiting (ADR-0031). */
+/** Writes issued together: a burst, far below what the port keeps waiting (ADR-0019). */
 const BURST = 50;
 
 /**
  * One tab holds the port for a long time and accepts every write the others issue.
  *
  * The tab holding the port remembers the writes it accepted in its term, so that a write handed
- * over twice is written once (ADR-0013). That record is what grows with the writes of a term, and
+ * over twice is written once (ADR-0011). That record is what grows with the writes of a term, and
  * a term can last as long as the tab: it keeps every write in progress and a bounded number of
  * finished ones. It is not reported anywhere, so what is measured is its cost: the heap after
  * `SIZES.ownerWrites` writes, taken once the record is full, is the heap before them. A record

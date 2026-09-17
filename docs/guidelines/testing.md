@@ -11,12 +11,12 @@ that matter, and they must be **deterministic**.
 | **Unit**            | `test/unit/`                                         | One module in isolation: backoff maths, validation, codecs, protocol encode/decode.                                                                                                 | No fakes beyond the module's own dependencies. Fast (< 5 ms each).                                                                                      |
 | **Integration**     | `test/integration/`                                  | Several real modules against the simulated browser harness: a single tab end-to-end, reconnect, write queueing.                                                                     | Uses the harness, never the real DOM.                                                                                                                   |
 | **Multi-context**   | `test/integration/multi-tab/`                        | The actual product claim: N simulated tabs sharing one port, ownership failover, broadcast fan-out, interlocking under contention.                                                  | Mandatory for every change to `owner/`, `worker/` or `client/`.                                                                                         |
-| **Browser**         | `test/browser/`                                      | The **built** package in a real Chromium: a real `SharedWorker` handshake, real Web Locks, real `BroadcastChannel`, `dist/` loaded by a page.                                       | Scenarios only, no races; `npm run test:browser`. See below and ADR-0035.                                                                               |
+| **Browser**         | `test/browser/`                                      | The **built** package in a real Chromium: a real `SharedWorker` handshake, real Web Locks, real `BroadcastChannel`, `dist/` loaded by a page.                                       | Scenarios only, no races; `npm run test:browser`. See below and ADR-0021.                                                                               |
 | **Hardware**        | `test/browser/hardware/`                             | The same scenarios against a real serial device, through a real UART.                                                                                                               | Runs only with `SERIAL_BROKER_HARDWARE=arduino`, `=emulator` or `=picker`; results in `docs/manual-test-plan.md`.                                       |
 | **Extreme**         | `test/integration/extreme/`, `test/browser/extreme/` | What the library costs and whether it stays stable at sizes no operator reaches: a hundred tabs, an hour of full-rate traffic, thousands of writes under crashes, a simulated week. | Runs only with `SERIAL_BROKER_EXTREME=1` (`npm run test:extreme`), never in CI; each part records its last run in a `RESULTS.md` next to it. See below. |
 | **Emulated device** | `emulator/`                                          | Real Chromium and the real Windows serial stack against a USB device whose failures are scriptable.                                                                                 | Its own tests live in `emulator/test/`; a browser drives it in `test/browser/hardware/emulator.spec.ts`.                                                |
 | **Manual**          | `debug/`                                             | Real Chromium, real hardware. Documented, checklisted, never a substitute for the above.                                                                                            | Recorded in `docs/manual-test-plan.md`.                                                                                                                 |
-| **Benchmark**       | `bench/`                                             | What the library costs: latency, throughput, handover and start times, an hour's steady state; on the harness and in a real browser.                                                | Not a test: nothing gates on a number. `npm run bench`; see below and ADR-0037.                                                                         |
+| **Benchmark**       | `bench/`                                             | What the library costs: latency, throughput, handover and start times, an hour's steady state; on the harness and in a real browser.                                                | Not a test: nothing gates on a number. `npm run bench`; see below and ADR-0023.                                                                         |
 
 ## Determinism is mandatory
 
@@ -25,7 +25,7 @@ No test may depend on wall-clock time, real timers, real randomness or real task
 - **Time** is injected (`Clock`) and driven by the harness's `FakeClock`, which moves only when a
   test advances it. `harness.settle()` lets pending promise chains run without moving time. A test
   that calls `await sleep(100)` to "let things settle" is rejected in review. The fake keeps the two
-  readings apart, as a browser does (ADR-0014): `jumpWallClock()` sets the system time without
+  readings apart, as a browser does (ADR-0012): `jumpWallClock()` sets the system time without
   touching a timer, and `stall()` lets monotonic time pass without running one, which is how a
   frozen or throttled tab's late timers are tested.
 - **Randomness** is injected. The harness draws the top of the jitter range every time, so backoff
@@ -68,7 +68,7 @@ The harness is the most important asset in the test suite. It has its own tests
 ## The browser suite
 
 `npm run test:browser` builds the package and runs `test/browser/` against a real Chromium with
-Playwright (ADR-0035). Locally it drives the **installed Microsoft Edge**, so nothing is
+Playwright (ADR-0021). Locally it drives the **installed Microsoft Edge**, so nothing is
 downloaded; CI installs Chromium and runs the same suite. A static server serves `dist/` and the
 test pages from `test/browser/pages/`, and each test opens ordinary pages that `import` the
 library — one page is one tab.
@@ -151,7 +151,7 @@ version, device, result.
 ## The benchmarks
 
 `bench/` measures what the library costs, in two places, against expectations written down
-before anything is measured (`bench/expectations.ts`, ADR-0037). The results are the
+before anything is measured (`bench/expectations.ts`, ADR-0023). The results are the
 [Performance chapter](../site/performance.md) of the documentation.
 
 ```sh
@@ -230,7 +230,7 @@ timers in one step, so a simulated week advances an hour at a time.
 A memory bound measures the harness as much as the library, so the harness keeps nothing of a tab
 that closed or was killed: its ports, listeners and bus connections are let go of, which
 `harness-conformance.test.ts` proves with a `WeakRef` and a collection. What the worker itself keeps
-of a killed tab is let go as soon as the browser lets go of the tab's lock (ADR-0041). Some state the library keeps is visible to no
+of a killed tab is let go as soon as the browser lets go of the tab's lock (ADR-0024). Some state the library keeps is visible to no
 count - the record of writes accepted at the port, for one - and is bounded through the heap alone:
 `long-lived-owner` fails when that record is unbounded.
 

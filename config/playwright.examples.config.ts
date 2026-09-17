@@ -7,7 +7,7 @@ import { defineConfig } from '@playwright/test';
 /**
  * The example applications' smoke tests: each example is started with its own `npm start` on
  * the port its `example.json` names, and its `smoke.spec.ts` drives it in a real browser with the
- * Web Serial stand-in installed. See examples/README.md for the contract, and ADR-0035 for why the
+ * Web Serial stand-in installed. See examples/README.md for the contract, and ADR-0021 for why the
  * browser suites look the way they do.
  *
  * Only examples whose dependencies are installed are started: an example without `node_modules`
@@ -21,7 +21,7 @@ interface ExampleManifest {
   readonly readyPath: string;
 }
 
-// This file lives in config/ (ADR-0042); the examples are a directory up.
+// This file lives in config/ (ADR-0025); the examples are a directory up.
 const examplesDir = join(import.meta.dirname, '..', 'examples');
 const only = process.argv.slice(2).filter((argument) => argument.startsWith('examples/'));
 

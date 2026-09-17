@@ -13,7 +13,7 @@ The device is a loopback by default — everything written comes straight back, 
 USB-serial adapter whose TX and RX pins are bridged. Unlike an adapter, it can also be unplugged,
 hung mid-write, and made to split its answers, on command, which is what testing this library
 actually needs. Why this approach and not a virtual COM port driver is in
-[ADR-0035](../docs/adr/0035-browser-tests-with-playwright.md).
+[ADR-0021](../docs/adr/0021-browser-tests-with-playwright.md).
 
 > **Status:** covered by its own tests (`emulator/test/`), which drive it with an independent
 > USB/IP client, and **run against usbip-win2 0.9.8.0 on Windows 11**:
@@ -91,7 +91,7 @@ Every transfer is logged, so you can see exactly which bytes reached the device 
 | 1–12, 18–19, 23, 25          | As written: it behaves like the loopback adapter the plan assumes.                                                                               |
 | 13–15 (unplug, replug)       | `unplug`, then `plug`.                                                                                                                           |
 | 16 (backoff while unplugged) | `unplug` and wait; `plug` when done.                                                                                                             |
-| 17 (powered off, port open)  | `hang`. A write that fits the port buffer still resolves; a larger one fails with a timeout, and the port works again after `resume` (ADR-0013). |
+| 17 (powered off, port open)  | `hang`. A write that fits the port buffer still resolves; a larger one fails with a timeout, and the port works again after `resume` (ADR-0011). |
 | 20 (large payload)           | As written.                                                                                                                                      |
 | 21 (text across chunks)      | `chunk 1` first; every multi-byte character then arrives split.                                                                                  |
 | 22 (binary)                  | As written; `send \x02\xff\x03` covers the receiving direction.                                                                                  |

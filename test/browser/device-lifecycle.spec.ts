@@ -3,8 +3,8 @@
  *
  * Both are places where the library depends on browser behaviour that a fake can only claim: that
  * a port granted from a click is usable at once, and that an unplugged device errors the read
- * stream of whoever holds it and announces itself again when it comes back (ADR-0036, ADR-0010).
- * See ADR-0035.
+ * stream of whoever holds it and announces itself again when it comes back (ADR-0022, ADR-0008).
+ * See ADR-0021.
  */
 
 import { expect, test } from '@playwright/test';

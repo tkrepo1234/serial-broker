@@ -3,7 +3,7 @@
  *
  * The in-process suite proves the coordination against a simulated platform. This proves that the
  * platform behaves as that simulation assumes - a real `SharedWorker` handshake, real Web Locks,
- * and the built files finding each other. See ADR-0035.
+ * and the built files finding each other. See ADR-0021.
  */
 
 import { expect, test } from '@playwright/test';

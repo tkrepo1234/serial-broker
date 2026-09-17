@@ -192,12 +192,12 @@ describe('decode matrix', () => {
     'write-ready',
     'write-approval',
     'status',
-  ] as const)('rejects %s that names no term (ADR-0030)', (type) => {
+  ] as const)('rejects %s that names no term (ADR-0018)', (type) => {
     expect(decodeMessage({ ...VALID[type], term: undefined }).ok).toBe(false);
   });
 
   it.each([1, 'true', null, undefined])(
-    'rejects a write approval whose answer is %s, not a boolean (ADR-0013)',
+    'rejects a write approval whose answer is %s, not a boolean (ADR-0011)',
     (approved) => {
       // Read loosely, anything truthy would begin a write its issuer did not approve.
       expect(decodeMessage({ ...VALID['write-approval'], approved }).ok).toBe(false);
@@ -247,7 +247,7 @@ describe('decode matrix', () => {
 describe('namespaced names', () => {
   it('puts the protocol version in the lock name', () => {
     // Two incompatible versions must not contend for the same lock, or they would take turns
-    // owning a port they cannot talk to each other about (ADR-0008).
+    // owning a port they cannot talk to each other about (ADR-0007).
     expect(ownerLockName('Reader')).toContain(`v${String(PROTOCOL_VERSION)}`);
     expect(ownerLockName('Reader')).toContain('Reader');
   });
@@ -278,7 +278,7 @@ const CONFIGURATION = ['configurations', 0] as const;
 
 /**
  * A report is display-only, and bounded by the decoder before this check. Only what files it - its
- * sender and its named configurations - is checked; the rest is displayed defensively (ADR-0018).
+ * sender and its named configurations - is checked; the rest is displayed defensively (ADR-0014).
  */
 describe('isParticipantDiagnostics', () => {
   it('accepts a complete report, and one from a context with no configurations', () => {

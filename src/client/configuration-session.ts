@@ -49,7 +49,7 @@ import type { Transport } from './transport/transport.js';
 /** Where the outcome of a write performed at this context's port goes. */
 interface WriteReport {
   /**
-   * Asks the context that issued the write whether it may begin now (ADR-0013): at once for this
+   * Asks the context that issued the write whether it may begin now (ADR-0011): at once for this
    * context's own, with `write-ready` for another's. `true` means that context counts it as begun.
    */
   readonly mayBegin: () => boolean | Promise<boolean>;
@@ -65,7 +65,7 @@ interface WriteReport {
  * to, and the lifecycle of writes this context has issued.
  *
  * The shape of it follows from one rule: **a context is either the owner or it is not, and it
- * must behave identically either way as far as the application can tell** (ADR-0011). So
+ * must behave identically either way as far as the application can tell** (ADR-0009). So
  * `send()` goes to the supervisor directly or across the bus depending on the role, and
  * nothing above this class knows which happened.
  *
@@ -81,7 +81,7 @@ export class ConfigurationSession {
   readonly #emitter: EventEmitter;
   readonly #election: OwnershipElection;
   readonly #writes: PendingWrites;
-  /** The terms of holding the port this context has heard of (ADR-0030). */
+  /** The terms of holding the port this context has heard of (ADR-0018). */
   readonly #terms: OwnerTerms;
   /** This context's term while it holds the port. */
   #term: TermId | undefined;
@@ -91,7 +91,7 @@ export class ConfigurationSession {
   readonly #statusAnswers: RateLimiter;
   #delayedStatusAnswer: TimerHandle | undefined;
   /**
-   * The writes accepted at this context's port in the current term of holding it (ADR-0013).
+   * The writes accepted at this context's port in the current term of holding it (ADR-0011).
    *
    * Replaced, not cleared, when the term ends: a write of the old term that ends later records its
    * outcome in the old term's record, where it cannot make the new term forget a write.
@@ -99,7 +99,7 @@ export class ConfigurationSession {
   #acceptedWrites = new AcceptedWrites();
   /**
    * The `write-ready` questions this context has asked as the tab holding the port, by the issuing
-   * context and request, with the term that asked (ADR-0013).
+   * context and request, with the term that asked (ADR-0011).
    *
    * Only the write next in the port's queue asks, and each question ends with its write, which the
    * supervisor bounds by `writeTimeoutMs`: there is never more than one per term here, and never one
@@ -115,17 +115,17 @@ export class ConfigurationSession {
   #statusSince: number;
   #lastErrorCode: SerialBrokerErrorCode | undefined;
   #isReleased = false;
-  /** This tab's place among the `maxTabs` tabs, or `undefined` without a limit (ADR-0025). */
+  /** This tab's place among the `maxTabs` tabs, or `undefined` without a limit (ADR-0017). */
   readonly #slot: TabSlot | undefined;
   /** On the bus and in the election: at once without a limit, once a place is held with one. */
   #isJoined = false;
-  /** Why this tab gave up: the tab holding the port runs a different tab limit (ADR-0025). */
+  /** Why this tab gave up: the tab holding the port runs a different tab limit (ADR-0017). */
   #withdrawal: SerialBrokerError | undefined;
   /**
    * The configuration in effect.
    *
    * Replaced, never mutated, and only in one respect: an auto-mode configuration takes its
-   * device from the port the user chooses, or from the tab holding the port (ADR-0036). Every
+   * device from the port the user chooses, or from the tab holding the port (ADR-0022). Every
    * other field is what `setup()` was given.
    */
   #configuration: NormalizedConfiguration;
@@ -207,7 +207,7 @@ export class ConfigurationSession {
         // The port is with nobody until the next tab claims it. Only the term that held it as far
         // as this tab knew says that; a term that had been succeeded describes nothing any more.
         // A configuration that gave up, and does not reconnect by itself, stays `failed`: the next
-        // tab to hold the port does not connect either (ADR-0010).
+        // tab to hold the port does not connect either (ADR-0008).
         if (wasCurrent && !this.#election.isOwner && !this.#isReleased && !this.#staysFailed()) {
           this.#setStatus(SerialBrokerStatus.Reconnecting);
         }
@@ -238,7 +238,7 @@ export class ConfigurationSession {
 
   /**
    * Joins the bus and the election - at once, or, with a tab limit, once this tab holds one of the
-   * places (ADR-0025). Until then the status is `queued`.
+   * places (ADR-0017). Until then the status is `queued`.
    */
   start(): void {
     const slot = this.#slot;
@@ -271,7 +271,7 @@ export class ConfigurationSession {
   }
 
   /**
-   * The bus reached a new broker after the old one died (ADR-0041).
+   * The bus reached a new broker after the old one died (ADR-0024).
    *
    * Statuses and write requests sent through the dead one may be lost. The tab holding the port
    * restates its status, which a tab that reached the new broker first could not ask for yet; any
@@ -289,7 +289,7 @@ export class ConfigurationSession {
   }
 
   /**
-   * Tries again where the connection gave up (ADR-0010): in the tab holding the port, whose
+   * Tries again where the connection gave up (ADR-0008): in the tab holding the port, whose
    * supervisor did, or - from any other tab - by asking that tab to.
    *
    * A tab that withdrew over a different tab limit stays withdrawn.
@@ -421,7 +421,7 @@ export class ConfigurationSession {
    *
    * Everything {@link getStatus} deliberately withholds is here - the role, the pending writes,
    * the owner's connection - because this goes to an operator's diagnostics view, never to the
-   * application's code (ADR-0018).
+   * application's code (ADR-0014).
    */
   diagnostics(): ConfigurationDiagnostics {
     return {
@@ -465,7 +465,7 @@ export class ConfigurationSession {
    *
    * Allowed while this tab holds the port, and before anyone is known to: a tab that has just set
    * the configuration up may ask in the same gesture, and the choice is used the moment this tab
-   * holds the port (ADR-0036). A tab that knows another tab holds it asks that tab to look again.
+   * holds the port (ADR-0022). A tab that knows another tab holds it asks that tab to look again.
    *
    * @param options - `chooseAgain`: an auto-mode configuration lets the user choose a different
    *   device, which the tab holding the port switches to, even while it is open.
@@ -538,7 +538,7 @@ export class ConfigurationSession {
   /**
    * Opens the picker for the device in effect and takes what the user chose.
    *
-   * In auto mode the chosen port's identity becomes the device (ADR-0036): the first time, and
+   * In auto mode the chosen port's identity becomes the device (ADR-0022): the first time, and
    * whenever the user is to choose again, when the picker is unfiltered. Otherwise the port has to be
    * the configured device - a browser applies the filter, but the check behind it holds should one
    * offer a port it did not ask for.
@@ -605,7 +605,7 @@ export class ConfigurationSession {
 
   /**
    * Takes a device for an auto-mode configuration: the port the user chose, or what the tab
-   * holding the port runs (ADR-0036).
+   * holding the port runs (ADR-0022).
    *
    * Only auto mode resolves, and only to something else than it has: the tab holding the port
    * decides, so a device adopted from it replaces one this tab chose earlier, and a device the user
@@ -649,7 +649,7 @@ export class ConfigurationSession {
       // status this port does not have, and a claim would hand this context's own writes out again.
       return;
     }
-    // Who may say what about the port is the terms' to decide (ADR-0030).
+    // Who may say what about the port is the terms' to decide (ADR-0018).
     this.#terms.authorize(message, () => {
       this.#apply(message);
     });
@@ -664,7 +664,7 @@ export class ConfigurationSession {
 
       case 'write-ready':
         // Decided here, in this context's own event loop, against whether it has given the write up
-        // (ADR-0013). Answered either way, so that a refused write does not hold the port's queue.
+        // (ADR-0011). Answered either way, so that a refused write does not hold the port's queue.
         this.transport.send({
           type: 'write-approval',
           v: PROTOCOL_VERSION,
@@ -714,7 +714,7 @@ export class ConfigurationSession {
       case 'status-request':
         if (message.retry && this.#supervisor !== undefined) {
           // Asked by a tab whose user chose the device, or whose application set it up again. A
-          // resolution chosen there is taken first (ADR-0036), and a different device is switched
+          // resolution chosen there is taken first (ADR-0022), and a different device is switched
           // to, even from an open connection: the user chose it. Otherwise nothing happens unless
           // this tab's supervisor gave up or waits for permission - a working connection is left
           // alone.
@@ -733,7 +733,7 @@ export class ConfigurationSession {
         return;
 
       case 'owner-claimed':
-        // Believed, and so the term holding the port (ADR-0030). Waiting writes go to it once it
+        // Believed, and so the term holding the port (ADR-0018). Waiting writes go to it once it
         // states `open`: until then there is nothing to write to.
         return;
 
@@ -742,13 +742,13 @@ export class ConfigurationSession {
       case 'welcome':
       case 'worker-log':
         // The broker's bookkeeping and the worker's own records, handled by the broker or the
-        // transport, which logs a forwarded record itself (ADR-0018). Nothing to do here.
+        // transport, which logs a forwarded record itself (ADR-0014). Nothing to do here.
         return;
 
       case 'diagnostics-request':
       case 'diagnostics-report':
         // Addressed to a context rather than to a configuration: the client answers requests
-        // itself, and reports go to observers, which have no sessions (ADR-0018).
+        // itself, and reports go to observers, which have no sessions (ADR-0014).
         return;
 
       default:
@@ -780,7 +780,7 @@ export class ConfigurationSession {
    * Begins a term of holding the port: the election holds its lock, so the term can be spoken for.
    *
    * Nothing is said in a term before its lock is held: every other tab checks that lock before it
-   * believes a word of what this tab says about the term (ADR-0030).
+   * believes a word of what this tab says about the term (ADR-0018).
    */
   #startTerm(term: TermId): void {
     this.#term = term;
@@ -839,12 +839,12 @@ export class ConfigurationSession {
 
     this.#supervisor = supervisor;
     // Taken over from a term that gave up, in a configuration that does not reconnect by itself:
-    // this tab does not connect either, until the application or the user says so (ADR-0010).
+    // this tab does not connect either, until the application or the user says so (ADR-0008).
     supervisor.start(this.#staysFailed() ? 'failed' : 'connecting');
 
     // Becoming the owner is also a change of owner, and has to treat pending writes exactly as an
     // announcement from a peer would. Whoever held the port before let go of the lock - but what it
-    // said about a write may still be on its way, so its term is waited for (ADR-0030).
+    // said about a write may still be on its way, so its term is waited for (ADR-0018).
     this.#terms.takeOwn({
       term,
       from: this.transport.clientId,
@@ -868,14 +868,14 @@ export class ConfigurationSession {
     }
 
     // `owner-released` is the term's last word, and a tab that hears it concludes that a write the
-    // term began and did not answer was lost with it (ADR-0030). So the answers go first: the
+    // term began and did not answer was lost with it (ADR-0018). So the answers go first: the
     // supervisor stops only once every write handed to it has been answered, or has hung for as long
     // as a write may.
     await supervisor.stop();
 
     // Queued before the goodbye is sent and before the term's lock is let go: a tab that finds the
     // lock free and this request waiting on it knows that the term's last words are on their way,
-    // rather than taking it for a term whose tab died (ADR-0030).
+    // rather than taking it for a term whose tab died (ADR-0018).
     this.#queueGoodbye(term);
 
     this.transport.send({
@@ -896,7 +896,7 @@ export class ConfigurationSession {
    *
    * It is granted once every tab watching the term has looked, and then let go. Nothing else can
    * produce it: a tab that died leaves nothing queued, which is exactly the difference the tabs
-   * waiting on the term have to tell (ADR-0030).
+   * waiting on the term have to tell (ADR-0018).
    */
   #queueGoodbye(term: TermId): void {
     void this.environment.locks
@@ -1002,7 +1002,7 @@ export class ConfigurationSession {
    *
    * Only from the context that issued the write, which the request's `from` named, and only for the
    * term that asked: whether a write may begin is that context's to decide, and a yes from any other
-   * would begin a write its issuer may have given up (ADR-0013). Any other answer is ignored - the
+   * would begin a write its issuer may have given up (ADR-0011). Any other answer is ignored - the
    * supervisor stops waiting at its deadline, so the write is not begun.
    */
   #takeApproval(from: ClientId, requestId: RequestId, term: TermId, approved: boolean): void {
@@ -1016,7 +1016,7 @@ export class ConfigurationSession {
   }
 
   /**
-   * Writes at this context's port, at most once per request whoever issued it (ADR-0013).
+   * Writes at this context's port, at most once per request whoever issued it (ADR-0011).
    *
    * A repeat of a write still being written is ignored, since its own outcome is on the way; a
    * repeat of a finished one is answered with the known outcome, for an issuer that may have
@@ -1134,7 +1134,7 @@ export class ConfigurationSession {
 
   /**
    * Gives the configuration up in this tab, because the tab holding the port runs it with a
-   * different tab limit (ADR-0025).
+   * different tab limit (ADR-0017).
    *
    * Two limits cannot both be kept, and silently keeping the looser one would defeat the point of
    * a limit. The tab holding the port decides; this one reports the conflict in this tab only, leaves
@@ -1179,13 +1179,13 @@ export class ConfigurationSession {
     }
     if (message.maxTabs !== this.#configuration.maxTabs) {
       // The limit is part of the term's lock name, so this tab has checked that the tab holding
-      // the port really runs the configuration with it (ADR-0025, ADR-0030).
+      // the port really runs the configuration with it (ADR-0017, ADR-0018).
       this.#withdraw(message.maxTabs);
       return;
     }
     if (message.device.kind === 'usb' || message.device.kind === 'non-usb') {
       // The device the tab holding the port runs - configured, or chosen by its user. A tab in
-      // auto mode follows it; any other tab keeps what it was configured with (ADR-0036). Believed
+      // auto mode follows it; any other tab keeps what it was configured with (ADR-0022). Believed
       // for the same reason as the limit: the term's lock was held when this status was checked.
       this.resolveDevice(message.device, 'holder');
     }
@@ -1200,7 +1200,7 @@ export class ConfigurationSession {
   }
 
   /**
-   * Answers a `status-request`, within the rate this context answers them at (ADR-0031).
+   * Answers a `status-request`, within the rate this context answers them at (ADR-0019).
    *
    * One answer is a broadcast that reaches every tab, so requests beyond the rate need no answer
    * of their own: they are answered together by the next one the rate allows, and no tab that
@@ -1237,7 +1237,7 @@ export class ConfigurationSession {
    * or the user: `failed`, with `autoReconnect: false`.
    *
    * A term of holding the port that ends does not change that, so neither the tabs that watch it end
-   * nor the tab taking over treat the handover as a reason to connect (ADR-0010). A tab that knows
+   * nor the tab taking over treat the handover as a reason to connect (ADR-0008). A tab that knows
    * nothing - the only tab, reloaded - is `idle`, and connects: setting up is the application asking.
    */
   #staysFailed(): boolean {

@@ -85,14 +85,14 @@ export function hello(from: string, configNames: readonly string[] = []): unknow
   return envelope(from, 'all', { type: 'hello', configNames });
 }
 
-/** A `welcome` as a worker answers a `hello`, naming the worker's lifetime lock (ADR-0041). */
+/** A `welcome` as a worker answers a `hello`, naming the worker's lifetime lock (ADR-0024). */
 export function welcome(to: string, worker = 'worker-1'): unknown {
   return envelope('serial-broker/broker', to, { type: 'welcome', worker });
 }
 
 /**
  * Holds a Web Lock for context `contextId` until the context is killed (`locks.killContext`): the
- * lock a live tab holds for itself, or a running worker for its lifetime (ADR-0041).
+ * lock a live tab holds for itself, or a running worker for its lifetime (ADR-0024).
  */
 export function holdLock(locks: FakeLockManager, contextId: string, name: string): void {
   void locks.forContext(contextId).request(name, { mode: 'exclusive' }, async () => {

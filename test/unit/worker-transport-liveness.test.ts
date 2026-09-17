@@ -29,10 +29,10 @@ const THROTTLED_TIMER_MS = 60_000;
 
 /**
  * A port to a worker, which holds its lifetime lock while it runs and answers `hello` with a welcome
- * naming that lock (ADR-0041).
+ * naming that lock (ADR-0024).
  *
  * A worker that does not answer never welcomes anyone. A worker of another protocol version answers
- * only `hello`, in its own version, and drops everything else (ADR-0008).
+ * only `hello`, in its own version, and drops everything else (ADR-0007).
  */
 class WorkerPort extends FakeMessagePort {
   constructor(
@@ -144,7 +144,7 @@ function worker(workers: readonly WorkerPort[], index: number): WorkerPort {
 }
 
 /**
- * How a tab notices that the worker ended (ADR-0041).
+ * How a tab notices that the worker ended (ADR-0024).
  *
  * A port to a dead worker reports nothing. The worker holds a Web Lock for its lifetime, and the tab
  * waits on it: the browser grants it the moment the worker has ended.
@@ -280,7 +280,7 @@ describe('SharedWorkerTransport, when its worker never answers at all', () => {
       },
     });
 
-    // A fetch that hangs, or a script that does not speak the frozen handshake (ADR-0008).
+    // A fetch that hangs, or a script that does not speak the frozen handshake (ADR-0007).
     await clock.advance(HANDSHAKE_DEADLINE_MS - 1);
     expect(reasons).toEqual([]);
     await clock.advance(1);
@@ -302,7 +302,7 @@ describe('SharedWorkerTransport, when its worker never answers at all', () => {
 
 /**
  * A worker whose script runs another protocol version, where nothing falls back to
- * `BroadcastChannel` (ADR-0008).
+ * `BroadcastChannel` (ADR-0007).
  *
  * Such a worker answers `hello` and nothing else. A new worker from the same URL runs the same
  * script, and starting one at every deadline would only fill the log.

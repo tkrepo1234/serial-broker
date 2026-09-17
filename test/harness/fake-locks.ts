@@ -24,7 +24,7 @@ interface HeldLock {
  * the specification the library depends on:
  *
  * - exclusive mode, granted to one holder at a time;
- * - shared mode, granted to any number of holders while no exclusive lock is held (ADR-0033);
+ * - shared mode, granted to any number of holders while no exclusive lock is held (ADR-0020);
  * - one FIFO queue per name for both modes, so the longest-waiting context succeeds a departing
  *   holder, and a shared request queued behind an exclusive one waits for it;
  * - `ifAvailable`, which answers `null` unless the request could be granted at once;

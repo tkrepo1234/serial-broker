@@ -42,7 +42,7 @@ the first assumption above is already inside the boundary. The next section says
 such a script can and cannot do.
 
 **What a message says about the port is checked against the browser.** Which tab holds the port,
-and for how long, is a Web Lock rather than an announcement (ADR-0005, ADR-0030): a tab believes a
+and for how long, is a Web Lock rather than an announcement (ADR-0005, ADR-0018): a tab believes a
 claim or a status only while the lock named after that term of holding the port is held, and takes
 the term for over only when the browser frees that lock. So a message can neither invent a term nor
 end one. Messages are still not authenticated — a script that also takes Web Locks is a different
@@ -64,7 +64,7 @@ sends, and in its diagnostics report.
 - **Break a tab or the worker with what it posts.** Every decoder is total: it never throws,
   whatever it is handed, and accepts nothing that is not a complete, well-typed message - a
   diagnostics report is typed only as far as filing it needs, and read defensively below that
-  (ADR-0018). A seeded fuzz test holds the message, report, announcement and handshake decoders to
+  (ADR-0014). A seeded fuzz test holds the message, report, announcement and handshake decoders to
   that.
 - **Make a tab or the worker hold, or pass on, anything of any size.** Every field is bounded (see
   [Limits](#limits)). An accepted message is rebuilt from the fields its type declares, so nothing a
@@ -82,11 +82,11 @@ sends, and in its diagnostics report.
   acts on it (ADR-0006).
 - **Take a tab's messages away on the worker, or end its participation.** Ports of one identity are
   served next to each other, never instead of each other, and a context's participation ends only
-  when the browser lets go of the Web Lock that context holds for its lifetime (ADR-0041).
+  when the browser lets go of the Web Lock that context holds for its lifetime (ADR-0024).
 - **Grow the broker without bound.** It keeps a bounded number of participants, ports per
   participant, and configurations.
 - **End, or invent, a term of holding the port.** A term is a Web Lock held by the tab that holds
-  the port, from before its first word in that term until after its last (ADR-0030). A claim, a
+  the port, from before its first word in that term until after its last (ADR-0018). A claim, a
   status or a goodbye naming a term nobody holds changes nothing, and no message ends a term whose
   lock is still held — not even a goodbye posted while a request of the script's own waits on that
   lock, because a term ends only once the browser has freed it. So a forged goodbye cannot fail a
@@ -94,13 +94,13 @@ sends, and in its diagnostics report.
   writes into the void.
 - **Make a tab withdraw over a tab limit.** The limit of the tab holding the port is part of that
   term's lock name, so a status naming another limit names no term of the configuration
-  (ADR-0025).
+  (ADR-0017).
 - **Settle, strand or begin another tab's write.** A write is asked about, or answered, only by the
   term it was addressed to and only by the context that holds that term's lock. A `write-ready` or
   `write-result` from anywhere else — with a request id read off the channel — is ignored, so no
   script can tell an application that bytes reached the device. The tab holding the port begins a
   write only on a `write-approval` from the context that issued it; one from any other identity is
-  ignored, and the write is not begun (ADR-0013).
+  ignored, and the write is not begun (ADR-0011).
 - **Pass off data or errors as the device's** to a tab that knows who holds the port:
   `data-received`, `data-sent` and `error` are delivered only from a context that speaks for a term
   this tab knows of. A script that speaks under the identity of the tab holding the port still can;
@@ -190,7 +190,7 @@ never a payload.
 
 ### Rates
 
-How often the bus may make a tab work, beyond dropping a message (ADR-0031). Each is a burst
+How often the bus may make a tab work, beyond dropping a message (ADR-0019). Each is a burst
 allowed at once and an allowance coming back per second; the values and their reasons are in
 `src/protocol/limits.ts`. The first thing dropped is logged at `warn`, once per context and limit.
 
@@ -229,7 +229,7 @@ under two kinds of key:
   as `{ auto: true, resolved: … }` — line settings, reconnect and timeout settings, text encoding,
   receive settings, `remember` and `maxTabs`.
 
-A key written under another storage version is neither read nor removed (ADR-0033): nothing is
+A key written under another storage version is neither read nor removed (ADR-0020): nothing is
 migrated, and such a key stays until the site data is cleared.
 
 - **Any same-origin script can read it, change it and delete it**, and it survives until the site
@@ -281,7 +281,7 @@ listener's exception contains.
 
 ### The debugging surface, when it is deployed
 
-`dist/debug/` is static content that nothing serves unless an operator does (ADR-0019). Once it is
+`dist/debug/` is static content that nothing serves unless an operator does (ADR-0015). Once it is
 served, anyone who can open it on the application's origin sees every configuration of every tab,
 all settings, all traffic in full with decoded text, errors with their context, the Web Locks and
 the granted ports — and can set up configurations, send bytes, change settings, disconnect, and

@@ -12,9 +12,9 @@ import type {
 import { toSetupOptions } from './validation.js';
 
 /**
- * The shapes of a diagnostics report (ADR-0018).
+ * The shapes of a diagnostics report (ADR-0014).
  *
- * Everything here describes what ADR-0011 keeps out of the application-facing API: which
+ * Everything here describes what ADR-0009 keeps out of the application-facing API: which
  * context owns a port, what the owner's connection is doing, what each context is still waiting
  * on. It reaches an operator through the diagnostics observer, behind its own entry point, and
  * never reaches application code through the main one.
@@ -59,7 +59,7 @@ export interface EffectiveSettings {
    * The device filter in effect: USB IDs, `{ any: true }`, `{ nonUsb: true }`, or - for a
    * configuration in auto mode - `{ auto: true }` with what it has `resolved` to, if anything.
    *
-   * Every shape can be passed back to `setup()` unchanged (ADR-0036).
+   * Every shape can be passed back to `setup()` unchanged (ADR-0022).
    */
   readonly device: DeviceFilter;
   /** Line settings the port is opened with, including the defaults that were applied. */
@@ -72,7 +72,7 @@ export interface EffectiveSettings {
   readonly receive: Required<ReceiveSettings>;
   /** Whether the configuration is remembered across reloads. */
   readonly remember: boolean;
-  /** How many tabs may use the configuration at once; `Infinity` for no limit (ADR-0025). */
+  /** How many tabs may use the configuration at once; `Infinity` for no limit (ADR-0017). */
   readonly maxTabs: number;
 }
 
@@ -94,7 +94,7 @@ export interface ConnectionDiagnostics {
   readonly bytesSent: number;
   /**
    * Epoch milliseconds since which a write has been stuck at the device, while one is: the device
-   * has not taken it within `writeTimeoutMs`, and the status still says `open` (ADR-0013).
+   * has not taken it within `writeTimeoutMs`, and the status still says `open` (ADR-0011).
    */
   readonly stalledWriteSince: number | undefined;
 }
@@ -105,7 +105,7 @@ export interface PendingWritesDiagnostics {
   readonly total: number;
   /** Handed to an owner that has not answered yet. The rest are waiting for a connection. */
   readonly dispatched: number;
-  /** Begun at the device. From here on a write is never repeated (ADR-0013). */
+  /** Begun at the device. From here on a write is never repeated (ADR-0011). */
   readonly started: number;
 }
 
@@ -158,14 +158,14 @@ export interface LockDiagnostics {
    * - `serial-broker/owner/v<protocol version>/<configuration name>` - the ownership of a port
    *   (ADR-0005);
    * - `serial-broker/term/v<protocol version>/…/<configuration name>` - one term of holding a port
-   *   (ADR-0030);
+   *   (ADR-0018);
    * - `serial-broker/tab-slot/…` and `serial-broker/tab-slot-gate/…` - the places of a configuration
-   *   with a tab limit, and the queue before them (ADR-0025);
+   *   with a tab limit, and the queue before them (ADR-0017);
    * - `serial-broker/persisted/v<storage schema version>/<configuration name>` - a tab running a
-   *   remembered configuration (ADR-0033);
+   *   remembered configuration (ADR-0020);
    * - `serial-broker/context/v<protocol version>/<client id>` - a context on the `SharedWorker`,
    *   for as long as it lives, and `serial-broker/worker/v<protocol version>/<worker id>` - a
-   *   worker, for as long as it runs (ADR-0041).
+   *   worker, for as long as it runs (ADR-0024).
    */
   readonly name: string;
   /**
@@ -196,7 +196,7 @@ export interface DiagnosticsSnapshot {
    * Every context that answered within the window, in the order the answers arrived.
    *
    * A report of another context is checked only as far as filing it needs - its sender and its named
-   * configurations (ADR-0018). Read its other fields defensively: another build may report
+   * configurations (ADR-0014). Read its other fields defensively: another build may report
    * differently.
    */
   readonly participants: readonly ParticipantDiagnostics[];

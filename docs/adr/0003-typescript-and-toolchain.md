@@ -14,24 +14,24 @@ model is "one global environment per file" unless that environment is fully inje
 - **TypeScript** in maximally strict mode as the implementation language. See
   [typescript.md](../guidelines/typescript.md).
 - **tsup** (esbuild) for bundling. The library (`src/index.ts`) and the diagnostics observer
-  (`src/diagnostics.ts`, [ADR-0018](./0018-diagnostics-observer.md)) are built as ES modules and
+  (`src/diagnostics.ts`, [ADR-0014](./0014-diagnostics-observer.md)) are built as ES modules and
   CommonJS, once more minified, and once more as classic scripts
-  ([ADR-0043](./0043-a-classic-script-build-and-published-names.md)); the worker script
+  ([ADR-0026](./0026-a-classic-script-build-and-published-names.md)); the worker script
   (`src/worker/serial-broker.worker.ts`) is built as a minified ES module only. **Every published
   file is minified except the readable ES module and CommonJS builds and the debugging surface's
-  bundle (ADR-0019)** — the worker included: it
+  bundle (ADR-0015)** — the worker included: it
   is served to every tab of every installation and nothing reads it, and its source map is
   published beside it. Every published file is named after the package rather than after its entry
-  file (ADR-0043). Declarations are emitted by `tsc`, so the published types are the ones the test
+  file (ADR-0026). Declarations are emitted by `tsc`, so the published types are the ones the test
   suite type-checks against.
 - **Vitest** as the test runner, in the `node` environment. The library never touches the DOM;
   every browser API it uses is injected (see
-  [ADR-0014](./0014-dependency-injection-of-the-environment.md)), so a DOM emulator would add
+  [ADR-0012](./0012-dependency-injection-of-the-environment.md)), so a DOM emulator would add
   nothing but noise and non-determinism.
 - **ESLint** (flat config) with `typescript-eslint` for correctness rules, and **Prettier**
   for formatting, connected by `eslint-config-prettier` so the two never disagree.
 - **typedoc** to generate the API reference from TSDoc, so the documentation cannot drift
-  from the signatures ([ADR-0020](./0020-documentation-toolchain.md)).
+  from the signatures ([ADR-0016](./0016-documentation-toolchain.md)).
 
 ## Alternatives considered
 
@@ -44,7 +44,7 @@ model is "one global environment per file" unless that environment is fully inje
   behaviour, but is slow, cannot kill a tab at a chosen instruction boundary, and cannot
   simulate a device being unplugged mid-write. Rejected as the primary layer; a small,
   scenario-shaped browser suite runs in CI on top of it
-  ([ADR-0035](./0035-browser-tests-with-playwright.md)).
+  ([ADR-0021](./0021-browser-tests-with-playwright.md)).
 - **`happy-dom`/`jsdom` environment**: neither implements `SharedWorker`, Web Locks or Web
   Serial, so the fakes would be needed anyway — the emulator would only hide which globals
   the code actually depends on.

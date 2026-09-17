@@ -11,7 +11,7 @@ import { READER_OPTIONS, readerHarness } from '../../harness/devices.js';
 
 /**
  * Row 13 of the scenario matrix with two real tabs: one of this build, and one of a build whose
- * protocol version is the next one (ADR-0008).
+ * protocol version is the next one (ADR-0007).
  *
  * The other build is this library loaded a second time with `protocol/version.js` replaced, so
  * every name it derives from the version - its locks and its broker channel - is its own. It runs

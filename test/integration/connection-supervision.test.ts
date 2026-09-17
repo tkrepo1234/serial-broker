@@ -21,7 +21,7 @@ import { fieldsOfEvent, recordingLogger } from '../harness/recording-logger.js';
 
 /**
  * How the tab holding the port connects, loses and hands over the connection, under the timing a
- * browser gives `getPorts()`, `open()` and `close()`. See ADR-0010.
+ * browser gives `getPorts()`, `open()` and `close()`. See ADR-0008.
  */
 
 /** Levers on the browser's timing that the plain harness does not offer. */
@@ -423,7 +423,7 @@ describe('a device that stops taking writes', () => {
   // Measured in Chromium on Windows against the USB/IP emulator: a write the device has not taken
   // cannot be aborted, and a port with one outstanding neither closes nor opens again, however soon
   // the device recovers. Tearing the connection down for a write timeout would therefore make
-  // recovery impossible. See ADR-0013.
+  // recovery impossible. See ADR-0011.
 
   /** Past the deadline of the tab holding the port, which starts the write a little after `send()`. */
   const PAST_THE_DEADLINE_MS = 2_000;

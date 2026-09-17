@@ -393,7 +393,7 @@ function messageProblems(message: ProtocolMessage): string[] {
 
 const isFinite = (value: unknown): boolean => typeof value === 'number' && Number.isFinite(value);
 
-/** Every way a report breaks what is needed to file it; empty for a sound one (ADR-0018). */
+/** Every way a report breaks what is needed to file it; empty for a sound one (ADR-0014). */
 function reportProblems(value: unknown): string[] {
   const report = value as Record<string, unknown> | null;
   if (typeof report !== 'object' || report === null || Array.isArray(report)) {

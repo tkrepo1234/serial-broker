@@ -21,7 +21,7 @@ import type { ScopedLogger } from '../core/logger.js';
  *   chosen instruction boundary, and control every delay exactly.
  * - The complete set of platform requirements is readable here rather than scattered.
  *
- * See ADR-0014.
+ * See ADR-0012.
  */
 export interface SerialBrokerEnvironment {
   /** `navigator.serial`, or a faithful stand-in. */
@@ -33,7 +33,7 @@ export interface SerialBrokerEnvironment {
   /** Opens the message bus. */
   readonly createTransport: (request: TransportRequest) => Transport;
   /**
-   * Opens a `BroadcastChannel`, for the version announcement (ADR-0008).
+   * Opens a `BroadcastChannel`, for the version announcement (ADR-0007).
    *
    * Absent where the platform has none. Tabs on other protocol versions then go unnoticed, which
    * costs a diagnosis and nothing else.
@@ -66,7 +66,7 @@ export interface SerialBrokerEnvironment {
  * Structural, like every Web Serial type below it: the platform's own `Serial`, `SerialPort` and
  * the rest are *ambient* types, declared globally by `@types/w3c-web-serial`. A declaration this
  * package publishes that names one of them would not type-check in an application that has not
- * installed those types - which the package cannot make it do. See ADR-0014.
+ * installed those types - which the package cannot make it do. See ADR-0012.
  * `navigator.serial` satisfies these interfaces as it stands; nothing is cast on the way in.
  */
 export interface SerialLike {
@@ -96,7 +96,7 @@ export interface SerialPortLike {
   open(options: SerialOptionsLike): Promise<void>;
   /** Closes the port. Refused while a stream of it is still locked. */
   close(): Promise<void>;
-  /** Revokes this origin's permission for the device. Absent in older Chromium (ADR-0036). */
+  /** Revokes this origin's permission for the device. Absent in older Chromium (ADR-0022). */
   forget?(): Promise<void>;
   /** What the browser knows about the device behind the port. Empty for a non-USB port. */
   getInfo(): SerialPortInfoLike;
@@ -150,7 +150,7 @@ export interface LockManagerLike {
   /**
    * Lists the locks held and requested across the origin.
    *
-   * Optional, and used only by diagnostics (ADR-0018). Nothing about ownership is ever derived
+   * Optional, and used only by diagnostics (ADR-0014). Nothing about ownership is ever derived
    * from it: a snapshot of a lock manager is stale the moment it is taken.
    */
   query?(): Promise<LockSnapshotLike>;

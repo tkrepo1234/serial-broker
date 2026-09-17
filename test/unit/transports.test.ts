@@ -46,7 +46,7 @@ describe('SharedWorkerTransport', () => {
     await flushMicrotasks();
 
     expect(port.posted).toEqual([expect.objectContaining({ type: 'hello', configNames: [] })]);
-    // The worker waits on this lock, and forgets the tab once the browser lets go of it (ADR-0041).
+    // The worker waits on this lock, and forgets the tab once the browser lets go of it (ADR-0024).
     expect(locks.holderOf(contextLockName(SELF))).toBe(SELF);
   });
 
@@ -120,7 +120,7 @@ describe('SharedWorkerTransport', () => {
       }),
     );
 
-    // The worker cannot reach an application's logger; a tab writes its records for it (ADR-0018).
+    // The worker cannot reach an application's logger; a tab writes its records for it (ADR-0014).
     // `clientId` stays the identity the worker's record concerns, not this tab's.
     expect(records).toEqual([
       [
@@ -449,7 +449,7 @@ describe('SharedWorkerTransport, while its script is starting', () => {
   it('reports a worker script of another protocol version as a load failure, and the version as a mismatch', () => {
     const { port, ready, loadFailures, decodeFailures, transportErrors } = start();
 
-    // The worker's answer to hello, in its own version (ADR-0008). Such a worker drops everything
+    // The worker's answer to hello, in its own version (ADR-0007). Such a worker drops everything
     // this tab says, so nothing sent so far reached anyone - as with a script that did not load.
     port.deliver({ ...WELCOME, v: PROTOCOL_VERSION + 1 });
 

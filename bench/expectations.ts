@@ -3,7 +3,7 @@
  *
  * The expectation is what a result is judged against, so it is data here rather than a number in
  * a report: a result more than ten times worse than its expectation has to become a fix or a
- * documented limit (ADR-0037), and an expectation is never adjusted to a result.
+ * documented limit (ADR-0023), and an expectation is never adjusted to a result.
  * The reasoning behind each number is in the comment next to it, so that a reader can disagree
  * with the reasoning rather than only with the number.
  *
@@ -11,7 +11,7 @@
  * one Node process, with no browser and no device: microtasks, structured clones and validation,
  * with every delay simulated. The browser numbers include the platform - a real `SharedWorker`
  * hop, real `postMessage` cloning, real Web Locks and a real renderer crash - and are expected to
- * be an order of magnitude larger. See ADR-0037.
+ * be an order of magnitude larger. See ADR-0023.
  */
 
 /** Which way a metric is better. */

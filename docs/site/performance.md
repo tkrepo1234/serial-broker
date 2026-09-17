@@ -63,7 +63,7 @@ tab.
 
 The expectations are data in `bench/expectations.ts`, one set for each place, and the reasoning
 for each number is in a comment next to it. They were written before anything was measured, and
-they are not adjusted to a result: the rule (ADR-0037) is that a result more than
+they are not adjusted to a result: the rule (ADR-0023) is that a result more than
 ten times worse than its expectation becomes either a fix in the library, with a test, or a limit
 written down in this chapter. A result that is far better than expected is left as it is; the
 expectation stays what it was.
@@ -137,7 +137,7 @@ and on a line that never goes quiet for up to `receive.maxWaitMs` (500 ms); see
 **The `SharedWorker` can end with the tab that crashes.** In Microsoft Edge 153 the `SharedWorker`
 ends when the renderer of the page that started it crashes - usually the first tab, which is also
 the first to hold the port. The worker holds a Web Lock for its lifetime, which every tab waits on
-(ADR-0041), so every tab learns of it at once and no timer is involved: `everyTab` is as close to
+(ADR-0024), so every tab learns of it at once and no timer is involved: `everyTab` is as close to
 `wall` on the `SharedWorker` transport as on the `BroadcastChannel` transport.
 
 ### Over the expectation, by less than ten times

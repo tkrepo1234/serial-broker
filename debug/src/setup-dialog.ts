@@ -27,7 +27,7 @@ export interface SetupRequest {
   /**
    * Whether to open the browser's port picker right after `setup()`, in the same click: the
    * _Choose a device…_ flow, where the configuration is in auto mode and takes its device from
-   * the port chosen (ADR-0036).
+   * the port chosen (ADR-0022).
    */
   readonly requestsAccess: boolean;
 }
@@ -194,7 +194,7 @@ export class SetupDialog {
    * Opens the dialog for a configuration that takes its device from the browser's port picker.
    *
    * There is nothing to say about the device: the picker opens when the form is submitted, in
-   * that click, and the configuration takes what is chosen (ADR-0036). Only the name and the line
+   * that click, and the configuration takes what is chosen (ADR-0022). Only the name and the line
    * settings are asked for, and the dialog opens on the baud rate, which is where someone who
    * knows their device starts.
    *

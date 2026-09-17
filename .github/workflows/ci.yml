@@ -93,7 +93,7 @@ jobs:
 
       # Installing Playwright downloads no browser - the package has no install script - so the
       # one this suite needs is fetched explicitly. Locally it drives the developer's installed
-      # Edge instead, and fetches nothing at all (ADR-0035).
+      # Edge instead, and fetches nothing at all (ADR-0021).
       - run: npx playwright install --with-deps chromium
 
       # Builds the package and runs test/browser/ against it. The hardware tests skip themselves:
@@ -128,7 +128,7 @@ jobs:
 
       - run: npm ci
 
-      # The same virtual environment `npm run docs` looks for locally (ADR-0020). The build fails
+      # The same virtual environment `npm run docs` looks for locally (ADR-0016). The build fails
       # on any Sphinx warning, so a broken cross-reference cannot land unnoticed.
       - run: |
           python -m venv docs/.venv

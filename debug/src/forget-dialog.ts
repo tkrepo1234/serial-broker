@@ -3,7 +3,7 @@ import type { ReleaseOptions } from '../../src/index.js';
 /**
  * The dialog that asks what should be forgotten, after _Disconnect_.
  *
- * Releasing forgets nothing on its own (ADR-0033), so the page has to say which of the browser's
+ * Releasing forgets nothing on its own (ADR-0020), so the page has to say which of the browser's
  * two stores is meant to go: the configuration remembered under the name, and the permission for
  * the device. It asks with two boxes rather than offering a menu of combinations, which would make
  * the rarest and least reversible choice look like just another item.

@@ -30,7 +30,7 @@ interface Entry {
  * interleaved byte by byte - which for a command-oriented device means neither of them.
  *
  * A job that fails does not stop the queue: the failure belongs to the caller that submitted
- * it, and the writes queued behind it are unrelated work. See ADR-0013.
+ * it, and the writes queued behind it are unrelated work. See ADR-0011.
  *
  * A job waiting behind a slow one can be withdrawn. The queue is a list rather than a chain of
  * promises for that reason: a withdrawn job leaves it at once, and with it everything the job holds -

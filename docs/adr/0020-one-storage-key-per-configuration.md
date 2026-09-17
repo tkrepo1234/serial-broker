@@ -1,4 +1,4 @@
-# ADR-0033: Remembered configurations: one storage key each, kept while any tab runs them
+# ADR-0020: Remembered configurations: one storage key each, kept while any tab runs them
 
 - **Status:** Accepted
 
@@ -6,7 +6,7 @@
 
 A released port is to be remembered and reused on the next visit without prompting the user again.
 The permission to use the port belongs to the browser and persists on its own
-([ADR-0036](./0036-take-the-device-identity-from-the-chosen-port.md)); the configuration - which
+([ADR-0022](./0022-take-the-device-identity-from-the-chosen-port.md)); the configuration - which
 device, which serial settings - is ours to store, in `localStorage`.
 
 Three forces shape how:
@@ -34,7 +34,7 @@ validation on read cannot absorb.
 - `serial-broker/configurations/v<storage version>/index` — a JSON array of the remembered names.
 - `serial-broker/configurations/v<storage version>/entry/<name>` — the options of that one
   configuration, exactly what `setup()` accepts. For an auto-mode configuration the `device`
-  carries its resolution (ADR-0036).
+  carries its resolution (ADR-0022).
 
 `save()` writes the entry first and adds the name to the index only if the index does not list it
 already. `remove()` takes the name out of the index first and removes the entry once that write has
@@ -83,7 +83,7 @@ nothing is promised about stored data (BACKLOG.md, standing constraints).
 - **One key, merged on write, or written from a Web Lock.** The merge happens on a copy that is
   already stale, and a lock does not make the renderer's cached copy fresh either.
 - **No index, enumerating the keys.** Widens the narrow storage interface
-  ([ADR-0014](./0014-dependency-injection-of-the-environment.md)) and makes a restore scan every key
+  ([ADR-0012](./0012-dependency-injection-of-the-environment.md)) and makes a restore scan every key
   of the origin, including the application's.
 - **Migrate other storage versions, or remove their keys on restore.** It buys a tidy
   `localStorage` with code that has to keep every format the library ever wrote readable. A stale key costs a few hundred bytes and holds

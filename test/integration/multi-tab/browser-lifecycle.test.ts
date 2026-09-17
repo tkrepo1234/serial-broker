@@ -119,7 +119,7 @@ describe.each(TRANSPORT_MODES)('the browser lifecycle (%s)', (transport) => {
     const next = outcomeOf(participant.client.send('Reader', 'N'));
     await harness.settle();
 
-    // How long a write has waited is measured on the monotonic clock (ADR-0014): the system time
+    // How long a write has waited is measured on the monotonic clock (ADR-0012): the system time
     // being set forward an hour refuses nothing that is still within `writeTimeoutMs`.
     expect(await waiting).toBe('resolved');
     expect(await next).toBe('resolved');

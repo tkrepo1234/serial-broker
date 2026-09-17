@@ -5,7 +5,7 @@ import { defineConfig } from '@playwright/test';
 /**
  * The browser benchmark: the harness scenarios of `bench/harness/` once more, in a real Chromium
  * with the Web Serial stand-in, so that the platform's own cost - a real `SharedWorker` hop, real
- * `postMessage` cloning, a real renderer crash - is in the numbers. See ADR-0037.
+ * `postMessage` cloning, a real renderer crash - is in the numbers. See ADR-0023.
  *
  * Opt-in only: `SERIAL_BROKER_BENCH_BROWSER=1 npm run bench:browser`. It never runs in CI, where a
  * shared runner's timings would say nothing; its numbers are recorded once, with the machine, in

@@ -203,7 +203,7 @@ export class BrowserHarness {
   readonly bus: FakeBus;
   readonly clock = new FakeClock();
   /**
-   * Time for the message bus: the deadline of the worker's handshake (ADR-0041).
+   * Time for the message bus: the deadline of the worker's handshake (ADR-0024).
    *
    * Separate from {@link clock}, so that a test asserting on the library's own timers - "no
    * reconnect is scheduled any more" - is not disturbed by the bus's, and a test about a worker
@@ -247,7 +247,7 @@ export class BrowserHarness {
   }
 
   /**
-   * Opens a diagnostics observer on the same origin (ADR-0018).
+   * Opens a diagnostics observer on the same origin (ADR-0014).
    *
    * Not a tab in the library's sense: it has an identity on the bus, but no configuration, no
    * port and no place in any election.

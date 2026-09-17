@@ -27,7 +27,7 @@ const UNSETTLED = Symbol('unsettled');
 /**
  * Thousands of writes from many tabs while the tab holding the port keeps crashing.
  *
- * The one promise that matters here is ADR-0013's: a write reaches the device at most once,
+ * The one promise that matters here is ADR-0011's: a write reaches the device at most once,
  * whatever happens to the tab writing it. It is checked from the device's side - every payload
  * carries its number, and the device's record of what it received is compared with what each
  * `send()` reported - not from the library's.
@@ -129,7 +129,7 @@ describe.skipIf(!IS_EXTREME).each(TRANSPORT_MODES)(
               }
             }
             // Longer than any write deadline, so every outcome is in; the worker forgot the tabs that
-            // died when the browser let go of their locks (ADR-0041).
+            // died when the browser let go of their locks (ADR-0024).
             await harness.advance(10_000);
             await harness.settle();
             // Reduced to numbers before the footprint is taken: ten thousand settled promises and
@@ -183,7 +183,7 @@ describe.skipIf(!IS_EXTREME).each(TRANSPORT_MODES)(
               expect(written, `write ${String(index)} resolved`).toBe(1);
               break;
             case OWNER_LOST:
-              // Undecidable by design (ADR-0013): once, or not at all.
+              // Undecidable by design (ADR-0011): once, or not at all.
               byOutcome.ownerLost += 1;
               break;
             case DIED_WITH_TAB:

@@ -15,7 +15,7 @@
  *
  * The browser gets the port through a profile that was given the permission before it started
  * (see `support/seeded-profile.ts`); no permission prompt is answered, and no machine-wide setting
- * or policy is touched. Results of a run belong in `docs/manual-test-plan.md`. See ADR-0035.
+ * or policy is touched. Results of a run belong in `docs/manual-test-plan.md`. See ADR-0021.
  */
 
 import process from 'node:process';

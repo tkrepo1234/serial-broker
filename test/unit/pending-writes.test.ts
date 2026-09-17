@@ -75,12 +75,12 @@ const notConnected = (): SerialBrokerError =>
   new SerialBrokerError(SerialBrokerErrorCode.NOT_CONNECTED, 'not here');
 
 /**
- * The delivery guarantee of ADR-0013, in isolation.
+ * The delivery guarantee of ADR-0011, in isolation.
  *
  * Every test here answers one question: *may this command be sent again?* Getting it wrong in
  * one direction loses a command; getting it wrong in the other executes it twice, and for a
  * device that cuts, dispenses or moves something, twice is materially worse than zero times.
- * A write belongs to the term it was handed to, and only that term ending decides it (ADR-0030).
+ * A write belongs to the term it was handed to, and only that term ending decides it (ADR-0018).
  * No term begins it without this tracker's approval, which is what makes `started: false` true.
  */
 describe('PendingWrites', () => {
@@ -164,7 +164,7 @@ describe('PendingWrites', () => {
     void outcomeOf(harness.writes.add(id('w1'), PAYLOAD)).then((value) => (outcome = value));
 
     // Asked by a tab that was never asked to write it. Approving would tie the write to a term that
-    // is not writing it, and lose it when that term ends (ADR-0030).
+    // is not writing it, and lose it when that term ends (ADR-0018).
     expect(harness.writes.approve(id('w1'), SECOND)).toBe(false);
     harness.endTerm(SECOND);
     await flushMicrotasks();
@@ -179,7 +179,7 @@ describe('PendingWrites', () => {
     void outcomeOf(harness.writes.add(id('w1'), PAYLOAD)).then((value) => (outcome = value));
 
     // Only the term that was asked to write it can say how it went; anyone else read the request
-    // id off the bus (ADR-0030).
+    // id off the bus (ADR-0018).
     harness.writes.handleResult(id('w1'), SECOND, undefined);
     harness.writes.handleResult(id('w1'), undefined, undefined);
     await flushMicrotasks();
@@ -251,7 +251,7 @@ describe('PendingWrites', () => {
     });
   });
 
-  it('lets no term begin a write once its deadline has said it did not start (ADR-0013)', async () => {
+  it('lets no term begin a write once its deadline has said it did not start (ADR-0011)', async () => {
     const harness = createHarness({ writeTimeoutMs: 1_000 });
     const outcome = outcomeOf(harness.writes.add(id('w1'), PAYLOAD));
 
@@ -404,7 +404,7 @@ describe('scheduleDeadline', () => {
 
     await clock.advance(100);
 
-    // Lateness is measured on the monotonic clock (ADR-0014): a punctual deadline stays punctual.
+    // Lateness is measured on the monotonic clock (ADR-0012): a punctual deadline stays punctual.
     expect(order).toEqual(['deadline', 'queued task']);
     expect(clock.pendingTimerCount).toBe(0);
   });

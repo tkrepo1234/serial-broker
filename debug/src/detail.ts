@@ -470,7 +470,7 @@ function hintFor(view: ConfigurationView, now: number): string {
       'auto' in view.settings.device &&
       view.settings.device.resolved === undefined;
     // Any tab taking part may ask: the permission is the origin's, and the tab holding the port
-    // looks again once it is granted (ADR-0036). Queued and withdrawn tabs are answered above.
+    // looks again once it is granted (ADR-0022). Queued and withdrawn tabs are answered above.
     return isUnresolved
       ? 'No device chosen yet. Choose it once; the configuration takes its identity from the port and remembers it.'
       : 'No granted port matches this device. Choose it once; the browser remembers it.';

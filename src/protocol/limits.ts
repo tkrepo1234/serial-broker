@@ -56,7 +56,7 @@ export const MAX_TEXT_LENGTH = 2 * MAX_PAYLOAD_BYTES;
 /**
  * The most configuration names one `hello` may list.
  *
- * A `hello` lists every configuration its tab takes part in (ADR-0041), and the broker keeps
+ * A `hello` lists every configuration its tab takes part in (ADR-0024), and the broker keeps
  * bookkeeping for each. No application sets up a thousand configurations in one tab.
  */
 export const MAX_HELLO_CONFIGURATIONS = 1024;
@@ -98,7 +98,7 @@ export const MAX_REPORT_CHARACTERS = 1024 * 1024;
  *
  * A tab limit is at most 100 per configuration, and an origin with a thousand open tabs is not one a
  * browser keeps running. Every participant is a set of ports, a lock request that tells the worker
- * when it has gone (ADR-0041), and an entry in each configuration it takes part in.
+ * when it has gone (ADR-0024), and an entry in each configuration it takes part in.
  */
 export const MAX_PARTICIPANTS = 1024;
 
@@ -120,7 +120,7 @@ export const MAX_PORTS_PER_PARTICIPANT = 8;
 export const MAX_CONFIGURATIONS = 4 * MAX_HELLO_CONFIGURATIONS;
 
 /**
- * The most fields, counting their values, one forwarded worker record may carry (ADR-0018).
+ * The most fields, counting their values, one forwarded worker record may carry (ADR-0014).
  *
  * The worker's own records carry six fields at most. The limit bounds what a tab holds while it
  * hands a record to the application's logger.
@@ -142,7 +142,7 @@ export const MAX_LOG_RECORD_CHARACTERS = 4 * 1024;
  * (`client/accepted-writes.ts`), and far more than an application produces: a device that takes a
  * command in a millisecond drains this in four seconds, and a write that waits longer than
  * `writeTimeoutMs` leaves the queue unwritten anyway. Beyond it a write is refused with
- * `WRITE_QUEUE_FULL` rather than held (ADR-0031).
+ * `WRITE_QUEUE_FULL` rather than held (ADR-0019).
  */
 export const MAX_WAITING_WRITES = 4096;
 
@@ -155,7 +155,7 @@ export const MAX_WAITING_WRITES = 4096;
 export const MAX_WAITING_WRITE_BYTES = 4 * MAX_PAYLOAD_BYTES;
 
 /**
- * The most reports one diagnostics collection keeps (ADR-0018).
+ * The most reports one diagnostics collection keeps (ADR-0014).
  *
  * As many as the broker keeps participants: every context that exists can answer once, and each
  * answer is held until the collection's window closes. Reports beyond it are dropped.
@@ -168,13 +168,13 @@ export const MAX_REPORTS_PER_COLLECTION = MAX_PARTICIPANTS;
  * The count alone bounds no memory, as it does not for the writes waiting at a port: one report may
  * hold {@link MAX_REPORT_CHARACTERS}, so {@link MAX_REPORTS_PER_COLLECTION} of the largest ones
  * would be a gigabyte - and a request id is broadcast, so anything on the bus can answer one under
- * as many invented identities as it likes (ADR-0031). A report of a real tab is kilobytes; this
+ * as many invented identities as it likes (ADR-0019). A report of a real tab is kilobytes; this
  * holds thousands of them.
  */
 export const MAX_REPORT_CHARACTERS_PER_COLLECTION = 16 * MAX_REPORT_CHARACTERS;
 
 /**
- * How often the tab holding the port answers `status-request` (ADR-0031).
+ * How often the tab holding the port answers `status-request` (ADR-0019).
  *
  * One answer is a broadcast that reaches every tab, so a burst of requests needs one answer, not
  * one each. The burst covers every tab of an origin joining at once; requests beyond the rate are
@@ -184,7 +184,7 @@ export const MAX_REPORT_CHARACTERS_PER_COLLECTION = 16 * MAX_REPORT_CHARACTERS;
 export const STATUS_ANSWER_RATE: RateLimit = { burst: 32, perSecond: 32 };
 
 /**
- * How often a tab answers `diagnostics-request` (ADR-0018, ADR-0031).
+ * How often a tab answers `diagnostics-request` (ADR-0014, ADR-0019).
  *
  * An answer is a report of everything the tab runs, up to {@link MAX_REPORT_CHARACTERS}. An
  * operator refreshes a diagnostics view by hand, a few times a minute; the burst covers a page that
@@ -251,7 +251,7 @@ export function exceedsStructureBudget(
  * How many characters a structure holds, counted within `budget`.
  *
  * For what a structure costs to keep, where the count of such structures is bounded separately -
- * the reports of a diagnostics collection (ADR-0031). A structure that exceeds `budget` is counted
+ * the reports of a diagnostics collection (ADR-0019). A structure that exceeds `budget` is counted
  * as the whole of it: the walk stops there, and nothing holds a structure it has refused.
  */
 export function structureCharacters(root: unknown, budget: StructureBudget): number {

@@ -28,7 +28,7 @@ window goes away.
 Every participant — owner or not — sees the same events and can issue writes. A write from
 another tab crosses the bus to the configuration's participants, and only the tab holding the
 port in the term the write is addressed to performs the actual `writer.write()`
-([ADR-0030](./0030-hold-a-web-lock-for-every-term-of-holding-the-port.md)).
+([ADR-0018](./0018-hold-a-web-lock-for-every-term-of-holding-the-port.md)).
 
 ## Alternatives considered
 
@@ -59,7 +59,7 @@ port in the term the write is addressed to performs the actual `writer.write()`
   gap is reported as `reconnecting`, never hidden.
 - Data that arrives during the transfer gap can be lost — the device is talking to nobody.
   This is a property of the platform, documented, and the reason
-  [ADR-0013](./0013-write-ordering-and-delivery-semantics.md) promises _at-most-once_
+  [ADR-0011](./0011-write-ordering-and-delivery-semantics.md) promises _at-most-once_
   delivery rather than exactly-once.
 
 ## Verification

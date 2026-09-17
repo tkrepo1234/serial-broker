@@ -76,7 +76,7 @@ describe('WriteQueue', () => {
 });
 
 /**
- * Withdrawing a write that waits at the port (ADR-0013): a write whose issuer has stopped waiting is
+ * Withdrawing a write that waits at the port (ADR-0011): a write whose issuer has stopped waiting is
  * taken out of the queue at once, so that it is never begun and holds no memory while the write in
  * front of it goes on.
  */

@@ -241,7 +241,7 @@ describe('isDeviceCompatible', () => {
 
   it('never lets auto mode conflict with auto mode, whatever each has resolved to', () => {
     // Both say "the device the tab holding the port chose"; the session running keeps its
-    // resolution (ADR-0036).
+    // resolution (ADR-0022).
     expect(compatible(undefined, { auto: true })).toBe(true);
     expect(compatible({ auto: true, resolved: VALID.device }, { auto: true })).toBe(true);
     expect(
@@ -275,7 +275,7 @@ describe('isDeviceCompatible', () => {
   });
 });
 
-describe('the device filter in auto mode (ADR-0036)', () => {
+describe('the device filter in auto mode (ADR-0022)', () => {
   const serial = { baudRate: 9600 };
 
   it('takes an omitted device, and { auto: true }, as auto mode with nothing resolved', () => {
@@ -319,7 +319,7 @@ describe('the device filter in auto mode (ADR-0036)', () => {
     ['any and a resolution', { any: true, resolved: { nonUsb: true } }],
   ])('rejects a device that mixes shapes: %s', (_label, device) => {
     // Either reading would be a guess about which device to open, and that is not a guess worth
-    // making (ADR-0036).
+    // making (ADR-0022).
     expect(argumentOf(() => normalizeConfiguration('R', { device, serial }))).toBe(
       'options.device',
     );

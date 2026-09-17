@@ -27,7 +27,7 @@ export type Admission =
  * A tab can hand the same write over twice. It sends to whoever holds the port, and may learn
  * only afterwards - from `owner-claimed`, a late `NOT_CONNECTED`, or `open` restated - that it
  * has to hand on every write it has not seen start. Recognising the request is what keeps the
- * write at most once (ADR-0013); answering the repeat with the known outcome lets the issuing
+ * write at most once (ADR-0011); answering the repeat with the known outcome lets the issuing
  * tab settle it.
  *
  * A write in progress is never forgotten, however many there are: forgetting one lets its repeat
@@ -45,7 +45,7 @@ export class AcceptedWrites {
   /**
    * `true` for a request this record has already seen: one being written, or one that has ended.
    *
-   * Asked before a write is refused for want of room at the port (ADR-0031): a repeat of a write
+   * Asked before a write is refused for want of room at the port (ADR-0019): a repeat of a write
    * already accepted must be answered from here, never refused, because its bytes may already be
    * on their way to the device.
    */

@@ -2,7 +2,7 @@ import { defineConfig } from 'tsup';
 
 /**
  * The debugging surface, bundled into `dist/debug/` so it ships with the package as static
- * content (ADR-0019).
+ * content (ADR-0015).
  *
  * It is an application page rather than part of the library: it inlines the library from source,
  * reaches past the public facade to show internals the facade hides, and is never imported by

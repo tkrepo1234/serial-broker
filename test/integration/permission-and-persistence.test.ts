@@ -12,7 +12,7 @@ import { remember, rememberedEntry, rememberedNames } from '../harness/stored-co
  *
  * Two things persist and they live in different places: the browser keeps the *permission*,
  * which script can neither store nor forge, and this library keeps the *configuration*. See
- * ADR-0036.
+ * ADR-0022.
  */
 describe('permission and persistence', () => {
   it('waits for permission when no granted device matches', async () => {
@@ -225,7 +225,7 @@ describe('remembered configurations', () => {
 });
 
 /**
- * How remembered configurations are laid out in storage (ADR-0033).
+ * How remembered configurations are laid out in storage (ADR-0020).
  *
  * One key per configuration and an index of their names, carrying a storage version of their own,
  * so that a change to the message protocol costs nobody their configurations and two tabs saving at

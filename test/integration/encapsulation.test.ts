@@ -10,7 +10,7 @@ import { connectedTab, READER_OPTIONS, readerHarness } from '../harness/devices.
 /**
  * The encapsulation boundary, asserted rather than trusted.
  *
- * ADR-0011 says the public surface reveals nothing about how ownership is coordinated. That
+ * ADR-0009 says the public surface reveals nothing about how ownership is coordinated. That
  * is only true for as long as nobody adds a convenient field, and "convenient field" is
  * exactly how these things leak. So the shape is pinned here: an accidental addition fails
  * the suite rather than shipping and becoming load-bearing for somebody.
@@ -96,7 +96,7 @@ describe('encapsulation', () => {
 
   it('keeps diagnostics out of the main entry point', () => {
     // Diagnostics reveal exactly what this boundary withholds, so they live behind an entry point
-    // of their own, where code has to reach for them on purpose (ADR-0018).
+    // of their own, where code has to reach for them on purpose (ADR-0014).
     const exported = Object.keys(publicApi).map((key) => key.toLowerCase());
 
     expect(exported.some((key) => key.includes('diagnostic') || key.includes('observer'))).toBe(
@@ -107,7 +107,7 @@ describe('encapsulation', () => {
   it('reports a status an application can act on, with no coordination vocabulary in it', () => {
     const allStatuses: string[] = Object.values(SerialBrokerStatus);
 
-    // `queued` says only that the tab limit the application itself set is reached (ADR-0025);
+    // `queued` says only that the tab limit the application itself set is reached (ADR-0017);
     // which tab holds the port stays unsayable.
     expect(allStatuses).toEqual([
       'idle',

@@ -41,7 +41,7 @@ async function twoTabs(
 }
 
 /**
- * Tabs that go away, as the worker experiences them (ADR-0041).
+ * Tabs that go away, as the worker experiences them (ADR-0024).
  *
  * A real worker is never told that a tab died, and the harness is not either. What tells it is the
  * Web Lock every tab holds for its lifetime, which the browser lets go of when the tab goes.
@@ -80,7 +80,7 @@ describe('tabs on the SharedWorker', () => {
 
 /**
  * A worker that dies while tabs are open: it crashed, was ended for memory, or was terminated from
- * `chrome://inspect` (ADR-0041).
+ * `chrome://inspect` (ADR-0024).
  *
  * A port to a dead worker reports nothing in either direction, and tabs opened later start a new
  * worker that knows none of the tabs already open. The browser lets go of the lock the worker held
@@ -222,7 +222,7 @@ describe('tabs whose worker script fails to load', () => {
 
 /**
  * A worker script of another protocol version: a copied worker file that was not replaced with the
- * library, or one served from a cache (ADR-0008).
+ * library, or one served from a cache (ADR-0007).
  *
  * Such a worker drops everything the tabs say. It answers `hello` with a welcome in its own
  * version, which tells a tab that nothing it sent arrived anywhere - as when the script does not
@@ -285,7 +285,7 @@ describe('tabs whose worker script is of another protocol version', () => {
 
     // Deployed again under the same worker URL while the tabs stayed open. The welcome of this
     // version came long ago, so there is nothing left to fall back from, and every worker started
-    // from that URL runs the new script: only a reload helps (ADR-0008).
+    // from that URL runs the new script: only a reload helps (ADR-0007).
     harness.bus.crashWorker('other-version');
     for (let round = 0; round < 10; round += 1) {
       await harness.busClock.advance(HANDSHAKE_DEADLINE_MS);

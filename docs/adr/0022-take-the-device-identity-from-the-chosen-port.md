@@ -1,4 +1,4 @@
-# ADR-0036: Device identity, permission and auto mode: the port the user chooses
+# ADR-0022: Device identity, permission and auto mode: the port the user chooses
 
 - **Status:** Accepted
 
@@ -59,7 +59,7 @@ looks for the port again. Only a tab that is `queued`, or withdrew, is refused w
 
 **The resolution is remembered, reported and shared.**
 
-- _Remembered:_ the stored entry ([ADR-0033](./0033-one-storage-key-per-configuration.md)) keeps
+- _Remembered:_ the stored entry ([ADR-0020](./0020-one-storage-key-per-configuration.md)) keeps
   `{ auto: true, resolved }`. `setup()` of an unresolved auto-mode configuration with
   `remember: true` starts from a remembered auto-mode resolution of the same name, logged as
   `session.device-resolved` with `source: 'remembered'`, so a later visit reconnects without a
@@ -70,10 +70,10 @@ looks for the port again. Only a tab that is `queued`, or withdrew, is refused w
   unresolved; `vendorId` and `productId` are set only for `'usb'`.
 - _Shared:_ the `status` message carries the holder's device in effect. A tab in auto mode adopts a
   `usb` or `non-usb` device it hears from the tab holding the port: **the tab holding the port
-  decides**, as for the tab limit ([ADR-0025](./0025-limit-the-tabs-using-a-configuration.md)). A
+  decides**, as for the tab limit ([ADR-0017](./0017-limit-the-tabs-using-a-configuration.md)). A
   holder that waits (`auto`) or accepts any port (`any`) hands on nothing, and an explicitly set up
   tab adopts nothing. A status is believed only while its term's Web Lock is held
-  ([ADR-0030](./0030-hold-a-web-lock-for-every-term-of-holding-the-port.md)).
+  ([ADR-0018](./0018-hold-a-web-lock-for-every-term-of-holding-the-port.md)).
 
 **Conflict rules within a tab** (`isDeviceCompatible`): auto never conflicts with auto; an unresolved
 auto filter conflicts with nothing; a resolved one counts as its resolution; two explicit filters
@@ -81,8 +81,8 @@ conflict unless equal in kind and IDs, `nonUsb` and `any` being distinct kinds. 
 are not compared: the documentation says to pass the same options for a name in every tab.
 
 **Releasing.** `release(name)` stops using a configuration in this tab and forgets nothing: what is
-remembered stays (ADR-0033) and the browser permission is kept, so the next `setup()` is
-prompt-free. `{ forget: true }` also removes the remembered entry, under the rule of ADR-0033. `release(name, { forgetDevice: true })` also calls `SerialPort.forget()` where the
+remembered stays (ADR-0020) and the browser permission is kept, so the next `setup()` is
+prompt-free. `{ forget: true }` also removes the remembered entry, under the rule of ADR-0020. `release(name, { forgetDevice: true })` also calls `SerialPort.forget()` where the
 browser supports it.
 
 **Choosing again.** `requestAccess(name, { chooseAgain: true })`, in any tab taking part
@@ -118,7 +118,7 @@ application's decision, and it is set up with the other device instead.
   follow the holder.
 - **Derive the configuration in the page**, from the chosen port's `getInfo()`. Every application
   would have to write it, the debugging surface
-  ([ADR-0019](./0019-ship-the-debugging-surface.md)) included, and the result is not shared between
+  ([ADR-0015](./0015-ship-the-debugging-surface.md)) included, and the result is not shared between
   tabs.
 - **Let only `restore()` read a remembered resolution.** The path the Quickstart teaches, `setup()`,
   would then ask the user on every visit and save over the choice.

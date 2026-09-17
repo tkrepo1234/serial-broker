@@ -5,7 +5,7 @@
  *     npm run emulator -- --vendor-id 0x1209 --product-id 0x0001 --no-attach
  *
  * See emulator/README.md for the one-time setup and how this maps onto the manual test plan.
- * Why the device is emulated over USB/IP rather than as a virtual COM port is in ADR-0035.
+ * Why the device is emulated over USB/IP rather than as a virtual COM port is in ADR-0021.
  */
 
 import { execFile } from 'node:child_process';

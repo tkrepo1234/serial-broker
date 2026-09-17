@@ -16,7 +16,7 @@ const ANY_DEVICE = {
  *
  * A built-in RS-232 interface on an industrial PC, a virtual COM port pair, a Bluetooth
  * serial profile: `getInfo()` tells you nothing about any of them, so there is no filter to
- * write and the library has to accept whatever the user granted. See ADR-0036.
+ * write and the library has to accept whatever the user granted. See ADR-0022.
  */
 describe('a device with no USB identity', () => {
   it('sends and receives like any other device', async () => {

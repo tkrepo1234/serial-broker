@@ -11,7 +11,7 @@ function createLimiter(limit: RateLimit = LIMIT): { limiter: RateLimiter; clock:
 }
 
 /**
- * The bound on how often the bus may make a context work (ADR-0031).
+ * The bound on how often the bus may make a context work (ADR-0019).
  *
  * A burst is what legitimate use looks like; a flood is what a broken or hostile sender looks
  * like.
@@ -56,7 +56,7 @@ describe('RateLimiter', () => {
       limiter.take();
     }
 
-    // Set forward: no allowance comes back before time has really passed (ADR-0014).
+    // Set forward: no allowance comes back before time has really passed (ADR-0012).
     clock.jumpWallClock(60_000);
     expect(limiter.take()).toBe(false);
 

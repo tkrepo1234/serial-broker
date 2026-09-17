@@ -1,10 +1,10 @@
-# ADR-0030: Hold a Web Lock for every term of holding the port
+# ADR-0018: Hold a Web Lock for every term of holding the port
 
 - **Status:** Accepted
 
 ## Context
 
-[ADR-0013](./0013-write-ordering-and-delivery-semantics.md) lets the tab that issued a write decide
+[ADR-0011](./0011-write-ordering-and-delivery-semantics.md) lets the tab that issued a write decide
 its fate: not repeatable once it has let the tab holding the port begin it, settled by
 `write-result`, and - when that tab is gone - failed if it had started, handed on if it had not.
 Everything depends on knowing when the tab holding the port is gone and when its last word has
@@ -35,7 +35,7 @@ serial-broker/term/v<protocol>/<maxTabs>/<term>/<clientId>/<configName>
 
 The name carries everything a tab must check before believing what is said in the term's name: the
 term identifier, created by the tab granted ownership; the context speaking for it; and the tab
-limit that context runs ([ADR-0025](./0025-limit-the-tabs-using-a-configuration.md)). The
+limit that context runs ([ADR-0017](./0017-limit-the-tabs-using-a-configuration.md)). The
 configuration name comes last, because it is the only part that may contain a `/`.
 
 - **The term lock is taken inside the election.** The ownership lock's callback takes the term's
@@ -131,14 +131,14 @@ about the term: the tab forgets it, and the next message naming it is checked af
 - **A word from a crashed holder that arrives after the browser freed its lock is too late.** The
   holder asks the issuing tab before it begins, and that tab counts what it let begin as begun, so a
   late word does not change whether a write began
-  ([ADR-0013](./0013-write-ordering-and-delivery-semantics.md)); only a late result is lost, and the
+  ([ADR-0011](./0011-write-ordering-and-delivery-semantics.md)); only a late result is lost, and the
   write is `OWNER_LOST_DURING_WRITE`.
 - **A script of the origin can take Web Locks.** It can hold a lock named for a term it invented, or
   queue on a real term's lock so that tabs wait for a goodbye that never comes - a delay, never an
   end. A script that takes locks can already keep every tab away from the device.
 - **A tab that joins while a device streams misses what arrives before it knows the term** - one
   round trip across the bus, longer where the answer waits for the status answer rate
-  ([ADR-0031](./0031-bound-and-rate-limit-what-the-bus-can-cost-a-tab.md)).
+  ([ADR-0019](./0019-bound-and-rate-limit-what-the-bus-can-cost-a-tab.md)).
 
 ## Verification
 

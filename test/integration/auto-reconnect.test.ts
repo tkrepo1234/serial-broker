@@ -7,7 +7,7 @@ import { TRANSPORT_MODES } from '../harness/browser-harness.js';
 import { READER_OPTIONS, readerHarness } from '../harness/devices.js';
 
 /**
- * `connection.autoReconnect: false`: the application reconnects, the library does not (ADR-0010).
+ * `connection.autoReconnect: false`: the application reconnects, the library does not (ADR-0008).
  * Setting a configuration that gave up up again is how it does.
  */
 
@@ -253,7 +253,7 @@ describe.each(TRANSPORT_MODES)('a configuration that failed (%s)', (transport) =
     await harness.advance(60_000);
     expect(other.client.getStatus('Reader').status).toBe('failed');
 
-    // Setting a configuration up again is how an application says "try again" (ADR-0010), in
+    // Setting a configuration up again is how an application says "try again" (ADR-0008), in
     // whichever tab it happens.
     await other.client.setup('Reader', manual);
     await harness.settle();

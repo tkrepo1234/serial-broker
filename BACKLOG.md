@@ -28,7 +28,7 @@ Not derivable from the code:
 
 - **Step 18 of the [manual test plan](./docs/manual-test-plan.md):** revoke the device in the
   browser's site settings while connected. Not automatable - the settings pages offer no control a
-  test can address. It would also settle an assumption of ADR-0010: that Chromium sends no
+  test can address. It would also settle an assumption of ADR-0008: that Chromium sends no
   `disconnect` when a permission is revoked.
 
 ## Candidates for the API
@@ -56,20 +56,20 @@ Each is a documented limit or a test that does not exist; none is a defect waiti
 - A tab that connects after a worker `warn` record was written is never told about it: the worker
   keeps no buffer to replay. Its records are not in the diagnostics observer's `collect()` either.
 - The broker has no rate limit of its own. Rate limits are per context, not per sender, so a flood
-  can crowd legitimate answers out of the allowance (ADR-0031 says why the rates are not
+  can crowd legitimate answers out of the allowance (ADR-0019 says why the rates are not
   per sender).
 - What a dead worker swallowed is only partly asked for again: errors and traffic broadcast into it
   are not repeated, and a write handed on afterwards may reach the device after a later write of
   the same tab (Known limits, "Messages on their way when the bus changes are lost").
 - A word a crashed holder sent that had not arrived when the browser freed its lock is too late
-  (ADR-0030). Draining the bus through the worker first would narrow it; a `BroadcastChannel` has
+  (ADR-0018). Draining the bus through the worker first would narrow it; a `BroadcastChannel` has
   no such hop.
 
 **Storage**
 
 - The index of remembered configurations is one key every tab writes: a name added by two tabs
   within the propagation window can be lost until that tab saves again, and entries left behind by
-  an unreadable index are never cleaned up. Both would need key enumeration, which ADR-0033
+  an unreadable index are never cleaned up. Both would need key enumeration, which ADR-0020
   rules out.
 
 **The platform**
@@ -77,7 +77,7 @@ Each is a documented limit or a test that does not exist; none is a defect waiti
 - A stuck write is invisible in the status: while the device takes nothing, the status stays
   `open`. Diagnostics report `stalledWriteSince`; a public status for it is not planned.
 - Releasing a configuration while the device holds a write cannot close the port - the platform
-  keeps it until the page goes (ADR-0013). Measured with usbip-win2 only.
+  keeps it until the page goes (ADR-0011). Measured with usbip-win2 only.
 - Whether a page with an open `SharedWorker` or `BroadcastChannel` enters the back/forward cache
   depends on the browser; the debugging surface's observer survives either way.
 - The debugging surface renders "in 1.4 s" from wall-clock timestamps, so a system clock jump skews

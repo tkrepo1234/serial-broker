@@ -44,7 +44,7 @@ Two mechanisms, deliberately separate:
 
 ```text
 facade        src/facade.ts               SerialBroker: a lazily created client behind named calls
-entry points  src/index.ts, diagnostics.ts, global*.ts   what the package publishes (ADR-0043)
+entry points  src/index.ts, diagnostics.ts, global*.ts   what the package publishes (ADR-0026)
 diagnostics   src/diagnostics.ts          openDiagnostics: an observer, independent of the facade
   │
 client        src/client/                 one tab's view of every configuration
@@ -79,14 +79,14 @@ fails the lint.
 No module outside the two composition roots - `src/environment/browser.ts` and the worker's entry
 point, `src/worker/serial-broker.worker.ts` - reaches `navigator`, `window`, `localStorage` or the
 timer functions; a lint rule enforces it, and time and randomness come from the environment too
-[ADR-0014]. It is what lets the test suite run many simulated tabs in one process. Durations are
+[ADR-0012]. It is what lets the test suite run many simulated tabs in one process. Durations are
 measured on the environment's monotonic clock, and only moments that are shown or sent on the wall
 clock.
 
 The environment describes each of those APIs in types of its own — `SerialLike`, `SerialPortLike`,
 `LockManagerLike`, `KeyValueStorage` — naming no ambient Web Serial type, so that nothing
 this package publishes needs `@types/w3c-web-serial`. `scripts/check-dist.mjs` type-checks every
-emitted `.d.ts` without those types after each build [ADR-0014].
+emitted `.d.ts` without those types after each build [ADR-0012].
 
 ## Ownership
 
@@ -102,14 +102,14 @@ its term.
 With a tab limit, a tab requests the ownership lock - and joins the bus - only while it holds one
 of `maxTabs` places, each the Web Lock `serial-broker/tab-slot/v<protocol>/<maxTabs>/<place>/<name>`.
 Waiting tabs queue at a gate lock and, holding it, request every place at once; the first granted is
-kept [ADR-0025].
+kept [ADR-0017].
 
 When a tab dies, the browser releases its locks and grants the ownership lock to the longest-waiting
 request. The successor's `owner-claimed` proves that the previous owner let go of the lock - but not
 that its last messages have arrived, since they come from another sender. So every time of holding
 the port is a term, a Web Lock of its own,
 `serial-broker/term/v<protocol>/<maxTabs>/<term>/<clientId>/<name>`, held by the tab holding the
-port from before its first word in the term until after its last [ADR-0030]. The name carries what a
+port from before its first word in the term until after its last [ADR-0018]. The name carries what a
 tab must check before believing a message about the term: the term, the tab speaking for it, and
 the tab limit that tab runs. Every other tab checks the lock with `ifAvailable` when it first hears
 of a term and queues for it in `shared` mode, so:
@@ -136,7 +136,7 @@ The bus is an interface, `Transport`, with two implementations [ADR-0006]:
   configuration the tab takes part in and is sent again whenever that changes. It routes each
   message to `all` participants of a configuration or to one tab. It knows no owner: a write request
   goes to every participant, and only the tab holding the addressed term acts on it. A port tells
-  nobody when the context at its other end goes away, so liveness is Web Locks [ADR-0041]: every tab
+  nobody when the context at its other end goes away, so liveness is Web Locks [ADR-0024]: every tab
   holds `serial-broker/context/v<protocol>/<clientId>` for its lifetime, and the worker forgets the
   tab when the browser grants it that lock; the worker holds `serial-broker/worker/v<protocol>/<id>`
   for its lifetime, named in its `welcome`, and a tab granted that lock reports
@@ -160,7 +160,7 @@ The worker can reach no logger: it is a context of its own, and the logger an ap
 belongs to a tab. It therefore sends its `warn` and `error` records to the contexts connected to it,
 as `worker-log` messages, and each tab writes them to its own logger under the worker's own events -
 `worker.message-refused`, `worker.limit-exceeded`, `broker.limit-exceeded` and the rest. The worker
-writes each kind of warning once, so what it forwards is bounded without a budget [ADR-0018].
+writes each kind of warning once, so what it forwards is bounded without a budget [ADR-0014].
 
 In the default mode the worker transport is wrapped in a `FallbackTransport`. A `SharedWorker`
 whose script answers 404 is still created; the browser reports the failure afterwards. So until
@@ -177,12 +177,12 @@ in its own. A tab that receives a message in another version on the worker's por
 `PROTOCOL_VERSION_MISMATCH` and falls back as above. Where nothing falls back — with
 `transport: 'sharedworker'`, or on a worker started in place of one that ended — the tab closes its
 port and starts no other worker, since one started from the same URL runs the same script; only a
-reload helps [ADR-0008].
+reload helps [ADR-0007].
 
 ## The protocol between tabs
 
 Every message carries `{ v, from, to, type }` and is validated completely on arrival; anything
-malformed is dropped [ADR-0008]. `decodeMessage` is total: whatever it is handed, it returns a
+malformed is dropped [ADR-0007]. `decodeMessage` is total: whatever it is handed, it returns a
 message or a reason, and never throws. Every field is also held to a limit - identifiers, names,
 payloads, text, name lists, errors and reports, in `src/protocol/limits.ts` - and an accepted
 message is rebuilt from the fields its type declares, so nothing a sender adds is passed on. A
@@ -193,7 +193,7 @@ what it keeps in the same way: participants, ports per participant, and configur
 | ------------------------------------------- | ----------------------- | --------------------------------------------------------------------------- |
 | `hello`                                     | every tab on the worker | Announces a tab and every configuration it takes part in; sent on change.   |
 | `welcome`                                   | the broker              | Answers `hello`: the script runs; names the lock the worker holds.          |
-| `worker-log`                                | the broker              | One of the worker's own records, for the tab's logger [ADR-0018].           |
+| `worker-log`                                | the broker              | One of the worker's own records, for the tab's logger [ADR-0014].           |
 | `owner-claimed`, `owner-released`           | the owner               | A term of holding the port began; it ended, as its last message.            |
 | `status-request`                            | a tab that just set up  | Asks the owner to restate the status, or to retry where it gave up.         |
 | `status`                                    | the owner               | The connection status changed, with the owner's tab limit, device and term. |
@@ -202,20 +202,20 @@ what it keeps in the same way: participants, ports per participant, and configur
 | `write-approval`                            | the issuing tab         | Answers `write-ready`: the write may begin, or it was given up.             |
 | `data-received`, `data-sent`                | the owner               | Traffic, to every participant.                                              |
 | `error`                                     | the owner               | A failure every participant should know about.                              |
-| `diagnostics-request`, `diagnostics-report` | an observer; every tab  | The diagnostics collection [ADR-0018].                                      |
+| `diagnostics-request`, `diagnostics-report` | an observer; every tab  | The diagnostics collection [ADR-0014].                                      |
 
 The protocol version is part of every message, of the lock names, and of the name of the worker and
 the channel, and it is incremented on any change to a message. Tabs on different versions therefore
 never exchange messages or contend for the same lock, and both will try to open the device. So that
 they can still detect each other, every tab also announces its protocol version on
-`serial-broker/announcements`, a channel whose name and single message never change [ADR-0008].
+`serial-broker/announcements`, a channel whose name and single message never change [ADR-0007].
 Remembered configurations carry a storage version of their own, so they survive a protocol change,
 and each lives under a key of its own, listed in an index, so that two tabs saving at the same
-moment cannot overwrite each other's [ADR-0033].
+moment cannot overwrite each other's [ADR-0020].
 
 ## The connection
 
-`PortSupervisor` is a state machine [ADR-0010]:
+`PortSupervisor` is a state machine [ADR-0008]:
 
 ```text
 idle ──▶ listing ──▶ opening ──▶ open ──▶ reconnecting ──▶ listing ─ …
@@ -237,7 +237,7 @@ harmless.
 Writes at the port go through a queue, so the bytes of one write are never interleaved with
 another's. A chunk the device has not taken within `writeTimeoutMs` fails its caller but stays in
 flight, and the connection is kept: the browser cannot withdraw it, and closing the port would never
-complete [ADR-0013].
+complete [ADR-0011].
 
 Received bytes are collected until the line has been quiet for `receive.idleMs`, and delivered to
 every tab as one event [ADR-0002].
@@ -249,13 +249,13 @@ the tab holding it reports, and `reconnecting` while ownership moves.
 
 ## Writes across tabs
 
-A write belongs to the tab that issued it, not to the owner or the broker [ADR-0013].
+A write belongs to the tab that issued it, not to the owner or the broker [ADR-0011].
 `PendingWrites` in that tab holds it until a term exists, addresses it to that term, and settles it
 when the term reports the result. Because this decision lives in the issuing tab, it is the same on
 both transports and does not depend on the broker. The owner records the writes it accepted in its
 term (`AcceptedWrites`), so a request handed to it twice is answered, not written twice.
 
-**The issuing tab decides whether a write begins** [ADR-0013]. Its `writeTimeoutMs` decides when a
+**The issuing tab decides whether a write begins** [ADR-0011]. Its `writeTimeoutMs` decides when a
 write that has not begun is given up, and no clock of another tab can tell when that is. So when a
 write from another tab is next in its queue, the owner sends `write-ready` to the issuing tab and
 waits. That tab answers `write-approval`: yes while it still waits on the write - and in the same
@@ -272,7 +272,7 @@ issuing tab ──write-request──▶ every tab; the owner of the addressed t
 
 A new claim does not decide anything by itself: the former term's result may still be on its way. A
 term ends when the browser frees its lock, or - for a holder that is letting go cleanly - at its
-`owner-released` [ADR-0030]. Only then is a write that term began and did not answer rejected with
+`owner-released` [ADR-0018]. Only then is a write that term began and did not answer rejected with
 `OWNER_LOST_DURING_WRITE`, and a write addressed to it that it never began handed to the owner now:
 
 | When the term holding the port ends | Outcome                                                      |
@@ -283,7 +283,7 @@ term ends when the browser frees its lock, or - for a holder that is letting go 
 An owner that crashed can have begun only what the issuing tab let it begin, so a crash never makes
 a begun write look unstarted.
 
-What the bus can cost a tab is bounded as well as validated [ADR-0031]: a port keeps a bounded
+What the bus can cost a tab is bounded as well as validated [ADR-0019]: a port keeps a bounded
 number of waiting writes and payload bytes, and refuses the rest with `WRITE_QUEUE_FULL`; answers to
 status and diagnostics requests are rate-limited, a diagnostics collection keeps a bounded number of
 reports, and what a flood would repeat in the log is logged once per kind.
@@ -291,16 +291,16 @@ reports, and what a flood would repeat in the log is logged once per kind.
 ## Errors
 
 There is one error class, `SerialBrokerError`, with a stable code, structured context and a
-remediation sentence for every code [ADR-0012]. Errors that cross the bus are serialised and rebuilt
+remediation sentence for every code [ADR-0010]. Errors that cross the bus are serialised and rebuilt
 in the receiving tab; the original cause comes back as a plain `Error` with its name and message.
 Browser exceptions are mapped to codes through an explicit table keyed on the `DOMException` name,
 never on message text.
 
 ## Diagnostics
 
-The application-facing API hides all of the above [ADR-0011]. An operator can see it through
+The application-facing API hides all of the above [ADR-0009]. An operator can see it through
 `serial-broker/diagnostics`, which opens a **diagnostics observer**: a context on the bus with no
-configuration and no place in any election, so observing never moves a port [ADR-0018].
+configuration and no place in any election, so observing never moves a port [ADR-0014].
 
 ```text
 observer ──diagnostics-request──▶ every context on the bus
@@ -347,7 +347,7 @@ origin sharing a port through a real `SharedWorker`, failover when the page hold
 killed, the `BroadcastChannel` fallback, and the minified entry point. It answers what the
 simulation cannot — that the platform behaves as the harness claims, and that the published files
 load and find each other — and a part of it runs against a real serial device, or an emulated USB
-device attached over USB/IP, when one is attached [ADR-0035].
+device attached over USB/IP, when one is attached [ADR-0021].
 
 What neither suite can prove is recorded in `docs/manual-test-plan.md`, which is worked through in a
 real browser, with real or emulated hardware, and where every hardware run is recorded.
@@ -355,4 +355,4 @@ real browser, with real or emulated hardware, and where every hardware run is re
 What the library costs is measured rather than tested: `bench/` runs the same scenarios - chunks
 from the device to ten tabs, writes from a tab, handovers, starts, an hour of traffic - on the
 harness and in a real browser, against expectations written down before anything is measured,
-and the [Performance](performance.md) chapter records the results [ADR-0037].
+and the [Performance](performance.md) chapter records the results [ADR-0023].

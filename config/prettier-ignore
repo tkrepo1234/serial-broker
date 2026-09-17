@@ -1,5 +1,5 @@
 # Prettier's ignore list. Passed as `--ignore-path config/prettier-ignore`, after `.gitignore`,
-# because --ignore-path replaces Prettier's default pair rather than adding to it (ADR-0042).
+# because --ignore-path replaces Prettier's default pair rather than adding to it (ADR-0025).
 #
 # These patterns follow .gitignore rules, so a pattern that CONTAINS A SLASH is anchored to the
 # directory holding this file - config/ - and not to the repository root. Every such pattern

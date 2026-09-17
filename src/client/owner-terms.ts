@@ -24,7 +24,7 @@ export interface TermClaim {
   readonly term: TermId;
   /** The context speaking for it. */
   readonly from: ClientId;
-  /** The tab limit that context runs the configuration with (ADR-0025). */
+  /** The tab limit that context runs the configuration with (ADR-0017). */
   readonly maxTabs: number;
 }
 
@@ -66,7 +66,7 @@ interface KnownTerm {
 }
 
 /**
- * What one tab knows about the terms of holding a configuration's port (ADR-0030), and so
+ * What one tab knows about the terms of holding a configuration's port (ADR-0018), and so
  * who may say what about the port.
  *
  * Every term is a Web Lock, held by the tab that holds the port from before its first word in that
@@ -116,7 +116,7 @@ export class OwnerTerms {
    * | `owner-released` | never on its own: noted, and it ends the term once its lock is free (`apply` is not run) |
    * | `write-ready`, `write-result` | it comes from the context that speaks for the term it names |
    * | `data-received`, `data-sent`, `error` | its sender speaks for a term that holds the port or is still being waited for |
-   * | `write-request`, `write-approval` | always: they speak for the tab that issued a write, not for a term. The tab holding the port takes an approval only from the context that issued the write, which it knows and the terms do not (ADR-0013) |
+   * | `write-request`, `write-approval` | always: they speak for the tab that issued a write, not for a term. The tab holding the port takes an approval only from the context that issued the write, which it knows and the terms do not (ADR-0011) |
    * | anything else | always: it says nothing about the port |
    */
   authorize(message: ProtocolMessage, apply: () => void): void {
@@ -148,7 +148,7 @@ export class OwnerTerms {
           return;
         }
         // The sender may be a script of the origin making things up - which is why the check exists
-        // (ADR-0030) - or the tab holding the port, heard by a tab still learning which term that is.
+        // (ADR-0018) - or the tab holding the port, heard by a tab still learning which term that is.
         this.#once.warn(
           'without-a-term',
           'dropped a message about the device from a context that speaks for no term of holding the port; further ones are dropped without a record',
@@ -231,7 +231,7 @@ export class OwnerTerms {
     }
     if (entry.isSucceeded) {
       // A later term has been heard of since. This one's word on the port is stale, however live
-      // its lock still looks (ADR-0030).
+      // its lock still looks (ADR-0018).
       return;
     }
     this.#makeCurrent(entry);

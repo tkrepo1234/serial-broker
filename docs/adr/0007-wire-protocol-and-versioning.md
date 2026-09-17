@@ -1,4 +1,4 @@
-# ADR-0008: Version the wire protocol; announce it; freeze the worker handshake
+# ADR-0007: Version the wire protocol; announce it; freeze the worker handshake
 
 - **Status:** Accepted
 
@@ -49,7 +49,7 @@ SemVer; there are no compatible additions.
 The announcement's name and message, and the handshake's `type`, sender identity and `v`, are
 frozen: every later version must still send and understand exactly these. The shapes are kept in
 `src/protocol/announcement.ts` and `src/protocol/handshake.ts`. Remembered configurations carry a
-storage version of their own ([ADR-0033](./0033-one-storage-key-per-configuration.md)).
+storage version of their own ([ADR-0020](./0020-one-storage-key-per-configuration.md)).
 
 ## Alternatives considered
 

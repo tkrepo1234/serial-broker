@@ -1,4 +1,4 @@
-# ADR-0031: Bound and rate-limit what the bus can cost a tab
+# ADR-0019: Bound and rate-limit what the bus can cost a tab
 
 - **Status:** Accepted
 
@@ -31,7 +31,7 @@ message.
 A token bucket (`core/rate-limit.ts`) expresses the rates: `burst` allowed at once, `perSecond`
 coming back. A burst is what legitimate use looks like - every tab of an origin asking for the
 status as it joins - and what follows it is not. The allowance is measured on the **monotonic
-clock** ([ADR-0014](./0014-dependency-injection-of-the-environment.md)), so setting the system time
+clock** ([ADR-0012](./0012-dependency-injection-of-the-environment.md)), so setting the system time
 neither refills it at once nor freezes it.
 
 | What                             | Limit                                                                                                                    |
@@ -45,10 +45,10 @@ neither refills it at once nor freezes it.
   next answer the rate allows is scheduled, and it answers all of them together. No tab that asked
   is left without a status.
 - **A write beyond the bound is refused** with `WRITE_QUEUE_FULL`, never held; what that means for
-  the write is [ADR-0013](./0013-write-ordering-and-delivery-semantics.md).
-- **Diagnostics answers and collections** are described in [ADR-0018](./0018-diagnostics-observer.md).
+  the write is [ADR-0011](./0011-write-ordering-and-delivery-semantics.md).
+- **Diagnostics answers and collections** are described in [ADR-0014](./0014-diagnostics-observer.md).
 - Errors from other tabs need no rate: they are believed only from a context speaking for a known
-  term of holding the port ([ADR-0030](./0030-hold-a-web-lock-for-every-term-of-holding-the-port.md)).
+  term of holding the port ([ADR-0018](./0018-hold-a-web-lock-for-every-term-of-holding-the-port.md)).
 
 ## Alternatives considered
 

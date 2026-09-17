@@ -2,8 +2,8 @@
  * The two message buses, and the worker that is of no use.
  *
  * `BroadcastChannel` is what a tab falls back to when the `SharedWorker` is unavailable or
- * unusable (ADR-0006, ADR-0008). Both paths exist because of browser behaviour, so both are
- * worth one run in a browser. See ADR-0035.
+ * unusable (ADR-0006, ADR-0007). Both paths exist because of browser behaviour, so both are
+ * worth one run in a browser. See ADR-0021.
  */
 
 import { expect, test } from '@playwright/test';
@@ -88,7 +88,7 @@ test.describe('a worker script of another protocol version', () => {
 
     // The worker answers `hello` and drops everything else, so the tabs would be cut off from
     // each other if they kept using it. They switch to the BroadcastChannel and share the port
-    // as usual (ADR-0008).
+    // as usual (ADR-0007).
     for (const tab of tabs) {
       const fallbacks = (await tab.logRecords()).filter(
         (record) => record.event === 'environment.transport-fallback',

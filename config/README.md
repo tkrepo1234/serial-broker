@@ -2,7 +2,7 @@
 
 The configuration of the tools that build, format, test and document this library. It lives here
 rather than in the repository root so that what a visitor sees first is the project and not its
-toolchain ([ADR-0042](../docs/adr/0042-keep-the-toolchains-configuration-in-config.md)).
+toolchain ([ADR-0025](../docs/adr/0025-keep-the-toolchains-configuration-in-config.md)).
 
 | File                            | Tool                                       | Invoked by                                                  |
 | ------------------------------- | ------------------------------------------ | ----------------------------------------------------------- |

@@ -13,7 +13,7 @@ import {
 import { fieldsOfEvent, recordingLogger } from '../harness/recording-logger.js';
 
 /**
- * Matching granted ports against a device filter of every kind (ADR-0036): USB IDs, any port, a
+ * Matching granted ports against a device filter of every kind (ADR-0022): USB IDs, any port, a
  * port without USB identity, and auto mode before and after it has resolved.
  */
 
@@ -49,7 +49,7 @@ describe('matchesDevice', () => {
     const configuration = device({ nonUsb: true });
 
     expect(matchesDevice(bareport, configuration)).toBe(true);
-    // Half an identity is no identity a filter could find the port by again (ADR-0019).
+    // Half an identity is no identity a filter could find the port by again (ADR-0015).
     expect(matchesDevice(halfPort, configuration)).toBe(true);
     expect(matchesDevice(usbPort, configuration)).toBe(false);
   });
@@ -150,7 +150,7 @@ describe('findGrantedPort', () => {
   }
 
   it('waits for the user in auto mode even when exactly one port is granted', async () => {
-    // The safer default of ADR-0036: the one granted port may belong to another configuration, and
+    // The safer default of ADR-0022: the one granted port may belong to another configuration, and
     // auto mode promises the device the user chose, not the device that happened to be there.
     const { logger, records } = recordingLogger();
 

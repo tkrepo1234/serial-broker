@@ -19,7 +19,7 @@
  * and deleted with the run's artefacts. Nothing touches the developer's own browser profile or any
  * machine-wide setting, and no enterprise policy or registry key is involved.
  *
- * See ADR-0035.
+ * See ADR-0021.
  */
 
 import { mkdir, writeFile } from 'node:fs/promises';

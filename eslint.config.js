@@ -28,7 +28,7 @@ export default defineConfig(
       // linting it with type information makes the TypeScript service build a program for every
       // example's own tsconfig.json, which exhausts a CI runner's memory.
       'examples/**',
-      // The documentation site's Python environment and build output (ADR-0020).
+      // The documentation site's Python environment and build output (ADR-0016).
       'docs/.venv/**',
       'docs/site/_build/**',
       'docs/site/api/reference/**',
@@ -89,16 +89,16 @@ export default defineConfig(
       'prefer-const': 'error',
       'no-var': 'error',
 
-      // --- Environment injection (ADR-0014) ---
+      // --- Environment injection (ADR-0012) ---
       'no-restricted-globals': [
         'error',
-        { name: 'navigator', message: 'Use the injected SerialBrokerEnvironment (ADR-0014).' },
-        { name: 'window', message: 'Use the injected SerialBrokerEnvironment (ADR-0014).' },
-        { name: 'localStorage', message: 'Use environment.storage (ADR-0014).' },
-        { name: 'setTimeout', message: 'Use environment.clock (ADR-0014).' },
-        { name: 'clearTimeout', message: 'Use environment.clock (ADR-0014).' },
-        { name: 'setInterval', message: 'Use environment.clock (ADR-0014).' },
-        { name: 'clearInterval', message: 'Use environment.clock (ADR-0014).' },
+        { name: 'navigator', message: 'Use the injected SerialBrokerEnvironment (ADR-0012).' },
+        { name: 'window', message: 'Use the injected SerialBrokerEnvironment (ADR-0012).' },
+        { name: 'localStorage', message: 'Use environment.storage (ADR-0012).' },
+        { name: 'setTimeout', message: 'Use environment.clock (ADR-0012).' },
+        { name: 'clearTimeout', message: 'Use environment.clock (ADR-0012).' },
+        { name: 'setInterval', message: 'Use environment.clock (ADR-0012).' },
+        { name: 'clearInterval', message: 'Use environment.clock (ADR-0012).' },
       ],
 
       // --- Module boundaries (docs/guidelines/coding-style.md) ---
@@ -115,7 +115,7 @@ export default defineConfig(
     },
   },
 
-  // The composition root is the single place allowed to touch browser globals (ADR-0014).
+  // The composition root is the single place allowed to touch browser globals (ADR-0012).
   {
     files: ['src/environment/browser.ts', 'src/worker/serial-broker.worker.ts'],
     rules: { 'no-restricted-globals': 'off' },
@@ -123,7 +123,7 @@ export default defineConfig(
 
   // The debugging surface is an application page, and like any application it is its own
   // composition root: it reads navigator, storage and timers directly, as src/environment/browser.ts
-  // does for the library (ADR-0019).
+  // does for the library (ADR-0015).
   {
     files: ['debug/**/*.ts'],
     rules: { 'no-restricted-globals': 'off' },
@@ -167,7 +167,7 @@ export default defineConfig(
   },
 
   // Build scripts are plain Node JavaScript with no TypeScript program behind them, so rules that
-  // need type information cannot apply to them (ADR-0020).
+  // need type information cannot apply to them (ADR-0016).
   {
     files: ['docs/site/build.mjs', 'scripts/*.mjs', 'test/browser/*.mjs', 'bench/*.mjs'],
     extends: [tseslint.configs.disableTypeChecked],
@@ -200,7 +200,7 @@ export default defineConfig(
         ResizeObserver: 'readonly',
       },
     },
-    // The environment is injected into the library so its tests can replace it (ADR-0014). This
+    // The environment is injected into the library so its tests can replace it (ADR-0012). This
     // script *is* the browser side: it runs in the reader's page, with nothing to inject into.
     rules: { 'no-restricted-globals': 'off' },
   },

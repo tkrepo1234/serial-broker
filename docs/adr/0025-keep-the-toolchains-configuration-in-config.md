@@ -1,4 +1,4 @@
-# ADR-0042: Keep the toolchain's configuration in config/
+# ADR-0025: Keep the toolchain's configuration in config/
 
 - **Status:** Accepted
 

@@ -9,7 +9,7 @@
  * Served as JavaScript by `test/browser/server.mjs`, which strips the types; it is TypeScript so
  * that it is type-checked against the library's public surface like the rest of the suite.
  *
- * See ADR-0035.
+ * See ADR-0021.
  */
 
 import type { LogLevel, SerialBrokerOptions } from '../../../src/core/types.js';

@@ -272,7 +272,7 @@ describe('SerialBrokerError built by application code', () => {
 /**
  * The `DOMException` mapping table.
  *
- * ADR-0012 says the mapping is by name and never by message text, because message text differs
+ * ADR-0010 says the mapping is by name and never by message text, because message text differs
  * between Chromium versions. These tests are what keeps that true.
  */
 describe('mapping platform failures', () => {

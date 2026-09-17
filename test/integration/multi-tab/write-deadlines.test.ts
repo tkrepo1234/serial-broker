@@ -28,7 +28,7 @@ async function letOneChunkThrough(harness: BrowserHarness, device: FakeDevice): 
 const NOT_STARTED = { code: SerialBrokerErrorCode.WRITE_TIMEOUT, context: { started: false } };
 
 /**
- * A write rejected with `WRITE_TIMEOUT` and `started: false` is never written afterwards (ADR-0013),
+ * A write rejected with `WRITE_TIMEOUT` and `started: false` is never written afterwards (ADR-0011),
  * whatever `writeTimeoutMs` each tab runs the configuration with. The issuer decides the outcome at
  * its own deadline, so the tab holding the port must not begin a write after that deadline - neither
  * because it runs a longer setting, nor because the write reached it only part way through its time.
@@ -132,7 +132,7 @@ describe.each(TRANSPORT_MODES)(
 
 /**
  * The tab holding the port begins no write another tab issued without asking that tab first, and
- * that tab lets it begin only while it has not given the write up (ADR-0013). The decision is taken in
+ * that tab lets it begin only while it has not given the write up (ADR-0011). The decision is taken in
  * one turn of the issuer's event loop, so no delay on the way - a busy main thread, a machine asleep,
  * an answer crossing the deadline - makes `started: false` untrue.
  */

@@ -1,11 +1,11 @@
-# ADR-0035: Test in a real browser, against an emulated device and against real hardware
+# ADR-0021: Test in a real browser, against an emulated device and against real hardware
 
 - **Status:** Accepted
 
 ## Context
 
 The test suite runs in Node against a simulated browser
-([ADR-0014](./0014-dependency-injection-of-the-environment.md)). That is what makes the hard parts
+([ADR-0012](./0012-dependency-injection-of-the-environment.md)). That is what makes the hard parts
 testable at all: a dozen tabs in one process, a tab killed at a chosen instruction boundary, every
 delay controlled. It is also the suite's one weakness — a fake that is wrong in the same way as the
 code passes every test, and nothing in it ever loads the files that are published.
@@ -116,7 +116,7 @@ desktop and are opt-in.
 - The whole real software path - Web Serial, Chromium's port enumeration, `usbser.sys`, the library -
   runs against a device that can be unplugged or hung on cue. It shows what no simulation
   could: a write the device does not take cannot be withdrawn
-  ([ADR-0013](./0013-write-ordering-and-delivery-semantics.md)).
+  ([ADR-0011](./0011-write-ordering-and-delivery-semantics.md)).
 - The stand-in lets example applications run the library with no device attached.
 
 ### Negative

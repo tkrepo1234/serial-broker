@@ -7,7 +7,7 @@ import { REMEDIATION, RETRYABLE_CODES, SerialBrokerErrorCode } from './error-cod
  * in every other tab. Structured cloning does not preserve `Error` subclasses or their custom
  * fields, so errors travel in this shape and are rebuilt on arrival.
  *
- * See ADR-0012.
+ * See ADR-0010.
  */
 export interface SerializedSerialBrokerError {
   /** Marks the object as one of ours, so a receiver can recognise it before reading it. */
@@ -43,7 +43,7 @@ export interface SerializedSerialBrokerError {
  * `undefined` before acting on a field.
  *
  * Fields are structurally cloneable by construction: primitives, arrays of strings, and plain
- * objects describing a device filter (ADR-0012).
+ * objects describing a device filter (ADR-0010).
  */
 export interface SerialBrokerErrorContext {
   /** Which argument or option failed validation, such as `options.serial.baudRate`. */
@@ -93,7 +93,7 @@ export interface SerialBrokerErrorContext {
   readonly chunkBytes?: number;
   /**
    * Whether the write had begun when it was rejected. `false` means the device received nothing
-   * and never will; `true` means it may still complete after the rejection (ADR-0013).
+   * and never will; `true` means it may still complete after the rejection (ADR-0011).
    */
   readonly started?: boolean;
   /** How long the write waited before its deadline passed. */
@@ -162,7 +162,7 @@ export interface DescribedDevice {
   readonly productId?: number | undefined;
   /**
    * What an auto-mode configuration resolved to, for `kind: 'auto'`: the device taken from the
-   * port the user chose, or absent while it has not resolved (ADR-0036).
+   * port the user chose, or absent while it has not resolved (ADR-0022).
    */
   readonly resolved?: ResolvedDescribedDevice | undefined;
 }
@@ -203,7 +203,7 @@ export interface SerialBrokerErrorOptions {
   readonly remediation?: string | undefined;
   /** Overrides the retryability derived from the code. */
   readonly isRetryable?: boolean | undefined;
-  /** Epoch milliseconds. Injected so tests are deterministic (ADR-0014). */
+  /** Epoch milliseconds. Injected so tests are deterministic (ADR-0012). */
   readonly timestamp?: number | undefined;
   /** The underlying error. Always pass it; never discard a cause. */
   readonly cause?: unknown;
@@ -522,7 +522,7 @@ export function describeUnknown(value: unknown): string {
 /**
  * Detects a `DOMException` without depending on the global existing.
  *
- * The library runs in test environments that have no DOM globals at all (ADR-0014), so a bare
+ * The library runs in test environments that have no DOM globals at all (ADR-0012), so a bare
  * `instanceof DOMException` would throw a `ReferenceError` rather than return `false`. The tag
  * is what Web IDL gives every `DOMException`, in any realm. An own `code` is no sign of one: a
  * `DOMException` inherits its `code`, while Node's system errors and many application errors
@@ -535,7 +535,7 @@ function isDomException(error: Error): boolean {
 /**
  * Gives an error created without a time the moment it reached the caller.
  *
- * Validation runs in core code that has no clock (ADR-0014), so the errors it throws carry the
+ * Validation runs in core code that has no clock (ADR-0012), so the errors it throws carry the
  * timestamp `0`, where the documentation promises epoch milliseconds. The code that calls it has
  * the clock, and fills the time in once, before the error reaches the application.
  *

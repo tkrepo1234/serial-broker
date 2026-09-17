@@ -8,7 +8,7 @@ import { connectedTab, READER_OPTIONS, readerHarness } from '../harness/devices.
  * Keeping the port open across a device being switched off, unplugged or power-cycled.
  *
  * Backoff is asserted exactly, not approximately: the harness fixes the jitter draw, so a
- * schedule is a sequence of numbers a test can name. See ADR-0010.
+ * schedule is a sequence of numbers a test can name. See ADR-0008.
  */
 describe('reconnect supervision', () => {
   it('reopens the port and resumes receiving after a power cycle, with no application action', async () => {
@@ -40,7 +40,7 @@ describe('reconnect supervision', () => {
     await tab.setup('Reader', READER_OPTIONS);
 
     // A power-cycled device is usually back within one event-loop turn. Waiting 250 ms for
-    // the first retry would turn a non-event into a visible outage (ADR-0010).
+    // the first retry would turn a non-event into a visible outage (ADR-0008).
     expect(harness.clock.nextTimerInMs).toBe(0);
     await harness.advance(0);
     expect(tab.client.getStatus('Reader').status).toBe(SerialBrokerStatus.Open);
@@ -197,7 +197,7 @@ describe('reconnect supervision', () => {
 });
 
 /**
- * Durations survive the system clock being set (ADR-0014).
+ * Durations survive the system clock being set (ADR-0012).
  *
  * The user correcting the time, a time zone change, an NTP step: `Date.now()` jumps forwards or
  * backwards while the timers keep counting. Everything this library times - how long a connection

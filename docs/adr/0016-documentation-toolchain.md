@@ -1,4 +1,4 @@
-# ADR-0020: Build the developer documentation with Sphinx, MyST and a TSDoc-generated reference
+# ADR-0016: Build the developer documentation with Sphinx, MyST and a TSDoc-generated reference
 
 - **Status:** Accepted
 

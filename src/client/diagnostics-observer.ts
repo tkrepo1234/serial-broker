@@ -57,7 +57,7 @@ interface Collection {
 }
 
 /**
- * Looks at every context of an origin without taking part (ADR-0018).
+ * Looks at every context of an origin without taking part (ADR-0014).
  *
  * An observer joins the message bus under an identity of its own, but sets up no
  * configuration, requests no Web Lock and never answers for a port. It can therefore be opened
@@ -66,7 +66,7 @@ interface Collection {
  * rather than with the page that was only watching.
  *
  * It does two things. It **collects** a report from every context, which describes what
- * ADR-0011 keeps from the application: roles, the owner's connection, pending writes. And it
+ * ADR-0009 keeps from the application: roles, the owner's connection, pending writes. And it
  * **watches** a configuration's traffic and ownership changes as they cross the bus.
  */
 export class DiagnosticsObserver {
@@ -75,7 +75,7 @@ export class DiagnosticsObserver {
   readonly #logger: ScopedLogger;
   readonly #transport: Transport;
   readonly #collections = new Map<RequestId, Collection>();
-  /** Reports beyond what one collection keeps, logged once (ADR-0031). */
+  /** Reports beyond what one collection keeps, logged once (ADR-0019). */
   readonly #once: OnceLog;
   readonly #watchers = new Map<string, Set<(event: ObservedEvent) => void>>();
   #isClosed = false;
@@ -260,14 +260,14 @@ export class DiagnosticsObserver {
         if (collection.reports.length >= MAX_REPORTS_PER_COLLECTION) {
           // Every report is kept until the window closes, and each may be a megabyte
           // (`MAX_REPORT_CHARACTERS`). A request id is broadcast, so anything on the bus can
-          // answer one - as many times as it invents client ids (ADR-0031).
+          // answer one - as many times as it invents client ids (ADR-0019).
           warnLimitExceeded(this.#once, LIMIT_EVENT, 'MAX_REPORTS_PER_COLLECTION', {
             requestId: message.requestId,
           });
           return;
         }
         // Bounded in what the reports hold as well as in how many there are: the count alone would
-        // leave a collection a gigabyte of invented reports (ADR-0031).
+        // leave a collection a gigabyte of invented reports (ADR-0019).
         const characters = structureCharacters(message.report, {
           values: MAX_REPORT_VALUES,
           characters: MAX_REPORT_CHARACTERS,

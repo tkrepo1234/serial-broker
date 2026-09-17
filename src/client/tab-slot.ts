@@ -8,7 +8,7 @@ import { tabSlotGateLockName, tabSlotLockName } from '../protocol/version.js';
 
 /**
  * One of a configuration's `maxTabs` places, held for as long as this tab uses the configuration
- * (ADR-0025).
+ * (ADR-0017).
  *
  * Each place is a Web Lock. The browser releases a tab's locks when the tab goes away, however it
  * goes - closed, crashed, killed - exactly as it releases ownership (ADR-0005), so a place held by

@@ -94,7 +94,7 @@ describe.each(TRANSPORT_MODES)('ownership failover (%s)', (transport) => {
     // The peer lets the owner begin the write, and the owner vanishes. Whether the device received
     // the bytes is unknowable, so the only honest outcome is a specific error - and above all,
     // no retry. Repeating a command to industrial hardware is the one thing this library
-    // must never do (ADR-0013).
+    // must never do (ADR-0011).
     device.faults.hangOnWrite = true;
     let outcome: unknown = 'pending';
     void peer.client.send('Reader', 'DANGEROUS').then(
@@ -105,7 +105,7 @@ describe.each(TRANSPORT_MODES)('ownership failover (%s)', (transport) => {
     const beforeTheCrash = outcome;
 
     // No waiting and no timer: the term is over the moment the browser frees its lock, which it
-    // does as it tears the crashed tab down (ADR-0030). The clock does not move.
+    // does as it tears the crashed tab down (ADR-0018). The clock does not move.
     await owner.kill();
 
     expect(beforeTheCrash).toBe('pending');
@@ -161,7 +161,7 @@ describe('handing the port over by releasing it', () => {
 
 /**
  * The lock of a term of holding the port is taken before the tab says anything in that term
- * (ADR-0030). A browser that refuses the request would otherwise leave a tab holding the ownership
+ * (ADR-0018). A browser that refuses the request would otherwise leave a tab holding the ownership
  * lock without ever opening the port - the one state in which nobody can use the device.
  */
 describe('a browser that refuses the lock for a term of holding the port', () => {

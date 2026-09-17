@@ -7,7 +7,7 @@
  *
  * Contexts running different protocol versions do not federate: the version is part of the
  * lock name and the broker channel name, so they partition into independent groups rather than
- * corrupting each other (ADR-0008). They still learn of each other through the version
+ * corrupting each other (ADR-0007). They still learn of each other through the version
  * announcement, whose channel carries no version, and report `PROTOCOL_VERSION_MISMATCH`.
  */
 export const PROTOCOL_VERSION = 1;
@@ -17,7 +17,7 @@ export const PROTOCOL_VERSION = 1;
  *
  * Whatever else a sender puts where a version belongs - an object, a string, a fraction, `NaN`,
  * `-0` - names no build of this library. Reporting it as a version would let one sender produce a
- * new "version" with every message, and each is reported once (ADR-0008).
+ * new "version" with every message, and each is reported once (ADR-0007).
  */
 export function isProtocolVersion(value: unknown): value is number {
   return typeof value === 'number' && Number.isSafeInteger(value) && value >= 1;
@@ -37,7 +37,7 @@ export function ownerLockName(configName: string): string {
 }
 
 /**
- * Name of the Web Lock that is place `place` of a configuration's `maxTabs` places (ADR-0025).
+ * Name of the Web Lock that is place `place` of a configuration's `maxTabs` places (ADR-0017).
  *
  * The limit is part of the name, so tabs that disagree about it never share places; they find out
  * from the status of the tab holding the port instead. The configuration name comes last, so that a
@@ -48,7 +48,7 @@ export function tabSlotLockName(configName: string, maxTabs: number, place: numb
 }
 
 /**
- * Name of the Web Lock that is held for one term of holding a configuration's port (ADR-0030).
+ * Name of the Web Lock that is held for one term of holding a configuration's port (ADR-0018).
  *
  * The tab that is granted ownership takes this lock before it says anything in the term, and lets
  * it go after its `owner-released`; the browser lets it go when the tab dies. So the lock, not a
@@ -57,7 +57,7 @@ export function tabSlotLockName(configName: string, maxTabs: number, place: numb
  *
  * The name carries everything a tab must be able to check about a term before believing what is
  * said in its name: the term, the tab speaking for it, and the tab limit that tab runs the
- * configuration with (ADR-0025). A message whose term, sender or limit differs from a held lock
+ * configuration with (ADR-0017). A message whose term, sender or limit differs from a held lock
  * names no term of this configuration. The configuration name comes last, so that a name containing
  * `/` cannot be mistaken for any of them - the other three never contain one.
  */
@@ -71,7 +71,7 @@ export function termLockName(
 }
 
 /**
- * Name of the Web Lock a context on the `SharedWorker` holds for as long as it lives (ADR-0041).
+ * Name of the Web Lock a context on the `SharedWorker` holds for as long as it lives (ADR-0024).
  *
  * The worker waits on it, and the browser grants it the moment the context has gone - closed,
  * crashed or discarded - which is how the worker forgets a context that can no longer say so.
@@ -81,7 +81,7 @@ export function contextLockName(clientId: string): string {
 }
 
 /**
- * Name of the Web Lock a worker holds for as long as it runs (ADR-0041).
+ * Name of the Web Lock a worker holds for as long as it runs (ADR-0024).
  *
  * Named after the worker's own identity, which it sends in every `welcome`: tabs wait on it, and the
  * browser grants it the moment the worker has ended. A second worker - one started from another
@@ -91,7 +91,7 @@ export function workerLockName(workerId: string): string {
   return `${NAMESPACE}/worker/v${String(PROTOCOL_VERSION)}/${workerId}`;
 }
 
-/** Name of the Web Lock tabs queue at before competing for one of the places (ADR-0025). */
+/** Name of the Web Lock tabs queue at before competing for one of the places (ADR-0017). */
 export function tabSlotGateLockName(configName: string, maxTabs: number): string {
   return `${NAMESPACE}/tab-slot-gate/v${String(PROTOCOL_VERSION)}/${String(maxTabs)}/${configName}`;
 }

@@ -25,10 +25,10 @@ export interface WorkerPortsHost {
   /**
    * Where the worker's own records go in the worker itself: nowhere in a browser, the test's logger
    * in the suite. What it records at `warn` and above is forwarded to the connected tabs as well
-   * (ADR-0018).
+   * (ADR-0014).
    */
   readonly logger: Logger;
-  /** `navigator.locks` of the worker: the locks that say who is still there (ADR-0041). */
+  /** `navigator.locks` of the worker: the locks that say who is still there (ADR-0024). */
   readonly locks: LockManagerLike;
   /** This worker's identity, unique among workers: its lifetime lock is named after it. */
   readonly workerId: string;
@@ -37,7 +37,7 @@ export interface WorkerPortsHost {
 /**
  * Why a decoded message was refused before it reached the broker.
  *
- * - `before-hello`: the port has not said who it is (ADR-0008: a tab's first message is `hello`).
+ * - `before-hello`: the port has not said who it is (ADR-0007: a tab's first message is `hello`).
  * - `sender-mismatch`: the port said `hello` as one context and now speaks as another.
  * - `broker-identity`: the port said `hello` as the broker itself.
  */
@@ -64,23 +64,23 @@ const REFUSAL_MESSAGES: Readonly<Record<Refusal, string>> = {
  *   them; a port its tab closed receives nothing.
  *
  * A port reports nothing when the context behind it goes away, so liveness comes from Web Locks
- * (ADR-0041). Every context holds a lock named after its identity for as long as it lives, and the
+ * (ADR-0024). Every context holds a lock named after its identity for as long as it lives, and the
  * worker waits on it from the moment it first hears of the identity: the browser grants it once the
  * context has gone - closed, crashed or discarded - and the worker forgets the identity then. The
  * worker holds a lock of its own for its lifetime, which the tabs wait on in the same way.
  *
  * The number of identities and of ports per identity is bounded (`limits.ts`). Kept apart from the
- * worker script so that the harness routes through exactly this code (ADR-0014).
+ * worker script so that the harness routes through exactly this code (ADR-0012).
  *
  * What the worker records would be seen by nobody - a `SharedWorker` cannot reach an application's
- * logger - so what it records at `warn` and above goes to the connected contexts (ADR-0018). Every
+ * logger - so what it records at `warn` and above goes to the connected contexts (ADR-0014). Every
  * such record is written once per key, or once in the worker's life, so what is forwarded is
  * bounded without a budget of its own.
  */
 export class WorkerPorts<Port extends WorkerPort> {
   /**
    * Settles once the worker holds its lifetime lock. Until then no port is started, so that no tab
-   * is welcomed to a worker whose end the browser could not announce (ADR-0041).
+   * is welcomed to a worker whose end the browser could not announce (ADR-0024).
    */
   readonly ready: Promise<void>;
   readonly #broker: Broker;
@@ -163,7 +163,7 @@ export class WorkerPorts<Port extends WorkerPort> {
     }
     if (message.type === 'hello') {
       // The answer tells the port that sent it that this worker runs, and names the lock that tells
-      // it when this worker has ended (ADR-0006, ADR-0041).
+      // it when this worker has ended (ADR-0006, ADR-0024).
       post(port, welcomeFor(message.from, this.host.workerId));
     }
     this.#broker.handleMessage(message.from, message);
@@ -188,7 +188,7 @@ export class WorkerPorts<Port extends WorkerPort> {
   }
 
   /**
-   * Sends one of the worker's records to every context connected to it (ADR-0018).
+   * Sends one of the worker's records to every context connected to it (ADR-0014).
    *
    * Only as a tab would accept it: the decoder's bounds on a record are the bounds here, and fields a
    * tab would refuse - an `undefined` one - are left out.
@@ -242,7 +242,7 @@ export class WorkerPorts<Port extends WorkerPort> {
   }
 
   /**
-   * Waits on the context's lock, and forgets the identity once the browser grants it (ADR-0041).
+   * Waits on the context's lock, and forgets the identity once the browser grants it (ADR-0024).
    *
    * A context takes its lock before it says hello, so the request queues behind it. Granted, the lock
    * is let go at once. A message still on its way from the context that has gone registers the
@@ -274,7 +274,7 @@ export class WorkerPorts<Port extends WorkerPort> {
     // copied from another release, or one kept by a cache. Its hello is the one message every
     // version answers. The welcome carries this worker's version, and so tells the tab that nothing
     // it sends arrives here; the tab is not registered, and nothing else it says is routed
-    // (ADR-0008).
+    // (ADR-0007).
     const otherVersionSender =
       failure.reason === 'version-mismatch' ? helloSenderOf(raw) : undefined;
     if (otherVersionSender !== undefined) {

@@ -26,7 +26,7 @@ export interface BroadcastChannelLike {
   addEventListener(type: 'messageerror', listener: (event: unknown) => void): void;
 }
 
-/** Constructs a `BroadcastChannel`. Injected so the harness can substitute one (ADR-0014). */
+/** Constructs a `BroadcastChannel`. Injected so the harness can substitute one (ADR-0012). */
 export type BroadcastChannelFactory = (name: string) => BroadcastChannelLike;
 
 /**
@@ -131,7 +131,7 @@ export class BroadcastChannelTransport implements Transport {
       // Addressed to a broker, or written by one, and there is none here. Every script of the origin
       // can post them, and nobody above the transport reads them - on the worker the broker never
       // passes them on - so they go no further, and both transports deliver the same messages. A
-      // forwarded worker record posted here is nobody's record, and is dropped with them (ADR-0018).
+      // forwarded worker record posted here is nobody's record, and is dropped with them (ADR-0014).
       return;
     }
 

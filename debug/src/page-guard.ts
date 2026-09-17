@@ -1,7 +1,7 @@
 /**
  * Checks that keep the debugging surface from being turned against the operator.
  *
- * The page can send bytes to devices and revoke device permissions (ADR-0019). A page of another
+ * The page can send bytes to devices and revoke device permissions (ADR-0015). A page of another
  * origin that frames it could lay its own content over the page's buttons and have the operator
  * click them. Whether the page may be framed at all is best decided by a `frame-ancestors` header
  * from the server that serves it, which a static page cannot set; this is the part the page can
@@ -10,7 +10,7 @@
 
 /**
  * The controls that set a configuration up, hidden together where the page cannot run one
- * (ADR-0019).
+ * (ADR-0015).
  *
  * The `?` beside _Choose a device…_ belongs to that action and goes with it: a help text about an
  * action the page has just removed explains nothing and invites a click on nothing.

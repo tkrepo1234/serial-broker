@@ -62,7 +62,7 @@ export const MAX_UNHEARD_ERRORS = 16;
 /**
  * How many other protocol versions a tab reports, each once, as `PROTOCOL_VERSION_MISMATCH`.
  *
- * A real mixed deployment has one or two (ADR-0008). The versions come from other contexts of the
+ * A real mixed deployment has one or two (ADR-0007). The versions come from other contexts of the
  * origin, where any script can post them, and each distinct one is remembered - and reported - for
  * the life of the tab, so their number has to be bounded. The versions already reported stay
  * recognised; reaching the limit is logged once, as `client.peer-versions-limit`.
@@ -82,7 +82,7 @@ const EVENT_NAMES: Readonly<Record<SerialBrokerEventName, true>> = {
  *
  * This is the class the public facade delegates to. It exists separately from the facade so
  * that a test can construct as many independent instances as it likes, each with its own
- * simulated environment - which is how the multi-tab scenarios are tested at all (ADR-0014).
+ * simulated environment - which is how the multi-tab scenarios are tested at all (ADR-0012).
  */
 export class SerialBrokerClient {
   readonly #sessions = new Map<string, ConfigurationSession>();
@@ -105,13 +105,13 @@ export class SerialBrokerClient {
   readonly #store: ConfigurationStore;
   /**
    * The holds that tell other tabs this one still runs a remembered configuration, by name
-   * (ADR-0033). Only configurations set up with `remember: true` have one.
+   * (ADR-0020). Only configurations set up with `remember: true` have one.
    */
   readonly #holds = new Map<string, HeldLock>();
   readonly #disposal = new DisposalStack();
   readonly #clientId: ClientId;
   readonly #logger: ScopedLogger;
-  /** How often this context answers `diagnostics-request` (ADR-0031). */
+  /** How often this context answers `diagnostics-request` (ADR-0019). */
   readonly #diagnosticsAnswers: RateLimiter;
 
   #transport: Transport | undefined;
@@ -215,7 +215,7 @@ export class SerialBrokerClient {
       }
       // Same device, same line settings: nothing to do, since re-running the connection would
       // interrupt a working port for no reason - unless it has given up, and setting it up again
-      // is how an application says "try again" (ADR-0010).
+      // is how an application says "try again" (ADR-0008).
       existing.retry();
       return;
     }
@@ -256,7 +256,7 @@ export class SerialBrokerClient {
   }
 
   /**
-   * The device the remembered entry of a new auto-mode configuration resolved to (ADR-0036),
+   * The device the remembered entry of a new auto-mode configuration resolved to (ADR-0022),
    * so that a later visit calling only `setup()` reconnects without a prompt, as
    * `restore()` does, and saves the resolution back rather than a configuration waiting again.
    *
@@ -356,7 +356,7 @@ export class SerialBrokerClient {
     options: ReleaseOptions,
   ): Promise<void> {
     // This tab stops running the configuration either way, so it stops saying so; what is
-    // remembered is removed only when the caller asked for it (ADR-0033). Both happen before the
+    // remembered is removed only when the caller asked for it (ADR-0020). Both happen before the
     // session goes, because a `setup()` of the same name waits for this release: the entry that
     // `setup()` saves has to come after anything forgotten here.
     if (options.forget === true) {
@@ -382,7 +382,7 @@ export class SerialBrokerClient {
   }
 
   /**
-   * Remembers a configuration for later visits, and says so to the other tabs (ADR-0033).
+   * Remembers a configuration for later visits, and says so to the other tabs (ADR-0020).
    *
    * Saved at once, so that a reload straight after `setup()` restores it, and again once the hold is
    * granted: a tab releasing the same name may forget the entry in between, and it waits for that
@@ -435,7 +435,7 @@ export class SerialBrokerClient {
 
   /**
    * Remembers the device an auto-mode configuration resolved to, so that `restore()` and a later
-   * visit reconnect to it without a prompt (ADR-0036).
+   * visit reconnect to it without a prompt (ADR-0022).
    *
    * Written at once, like the entry itself in {@link #remember}; the hold writes it again once it
    * is granted. Nothing is written for a configuration that is not remembered, or one that has
@@ -459,7 +459,7 @@ export class SerialBrokerClient {
    * What a release does unless it was asked to forget, and what a closing tab does: this tab is not
    * running the configuration any more, so it must not go on claiming it is - another tab asked to
    * forget the entry would be refused by a hold nobody needs. The entry itself stays, for
-   * `restore()` and the next `setup()` (ADR-0033).
+   * `restore()` and the next `setup()` (ADR-0020).
    */
   async #letGoOfHold(name: string): Promise<void> {
     const hold = this.#holds.get(name);
@@ -473,7 +473,7 @@ export class SerialBrokerClient {
    * Both stores are the origin's, not this tab's: the entry under the name, and the browser's
    * permission for the device it names. Neither needs a session, so neither needs the caller to
    * connect first. The entry is still kept while another tab runs the configuration remembered
-   * (ADR-0033), and the device is looked up in what is remembered under the name, because there
+   * (ADR-0020), and the device is looked up in what is remembered under the name, because there
    * is no session to take it from.
    */
   async #forgetAsAsked(name: string, options: ReleaseOptions): Promise<void> {
@@ -492,7 +492,7 @@ export class SerialBrokerClient {
    * Forgets a remembered configuration, unless another tab still runs it with `remember: true`.
    *
    * The entry is one per name for the whole origin. Forgetting it while another tab runs the
-   * configuration would cost that tab the configuration on its next reload (ADR-0033).
+   * configuration would cost that tab the configuration on its next reload (ADR-0020).
    * Reached by `release(name, { forget: true })` and by setting the name up with `remember: false`;
    * a name with nothing stored under it is left as it is rather than reported.
    */
@@ -634,7 +634,7 @@ export class SerialBrokerClient {
     }
     this.#sessions.clear();
     // Let go, but nothing forgotten: disposing is what a closing tab does, and a configuration it
-    // ran stays remembered for the next visit (ADR-0033).
+    // ran stays remembered for the next visit (ADR-0020).
     await Promise.all([...this.#holds.values()].map((hold) => hold.stop()));
     this.#holds.clear();
     // A `release()` still under way has not closed its port or let its lock go yet, and still
@@ -706,7 +706,7 @@ export class SerialBrokerClient {
    *
    * Tabs on different protocol versions share no lock, worker or bus, so without this
    * they never learn of each other - and both try to hold the device. The announcement travels on
-   * the one channel whose name carries no version (ADR-0008). Every tab announces itself once and
+   * the one channel whose name carries no version (ADR-0007). Every tab announces itself once and
    * answers each announcement from another version, so a tab opened later still learns of the tabs
    * already open; a reply is never answered, so two versions cannot keep each other talking.
    */
@@ -818,7 +818,7 @@ export class SerialBrokerClient {
   }
 
   /**
-   * Answers an observer, within the rate this context answers requests at (ADR-0031).
+   * Answers an observer, within the rate this context answers requests at (ADR-0019).
    *
    * Reached only through the bus, so a transport exists. An answer describes everything this
    * context runs, so answering every request that arrives is work any script of the origin could
@@ -856,7 +856,7 @@ export class SerialBrokerClient {
     }
 
     // Recorded once for each way a message can be malformed, so that a flood of nonsense does not
-    // become a flood in the application's log (ADR-0031).
+    // become a flood in the application's log (ADR-0019).
     this.#once.warn(`malformed:${failure.reason}`, 'dropped a malformed message', {
       event: 'client.malformed-message',
       reason: description,

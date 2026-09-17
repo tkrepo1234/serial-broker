@@ -69,7 +69,7 @@ export class EventEmitter {
     return listeners !== undefined && listeners.size > 0;
   }
 
-  /** How many listeners each event has, for a diagnostics report (ADR-0018). */
+  /** How many listeners each event has, for a diagnostics report (ADR-0014). */
   listenerCounts(): Record<SerialBrokerEventName, number> {
     const count = (event: SerialBrokerEventName): number => this.#listeners.get(event)?.size ?? 0;
     return {

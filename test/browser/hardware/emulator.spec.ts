@@ -10,7 +10,7 @@
  * **Requires usbip-win2** (see emulator/README.md), so it runs only when
  * `SERIAL_BROKER_HARDWARE=emulator` is set, and never in CI. Nothing else may be listening on
  * port 3240. The browser gets the port through a seeded profile, as in `arduino.spec.ts`; no
- * prompt is answered and no machine-wide setting is touched. See ADR-0035.
+ * prompt is answered and no machine-wide setting is touched. See ADR-0021.
  */
 
 import { writeFile } from 'node:fs/promises';
@@ -331,9 +331,9 @@ test.describe('the USB/IP emulator, attached by usbip-win2', () => {
     await tab?.waitForPatternRun(CONFIGURATION, 65_536, 180_000);
   });
 
-  // Not the library: Web Serial alone. This is the platform behaviour ADR-0013 rests on, pinned so
+  // Not the library: Web Serial alone. This is the platform behaviour ADR-0011 rests on, pinned so
   // that a browser which changes it fails here rather than silently.
-  test('cannot abort, close or reopen a port while the device holds a write (ADR-0013)', async ({
+  test('cannot abort, close or reopen a port while the device holds a write (ADR-0011)', async ({
     hardware,
     emulator,
   }) => {

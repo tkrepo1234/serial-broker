@@ -11,7 +11,7 @@
       The same page as tab.html, loading <code>dist/serial-broker.global.js</code> with a plain
       <code>&lt;script src&gt;</code>: no module, no import map. The library arrives as the one
       global <code>SerialBroker</code>, and the page has to name the worker script itself - a
-      classic script has no <code>import.meta.url</code> to find it with (ADR-0043). The test passes
+      classic script has no <code>import.meta.url</code> to find it with (ADR-0026). The test passes
       it in the query string, which the harness gives to <code>configure()</code>.
     </p>
     <button id="request-access" type="button">Choose device…</button>

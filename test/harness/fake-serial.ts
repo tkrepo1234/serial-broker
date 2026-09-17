@@ -34,7 +34,7 @@ export class FakeDevice {
    *
    * A virtual COM port pair, a built-in RS-232 interface and a Bluetooth serial profile all
    * report nothing from `getInfo()`. Simulating that is the only way to test the `any`
-   * filter honestly (ADR-0036).
+   * filter honestly (ADR-0022).
    */
   isUsb = true;
 
@@ -318,7 +318,7 @@ export class FakeSerialPort {
  *
  * Permission is modelled the way the browser models it: per origin, not per context. A device
  * granted in one tab is immediately visible to `getPorts()` in every other tab, which is what
- * makes "remembered across tabs and reloads" testable at all (ADR-0036).
+ * makes "remembered across tabs and reloads" testable at all (ADR-0022).
  */
 export class FakeSerialRegistry {
   readonly #devices: FakeDevice[] = [];
@@ -352,7 +352,7 @@ export class FakeSerialRegistry {
 
   /**
    * Adds a port that reports no USB identity - a virtual COM port, a built-in RS-232
-   * interface, a Bluetooth serial profile. See ADR-0036.
+   * interface, a Bluetooth serial profile. See ADR-0022.
    */
   addNonUsbPort(): FakeDevice {
     const device = this.addDevice(0, 0);

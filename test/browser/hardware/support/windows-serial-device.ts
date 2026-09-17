@@ -12,7 +12,7 @@
  * Get-CimInstance Win32_PnPEntity | Where-Object { $_.Name -like '*(COM*' }
  * ```
  *
- * See ADR-0035.
+ * See ADR-0021.
  */
 
 import { execFileSync } from 'node:child_process';

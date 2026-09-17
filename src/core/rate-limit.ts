@@ -1,7 +1,7 @@
 import type { Clock } from './clock.js';
 
 /**
- * How often something coming from the bus may make a context work (ADR-0031).
+ * How often something coming from the bus may make a context work (ADR-0019).
  *
  * Validation and the limits of `protocol/limits.ts` bound what one message can cost. They do not
  * bound how many messages there are: any script of the origin can post as fast as it likes, and
@@ -21,7 +21,7 @@ export interface RateLimit {
  * joins, every tab answering one diagnostics request - and a flood is what a hostile or broken
  * sender looks like. A bucket lets the first through untouched and bounds the second.
  *
- * The allowance is measured on the monotonic clock (`clock.monotonicNow()`, ADR-0014), so setting
+ * The allowance is measured on the monotonic clock (`clock.monotonicNow()`, ADR-0012), so setting
  * the system time neither refills it at once nor freezes it.
  */
 export class RateLimiter {

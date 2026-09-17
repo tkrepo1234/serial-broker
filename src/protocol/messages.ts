@@ -7,7 +7,7 @@ import type { LogFields, SerialBrokerStatus } from '../core/types.js';
  *
  * Every message is a discriminated union member keyed on `type`, carries the protocol version
  * in `v`, and contains only structurally-cloneable values. Nothing here is ever trusted on
- * arrival: `decode.ts` validates every message before a field is read (ADR-0008).
+ * arrival: `decode.ts` validates every message before a field is read (ADR-0007).
  */
 
 /** Opaque identifier of a participating browsing context. */
@@ -18,7 +18,7 @@ export type RequestId = string & { readonly __brand: 'RequestId' };
 
 /**
  * Opaque identifier of one term of holding a configuration's port: from the moment a tab is granted
- * the ownership lock until it lets it go (ADR-0030).
+ * the ownership lock until it lets it go (ADR-0018).
  *
  * A tab that holds the port twice has two terms. Messages about ownership, writes and the status
  * carry the term they belong to, because messages from two senders have no order between them: a
@@ -38,7 +38,7 @@ export type MessageTarget = 'all' | ClientId;
 
 /** Fields present on every message. */
 interface Envelope {
-  /** Protocol version of the sender. See ADR-0008. */
+  /** Protocol version of the sender. See ADR-0007. */
   readonly v: number;
   /** The context that sent it. */
   readonly from: ClientId;
@@ -54,7 +54,7 @@ interface Envelope {
  * Always the first message a participant sends on a port, and sent again whenever the configurations
  * it takes part in change: the broker routes a configuration's messages to the contexts whose latest
  * `hello` names it. A tab that reaches a new worker says it once more, which restores all of its
- * participation there (ADR-0041).
+ * participation there (ADR-0024).
  */
 export interface HelloMessage extends Envelope {
   readonly type: 'hello';
@@ -67,7 +67,7 @@ export interface HelloMessage extends Envelope {
  *
  * Its arrival proves that the worker script loaded and runs. It names the Web Lock the worker holds
  * for its lifetime, which the tab waits on: the browser grants it the moment the worker has ended,
- * however it ended (ADR-0041).
+ * however it ended (ADR-0024).
  */
 export interface WelcomeMessage extends Envelope {
   readonly type: 'welcome';
@@ -85,11 +85,11 @@ export interface OwnerClaimedMessage extends Envelope {
   /** The term that begins. */
   readonly term: TermId;
   /**
-   * The tab limit the sender runs the configuration with (ADR-0025).
+   * The tab limit the sender runs the configuration with (ADR-0017).
    *
    * Here as well as in {@link StatusMessage} because the term's Web Lock is named after all three -
    * term, sender and limit - and a tab has to know the name before it can check that the lock is
-   * held (ADR-0030).
+   * held (ADR-0018).
    */
   readonly maxTabs: number;
 }
@@ -100,7 +100,7 @@ export interface OwnerClaimedMessage extends Envelope {
  * Sent on a graceful release only, after the port is closed and every write of the term has been
  * answered, and before the lock is let go. It is the term's last message: a sender's messages keep
  * their order, so a tab that hears it has heard everything the term said about its writes
- * (ADR-0030). Ownership itself is never derived from these messages - only from the Web Lock
+ * (ADR-0018). Ownership itself is never derived from these messages - only from the Web Lock
  * (ADR-0005), which is also what covers the abrupt-death case: the browser releases the lock, the
  * successor is granted it, and it announces itself.
  */
@@ -120,7 +120,7 @@ export interface WriteRequestMessage extends Envelope {
   /**
    * The term the request is addressed to. Only a tab holding the port in that term writes it; any
    * other answers `NOT_CONNECTED`. So a request is only ever written by the term its sender chose,
-   * and the sender hands it to another term only once this one has ended (ADR-0030).
+   * and the sender hands it to another term only once this one has ended (ADR-0018).
    */
   readonly term: TermId;
 }
@@ -131,7 +131,7 @@ export interface WriteRequestMessage extends Envelope {
  * Sent by the tab holding the port, to the request's `from`, when the write is next in its queue. The
  * write is begun only once that context has answered with {@link WriteApprovalMessage}: the issuer
  * decides in its own event loop whether it has given the write up, so no clocks of two contexts are
- * compared (ADR-0013).
+ * compared (ADR-0011).
  */
 export interface WriteReadyMessage extends Envelope {
   readonly type: 'write-ready';
@@ -147,7 +147,7 @@ export interface WriteReadyMessage extends Envelope {
  * `approved` is `true` only while the issuer has not given the write up, and from that moment the
  * issuer counts the write as begun: it is never handed to another term, and its deadline no longer
  * reports it as not started. The tab holding the port takes the answer only from the context that
- * issued the write (ADR-0013).
+ * issued the write (ADR-0011).
  */
 export interface WriteApprovalMessage extends Envelope {
   readonly type: 'write-approval';
@@ -198,7 +198,7 @@ export interface DataSentMessage extends Envelope {
  *
  * `'auto'` is an auto-mode configuration that has not resolved: the holder is waiting for the
  * user to choose. Everything else is what the holder matches ports against - configured, or
- * resolved from the port the user chose - and what a tab set up in auto mode adopts (ADR-0036).
+ * resolved from the port the user chose - and what a tab set up in auto mode adopts (ADR-0022).
  */
 export type StatusDevice =
   | { readonly kind: 'usb'; readonly vendorId: number; readonly productId: number }
@@ -213,10 +213,10 @@ export interface StatusMessage extends Envelope {
   readonly status: SerialBrokerStatus;
   /**
    * The tab limit of the tab sending the status - the one holding the port. A tab running the
-   * configuration with a different limit withdraws when it hears this (ADR-0025).
+   * configuration with a different limit withdraws when it hears this (ADR-0017).
    */
   readonly maxTabs: number;
-  /** The device of the tab sending the status. A tab in auto mode adopts it (ADR-0036). */
+  /** The device of the tab sending the status. A tab in auto mode adopts it (ADR-0022). */
   readonly device: StatusDevice;
   /** The term of the tab sending it. A status of a term that has ended or been succeeded is stale. */
   readonly term: TermId;
@@ -237,12 +237,12 @@ export interface StatusRequestMessage extends Envelope {
   readonly configName: string;
   /**
    * The sender's application set the configuration up again while it had `failed`: the tab holding
-   * the port tries again, as `setup()` in that tab would (ADR-0010).
+   * the port tries again, as `setup()` in that tab would (ADR-0008).
    */
   readonly retry: boolean;
   /**
    * With `retry`: the device the sender's user chose in auto mode, which the tab holding the port
-   * adopts before it looks for the port again (ADR-0036). Absent otherwise.
+   * adopts before it looks for the port again (ADR-0022). Absent otherwise.
    */
   readonly device?: Extract<StatusDevice, { readonly kind: 'usb' } | { readonly kind: 'non-usb' }>;
 }
@@ -252,7 +252,7 @@ export interface StatusRequestMessage extends Envelope {
  *
  * Carries no configuration name on purpose: the question is who is there and what they are
  * doing, which no single configuration can answer. Sent by a diagnostics observer, which is not
- * a participant and takes no part in ownership (ADR-0018).
+ * a participant and takes no part in ownership (ADR-0014).
  */
 export interface DiagnosticsRequestMessage extends Envelope {
   readonly type: 'diagnostics-request';
@@ -267,7 +267,7 @@ export interface DiagnosticsReportMessage extends Envelope {
 }
 
 /**
- * One diagnostic record of the worker, sent to a tab so that its logger can write it (ADR-0018).
+ * One diagnostic record of the worker, sent to a tab so that its logger can write it (ADR-0014).
  *
  * The worker runs where no application logger exists, so what it records about refused messages and
  * exceeded limits would otherwise be seen by nobody. Only the broker sends this, and only to the

@@ -71,7 +71,7 @@ describe.each(TRANSPORT_MODES)(
 );
 
 /**
- * What waits at the port is bounded, in writes and in bytes (ADR-0031). Every tab of the origin can
+ * What waits at the port is bounded, in writes and in bytes (ADR-0019). Every tab of the origin can
  * ask the tab holding the port to write, and a script of the origin can ask as fast as it likes; a
  * queue that grew with the asking would be the one part of the library a message can make unbounded.
  */
@@ -136,7 +136,7 @@ describe('handing a write to the device in chunks', () => {
 
 /**
  * Writes the tab holding the port accepts from other tabs, and what it remembers of them to keep
- * each write at most once (ADR-0013).
+ * each write at most once (ADR-0011).
  */
 
 describe.each(TRANSPORT_MODES)('a write that found the port closed (%s)', (transport) => {

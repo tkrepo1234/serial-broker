@@ -6,7 +6,7 @@
  * Started by `bench/run.mjs`, which bundles this file and passes the repository root as the first
  * argument and `--expose-gc` to Node. Exits with 1 when a scenario does not do what it measures or
  * when a measurement has no expectation - never because a number is worse than expected: what
- * to do about that is a decision for a person (ADR-0037), and the chapter
+ * to do about that is a decision for a person (ADR-0023), and the chapter
  * records it.
  */
 

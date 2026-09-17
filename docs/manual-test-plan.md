@@ -15,7 +15,7 @@ appears as an ordinary USB serial device with a COM port. It is a loopback like 
 adapter below, and it can be unplugged, hung mid-write and made to split its answers on command,
 which covers steps 13–17, 21 and 24 better than hardware can. Setup, commands and the mapping to
 each step are in [`emulator/README.md`](../emulator/README.md); the reasoning is in
-[ADR-0035](./adr/0035-browser-tests-with-playwright.md).
+[ADR-0021](./adr/0021-browser-tests-with-playwright.md).
 
 A run with the emulator is recorded like any other run, naming the emulator and the usbip-win2
 version instead of a device. The run on real hardware is the Arduino suite's.
@@ -35,7 +35,7 @@ version instead of a device. The run on real hardware is the Arduino suite's.
 
 ## What the browser suite does for you
 
-`npm run test:browser` (ADR-0035) runs part of this plan on every CI run, and the hardware part of
+`npm run test:browser` (ADR-0021) runs part of this plan on every CI run, and the hardware part of
 that suite runs another part of it against a device — on Windows, because the permission it seeds
 is a Windows device instance ID:
 
@@ -142,7 +142,7 @@ The checklist exercises on real hardware what the scenario matrix in
       The port stays open and the read loop stalls. A short write still resolves — the browser
       buffers `serial.bufferSize` bytes — but a write larger than that fails with
       `WRITE_TIMEOUT`, the status stays `open`, and once the device is back sending works
-      again with no reload (ADR-0013).
+      again with no reload (ADR-0011).
 
 ### Permission changes
 
@@ -185,7 +185,7 @@ The checklist exercises on real hardware what the scenario matrix in
       As soon as the worker is gone each tab reports `BROKER_UNAVAILABLE` once, a new worker appears
       there, and steps 5 and 6 work again without a reload. Repeat with one tab hidden for more than
       five minutes beforehand: it reconnects as quickly — the worker's Web Lock is freed, and no
-      timer waits (ADR-0041).
+      timer waits (ADR-0024).
 
 ## The last run
 

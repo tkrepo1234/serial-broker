@@ -14,7 +14,7 @@ import { outcomeOf, queuedWritesAt } from '../../harness/outcomes.js';
  * senders, and nothing orders them against each other. A tab can hear the new holder's
  * `owner-claimed` before the last words of the former one. What the former holder said is
  * attributed to its own term of holding the port, and only that term ending decides the fate of a
- * write handed to it (ADR-0030).
+ * write handed to it (ADR-0018).
  */
 
 describe.each(TRANSPORT_MODES)('a handover heard out of order (%s)', (transport) => {
@@ -94,7 +94,7 @@ describe.each(TRANSPORT_MODES)('a handover heard out of order (%s)', (transport)
     const { outcome } = await writtenWithItsResultLate(harness, device, busy, first);
 
     // The tab crashes, and its words arrive while the browser is still tearing it down - before
-    // the busy tab is granted the lock of its term, which is what ends the term (ADR-0030).
+    // the busy tab is granted the lock of its term, which is what ends the term (ADR-0018).
     const crashing = first.kill();
     busy.deliverHeld();
     await crashing;
@@ -108,7 +108,7 @@ describe.each(TRANSPORT_MODES)('a handover heard out of order (%s)', (transport)
     const { outcome } = await writtenWithItsResultLate(harness, device, busy, first);
 
     // The busy tab let the first tab begin the write, so it knows the write may have reached the
-    // device, whatever has arrived of the rest (ADR-0013).
+    // device, whatever has arrived of the rest (ADR-0011).
     await first.kill();
     busy.deliverHeld();
     await harness.advance(0);
@@ -265,7 +265,7 @@ describe('a write of another tab during a clean release', () => {
     device.resumeWrites();
     // The release completes and the write is handed on within the first half second. One jump to
     // 5 s would hand it on only at the moment its issuer's deadline runs out, where it is rightly
-    // not begun (ADR-0013).
+    // not begun (ADR-0011).
     await harness.advance(500);
     await harness.advance(4_500);
     await releasing;

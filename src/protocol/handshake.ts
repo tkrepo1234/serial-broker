@@ -6,13 +6,13 @@ import { PROTOCOL_VERSION } from './version.js';
 /**
  * The handshake between a tab and the worker: the one exchange that works across protocol versions.
  *
- * A tab starts the worker under a name that carries its protocol version (ADR-0008), but the script
+ * A tab starts the worker under a name that carries its protocol version (ADR-0007), but the script
  * the browser runs under that name is whatever the worker URL serves. A worker file copied from an
  * earlier release, or one kept by a cache, can be of another version. Such a worker drops
  * everything the tab says, and a tab that hears nothing back cannot tell it from a worker that is
  * only slow to start - so it would stay cut off from every other tab, with nothing reported.
  *
- * This exchange is therefore frozen, like the version announcement (ADR-0008). Every later version
+ * This exchange is therefore frozen, like the version announcement (ADR-0007). Every later version
  * has to keep exactly this:
  *
  * 1. A tab's first message on the port is an object with `type: 'hello'` and the tab's identity, a
@@ -27,7 +27,7 @@ import { PROTOCOL_VERSION } from './version.js';
 /**
  * How long a tab waits for the worker's `welcome` before it gives up on that worker.
  *
- * The one timer the liveness of the bus needs (ADR-0041): a worker that has ended frees its
+ * The one timer the liveness of the bus needs (ADR-0024): a worker that has ended frees its
  * lifetime lock, but a worker whose script fetch hangs, or one that cannot take its lock, never
  * holds one to free. Only whether the welcome has arrived is checked, not how late the timer ran,
  * so a hidden tab whose timers the browser holds back is not misjudged: its welcome arrived long
@@ -39,7 +39,7 @@ export const HANDSHAKE_DEADLINE_MS = 45_000;
 /**
  * The worker's answer to a tab's `hello`, in this build's protocol version.
  *
- * @param workerId - The identity the worker's lifetime lock is named after (ADR-0041).
+ * @param workerId - The identity the worker's lifetime lock is named after (ADR-0024).
  */
 export function welcomeFor(clientId: ClientId, workerId: string): WelcomeMessage {
   return { type: 'welcome', v: PROTOCOL_VERSION, from: BROKER_ID, to: clientId, worker: workerId };

@@ -3,7 +3,7 @@
  * internal and may change in a patch release, even if its own module exports it.
  *
  * The surface is deliberately narrow. The testing seam - `SerialBrokerClient` and the injected
- * `SerialBrokerEnvironment` (ADR-0014) - is **not** part of it: a test imports those directly
+ * `SerialBrokerEnvironment` (ADR-0012) - is **not** part of it: a test imports those directly
  * from their modules, and exporting them here would turn a mechanism this library reserves the
  * right to change into a contract it has to keep. See docs/guidelines/api-design.md.
  *
@@ -79,7 +79,7 @@ export {
  *
  * Re-exported from the facade rather than from `environment/browser`: a re-export makes the
  * published declarations import that module's, and with them the injection seam this library
- * reserves the right to change (ADR-0014).
+ * reserves the right to change (ADR-0012).
  */
 export { isSupported } from './facade.js';
 
@@ -88,6 +88,6 @@ export { isSupported } from './facade.js';
  *
  * Exported for diagnostics: two tabs running different protocol versions do not coordinate
  * with each other, and an application that shows its build information may want to show this
- * too. See ADR-0008.
+ * too. See ADR-0007.
  */
 export { PROTOCOL_VERSION } from './protocol/version.js';

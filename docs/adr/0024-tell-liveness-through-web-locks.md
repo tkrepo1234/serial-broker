@@ -1,4 +1,4 @@
-# ADR-0041: Tell who is still there through Web Locks, not heartbeats
+# ADR-0024: Tell who is still there through Web Locks, not heartbeats
 
 - **Status:** Accepted
 
@@ -10,7 +10,7 @@ port does not even throw. And a `SharedWorker` can end while its tabs live: it c
 the browser to reclaim memory, or be terminated from `chrome://inspect`. In Microsoft Edge the worker
 ends with the renderer of the page that started it - usually the first tab to hold the port - which
 the browser benchmark's `handover/crash` exercises
-([ADR-0037](./0037-measure-performance-against-expectations-written-first.md)).
+([ADR-0023](./0023-measure-performance-against-expectations-written-first.md)).
 
 Heartbeats would answer both directions: a message from every tab every few seconds, answered by
 the worker, a sweep forgetting tabs that stay silent, and a new worker after some unanswered

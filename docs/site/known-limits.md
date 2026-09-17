@@ -60,7 +60,7 @@ production screen.
 `release()`, `releaseAll()` and `dispose()` all act on the tab that calls them. If another tab still
 has the configuration set up, the port stays open and ownership moves there - which is the point of
 the library, and it means "the operator is finished, close the device" has no single call. A tab
-cannot make the decision for tabs it is not allowed to see (ADR-0011).
+cannot make the decision for tabs it is not allowed to see (ADR-0009).
 
 **What to do:** have the application say so on its own bus - a `BroadcastChannel` message that every
 tab answers by calling `release()` - or give the operator a screen where the last tab is closed.
@@ -72,7 +72,7 @@ permission with it: the next `setup()` anywhere needs the picker again.
 A device switched off behind its powered USB adapter, or one holding back data with flow control,
 leaves the port open. The status stays `open`, reads wait, and a write that does not fit the
 browser's transmit buffer fails with `WRITE_TIMEOUT` while its chunk stays in flight: the browser
-can neither withdraw it nor close the port while it is outstanding (ADR-0013). Writes carry on the
+can neither withdraw it nor close the port while it is outstanding (ADR-0011). Writes carry on the
 moment the device takes data again. Releasing the configuration during such a stall cannot close the
 port either; the browser frees it only when the page goes away.
 
@@ -83,7 +83,7 @@ reports `stalledWriteSince` for such a write.
 ## A worker that hangs after answering is not noticed
 
 The tabs learn that the `SharedWorker` has ended when the browser lets go of its Web Lock
-(ADR-0041), at once and without a timer. A worker that keeps running but stops passing messages on -
+(ADR-0024), at once and without a timer. A worker that keeps running but stops passing messages on -
 a script stuck in a loop - still holds its lock, so no tab notices. Writes from tabs that do not hold
 the port then end in `WRITE_TIMEOUT`, and what the device sends reaches only the tab holding the
 port, until the page is reloaded. Only a worker that never answers when a tab connects is caught, by

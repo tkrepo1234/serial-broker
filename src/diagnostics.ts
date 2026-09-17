@@ -1,10 +1,10 @@
 /**
  * serial-broker/diagnostics - a read-only view into what every tab of an origin is doing.
  *
- * The main entry point deliberately hides how tabs coordinate (ADR-0011): an application must
+ * The main entry point deliberately hides how tabs coordinate (ADR-0009): an application must
  * not be able to ask which tab owns the port, because it would branch on the answer and be
  * wrong a moment later. An operator trying to understand a deployment needs exactly that answer.
- * This entry point gives it to them, and only to code that imports it on purpose (ADR-0018).
+ * This entry point gives it to them, and only to code that imports it on purpose (ADR-0014).
  *
  * It is independent of the main entry point: it opens its own connection to the message bus and
  * shares no state with `SerialBroker`, so it works from any page of the origin and from a

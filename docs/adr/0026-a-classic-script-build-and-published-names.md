@@ -1,4 +1,4 @@
-# ADR-0043: Ship a classic script build on one global; name published files after the package
+# ADR-0026: Ship a classic script build on one global; name published files after the package
 
 - **Status:** Accepted
 

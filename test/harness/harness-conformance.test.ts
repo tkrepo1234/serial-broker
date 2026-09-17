@@ -226,7 +226,7 @@ describe('FakeLockManager', () => {
     const snapshot = await locks.forContext('c').query?.();
 
     // A tab tells a holder that let go cleanly from one that crashed by the request the holder
-    // queued (ADR-0030), and a diagnostics observer lists both.
+    // queued (ADR-0018), and a diagnostics observer lists both.
     expect(snapshot).toEqual({
       held: [{ name: LOCK, mode: 'exclusive', clientId: 'a' }],
       pending: [{ name: LOCK, mode: 'shared', clientId: 'b' }],
@@ -380,7 +380,7 @@ describe('FakeClock', () => {
     clock.jumpWallClock(7_200_000);
 
     // What `performance.now()` does while `Date.now()` is moved: a duration measured on it is the
-    // time that really passed (ADR-0014).
+    // time that really passed (ADR-0012).
     expect(clock.monotonicNow() - startedAt).toBe(1_000);
   });
 
@@ -816,7 +816,7 @@ describe('FakeWorkerHost', () => {
     const heldWhileRunning = locks.holderOf(workerLockName(host.workerId));
 
     // What the browser does for a `SharedWorker` that crashed or was terminated, and what every tab
-    // waiting on the lock learns the worker's end from (ADR-0041).
+    // waiting on the lock learns the worker's end from (ADR-0024).
     host.crash();
 
     expect(heldWhileRunning).toBe(host.workerId);
@@ -871,7 +871,7 @@ describe.each(TRANSPORT_MODES)('FakeBus (%s)', (transport) => {
         await (ending === 'closed' ? leaving.close() : leaving.kill());
         return new WeakRef(leaving.client);
       })();
-      // The worker forgets the tab once the browser lets go of its lock (ADR-0041), and a task
+      // The worker forgets the tab once the browser lets go of its lock (ADR-0024), and a task
       // later nothing of this job keeps the client alive.
       await harness.advance(1_000);
       await new Promise((resolve) => setTimeout(resolve, 0));

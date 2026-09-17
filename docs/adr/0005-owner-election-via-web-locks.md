@@ -24,7 +24,7 @@ long as the window is the owner.
   callback's promise pending. Inside the callback it takes the lock of its term of holding the
   port before it counts as the owner; a term lock the browser refuses lets the ownership lock go
   too, and both are requested again
-  ([ADR-0030](./0030-hold-a-web-lock-for-every-term-of-holding-the-port.md)).
+  ([ADR-0018](./0018-hold-a-web-lock-for-every-term-of-holding-the-port.md)).
 - A window relinquishes ownership by resolving that promise — after closing the port.
 - When the owning window dies, **the browser releases the lock** as part of tearing down the
   context, and the longest-waiting window is granted it. Failover needs no timeout, no
@@ -33,20 +33,20 @@ long as the window is the owner.
   is always a successor queued.
 - The lock name includes the protocol version, so two incompatible library versions in the
   same origin do not contend for the same lock
-  ([ADR-0008](./0008-wire-protocol-and-versioning.md)).
+  ([ADR-0007](./0007-wire-protocol-and-versioning.md)).
 
 Web Locks are same-origin scoped and cover every window, tab, iframe and worker of that
 origin — the exact scope of the problem. The same property carries the tab limit
-([ADR-0025](./0025-limit-the-tabs-using-a-configuration.md)), the remembered configurations
-([ADR-0033](./0033-one-storage-key-per-configuration.md)) and liveness on the bus
-([ADR-0041](./0041-tell-liveness-through-web-locks.md)).
+([ADR-0017](./0017-limit-the-tabs-using-a-configuration.md)), the remembered configurations
+([ADR-0020](./0020-one-storage-key-per-configuration.md)) and liveness on the bus
+([ADR-0024](./0024-tell-liveness-through-web-locks.md)).
 
 ## Alternatives considered
 
 - **Heartbeats in the SharedWorker.** Rejected as the mechanism for ownership: it depends on the
   worker being alive and on choosing a timeout, and it cannot prevent a split-brain window between
   "worker thinks A is dead" and "A is actually still writing". A browser-enforced exclusive lock
-  has neither problem. Presence on the bus rests on Web Locks as well (ADR-0041).
+  has neither problem. Presence on the bus rests on Web Locks as well (ADR-0024).
 - **`localStorage` lease with expiry timestamps.** The classic pre-Web-Locks approach.
   Requires clock agreement between tabs, has a documented race on `storage` event delivery,
   and a stalled tab can renew a lease it should have lost. Rejected.

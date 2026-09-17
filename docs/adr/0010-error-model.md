@@ -1,4 +1,4 @@
-# ADR-0012: One error type, stable codes, mandatory remediation
+# ADR-0010: One error type, stable codes, mandatory remediation
 
 - **Status:** Accepted
 

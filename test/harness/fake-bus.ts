@@ -127,7 +127,7 @@ export class FakeWorkerHost {
 
   /**
    * @param locks - The browser's lock manager: the worker holds a lock for its lifetime there, and
-   *   waits on the lock of every context it hears of (ADR-0041).
+   *   waits on the lock of every context it hears of (ADR-0024).
    * @param logger - Receives the worker's own records, which a real worker has no way to hand to a
    *   tab. For tests that assert on them.
    * @param meter - Counts what crosses this worker's ports.
@@ -176,7 +176,7 @@ export class FakeWorkerHost {
    * `chrome://inspect`.
    *
    * Its ports deliver nothing in either direction any more, its broker's state is gone, and it runs
-   * no code. The browser lets go of its locks, which is all a tab learns (ADR-0041).
+   * no code. The browser lets go of its locks, which is all a tab learns (ADR-0024).
    */
   crash(): void {
     this.#isCrashed = true;
@@ -333,7 +333,7 @@ export type TransportMode = 'sharedworker' | 'broadcastchannel';
  *   event, as for a script that answers 404.
  * - `'other-version'`: a worker script of another protocol version, such as a copied worker
  *   file that belongs to a different release. It drops everything a tab says, and keeps only the
- *   frozen part of the handshake: it answers `hello` with a welcome in its own version (ADR-0008).
+ *   frozen part of the handshake: it answers `hello` with a welcome in its own version (ADR-0007).
  */
 export type WorkerScript = 'loads' | 'fails' | 'other-version';
 
@@ -366,7 +366,7 @@ export class FakeBus {
     workerScript: WorkerScript = 'loads',
     /** Time for the bus: the deadline of the worker's handshake. */
     readonly clock: FakeClock,
-    /** The browser's locks, which the workers hold and wait on (ADR-0041). */
+    /** The browser's locks, which the workers hold and wait on (ADR-0024). */
     readonly locks: FakeLockManager,
   ) {
     this.#workerScript = workerScript;
@@ -389,7 +389,7 @@ export class FakeBus {
    * Simulates the worker dying while tabs are connected to it.
    *
    * As in a browser, the tabs are not told: their ports simply go dead. The next tab to start the
-   * worker - one opened later, or one whose wait on the dead one's lock ended (ADR-0041) - starts a new one,
+   * worker - one opened later, or one whose wait on the dead one's lock ended (ADR-0024) - starts a new one,
    * which knows nothing of the tabs that were connected to the old.
    *
    * @param restartsAs - The script every worker started from now on runs. A different one is what
@@ -414,7 +414,7 @@ export class FakeBus {
    */
   killContext(contextId: string): void {
     // A real worker is never told that a tab died: the port simply stops, in both directions, and
-    // the worker learns of it only when the browser lets go of the tab's lock (ADR-0041).
+    // the worker learns of it only when the browser lets go of the tab's lock (ADR-0024).
     this.#killed.add(contextId);
     for (const port of this.#workerEnds.get(contextId) ?? []) {
       port.close();
@@ -526,7 +526,7 @@ export class FakeBus {
           return;
         }
         // A port to a worker whose script never ran accepts messages and delivers none. A worker of
-        // another version drops them too, but answers the frozen handshake (ADR-0008).
+        // another version drops them too, but answers the frozen handshake (ADR-0007).
         if (
           script === 'other-version' &&
           isStarted &&

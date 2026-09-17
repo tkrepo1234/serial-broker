@@ -27,7 +27,7 @@ export interface SupervisorCallbacks {
    *
    * Asked rather than given, because an auto-mode configuration resolves its device while the
    * supervisor runs - from the port the user chooses, or from the tab holding the port before
-   * this one (ADR-0036).
+   * this one (ADR-0022).
    */
   readonly device: () => NormalizedDeviceFilter;
   /** The connection status changed. */
@@ -75,7 +75,7 @@ type ConnectionState =
  * connection away - an unplugged device, a powered-off device, a stream that errors, an
  * `open()` that never settles - funnels into a single loss handler, and recovery is
  * exponential backoff with jitter, short-circuited when the platform tells us the device is
- * back. See ADR-0010.
+ * back. See ADR-0008.
  *
  * It is created when this context acquires ownership and disposed when it loses it, so it
  * never has to ask whether it is still the owner: if it is running, it is.
@@ -109,7 +109,7 @@ export class PortSupervisor {
    * This is what tells an absent device from a withdrawn permission. `getPorts()` lists neither,
    * but only an unplugged device is announced by a `disconnect` event - so while this is set, a
    * port missing from the list is a device that has not come back, and the attempt has failed.
-   * See ADR-0010.
+   * See ADR-0008.
    */
   #foundPortDetached = false;
   /**
@@ -126,7 +126,7 @@ export class PortSupervisor {
   readonly #writes = new WriteQueue();
   /**
    * Every write handed to this port that has not been answered, with its size: queued, being
-   * written, or stalled at the device. What waits here is bounded in both (ADR-0031).
+   * written, or stalled at the device. What waits here is bounded in both (ADR-0019).
    */
   readonly #unanswered = new Map<Promise<void>, number>();
   #unansweredBytes = 0;
@@ -144,7 +144,7 @@ export class PortSupervisor {
   #openedAt: number | undefined;
   #bytesReceived = 0;
   #bytesSent = 0;
-  /** Since when a write has been stuck at the device, while one is (ADR-0013). Diagnostics only. */
+  /** Since when a write has been stuck at the device, while one is (ADR-0011). Diagnostics only. */
   #stalledSince: number | undefined;
 
   constructor(
@@ -157,7 +157,7 @@ export class PortSupervisor {
   }
 
   /**
-   * Describes the connection for a diagnostics report (ADR-0018).
+   * Describes the connection for a diagnostics report (ADR-0014).
    *
    * Called on demand by an observer, never on a hot path, and nothing in the library branches
    * on what it returns.
@@ -182,11 +182,11 @@ export class PortSupervisor {
    * If no granted port matches the configured device, the status becomes
    * `awaiting-permission` and nothing is retried until `requestAccess()` succeeds or the
    * platform reports a device plugged in - the browser will not show a port picker outside a
-   * user gesture (ADR-0036).
+   * user gesture (ADR-0022).
    *
    * @param from - `'failed'` to start without connecting, as the configuration's previous term of
    *   holding the port ended: in `failed`, which a configuration with `autoReconnect: false` leaves
-   *   only when the application or the user says so (ADR-0010). {@link retry} and
+   *   only when the application or the user says so (ADR-0008). {@link retry} and
    *   {@link useGrantedPort} start it then, as they would in the tab that gave up.
    */
   start(from: 'connecting' | 'failed' = 'connecting'): void {
@@ -254,7 +254,7 @@ export class PortSupervisor {
   /**
    * Waits, within `writeTimeoutMs`, until every write handed to this port has been answered.
    *
-   * The caller says `owner-released` next, which has to follow every answer of the term (ADR-0030).
+   * The caller says `owner-released` next, which has to follow every answer of the term (ADR-0018).
    * Each write's own caller heard its outcome first: its reaction was registered before this one. A
    * write still hanging after that is answered when it ends; its issuer has taken it for lost by then,
    * which is what it is.
@@ -296,7 +296,7 @@ export class PortSupervisor {
    * Connects to a port the user has just granted in the picker.
    *
    * The picker itself is the session's: which device it asks for, and what the chosen port
-   * means for the configuration, are decided there (ADR-0036). What the supervisor decides is
+   * means for the configuration, are decided there (ADR-0022). What the supervisor decides is
    * what the grant means for the connection, since the picker stays open for as long as the user
    * likes and the connection may have moved on meanwhile.
    */
@@ -324,7 +324,7 @@ export class PortSupervisor {
 
   /**
    * Follows a change of the device in effect: the user of an auto-mode configuration chose a
-   * different port, here or in another tab (ADR-0036).
+   * different port, here or in another tab (ADR-0022).
    *
    * A connection to a port that is still the device is left alone. Any other connection is closed -
    * once the writes handed to it have been answered, as when this tab stops holding the port - and
@@ -375,7 +375,7 @@ export class PortSupervisor {
    *
    * Called while the state still names this connection, and moved on from right after: a write
    * already at the device completes, and one still queued finds no open connection and is handed on
-   * again once the new device is open, as `NOT_CONNECTED` always is (ADR-0013).
+   * again once the new device is open, as `NOT_CONNECTED` always is (ADR-0011).
    */
   async #closeAfterWrites(state: Extract<ConnectionState, { kind: 'open' }>): Promise<void> {
     await this.#closeStep(this.#writes.drain(), 'draining writes');
@@ -391,19 +391,19 @@ export class PortSupervisor {
    *
    * A write is begun only once `mayBegin` has said yes. The context that issued it decides: its
    * deadline may already have told the caller that the write did not start, and writing it afterwards
-   * would put a command on the device the application may have sent again (ADR-0013). That context's
+   * would put a command on the device the application may have sent again (ADR-0011). That context's
    * `writeTimeoutMs` is its own and may differ from this tab's, and no clock of this tab can tell
    * when it ran out - so it is asked.
    *
    * A write that has waited for this tab's own `writeTimeoutMs`, in the queue and for the answer
    * together, is not begun either, and rejects with `WRITE_TIMEOUT` and `started: false`: an issuer
    * that is gone or does not answer holds the queue no longer than a write of this tab's own would
-   * wait, and a backlog behind a slow write holds no payloads longer than that (ADR-0031).
+   * wait, and a backlog behind a slow write holds no payloads longer than that (ADR-0019).
    *
    * @param payload - The bytes to write.
    * @param mayBegin - Asked when the write is next and the port is open. `true` means the issuing
    *   context counts the write as begun from now on: if this context dies before its result, whether
-   *   the device received the bytes is unknowable. See ADR-0013.
+   *   the device received the bytes is unknowable. See ADR-0011.
    */
   write(payload: Uint8Array, mayBegin: () => boolean | Promise<boolean>): Promise<void> {
     const written = this.#write(payload, mayBegin);
@@ -422,7 +422,7 @@ export class PortSupervisor {
    * The error for a write that does not fit what this port keeps waiting, or `undefined` if it fits.
    *
    * Refusing says that nothing of the write was written, which a write held beyond every bound could
-   * not say (ADR-0031). Asked before a write is accepted, so a write already accepted is never
+   * not say (ADR-0019). Asked before a write is accepted, so a write already accepted is never
    * refused: its bytes may be on their way to the device.
    */
   refusalOfWrite(requestId: string, byteLength: number): SerialBrokerError | undefined {
@@ -471,7 +471,7 @@ export class PortSupervisor {
       // Measured as well as timed: a timer can run late, in a tab the browser throttles, and a write
       // begun in that moment is one its issuer has given up on. On the monotonic clock, the one the
       // expiry timer runs on, so that the system clock being set forward or back neither refuses a
-      // write that is still in time nor lets a lapsed one through (ADR-0014).
+      // write that is still in time nor lets a lapsed one through (ADR-0012).
       if (clock.monotonicNow() - queuedAt >= writeTimeoutMs) {
         throw this.#notBegun('waited-too-long', payload.byteLength, queuedAt);
       }
@@ -483,7 +483,7 @@ export class PortSupervisor {
       const isApproved = typeof answer === 'boolean' ? answer : await answer;
       // The answer may have crossed a lost connection, or this tab letting go of the port. The write
       // has not begun, and `NOT_CONNECTED` says so to the issuer, which hands it on - including one it
-      // has just let begin (ADR-0013).
+      // has just let begin (ADR-0011).
       const state = this.#openConnection(payload.byteLength);
       if (!isApproved) {
         throw this.#notBegun('not-approved', payload.byteLength, queuedAt);
@@ -511,7 +511,7 @@ export class PortSupervisor {
             // The device has not taken the chunk. Tearing the connection down would not help: the
             // browser cannot abort a write the operating system still holds, and a port with one
             // outstanding neither closes nor opens again, however soon the device recovers
-            // (measured in Chromium on Windows, ADR-0013). So the caller hears now, and the chunk
+            // (measured in Chromium on Windows, ADR-0011). So the caller hears now, and the chunk
             // stays in flight - holding the queue, so that nothing behind it begins - until the
             // device takes it or the connection is lost.
             stalled.reject(error);
@@ -698,7 +698,7 @@ export class PortSupervisor {
    * Reacts to the device reappearing.
    *
    * The platform telling us the device is back makes any remaining backoff delay pointless,
-   * so the pending timer is cancelled and the attempt is made now. See ADR-0010.
+   * so the pending timer is cancelled and the attempt is made now. See ADR-0008.
    */
   handleDeviceConnected(): void {
     // A device came back, and whether it is the one that was unplugged cannot be told: the port
@@ -874,7 +874,7 @@ export class PortSupervisor {
 
     if (port === undefined && this.#isFoundPortDetached()) {
       // The browser does not list a detached port. The device is away, not the permission, so
-      // this is a failed attempt like any other and backoff continues (ADR-0010).
+      // this is a failed attempt like any other and backoff continues (ADR-0008).
       this.#recordFailedAttempt(
         'device-absent',
         new SerialBrokerError(
@@ -987,7 +987,7 @@ export class PortSupervisor {
     }
 
     // A streaming decoder per connection: a multi-byte character cannot span a disconnect,
-    // so its state must not either. See ADR-0015.
+    // so its state must not either. See ADR-0013.
     const decoder = this.configuration.encoding.decodeText
       ? new TextDecoder(this.configuration.encoding.encoding)
       : undefined;
@@ -1003,7 +1003,7 @@ export class PortSupervisor {
     };
     this.#state = state;
 
-    // The stability window is a duration, so it is measured on the monotonic clock (ADR-0014);
+    // The stability window is a duration, so it is measured on the monotonic clock (ADR-0012);
     // `openedAt` is a moment an operator reads, so it is the wall clock.
     this.#backoff.recordConnected(this.environment.clock.monotonicNow());
     this.#openedAt = this.environment.clock.now();
@@ -1224,7 +1224,7 @@ export class PortSupervisor {
     }
 
     // The first retry after a loss is immediate: a power-cycled device is usually back within
-    // one event-loop turn (ADR-0010).
+    // one event-loop turn (ADR-0008).
     const delayMs = computeBackoffDelayMs(
       this.#backoff.retryIndex,
       this.configuration.connection,
@@ -1371,7 +1371,7 @@ export class PortSupervisor {
   /**
    * Reports an error to the context that owns this supervisor, and through it to every tab.
    *
-   * `isRetryable` says that the library recovers by itself (ADR-0012). A configuration with
+   * `isRetryable` says that the library recovers by itself (ADR-0010). A configuration with
    * `autoReconnect: false` recovers from nothing, so a lost connection or failed attempt it reports
    * carries `false`, whatever its code - an application skipping retryable errors would otherwise
    * hide a loss it has to act on.

@@ -118,7 +118,7 @@ describe('debugging surface: configurations', () => {
     });
 
     expect([...(owning[0]?.actions ?? [])].sort()).toEqual(['choose-device', 'disconnect', 'edit']);
-    // The permission is the origin's: a tab that does not hold the port may ask as well (ADR-0036).
+    // The permission is the origin's: a tab that does not hold the port may ask as well (ADR-0022).
     expect([...(waiting[0]?.actions ?? [])].sort()).toEqual([
       'choose-device',
       'disconnect',
@@ -337,7 +337,7 @@ describe('debugging surface: new and edited configurations', () => {
 
   it('leaves blank optional fields out, so the library applies its own defaults', () => {
     expect(buildSetupOptions(defaultFormValues())).toEqual({
-      // Auto mode by default: the device comes from the port the user chooses (ADR-0036).
+      // Auto mode by default: the device comes from the port the user chooses (ADR-0022).
       device: { auto: true },
       serial: { baudRate: 9600 },
       // A checkbox cannot be left blank, so it starts at the library's default.
@@ -437,7 +437,7 @@ describe('debugging surface: new and edited configurations', () => {
 
   it('keeps what an automatic device resolved to, so editing the line settings does not ask again', () => {
     // Editing is release and setup: without the resolution in the options, the configuration would
-    // wait for the user to choose the device once more (ADR-0036).
+    // wait for the user to choose the device once more (ADR-0022).
     for (const resolved of [{ vendorId: 0x1a86, productId: 0x7523 }, { nonUsb: true }] as const) {
       const running = normalizeConfiguration('Device', {
         device: { auto: true, resolved },
@@ -530,7 +530,7 @@ describe('debugging surface: a device chosen in the picker', () => {
     const page = chooserAnswering(false);
 
     // setup() remembered the configuration at once, and a plain release keeps what is remembered
-    // (ADR-0033): without `forget` the name stays in the list, and the next try is "Device 2".
+    // (ADR-0020): without `forget` the name stays in the list, and the next try is "Device 2".
     expect(await chooseDeviceOrUndo(page, 'Device')).toBe(false);
     expect(page.released).toEqual([['Device', { forget: true }]]);
   });
@@ -694,7 +694,7 @@ describe('debugging surface: framing', () => {
   });
 
   it('names every header control that sets a configuration up, the help beside them included', async () => {
-    // A page that cannot start hides `SETUP_ACTION_IDS` (ADR-0019). A control the list misses -
+    // A page that cannot start hides `SETUP_ACTION_IDS` (ADR-0015). A control the list misses -
     // the `?` that explains an action the page has just removed, for instance - stays behind, so
     // the markup is checked against the list rather than trusted to agree with it.
     const html = await import('node:fs/promises').then(

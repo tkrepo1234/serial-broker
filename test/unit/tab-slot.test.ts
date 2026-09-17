@@ -6,7 +6,7 @@ import { FakeClock, flushMicrotasks } from '../harness/fake-clock.js';
 import { FakeLockManager } from '../harness/fake-locks.js';
 
 /**
- * The places a tab limit consists of (ADR-0025), against the fake Web Locks every other ownership
+ * The places a tab limit consists of (ADR-0017), against the fake Web Locks every other ownership
  * test relies on.
  */
 

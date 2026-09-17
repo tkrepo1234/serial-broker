@@ -29,7 +29,7 @@ import {
  *
  * A function of its own rather than a re-export of the environment's: the published declaration of
  * a re-export imports the declarations of the module it comes from, and the environment is the
- * injection seam this library reserves the right to change (ADR-0014).
+ * injection seam this library reserves the right to change (ADR-0012).
  */
 export function isSupported(): boolean {
   return isPlatformSupported();
@@ -41,7 +41,7 @@ export function isSupported(): boolean {
  * Everything is addressed by configuration name; no handles are returned that could outlive
  * their configuration or leak internals. Nothing here reveals which browsing context owns the
  * port, that a `SharedWorker` exists, or that a Web Lock is held - by design, so that those
- * choices stay changeable (ADR-0011).
+ * choices stay changeable (ADR-0009).
  *
  * The documentation lives on this interface rather than on the {@link SerialBroker} object,
  * because the interface is the contract: it is what an IDE shows, what a consumer implements
@@ -54,13 +54,13 @@ export interface SerialBrokerApi {
    * If the browser already has permission for a matching device - because the user granted it
    * on an earlier visit - the port is opened immediately, with no prompt and no user gesture.
    * Otherwise the status becomes `awaiting-permission` and the application must call
-   * {@link SerialBrokerApi.requestAccess} from a user gesture (ADR-0036).
+   * {@link SerialBrokerApi.requestAccess} from a user gesture (ADR-0022).
    *
    * Without a `device`, or with `device: { auto: true }`, the configuration is in **auto mode**:
    * it waits with `awaiting-permission` until `requestAccess()` opens the picker with no filter,
    * and takes its device from the port the user chooses - its USB IDs, or the fact that it has
    * none. The device is remembered with the configuration, reported by `getStatus()`, and adopted
-   * by the other tabs that set the name up in auto mode (ADR-0036). On a later visit this call
+   * by the other tabs that set the name up in auto mode (ADR-0022). On a later visit this call
    * takes the device from the configuration remembered under the same name, so it reconnects
    * without a prompt, like an explicit one, whether or not `restore()` ran first. A `device` passed
    * here, or `resolved`, wins over what is remembered; so does `remember: false`, which uses nothing
@@ -75,7 +75,7 @@ export interface SerialBrokerApi {
    * In one tab a name is one configuration, whichever code set it up: a second call joins it, and
    * one `release()` ends it for every caller. A second call with equivalent options leaves a
    * working configuration alone, and starts a `failed` one again - in whichever tab it is made, since
-   * a tab that does not hold the port asks the tab that does (ADR-0010). A tab that withdrew over a
+   * a tab that does not hold the port asks the tab that does (ADR-0008). A tab that withdrew over a
    * different `maxTabs` stays `failed` until it is released.
    *
    * @param name - Identifies this configuration in every other call. Must be non-empty, at
@@ -132,7 +132,7 @@ export interface SerialBrokerApi {
    * two together remove every trace of the configuration in this browser.
    *
    * `{ forget: true }` removes the entry only once no tab still runs the configuration with
-   * `remember: true` - it is one entry per name for the whole origin (ADR-0033) - and does nothing
+   * `remember: true` - it is one entry per name for the whole origin (ADR-0020) - and does nothing
    * for a configuration set up with `remember: false`, which has nothing stored under its name.
    *
    * @param name - The configuration name. One that is not set up in this tab has nothing to
@@ -184,7 +184,7 @@ export interface SerialBrokerApi {
    *
    * Writes issued by one tab reach the device in the order that tab issued them, and the bytes
    * of one call are never interleaved with another's. Writes from *different* tabs have no
-   * defined relative order (ADR-0013).
+   * defined relative order (ADR-0011).
    *
    * @param name - The configuration name passed to {@link SerialBrokerApi.setup}.
    * @param data - Text, encoded as UTF-8, or raw bytes. Nothing is appended: no newline, no
@@ -192,7 +192,7 @@ export interface SerialBrokerApi {
    * @returns A promise that resolves once the browser has taken the bytes for the port - into its
    *   transmit buffer of `serial.bufferSize` bytes - not once the device has received them, which
    *   Web Serial does not report. A device that has stopped taking data fails a write with
-   *   `WRITE_TIMEOUT` only once that buffer is full (ADR-0013).
+   *   `WRITE_TIMEOUT` only once that buffer is full (ADR-0011).
    * @throws A `SerialBrokerError` with code `UNKNOWN_CONFIGURATION`, `INVALID_ARGUMENT` for an
    *   invalid name, for data that is neither a string nor a `BufferSource` or whose buffer is
    *   detached, for a string while an `encoding` other than UTF-8 is configured or for more than
@@ -281,7 +281,7 @@ export interface SerialBrokerApi {
    * Synchronous and local: it reads a cached snapshot and never blocks. `observedAt` says when
    * the snapshot was taken, so a stale value is recognisable rather than misleading. The
    * snapshot describes the *connection* and never the coordination - which tab owns the port
-   * is deliberately not representable (ADR-0011).
+   * is deliberately not representable (ADR-0009).
    *
    * @param name - The configuration name.
    * @returns A frozen snapshot. Treat the `status` union as extensible: handle an unrecognised
@@ -342,7 +342,7 @@ export interface SerialBrokerApi {
    * The picker is pre-filtered to the configured device, or to the device a configuration in
    * auto mode has resolved to. It is unfiltered for a configuration that accepts any port or
    * only ports without USB identity, and for one in auto mode that has not resolved yet - which
-   * then takes its device from the port chosen, and remembers it (ADR-0036).
+   * then takes its device from the port chosen, and remembers it (ADR-0022).
    *
    * Allowed in any tab taking part in the configuration: the permission belongs to the origin. In a
    * tab that does not hold the port, the tab holding it looks for the granted port again and opens
@@ -548,7 +548,7 @@ export const SerialBroker: SerialBrokerApi = {
     if (instance === undefined) {
       // Nothing is set up here, so there is nothing to disconnect from. Forgetting is not about
       // this tab, though - it is about what the browser stores, and it is promised either way
-      // (ADR-0033) - so a client is built when, and only when, something is asked to be
+      // (ADR-0020) - so a client is built when, and only when, something is asked to be
       // forgotten. Without that there is no reason to build one, and building one throws in a
       // browser without Web Serial. A disposal under way may still be closing the port.
       const asked = checked(() => {

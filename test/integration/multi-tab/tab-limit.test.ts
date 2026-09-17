@@ -6,7 +6,7 @@ import { READER_OPTIONS, readerHarness } from '../../harness/devices.js';
 import type { TransportMode } from '../../harness/fake-bus.js';
 
 /**
- * Limiting how many tabs use a configuration at once (ADR-0025).
+ * Limiting how many tabs use a configuration at once (ADR-0017).
  */
 
 async function harnessWithDevice(transport: TransportMode) {
@@ -97,7 +97,7 @@ describe.each(TRANSPORT_MODES)('tabs beyond the tab limit (%s)', (transport) => 
     await harness.settle();
     expect(second.client.getStatus('Reader').status).toBe('queued');
 
-    // A queued tab does not take part, so it may not ask for the origin's permission (ADR-0036).
+    // A queued tab does not take part, so it may not ask for the origin's permission (ADR-0022).
     await expect(second.client.requestAccess('Reader')).rejects.toMatchObject({
       code: SerialBrokerErrorCode.PERMISSION_REQUIRED,
       context: { status: 'queued' },
@@ -120,7 +120,7 @@ describe.each(TRANSPORT_MODES)('a tab running a different tab limit (%s)', (tran
       maxTabs: 2,
       holdingTabMaxTabs: 1,
     });
-    // The other tabs believe errors only from the tab holding the port (ADR-0025).
+    // The other tabs believe errors only from the tab holding the port (ADR-0017).
     expect(holder.errorCodes('Reader')).not.toContain(SerialBrokerErrorCode.CONFIGURATION_CONFLICT);
 
     device.emit('HOLDER');

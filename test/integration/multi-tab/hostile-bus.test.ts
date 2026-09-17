@@ -101,7 +101,7 @@ async function twoWatchedTabs(): Promise<{
  * Everything these post is well-formed and names the real configuration; several name the real term
  * of holding the port and the real identity of the tab holding it, both of which are on the channel.
  * What holds them off is not validation but the Web Lock of the term: a term is live while its lock
- * is held, and over when the browser frees it (ADR-0030).
+ * is held, and over when the browser frees it (ADR-0018).
  */
 describe('a script of the origin that forges messages about the port', () => {
   it('cannot end a live term by claiming the port for a term nobody holds', async () => {
@@ -143,7 +143,7 @@ describe('a script of the origin that forges messages about the port', () => {
     await harness.settle();
 
     // The tab limit is part of the name of the term's lock, so a status naming another one names
-    // no term this configuration has (ADR-0025, ADR-0030).
+    // no term this configuration has (ADR-0017, ADR-0018).
     expect(other.errorCodes('Reader')).toEqual([]);
     expect(other.client.getStatus('Reader').status).toBe(SerialBrokerStatus.Open);
     await expect(sending).resolves.toBeUndefined();
@@ -172,7 +172,7 @@ describe('a script of the origin that forges messages about the port', () => {
 
     // In the script's own name, for the real term; and in the holder's name, for a term it never
     // held. The lock of a term names the term and the tab speaking for it, so neither names a term
-    // of this configuration (ADR-0030), and a tab waiting for a device is not handed one.
+    // of this configuration (ADR-0018), and a tab waiting for a device is not handed one.
     mallory.post({ ...forged, term: termOnTheBus(mallory.heard) });
     mallory.post({ ...forged, from: owner.client.clientId, term: 't-invented' });
     await harness.settle();
@@ -304,7 +304,7 @@ describe('a script of the origin that forges messages about the port', () => {
     await harness.settle();
 
     // Whether a write may begin is its issuer's to say: begun on this, it could be a write the
-    // application was told did not start (ADR-0013).
+    // application was told did not start (ADR-0011).
     expect(device.written).toHaveLength(0);
 
     issuer.deliverHeld();
@@ -366,7 +366,7 @@ describe('a script of the origin that floods the bus with well-formed messages',
 
     // This tab has asked for the status, and the answer that tells it which term holds the port
     // waits for the next one the rate allows. Device data cannot be told from what any script of
-    // the origin says until then (ADR-0030), so it is dropped - once with a record, then silently.
+    // the origin says until then (ADR-0018), so it is dropped - once with a record, then silently.
     const joining = harness.openTab();
     await joining.client.setup('Reader', READER_OPTIONS);
     const received: string[] = [];
@@ -465,7 +465,7 @@ describe('a script on the SharedWorker that uses the identity of a tab', () => {
     await issuer.client.setup('Reader', READER_OPTIONS);
     await harness.settle();
     // A participant of its own, which holds the lock that tells the worker a context is there - as a
-    // tab takes it, and as any script of the origin can (ADR-0041).
+    // tab takes it, and as any script of the origin can (ADR-0024).
     void harness.locks
       .forContext('mallory')
       .request(
@@ -528,7 +528,7 @@ describe('a script on the SharedWorker that uses the identity of a tab', () => {
 
     // Identities are no secret. The port that says hello as the tab is one more port of that
     // identity (ADR-0006); what ends the tab's participation is the tab's own lock, which a script
-    // cannot let go of (ADR-0041).
+    // cannot let go of (ADR-0024).
     const forged = { v: PROTOCOL_VERSION, from: other.client.clientId, to: 'all' };
     mallory.post({ ...forged, type: 'hello', configNames: ['Reader'] });
     await harness.settle();

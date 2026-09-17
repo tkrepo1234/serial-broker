@@ -5,7 +5,7 @@
  * served next to the application - loads
  * `<script src="serial-broker.diagnostics.global.js"></script>` and calls
  * `SerialBrokerDiagnostics.openDiagnostics({ workerUrl })`. It carries exactly what
- * `serial-broker/diagnostics` exports, under the same names. See ADR-0043.
+ * `serial-broker/diagnostics` exports, under the same names. See ADR-0026.
  *
  * A namespace object rather than the function itself: `openDiagnostics` is one of three exports
  * and reads as a verb, so `SerialBrokerDiagnostics(...)` would say less than the call it stands

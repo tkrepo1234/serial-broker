@@ -14,7 +14,7 @@ import {
 } from './support/extreme.js';
 
 /**
- * A diagnostics observer (ADR-0018) with a thousand watchers on one configuration, under traffic.
+ * A diagnostics observer (ADR-0014) with a thousand watchers on one configuration, under traffic.
  *
  * Every event on the bus is handed to every watcher: a thousand watchers make a thousand
  * callbacks per chunk. What is measured: each hears everything, one that stopped hears nothing

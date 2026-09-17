@@ -12,7 +12,7 @@ Thumbs.db
 .idea/
 
 # Browser tests: Playwright's traces, reports and the throwaway browser profiles under them
-# (ADR-0035)
+# (ADR-0021)
 test-results/
 playwright-report/
 
@@ -20,7 +20,7 @@ playwright-report/
 *.log
 npm-debug.log*
 
-# Documentation site: Python environment, generated reference, build output (ADR-0020)
+# Documentation site: Python environment, generated reference, build output (ADR-0016)
 docs/.venv/
 docs/site/api/reference/
 docs/site/_build/

@@ -69,7 +69,7 @@ describe.each(TRANSPORT_MODES)('a deployment left running (%s)', (transport) => 
       live.push(joining);
       await elapse(harness, 2_000);
     }
-    // The worker forgets a killed tab as soon as the browser lets go of its lock (ADR-0041).
+    // The worker forgets a killed tab as soon as the browser lets go of its lock (ADR-0024).
     await elapse(harness, 1_000);
 
     expect(

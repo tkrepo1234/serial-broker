@@ -1,4 +1,4 @@
-# ADR-0019: Ship the debugging surface in the package, as static content, under its own policy
+# ADR-0015: Ship the debugging surface in the package, as static content, under its own policy
 
 - **Status:** Accepted
 
@@ -28,13 +28,13 @@ can resolve its files.
 
 - It exposes every option of `setup()` and `configure()`, every field of `getStatus()`, all four
   events and the library's log records for the tab it runs in; and, through the diagnostics
-  observer ([ADR-0018](./0018-diagnostics-observer.md)), every tab of the origin, the Web Locks,
+  observer ([ADR-0014](./0014-diagnostics-observer.md)), every tab of the origin, the Web Locks,
   and a live watch of any configuration.
 - It **sets nothing up on its own**, and does not call `restore()` on load. Opening it to look must
   not make it a participant, or it would end up owning a port when the application's tabs close.
 - Its first action for a developer is _Choose a device…_, which sets a configuration up in auto
   mode and calls `requestAccess()` in the same click, so no vendor or product ID has to be known
-  ([ADR-0036](./0036-take-the-device-identity-from-the-chosen-port.md)).
+  ([ADR-0022](./0022-take-the-device-identity-from-the-chosen-port.md)).
 - It loads the worker next to itself by default, and takes the worker URL and transport from its
   settings panel, from storage, or from the query string, so an operator can point it at the
   application's bus and share a link that does.

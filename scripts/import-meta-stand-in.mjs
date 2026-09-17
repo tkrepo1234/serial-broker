@@ -4,7 +4,7 @@
  * The library resolves its worker script with `new URL('./serial-broker.worker.js',
  * import.meta.url)`. Two published builds have no `import.meta` to resolve it against: the
  * CommonJS build, and the classic script build that a page loads with `<script src>`
- * (ADR-0043). Without a replacement, esbuild compiles `import.meta` to an empty object and the
+ * (ADR-0026). Without a replacement, esbuild compiles `import.meta` to an empty object and the
  * failure reads "Invalid URL"; a shim built on `document.currentScript` or `document.baseURI`
  * would resolve next to the page instead of next to the library, where the script is not.
  *

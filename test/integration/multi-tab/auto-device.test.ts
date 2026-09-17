@@ -11,7 +11,7 @@ import { remember, rememberedEntry } from '../../harness/stored-configurations.j
 
 /**
  * Auto mode: a configuration set up without a device takes it from the port the user chooses,
- * remembers it, and shares it with the other tabs of the configuration (ADR-0036).
+ * remembers it, and shares it with the other tabs of the configuration (ADR-0022).
  */
 
 /** Setup options in auto mode: no device at all. */

@@ -6,7 +6,7 @@
  * - The minified builds export exactly what the readable ones export, so switching between
  *   `serial-broker` and `serial-broker/min` cannot lose anything.
  * - The classic script builds put the same surface on one global each, so a page that loads
- *   `<script src="serial-broker.global.js">` can reach everything a module can (ADR-0043). The
+ *   `<script src="serial-broker.global.js">` can reach everything a module can (ADR-0026). The
  *   file is run here, in a context with no browser in it, and the global it leaves behind is
  *   compared with the ES module's exports - so the two cannot drift.
  * - Every build looks for the same worker script, `serial-broker.worker.js`. A `SharedWorker` is
@@ -49,7 +49,7 @@ const WORKER_SCRIPT = 'serial-broker.worker.js';
  *
  * `isTheGlobal` names the one export the global *is* rather than carries: the main entry point's
  * global is the facade itself, so `SerialBroker.setup()` reads the same as in a module and a page
- * needs exactly one name (ADR-0043). The diagnostics global carries all three of its exports.
+ * needs exactly one name (ADR-0026). The diagnostics global carries all three of its exports.
  */
 const ENTRY_POINTS = [
   {
@@ -211,7 +211,7 @@ function classicSurfaceProblems(entry, namespace) {
  *
  * Every `.d.ts` under dist/ is checked, not only the ones the entry points reach: a file that no
  * export names today is one an import of a deep path reaches tomorrow, and `skipLibCheck: false`
- * in an application checks the lot. dist/debug/ is excluded - it is a page, not a module (ADR-0019).
+ * in an application checks the lot. dist/debug/ is excluded - it is a page, not a module (ADR-0015).
  *
  * @returns One problem per diagnostic.
  */

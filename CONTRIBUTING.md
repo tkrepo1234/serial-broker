@@ -16,7 +16,7 @@ they are short. The three that decide most reviews:
 - [API Design](./docs/guidelines/api-design.md) — what the public surface may and may not say.
 
 If you are changing how contexts coordinate, read [ADR-0005](./docs/adr/0005-owner-election-via-web-locks.md)
-and [ADR-0013](./docs/adr/0013-write-ordering-and-delivery-semantics.md) first. Both record
+and [ADR-0011](./docs/adr/0011-write-ordering-and-delivery-semantics.md) first. Both record
 decisions that look replaceable and are not.
 
 ## Setting up
@@ -45,7 +45,7 @@ the working folder, at `~/.serial-broker/docs-venv` or wherever `SERIAL_BROKER_D
 `python -m venv docs/.venv`, then install `docs/site/requirements.txt` with that environment's
 `pip`. The build fails on any warning, in CI as locally.
 
-`npm run test:browser` builds the package and runs the browser suite (`test/browser/`, ADR-0035)
+`npm run test:browser` builds the package and runs the browser suite (`test/browser/`, ADR-0021)
 against **the Microsoft Edge you already have installed** — no browser is downloaded. It serves
 `dist/` on `http://localhost:8146`; set `SERIAL_BROKER_BROWSER_TEST_PORT` if that port is taken,
 and `SERIAL_BROKER_BROWSER_CHANNEL` (`chromium`, `chrome`, `msedge`) to use another browser, which
@@ -92,7 +92,7 @@ Automation, and `npm run test:background` puts the tab holding the port in the b
 `npm run bench` measures what the library costs on the simulated browser - latency and throughput
 from the device to 1, 5 and 10 tabs, write latency, handover and start times, an hour's steady
 state, over both transports - in about a second, and judges every number against the expectation
-written down for it in `bench/expectations.ts` (ADR-0037). It writes `bench/results/harness.json`
+written down for it in `bench/expectations.ts` (ADR-0023). It writes `bench/results/harness.json`
 and the fragments under `docs/site/_generated/` that the documentation's Performance chapter
 includes; commit them with a change that is meant to be faster, or that touches what they measure.
 

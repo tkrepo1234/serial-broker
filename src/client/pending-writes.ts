@@ -30,12 +30,12 @@ export interface Deadline {
  * resumes with its overdue timers and the messages that arrived meanwhile both queued, and the
  * browser promises no order between the two. Deciding at once may decide against a message that is
  * already waiting - failing a write that succeeded, or handing a written one to the next owner to be
- * written again (ADR-0013, ADR-0030).
+ * written again (ADR-0011, ADR-0018).
  *
  * So a deadline that runs {@link LATE_DEADLINE_MS} or more late schedules itself once more with no
  * delay. That timer is queued behind the tasks already waiting, and those run first. A deadline that
  * runs on time decides at once. Lateness is measured on the monotonic clock, the one the timer itself
- * runs on (ADR-0014).
+ * runs on (ADR-0012).
  */
 export function scheduleDeadline(clock: Clock, onExpired: () => void, delayMs: number): Deadline {
   const dueAt = clock.monotonicNow() + delayMs;
@@ -77,11 +77,11 @@ interface PendingWrite {
    * The line between replayable and not. Before it, the bytes demonstrably never reached the
    * device and the request can be re-sent to a new owner: no term begins a write without this
    * context's approval. After it, whether they arrived is unknowable and the request must never be
-   * repeated - unless that term answers that it did not begin it after all. See ADR-0013.
+   * repeated - unless that term answers that it did not begin it after all. See ADR-0011.
    */
   startedTerm: TermId | undefined;
   /**
-   * The term the request was last handed to (ADR-0030).
+   * The term the request was last handed to (ADR-0018).
    *
    * Only a tab holding the port in that term writes it, so this is the one term whose word decides
    * whether it was written. It is handed to another term only once this one has ended.
@@ -128,14 +128,14 @@ export interface PendingWriteHost {
 /**
  * The lifecycle of every write this context has issued.
  *
- * This is where the delivery guarantee of ADR-0013 lives, and it lives here rather than in the
+ * This is where the delivery guarantee of ADR-0011 lives, and it lives here rather than in the
  * broker for a reason: only the context that issued a write knows what it asked for, and
  * keeping the decision local means it behaves identically with or without a broker, and
  * survives the broker itself dying.
  *
  * The rules it enforces, all of them about one question - *may this command be sent again?*
  * A write is addressed to one term of holding the port, and only that term can write it
- * (ADR-0030).
+ * (ADR-0018).
  *
  * | Situation | Answer |
  * | --- | --- |
@@ -155,7 +155,7 @@ export class PendingWrites {
     return this.#writes.size;
   }
 
-  /** How far the outstanding writes have got, for a diagnostics report (ADR-0018). */
+  /** How far the outstanding writes have got, for a diagnostics report (ADR-0014). */
   diagnostics(): PendingWritesDiagnostics {
     let dispatched = 0;
     let started = 0;
@@ -221,14 +221,14 @@ export class PendingWrites {
   /**
    * Decides whether `term` may begin writing a request now, and if it may, counts it as begun.
    *
-   * The tab holding the port asks before it begins any write (ADR-0013). The answer is yes only while
+   * The tab holding the port asks before it begins any write (ADR-0011). The answer is yes only while
    * this context still waits on the write: one whose deadline has run was reported to its caller as
    * not started, and one that was released or refused is gone. Deciding and marking happen in one
    * turn of this context's event loop, so no deadline can run between them - from here on the
    * deadline reports `started: true`, and the write is never handed to another term.
    *
    * Only the term the request was addressed to may begin it: no other tab was asked to write it
-   * (ADR-0030). A question from anywhere else concerns a copy that reached the wrong tab, or is forged,
+   * (ADR-0018). A question from anywhere else concerns a copy that reached the wrong tab, or is forged,
    * and approving it would strand a write nobody is writing.
    *
    * @returns `true` if the term may begin the write.
@@ -247,7 +247,7 @@ export class PendingWrites {
    *
    * Only that term writes the request, so only that term knows how it went, and an
    * answer from anywhere else is a copy that reached the wrong tab or a message from a script of
-   * the origin that read the request id off the bus (ADR-0030). Such an answer is ignored: taken,
+   * the origin that read the request id off the bus (ADR-0018). Such an answer is ignored: taken,
    * it would settle - resolve, even - a write that is still on its way to the device.
    *
    * `NOT_CONNECTED` is the one outcome that does not settle the write: that term did not write it
@@ -277,7 +277,7 @@ export class PendingWrites {
   }
 
   /**
-   * Reacts to a term of holding the port ending (ADR-0030).
+   * Reacts to a term of holding the port ending (ADR-0018).
    *
    * Everything that term said has arrived, or has been waited for as long as it will be. A write it
    * had begun and not answered is now undecidable and is failed; a write handed to it that it never
@@ -308,8 +308,8 @@ export class PendingWrites {
    * Hands on every write that has not started, including those already handed to an owner.
    *
    * For when a request may have been lost on its way: the broker it went through died
-   * (ADR-0041), or the owner restated `open`. The owner recognises a request it has
-   * already accepted, so handing one on again to the same term cannot write it twice (ADR-0013). A
+   * (ADR-0024), or the owner restated `open`. The owner recognises a request it has
+   * already accepted, so handing one on again to the same term cannot write it twice (ADR-0011). A
    * write addressed to a term that has not ended stays with it.
    */
   resendUnstarted(): void {
@@ -388,7 +388,7 @@ export class PendingWrites {
     }
     if (addressed !== undefined && addressed !== term && !this.host.isTermEnded(addressed)) {
       // Another term may still be writing it, and its word may not have arrived: a claim from the
-      // new holder proves only that the old one let go of the lock (ADR-0030).
+      // new holder proves only that the old one let go of the lock (ADR-0018).
       return;
     }
 

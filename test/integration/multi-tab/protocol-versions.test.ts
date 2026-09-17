@@ -13,7 +13,7 @@ import { READER_OPTIONS } from '../../harness/devices.js';
 
 /**
  * Tabs on different protocol versions share no lock, worker or bus, and learn of each other only
- * through the version announcement (ADR-0008).
+ * through the version announcement (ADR-0007).
  */
 
 /**

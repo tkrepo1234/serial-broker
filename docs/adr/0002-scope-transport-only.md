@@ -42,7 +42,7 @@ second, 12.5 ms apart. 50 ms joins all of these into one answer and is below wha
 The settings of the tab holding the port apply, because that tab reads the device. They are not
 part of the comparison that decides a `CONFIGURATION_CONFLICT`: two tabs disagreeing about `idleMs`
 is not two ways of opening a port. Text decoding happens on the delivered bytes, with a streaming
-decoder, so a character split across reads is decoded intact ([ADR-0015](./0015-text-and-binary-payloads.md)).
+decoder, so a character split across reads is decoded intact ([ADR-0013](./0013-text-and-binary-payloads.md)).
 
 ## Alternatives considered
 

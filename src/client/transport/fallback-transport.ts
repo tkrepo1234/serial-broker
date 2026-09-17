@@ -24,7 +24,7 @@ const FALLBACK_LOG_MESSAGES: Readonly<Record<WorkerLoadFailure, string>> = {
  * So until the broker's `welcome` proves the script runs, the transport can still move. When it
  * does, nothing it sent reached anyone, and nothing is sent again: the new bus is told what this
  * context takes part in, and the client states again what the others need to know, as it does after
- * reaching a new worker (ADR-0041). Who holds the port is the Web Locks' to say, not a message's, so
+ * reaching a new worker (ADR-0024). Who holds the port is the Web Locks' to say, not a message's, so
  * no term can be left waiting on a word that went into the unusable worker: a tab that knows of a
  * term has heard of it on the bus the term's holder is on. Traffic sent in between is lost.
  */

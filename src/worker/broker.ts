@@ -25,9 +25,9 @@ export interface BrokerHost {
  *   meant for the owner goes to every participant, and only the tab holding the addressed term acts
  *   on it (ADR-0006): a claim of ownership the broker believed would be one anybody could forge.
  * - **What happens to a write when the owner dies** is decided by the context that issued it
- *   (ADR-0013), which is the only context that knows whether repeating the command is safe.
+ *   (ADR-0011), which is the only context that knows whether repeating the command is safe.
  * - **Who is still there** is decided by the Web Locks the contexts hold, which the worker waits
- *   on (`worker-ports.ts`, ADR-0041).
+ *   on (`worker-ports.ts`, ADR-0024).
  *
  * The same is what lets the `BroadcastChannel` fallback do without a broker at all: each tab
  * resolves the same targets from the envelope for itself (ADR-0006).
@@ -57,12 +57,12 @@ export class Broker {
       case 'welcome':
       case 'worker-log':
         // Only the worker sends these: one arriving here came from something else, and is never
-        // passed on - a tab takes a forwarded record for the worker's own (ADR-0018).
+        // passed on - a tab takes a forwarded record for the worker's own (ADR-0014).
         return;
 
       case 'diagnostics-request':
         // Asks every context to describe itself, and the observer asking has no configuration in
-        // common with anyone (ADR-0018).
+        // common with anyone (ADR-0014).
         for (const client of this.host.clients()) {
           if (client !== clientId) {
             this.host.deliver(client, message);

@@ -115,7 +115,7 @@ granted ports apart: it uses the first and logs `matcher.ambiguous`.
   even when only one is granted; `getStatus().deviceKind` is `'auto'` then. `setup()` and
   `requestAccess()` may follow each other in one click.
 - **When to change it:** name the USB IDs when the application must never open anything but one kind
-  of device, and the picker should offer nothing else. The decision and its reasons are in ADR-0036.
+  of device, and the picker should offer nothing else. The decision and its reasons are in ADR-0022.
 
 ### `{ vendorId, productId }`
 
@@ -247,7 +247,7 @@ switch. `1` disables it.
 configuration still tries again when the device is plugged in again, and when `setup()` is called
 for it again. `1` gives up after the first failure; there is no `0`, because not reconnecting at
 all is what `autoReconnect: false` says, and a number saying it a second time would still revive on
-replug (ADR-0010). **Set a limit** when a device that stays
+replug (ADR-0008). **Set a limit** when a device that stays
 away should be shown as a problem rather than as endlessly reconnecting.
 
 `stableAfterMs`

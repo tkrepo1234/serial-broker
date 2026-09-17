@@ -8,7 +8,7 @@
  * clock: `performance.timeOrigin + performance.now()`, the system clock at sub-millisecond
  * resolution, which the pages of one browser share.
  *
- * Served as JavaScript by `test/browser/server.mjs`, which strips the types (ADR-0035, ADR-0037).
+ * Served as JavaScript by `test/browser/server.mjs`, which strips the types (ADR-0021, ADR-0023).
  */
 
 import type { SerialBrokerOptions } from '../../../src/core/types.js';

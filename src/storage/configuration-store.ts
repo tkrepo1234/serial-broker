@@ -6,19 +6,19 @@ import { normalizeConfiguration, toSetupOptions } from '../core/validation.js';
 import type { KeyValueStorage } from '../environment/environment.js';
 
 /**
- * Version of the stored format, independent of the protocol version (ADR-0033).
+ * Version of the stored format, independent of the protocol version (ADR-0020).
  *
  * Stored entries are the options `setup()` accepts and are validated again on every read, so a
  * change to the message protocol leaves them usable. This is incremented only for a change to what
  * is stored that the validation on read cannot absorb - a different shape, a different key layout
- * (ADR-0033). Entries under another version are left where they are, unread.
+ * (ADR-0020). Entries under another version are left where they are, unread.
  */
 export const STORAGE_SCHEMA_VERSION = 1;
 
 /** What every key of the current format starts with. */
 const KEY_PREFIX = `serial-broker/configurations/v${String(STORAGE_SCHEMA_VERSION)}`;
 
-/** Key holding the names of the remembered configurations, as a JSON array (ADR-0033). */
+/** Key holding the names of the remembered configurations, as a JSON array (ADR-0020). */
 export function storageIndexKey(): string {
   return `${KEY_PREFIX}/index`;
 }
@@ -57,13 +57,13 @@ interface StoredIndex {
  *
  * What is stored is only the *configuration* - which device type to look for and how to open
  * it. The permission to use the device belongs to the browser and cannot be stored, forged or
- * inspected by script; it is what makes the restore prompt-free (ADR-0036). Nothing sensitive
+ * inspected by script; it is what makes the restore prompt-free (ADR-0022). Nothing sensitive
  * lives here.
  *
- * One key per configuration, plus an index listing their names (ADR-0033). Two tabs remembering
+ * One key per configuration, plus an index listing their names (ADR-0020). Two tabs remembering
  * different configurations in the same moment write different keys, so neither can lose the
  * other's; the index is the only key they share, and a name missing from it is put back the next
- * time that tab saves - which it does as soon as its persistence hold is granted (ADR-0033).
+ * time that tab saves - which it does as soon as its persistence hold is granted (ADR-0020).
  *
  * Stored data is treated as hostile. It may come from another version, from a hand-edited
  * developer console, or be truncated by a browser that ran out of quota mid-write, so every
@@ -74,7 +74,7 @@ export class ConfigurationStore {
     private readonly storage: KeyValueStorage,
     private readonly logger: ScopedLogger,
     private readonly reportProblem: StorageProblemReporter,
-    /** The time for the errors it reports; the store has no clock of its own (ADR-0014). */
+    /** The time for the errors it reports; the store has no clock of its own (ADR-0012). */
     private readonly now: () => number = () => 0,
   ) {}
 
@@ -189,7 +189,7 @@ export class ConfigurationStore {
 
   /**
    * An auto-mode configuration that has not resolved keeps the device a remembered entry of the
-   * same name resolved to (ADR-0036).
+   * same name resolved to (ADR-0022).
    *
    * `setup()` already starts such a configuration with the remembered device, so this matters only
    * where another tab resolved the name after this tab set it up and before this tab saved again -
@@ -221,7 +221,7 @@ export class ConfigurationStore {
 
     if (raw === null) {
       // Listed but not there: another tab removed the configuration while this index was stale
-      // (ADR-0033), a write failed after the name was listed, a browser evicted the entry, or a
+      // (ADR-0020), a write failed after the name was listed, a browser evicted the entry, or a
       // developer console did. Nothing is corrupt - the name is, so it leaves the index without a
       // word to the application, which has nothing to act on and may have asked for the removal.
       this.logger.info('forgot a remembered configuration that has no entry left', {

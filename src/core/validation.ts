@@ -61,7 +61,7 @@ const MAX_ATTEMPTS = 1_000_000;
 /**
  * The largest tab limit other than `Infinity`.
  *
- * A tab waiting for a place requests every place at once (ADR-0025), so the limit is a number of
+ * A tab waiting for a place requests every place at once (ADR-0017), so the limit is a number of
  * Web Lock requests. A hundred tabs is more than any application uses one device from.
  */
 const MAX_TAB_LIMIT = 100;
@@ -268,7 +268,7 @@ const DEVICE_SHAPES =
  * Four shapes, kept apart rather than merged into one with optional IDs: a configuration
  * identifies a USB device, accepts whatever the user granted, accepts only ports without a USB
  * identity, or takes its device from the port the user chooses - and code downstream must not be
- * able to read a vendor ID from a kind that has none. See ADR-0036.
+ * able to read a vendor ID from a kind that has none. See ADR-0022.
  *
  * Mixing them - passing `any` *and* IDs, say - is rejected rather than silently resolved, because
  * either interpretation would be a guess about what the caller meant. An absent `device` is auto
@@ -373,7 +373,7 @@ function normalizeUsbDevice(
  * and one read again after the port has closed could have changed in between.
  *
  * Both options default to `false`, so a release on its own keeps what is remembered and the
- * browser's permission alike (ADR-0033).
+ * browser's permission alike (ADR-0020).
  *
  * @throws A {@link SerialBrokerError} with code `INVALID_ARGUMENT`.
  */
@@ -515,7 +515,7 @@ export function normalizeConfiguration(name: unknown, options: unknown): Normali
       maxDelayMs: requireInteger(...connectionOption('maxDelayMs'), 0, MAX_DELAY_MS),
       jitter: requireFiniteNumber(...connectionOption('jitter'), 0, 1),
       // From one, not from zero: an attempt is always made. `maxAttempts: 0` reads as "do not
-      // reconnect", which `autoReconnect: false` says (ADR-0010), and would still make one attempt.
+      // reconnect", which `autoReconnect: false` says (ADR-0008), and would still make one attempt.
       maxAttempts: requireIntegerOrInfinity(...connectionOption('maxAttempts'), 1, MAX_ATTEMPTS),
       stableAfterMs: requireInteger(...connectionOption('stableAfterMs'), 0, MAX_DELAY_MS),
       openTimeoutMs: requireInteger(...connectionOption('openTimeoutMs'), 1, MAX_TIMEOUT_MS),
@@ -567,7 +567,7 @@ export function normalizeConfiguration(name: unknown, options: unknown): Normali
  * The inverse of {@link normalizeConfiguration}, and the one place the device filter is turned
  * back into its application-facing shape. A configuration leaves the validated core this way
  * wherever it goes: restored through `setup()`, written to storage, described in a diagnostics
- * report (ADR-0018). Each nested object is a copy, so the result can be changed or cloned without
+ * report (ADR-0014). Each nested object is a copy, so the result can be changed or cloned without
  * touching the frozen original.
  *
  * @param configuration - A configuration that has passed validation.
@@ -645,7 +645,7 @@ export function isDeviceCompatible(
     a.serial.parity === b.serial.parity &&
     a.serial.flowControl === b.serial.flowControl &&
     // Not a hardware setting, but a second `setup()` cannot change it either: the tab already
-    // holds, or waits for, a place among a set of that size (ADR-0025).
+    // holds, or waits for, a place among a set of that size (ADR-0017).
     a.maxTabs === b.maxTabs
   );
 }
@@ -654,7 +654,7 @@ export function isDeviceCompatible(
  * `true` if two filters name the same device.
  *
  * Auto mode never conflicts with auto mode: both say "whatever the tab holding the port chose",
- * and the session already running keeps its resolution (ADR-0036). Against an explicit filter, an
+ * and the session already running keeps its resolution (ADR-0022). Against an explicit filter, an
  * auto-mode filter that has not resolved is compatible - it has committed to nothing - and one
  * that has resolved counts as the device it resolved to.
  */

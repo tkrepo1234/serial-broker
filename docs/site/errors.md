@@ -300,7 +300,7 @@ bytes is summarised in [Write outcomes](guarantees.md#write-outcomes).
   begin, so it may still complete after the rejection.
 - The device did not take a chunk within `connection.writeTimeoutMs`, typically because of flow
   control or a device that has stopped answering. **Context:** `bytesWritten` of `byteLength`. The
-  connection stays open and the chunk stays in flight (ADR-0013); the writes behind it are not begun
+  connection stays open and the chunk stays in flight (ADR-0011); the writes behind it are not begun
   until the device takes it, and fail at their own deadline with `started: false`. The rest of this
   write is never sent.
 

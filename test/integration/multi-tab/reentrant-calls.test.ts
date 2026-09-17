@@ -256,7 +256,7 @@ describe.each(TRANSPORT_MODES)(
       await harness.advance(0);
 
       // The tab that did not take the port over is the one that sees it with nobody: its
-      // successor goes from the old time of holding the port straight to its own (ADR-0030).
+      // successor goes from the old time of holding the port straight to its own (ADR-0018).
       const watching = others.find(
         (tab) => tab.client.diagnostics()?.configurations[0]?.role !== 'owner',
       );

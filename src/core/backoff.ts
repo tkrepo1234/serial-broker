@@ -10,7 +10,7 @@ export interface BackoffSettings {
 /**
  * Computes the delay before a reconnect attempt.
  *
- * Exponential with full jitter (ADR-0010):
+ * Exponential with full jitter (ADR-0008):
  *
  *     delay(n) = min(maxDelayMs, initialDelayMs * factor^(n-1)) * random(jitter..1)
  *
@@ -23,7 +23,7 @@ export interface BackoffSettings {
  *
  * @param attempt - Zero-based attempt number.
  * @param settings - Normalised backoff parameters.
- * @param random - Returns a value in `[0, 1)`. Injected for determinism (ADR-0014).
+ * @param random - Returns a value in `[0, 1)`. Injected for determinism (ADR-0012).
  * @returns Milliseconds to wait. Always finite and non-negative.
  */
 export function computeBackoffDelayMs(
@@ -97,7 +97,7 @@ export class BackoffState {
    *
    * @param now - A monotonic reading, `Clock.monotonicNow()`: the window is a duration, and a
    *   system clock the user or an NTP step moves must neither end it early nor hold it open
-   *   (ADR-0014).
+   *   (ADR-0012).
    */
   recordConnected(now: number): void {
     this.#connectedAt = now;

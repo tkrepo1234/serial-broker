@@ -1,4 +1,4 @@
-# ADR-0037: Measure performance against expectations written first
+# ADR-0023: Measure performance against expectations written first
 
 - **Status:** Accepted
 
@@ -16,7 +16,7 @@ than its expectation becomes a fix or a documented limit.
 Three things make this harder than a benchmark usually is:
 
 1. **The harness has no real time.** Its clock moves when a test moves it, which is what makes
-   the test suite deterministic (ADR-0014). A latency in the harness is therefore not a
+   the test suite deterministic (ADR-0012). A latency in the harness is therefore not a
    simulated quantity; it is the wall-clock time the process spent in the library's microtasks
    between the device pushing a chunk and a listener seeing it. That is the number that isolates
    the library's own cost, and it is also a number that varies with the machine.
@@ -25,7 +25,7 @@ Three things make this harder than a benchmark usually is:
    module loader; a benchmark is not a test, and Vitest's own benchmark mode is for micro-benchmarks
    of a function, not for a scenario across ten simulated tabs.
 3. **A real browser's numbers depend on the machine**, and CI runners are shared machines whose
-   timings say nothing. The browser test suite has a stand-in for Web Serial (ADR-0035),
+   timings say nothing. The browser test suite has a stand-in for Web Serial (ADR-0021),
    and a loopback says nothing unless a tab writes first.
 
 ## Decision

@@ -11,13 +11,14 @@ a tab dying mid-write, a lock changing hands, a device disappearing. The reason 
 
 Decisions also move. A reader who wants to know what holds has one question - what is decided, and
 why - and a record that answers it with a sequence of amendments makes the reader reconstruct the
-answer. Code and documentation cite the records by number, so a number has to keep its meaning.
+answer. Code and documentation cite the records by number, so every citation has to resolve.
 
 ## Decision
 
 We record every architectural decision as a numbered Architecture Decision Record in
 `docs/adr/`, using a MADR-derived [template](./0000-template.md). Code that exists because of a
-decision cites it (`// See ADR-0005.`). Numbers are never reused and never renumbered.
+decision cites it (`// See ADR-0005.`). The records are numbered without gaps: when one is removed, the
+records after it move up and every citation follows.
 
 **One current record per decision.** A record states the decision as it stands, in the present
 tense, with the reasons that hold and the alternatives that lose to it. When a decision moves, the

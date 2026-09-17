@@ -20,7 +20,7 @@ const HOUR_MS = 3_600_000;
  * Tabs left open for a simulated week, mostly idle: one chunk and one write an hour to show the port
  * is still shared.
  *
- * Who is still there is told by Web Locks, not by messages (ADR-0041), so an idle week costs the bus
+ * Who is still there is told by Web Locks, not by messages (ADR-0024), so an idle week costs the bus
  * nothing on either transport - which the numbers show.
  */
 describe.skipIf(!IS_EXTREME).each(TRANSPORT_MODES)('a simulated week (%s)', (transport) => {

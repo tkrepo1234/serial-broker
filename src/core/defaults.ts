@@ -17,7 +17,7 @@ export type NormalizedEncodingSettings = Required<EncodingSettings>;
 /** Effective receive settings, with every optional field resolved. */
 export type NormalizedReceiveSettings = Required<ReceiveSettings>;
 
-/** What auto mode resolves to: a USB identity, or the absence of one (ADR-0036). */
+/** What auto mode resolves to: a USB identity, or the absence of one (ADR-0022). */
 export type ResolvedDevice =
   | { readonly kind: 'usb'; readonly vendorId: number; readonly productId: number }
   | { readonly kind: 'non-usb' };
@@ -26,11 +26,11 @@ export type ResolvedDevice =
  * A validated device filter.
  *
  * Discriminated rather than "optional IDs", so that no code can read a vendor ID that a
- * configuration does not have. See ADR-0036.
+ * configuration does not have. See ADR-0022.
  *
  * `auto` keeps its resolution beside the mode rather than becoming the device it resolved to: the
  * configuration stays one that follows the tab holding the port, and a later `setup()` in auto
- * mode never conflicts with it (ADR-0036).
+ * mode never conflicts with it (ADR-0022).
  */
 export type NormalizedDeviceFilter =
   | ResolvedDevice
@@ -62,7 +62,7 @@ export interface NormalizedConfiguration {
   readonly encoding: NormalizedEncodingSettings;
   readonly receive: NormalizedReceiveSettings;
   readonly remember: boolean;
-  /** How many tabs may use the configuration at once; `Infinity` for no limit (ADR-0025). */
+  /** How many tabs may use the configuration at once; `Infinity` for no limit (ADR-0017). */
   readonly maxTabs: number;
 }
 
@@ -75,7 +75,7 @@ export const DEFAULT_SERIAL_SETTINGS: Omit<NormalizedSerialSettings, 'baudRate'>
   flowControl: 'none',
 };
 
-/** Defaults for {@link ConnectionSettings}. Rationale for each value is in ADR-0010. */
+/** Defaults for {@link ConnectionSettings}. Rationale for each value is in ADR-0008. */
 export const DEFAULT_CONNECTION_SETTINGS: NormalizedConnectionSettings = {
   initialDelayMs: 250,
   factor: 2,
@@ -99,7 +99,7 @@ export const DEFAULT_RECEIVE_SETTINGS: NormalizedReceiveSettings = {
   maxWaitMs: 500,
 };
 
-/** Defaults for {@link EncodingSettings}. See ADR-0015. */
+/** Defaults for {@link EncodingSettings}. See ADR-0013. */
 export const DEFAULT_ENCODING_SETTINGS: NormalizedEncodingSettings = {
   encoding: 'utf-8',
   decodeText: false,

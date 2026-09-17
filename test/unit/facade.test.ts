@@ -20,7 +20,7 @@ import { fieldsOfEvent, recordingLogger } from '../harness/recording-logger.js';
 /**
  * Puts the harness's Web Serial and Web Locks fakes where a browser puts the real ones.
  *
- * The rest of the suite injects its environment (ADR-0014), but the singleton builds its own
+ * The rest of the suite injects its environment (ADR-0012), but the singleton builds its own
  * from globals on first use - so the same fakes a harness tab is wired to are installed as
  * `navigator.serial` and `navigator.locks`, for one page with one granted device. Everything
  * else is stubbed only as far as building an environment needs: without `SharedWorker` the

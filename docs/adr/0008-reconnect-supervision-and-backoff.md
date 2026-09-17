@@ -1,4 +1,4 @@
-# ADR-0010: Supervise the connection with bounded exponential backoff
+# ADR-0008: Supervise the connection with bounded exponential backoff
 
 - **Status:** Accepted
 
@@ -35,7 +35,7 @@ Defaults: `initialDelayMs: 250`, `factor: 2`, `maxDelayMs: 30000`, `jitter: 0.5`
 `maxAttempts: Infinity`, and **attempt 0 is not delayed** - a power-cycled device is usually
 back within one event-loop turn. The counter resets only after a connection has been **stable**
 for `stableAfterMs` (default 5 s, measured on the monotonic clock,
-[ADR-0014](./0014-dependency-injection-of-the-environment.md)), so a device that accepts `open()`
+[ADR-0012](./0012-dependency-injection-of-the-environment.md)), so a device that accepts `open()`
 and immediately drops does not produce a tight loop.
 
 **Rules that make it precise.**
@@ -66,7 +66,7 @@ and immediately drops does not produce a tight loop.
 - **`connection.autoReconnect`** (default `true`). With `false`, a lost connection or failed attempt
   ends in `failed` with its error, nothing is scheduled, and a device plugged in again does not
   revive it. The errors the supervisor reports for them carry `isRetryable: false`, whatever their
-  code, because nothing retries them ([ADR-0012](./0012-error-model.md)). A configuration that never
+  code, because nothing retries them ([ADR-0010](./0010-error-model.md)). A configuration that never
   connected still connects when its device appears: that is the first connection the application
   asked for.
 - **A handover does not revive a failed configuration.** With `autoReconnect: false`, a tab that
@@ -80,7 +80,7 @@ and immediately drops does not produce a tight loop.
   counter in whichever tab it is called - a tab that does not hold the port sends `status-request`
   with `retry: true`, and the holder retries. A working or reconnecting connection is left alone.
 - A write the device has not taken does not end the connection
-  ([ADR-0013](./0013-write-ordering-and-delivery-semantics.md)).
+  ([ADR-0011](./0011-write-ordering-and-delivery-semantics.md)).
 
 ## Alternatives considered
 

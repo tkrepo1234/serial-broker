@@ -1,4 +1,4 @@
-# ADR-0014: Inject the browser environment, with a monotonic and a wall clock
+# ADR-0012: Inject the browser environment, with a monotonic and a wall clock
 
 - **Status:** Accepted
 
@@ -68,7 +68,7 @@ a dozen independent simulated tabs.
 - **Global mocking with `vi.stubGlobal`.** One global set per process means no multi-tab test,
   which is the entire point of this library. Fatal.
 - **Testing only against real Chromium via Playwright.** Cannot produce the failure interleavings
-  that matter. Retained as a layer on top ([ADR-0035](./0035-browser-tests-with-playwright.md)).
+  that matter. Retained as a layer on top ([ADR-0021](./0021-browser-tests-with-playwright.md)).
 - **Injecting each dependency separately into each class.** The parameter lists grow without bound
   and every new dependency becomes a mechanical refactor. One environment object is simpler.
 - **One clock reading, clamping negative differences.** Hides half the problem: a clock set forward

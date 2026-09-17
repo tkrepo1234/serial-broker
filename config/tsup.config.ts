@@ -19,18 +19,18 @@ const common = {
  * Every published file is named after the package, not after the entry file it was built from:
  * `serial-broker.js`, `serial-broker.min.js`, `serial-broker.global.js`,
  * `serial-broker.worker.js`. Someone copying one of these onto a web server can see what it is,
- * which a name like `index.min.js` does not say (ADR-0043). The entry *keys* below carry those
+ * which a name like `index.min.js` does not say (ADR-0026). The entry *keys* below carry those
  * names; the source files keep the conventional `src/index.ts` and `src/diagnostics.ts`, and
  * `scripts/entry-declarations.mjs` renames the two declarations `tsc` names after them.
  *
  * Four entry points, deliberately:
  *
  * - `index` is the library consumed by the application.
- * - `diagnostics` is the read-only observer behind `serial-broker/diagnostics` (ADR-0018). It
+ * - `diagnostics` is the read-only observer behind `serial-broker/diagnostics` (ADR-0014). It
  *   shares no state with `index` by design, so bundling it separately duplicates nothing that
  *   matters.
  * - `global.ts` and `global-diagnostics.ts` are the same two surfaces as classic scripts, for a
- *   page that loads the library with `<script src>` and writes no modules at all (ADR-0043).
+ *   page that loads the library with `<script src>` and writes no modules at all (ADR-0026).
  *   They are built as IIFEs that put one global each on the page and export nothing.
  * - `serial-broker.worker` is the broker script. It must be a separately addressable file,
  *   because a `SharedWorker` is identified by its script URL: a bundled-in `Blob` URL would
@@ -71,7 +71,7 @@ export default defineConfig([
         // scripts/import-meta-stand-in.mjs for why the replacement throws instead of guessing.
         options.define = { ...options.define, 'import.meta.url': 'cjsImportMeta.url' };
         // Resolved from the working directory - the repository root, where the npm script runs -
-        // not from this file's directory (ADR-0042), as `entry` above is.
+        // not from this file's directory (ADR-0025), as `entry` above is.
         options.inject = [...(options.inject ?? []), 'scripts/import-meta-stand-in.mjs'];
       }
     },

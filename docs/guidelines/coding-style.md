@@ -79,7 +79,7 @@ Every source file follows this order, top to bottom:
   package's consumers only; nothing inside the library imports through them. The two exceptions
   are `src/global.ts` and `src/global-diagnostics.ts`, the classic script builds' entry points:
   they are consumers, repackaging an entry point's surface onto one global, and taking it from the
-  entry point is what makes the two the same surface by construction (ADR-0043).
+  entry point is what makes the two the same surface by construction (ADR-0026).
 
 ## Language rules
 

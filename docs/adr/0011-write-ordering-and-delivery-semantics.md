@@ -1,4 +1,4 @@
-# ADR-0013: Per-participant write ordering with at-most-once delivery
+# ADR-0011: Per-participant write ordering with at-most-once delivery
 
 - **Status:** Accepted
 
@@ -18,7 +18,7 @@ be executed twice - and for a device that dispenses, cuts, prints or moves somet
 is materially worse than zero times.
 
 The platform adds two facts, which the emulator suite pins in Chromium on Windows
-([ADR-0035](./0035-browser-tests-with-playwright.md)). A write that fits the port's transmit
+([ADR-0021](./0021-browser-tests-with-playwright.md)). A write that fits the port's transmit
 buffer (`serial.bufferSize`, 255 bytes by default) resolves at once, although the device took
 nothing. And a write the device does not take cannot be withdrawn: `writer.abort()` never settles
 while the operating system's write is pending, `port.close()` then never settles either, and
@@ -50,7 +50,7 @@ the outcome:
   without a result, and the library **cannot** determine whether the bytes reached the device. It
   does **not** retry it.
 - **`WRITE_QUEUE_FULL`:** the tab holding the port already holds `MAX_WAITING_WRITES` writes or
-  `MAX_WAITING_WRITE_BYTES` of payload ([ADR-0031](./0031-bound-and-rate-limit-what-the-bus-can-cost-a-tab.md)).
+  `MAX_WAITING_WRITE_BYTES` of payload ([ADR-0019](./0019-bound-and-rate-limit-what-the-bus-can-cost-a-tab.md)).
   Nothing of it was written, and it is safe to send again. The bound counts every tab's writes
   alike, the holder's own included, so whether a `send()` works never depends on which tab holds
   the port.
@@ -74,7 +74,7 @@ its setting is its own, and no clock of another context can tell when it ran out
 - The tab holding the port begins the write only on `true`, and takes the answer only from the tab
   that issued the write; an approval from any other context is ignored (SECURITY.md). A `write-ready`
   is answered only when it comes from the context speaking for the term the write was addressed to
-  ([ADR-0030](./0030-hold-a-web-lock-for-every-term-of-holding-the-port.md)).
+  ([ADR-0018](./0018-hold-a-web-lock-for-every-term-of-holding-the-port.md)).
 - A write that finds the port closed after it was approved has not begun, and is answered
   `NOT_CONNECTED`. The issuer takes that, from the addressed term, as the end of the approval, and
   hands the write on; the next term asks again.
@@ -82,7 +82,7 @@ its setting is its own, and no clock of another context can tell when it ran out
   received the request, in its queue and for the answer together, and fails a write not begun by
   then with `WRITE_TIMEOUT` and `started: false`. An issuer that has gone, or is frozen or busy,
   holds the queue no longer than a write of the holder's own would wait, and a peer's setting never
-  keeps a payload here longer ([ADR-0031](./0031-bound-and-rate-limit-what-the-bus-can-cost-a-tab.md)).
+  keeps a payload here longer ([ADR-0019](./0019-bound-and-rate-limit-what-the-bus-can-cost-a-tab.md)).
   A holder that lets go of the port stops waiting at once and answers `NOT_CONNECTED`, so the write
   is handed on rather than holding the release.
 - The holder's own writes are decided the same way, without a message: it asks its own
@@ -103,7 +103,7 @@ the port it knows of, holds it until a term exists, decides whether it may begin
 stops being repeatable, settles it on `write-result`, and decides its fate when the addressed term
 ends. Only that term writes it; a term with no open connection answers `NOT_CONNECTED`, which
 returns the write to wait for the next term. Who may speak about a write, and when a term has
-ended, is [ADR-0030](./0030-hold-a-web-lock-for-every-term-of-holding-the-port.md). The tab holding
+ended, is [ADR-0018](./0018-hold-a-web-lock-for-every-term-of-holding-the-port.md). The tab holding
 the port records the requests it accepted in its term (`AcceptedWrites`), so a request handed to it
 twice is answered with its known outcome and never written twice.
 
@@ -119,7 +119,7 @@ device does not end the connection:
   since when a write has been stuck.
 - When the device takes the chunk, the queue carries on with no reconnection and no status change.
   When the chunk fails instead, that is a lost connection: `WRITE_FAILED` and reconnection
-  ([ADR-0010](./0010-reconnect-supervision-and-backoff.md)).
+  ([ADR-0008](./0008-reconnect-supervision-and-backoff.md)).
 
 A write the device rejects outright still ends the connection: an errored stream holds no write, so
 closing it works.

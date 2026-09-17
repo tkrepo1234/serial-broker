@@ -8,7 +8,7 @@
  * catches that - which is the first test of each build. A classic script global that is missing
  * part of the surface leaves its page unable to call the library: `scripts/check-dist.mjs` compares
  * the global with the ES module's exports after every build, and the second test of the classic
- * build checks the same thing in a browser, where `window` is real. See ADR-0035 and ADR-0043.
+ * build checks the same thing in a browser, where `window` is real. See ADR-0021 and ADR-0026.
  */
 
 import { expect, test } from '@playwright/test';
