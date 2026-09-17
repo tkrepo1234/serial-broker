@@ -123,6 +123,37 @@ test('reads and writes hex, and keeps the display options between visits', async
   await expect(tab.locator(`${ID}displaySummary`)).toContainText('hex');
 });
 
+test('keeps the log the size it is, however much arrives and however long a line is', async ({
+  context,
+}) => {
+  await installLoopback(context, true);
+  const tab = await ExampleTab.open(context, UI);
+  await tab.expectOpenWithoutClick();
+
+  const log = tab.locator('#received');
+  const before = await log.boundingBox();
+
+  // Many lines, a line too long to fit, and a word too long to break at a space.
+  for (let line = 0; line < 40; line += 1) {
+    await tab.locator(UI.sendInput).fill(`line ${String(line)} ${'ABCDEFGHIJ '.repeat(12)}`);
+    await tab.locator(UI.sendButton).click();
+  }
+  await tab.sendLine('X'.repeat(400));
+
+  // The box is where it was and as large as it was: what does not fit scrolls inside it, the newest
+  // line is in view, and the line to type into has not been pushed out of the window.
+  expect(await log.boundingBox()).toEqual(before);
+  expect(
+    await log.evaluate(
+      (element) => element.scrollHeight - element.scrollTop - element.clientHeight,
+    ),
+  ).toBeLessThan(4);
+  expect(
+    await tab.page.evaluate(() => document.documentElement.scrollHeight <= window.innerHeight),
+  ).toBe(true);
+  await expect(tab.locator(UI.sendInput)).toBeInViewport();
+});
+
 test('changes the baud rate in the settings dialog and connects again with it', async ({
   context,
 }) => {
