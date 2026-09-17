@@ -25,6 +25,17 @@ setting can take them away.
 npm install serial-broker
 ```
 
+**Before 1.0 the package is not on the npm registry.** Every [release](https://github.com/tkrepo1234/serial-broker/releases) attaches it as
+`serial-broker-<version>.tgz`, and npm installs it from the file, with the same result:
+
+```sh
+npm install ./serial-broker-<version>.tgz
+```
+
+Wherever this documentation or an example says `npm install serial-broker`, that is the command to
+use until then. A page without a package manager takes `serial-broker-<version>-browser.zip` from
+the same release; see [Deploying](deploying.md).
+
 The package contains:
 
 | Import path                             | File in `dist/`                         | What it is                                                                       |

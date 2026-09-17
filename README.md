@@ -48,9 +48,16 @@ sendButton.addEventListener('click', () => void SerialBroker.send('CardReader', 
 
 ## Install
 
+serial-broker is not on npm before 1.0. Every [release](https://github.com/tkrepo1234/serial-broker/releases) attaches the package, and npm
+installs it from the file:
+
 ```sh
-npm install serial-broker
+npm install ./serial-broker-<version>.tgz
 ```
+
+Where the documentation and the examples say `npm install serial-broker`, that is this command until
+1.0. A page without a package manager takes `serial-broker-<version>-browser.zip` from the same
+release instead.
 
 Serve `serial-broker.worker.js` from the application's origin, and name its URL before the first
 `setup()`: `SerialBroker.configure({ workerUrl })`. **Requirements:** a Chromium-based desktop browser,

@@ -59,6 +59,9 @@ usbip-win2 - in Microsoft Edge on Windows. Before 1.0 a minor version may break 
   `serial-broker.min.js`, `serial-broker.d.ts`, `serial-broker.global.js`,
   `serial-broker.diagnostics.*` and `serial-broker.worker.js`, each with its source map. Every
   release also attaches `serial-broker-<version>-browser.zip` for a page with no package manager.
+- **Not on the npm registry before 1.0.** A release attaches `serial-broker-<version>.tgz`, and
+  `npm install ./serial-broker-<version>.tgz` installs it; checked with a project of its own, where
+  the ES module, the CommonJS build and the types resolve under `node16` and `bundler`.
 - **A read-only diagnostics entry point**, `serial-broker/diagnostics`, and **a debugging surface**
   shipped as static content in `dist/debug/` under its own content security policy (ADR-0018,
   ADR-0019). It lists every configuration of the origin, connects, edits and disconnects, and asks
