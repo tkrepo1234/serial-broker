@@ -223,6 +223,40 @@ test('reads and writes hex, and keeps the display options between visits', async
   await expect(tab.locator(`${ID}displaySummary`)).toContainText('hex');
 });
 
+test('walks what was sent with the arrow keys, each entry in its mode, and keeps the focus', async ({
+  context,
+}) => {
+  const tab = await open(context);
+  await connect(tab);
+  const input = tab.locator(UI.sendInput);
+
+  await tab.sendLine('AS TEXT');
+  await tab.locator(`${ID}sendMode`).click();
+  await tab.page.getByRole('option', { name: 'Hex' }).click();
+  await input.fill('41 42');
+  await tab.locator(UI.sendButton).click();
+  await expect(tab.locator('#received')).toContainText('AB');
+
+  // Up: the hex entry, in hex. Up again: the text entry - and the mode follows it, while the field
+  // keeps the focus. The keys used to reach the toolbar, which moved the focus to the select.
+  await input.click();
+  await input.press('ArrowUp');
+  await expect(input).toHaveValue('41 42');
+  await expect(input).toBeFocused();
+  await input.press('ArrowUp');
+  await expect(input).toHaveValue('AS TEXT');
+  await expect(tab.locator(`${ID}sendMode`)).toContainText('Text');
+  await expect(input).toBeFocused();
+  await input.press('ArrowDown');
+  await expect(input).toHaveValue('41 42');
+  await expect(tab.locator(`${ID}sendMode`)).toContainText('Hex');
+  await expect(input).toBeFocused();
+  // Past the newest entry: the empty line, in the mode that is set.
+  await input.press('ArrowDown');
+  await expect(input).toHaveValue('');
+  await expect(input).toBeFocused();
+});
+
 test('keeps the log the size it is, however much arrives and however long a line is', async ({
   context,
 }) => {

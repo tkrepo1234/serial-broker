@@ -61,7 +61,7 @@ sap.ui.define(
         /** @type {unknown} */ (undefined)
       ),
       _status: 'idle',
-      _history: /** @type {string[]} */ ([]),
+      _history: /** @type {{ text: string, mode: string }[]} */ ([]),
       _historyAt: 0,
       _subscriptions: /** @type {(() => void)[]} */ ([]),
       _connecting: /** @type {Promise<void> | undefined} */ (undefined),
@@ -80,7 +80,7 @@ sap.ui.define(
 
         /** @type {TerminalPreferences} */
         this._preferences = Preferences.load();
-        /** Lines typed earlier, newest last; up and down walk it. @type {string[]} */
+        /** What was sent earlier, newest last, each with the mode it was typed in; up and down walk it. */
         this._history = [];
         this._historyAt = 0;
         /** Undoing what `_connectOnce` subscribed, so connecting again does not subscribe twice. */
@@ -581,7 +581,7 @@ sap.ui.define(
           this._showError(error);
           return;
         }
-        this._history.push(text);
+        this._history.push({ text, mode: this._preferences.sendMode });
         this._historyAt = this._history.length;
         this._ui.setProperty('/sendText', '');
         // Nothing is appended by the library: the line ending is this page's decision, above.
@@ -593,9 +593,23 @@ sap.ui.define(
        * @param {-1 | 1} step
        */
       _walkHistory: function (event, step) {
+        // The keys are this field's alone. Left to travel on, they reach the toolbar the field sits
+        // in, which moves the focus to its neighbour on an arrow key - and the neighbour is the
+        // Text/Hex select, so walking the history threw the user out of the field they type in.
         event.preventDefault();
+        event.stopPropagation();
+        /** @type {{ setMarked?: () => void }} */ (event).setMarked?.();
+
         this._historyAt = Math.min(this._history.length, Math.max(0, this._historyAt + step));
-        this._ui.setProperty('/sendText', this._history[this._historyAt] ?? '');
+        const entry = this._history[this._historyAt];
+        this._ui.setProperty('/sendText', entry?.text ?? '');
+        // An entry comes back the way it was sent: bytes typed as hex are hex again, without the
+        // user touching the select - and without the select taking the focus.
+        if (entry !== undefined && entry.mode !== this._preferences.sendMode) {
+          this._ui.setProperty('/preferences/sendMode', entry.mode);
+          this._savePreferences();
+        }
+        /** @type {import('sap/m/Input').default | undefined} */ (this.byId('sendInput'))?.focus();
       },
 
       // --- Experimental file transfer -----------------------------------------------------------
