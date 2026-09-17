@@ -110,7 +110,9 @@ it proves the software path, not the electrical one.
 
 1. `npm run debug` — builds the package and serves `dist/` over `http://localhost`. Web Serial
    refuses anything that is not a secure context, so a LAN address over plain HTTP will not do.
-2. Open `http://localhost:<port>/debug/` in Chrome — the debugging surface. Its list shows every
+2. Open `http://localhost:<port>/debug/index.html` in Chrome — the debugging surface. Name the file:
+   `/debug/` lists the directory, and `/debug` is one directory up from where the page lives, so
+   the page's own `debug.css` would not be found. Its list shows every
    configuration; choosing one opens its detail view, which lists the tabs running it and which of
    them holds the port. Use it to confirm the failover steps rather than inferring them.
 3. Attach a USB-serial device. A CH340 adapter (`0x1a86` / `0x7523`) with its TX and RX pins
