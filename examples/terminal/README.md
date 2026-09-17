@@ -4,8 +4,9 @@ A serial terminal: open a port, watch what the device says, type back. It is the
 application built on [serial-broker](../../README.md), and the one to read first — everything a
 terminal is expected to do, and nothing else.
 
-Static HTML, an import map and one script the browser loads as it is. No bundler, no build step,
-no framework, no dependencies at run time.
+Static HTML and two plain scripts the browser loads as they are. No bundler, no build step, no
+framework, no dependencies at run time - and **no web server**: the folder runs when
+`index.html` is opened from a file.
 
 ![The window: a header with the connection, a log, and an input line.](#)
 
@@ -65,10 +66,10 @@ Serial stand-in — a loopback adapter that echoes everything sent — before th
 | ------------------- | -------------------------------------------------------------------- |
 | `npm start`         | Serves the terminal at <http://localhost:8161/>.                     |
 | `npm run typecheck` | `tsc` with `checkJs` over the page, against the library's own types. |
-| `npm run build`     | Assembles `dist/`: the page and the four library files it loads.     |
+| `npm run build`     | Assembles `dist/`: the page and the library files it loads.          |
 
-Chrome or Edge is required — Web Serial exists nowhere else — and a secure context, which
-`localhost` counts as.
+Chrome or Edge is required — Web Serial exists nowhere else — and a secure context, which a page
+opened from a file and `localhost` both count as.
 
 ## Deploying it
 
@@ -80,27 +81,34 @@ dist/
 ├── terminal.css
 ├── terminal.js
 └── serial-broker/
-    ├── serial-broker.min.js
-    ├── serial-broker.min.js.map
+    ├── serial-broker.global.js
+    ├── serial-broker.global.js.map
     ├── serial-broker.worker.js
     └── serial-broker.worker.js.map
 ```
 
-Copy that folder to any web server. Two things matter, and both are in the page already:
+**Open `dist/index.html` in Chrome or Edge** - a double click will do - or copy the folder to a
+station, or to any web server. Every path in the page is relative, so the folder works wherever it
+lies. Three things make that possible, and all are in the page already:
 
-- The **import map** in `index.html` maps the bare specifier `serial-broker` to
-  `/serial-broker/serial-broker.min.js`. Move the folder, and that one line moves with it.
-- **`configure({ workerUrl })`** names `/serial-broker/serial-broker.worker.js`. A `SharedWorker`
-  is identified by the URL of its script, so every tab has to name the same one, and it has to be
-  served from this origin. Without it the tabs would each get a worker of their own and stop
-  sharing the port.
+- The library is loaded as a **classic script**, `serial-broker.global.js`, which puts one global on
+  the page. A page opened from a file may load neither an ES module nor an import map.
+- **`configure({ workerUrl })`** names `serial-broker/serial-broker.worker.js` next to the page. A
+  `SharedWorker` is identified by the URL of its script, so every tab has to name the same one -
+  and every tab of this page does.
+- Opened from a file, the browser starts **no `SharedWorker`** at all. The library notices and
+  coordinates the tabs over a `BroadcastChannel` instead; two tabs still share one port.
+
+One thing to know when several applications are opened from files on one machine: to the browser
+they all belong to the same place, so they share configuration names. This terminal's is
+`Terminal`.
 
 ## Taking it into an application of your own
 
 `public/terminal.js` is the whole integration, and it is four calls:
 
 ```js
-SerialBroker.configure({ workerUrl: '/serial-broker/serial-broker.worker.js' });
+SerialBroker.configure({ workerUrl: WORKER_URL }); // serial-broker/serial-broker.worker.js, beside the page
 await SerialBroker.setup('Terminal', { device: { any: true }, serial: { baudRate: 9600 } });
 SerialBroker.subscribe('Terminal', 'onReceive', (event) => show(event.text));
 await SerialBroker.send('Terminal', new TextEncoder().encode('PING\r\n'));

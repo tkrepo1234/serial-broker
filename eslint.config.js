@@ -13,6 +13,9 @@ export default defineConfig(
       'dist/**',
       '.claude/**',
       'coverage/**',
+      // What Playwright leaves behind: traces, and the folder the terminal's smoke test assembles to
+      // open from a file - copies of built files, not sources.
+      'test-results/**',
       'node_modules/**',
       // The example applications are applications with their own toolchains and TypeScript
       // configurations (examples/README.md). Each framework answers to conventions of its own -

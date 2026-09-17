@@ -19,14 +19,14 @@ const LIBRARY = path.join(ROOT, 'node_modules', 'serial-broker', 'dist');
 
 /** What the page loads at run time, by the name the import map and `configure()` use. */
 const FILES = [
-  'serial-broker.min.js',
-  'serial-broker.min.js.map',
+  'serial-broker.global.js',
+  'serial-broker.global.js.map',
   'serial-broker.worker.js',
   'serial-broker.worker.js.map',
 ];
 
 try {
-  await stat(path.join(LIBRARY, 'serial-broker.min.js'));
+  await stat(path.join(LIBRARY, 'serial-broker.global.js'));
 } catch {
   process.stderr.write(
     'node_modules/serial-broker/dist/ is missing or incomplete. Run `npm run build` in the ' +
@@ -44,4 +44,6 @@ for (const file of FILES) {
 }
 
 process.stdout.write(`Built ${path.relative(process.cwd(), OUT)}\n`);
-process.stdout.write('Copy that folder to a web server; it needs no Node at run time.\n');
+process.stdout.write(
+  'Open dist/index.html in Chrome or Edge, or copy the folder to a web server.\n',
+);

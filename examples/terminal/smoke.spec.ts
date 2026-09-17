@@ -4,6 +4,10 @@
  * examples/terminal/smoke.spec.ts`. See examples/README.md for the contract.
  */
 
+import { cp } from 'node:fs/promises';
+import path from 'node:path';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+
 import { expect, test } from '@playwright/test';
 
 import { ExampleTab, installLoopback, USUAL_IDS, type ExampleUi } from '../smoke-support.js';
@@ -94,4 +98,38 @@ test('reads and writes hex, and keeps the display options between visits', async
   await expect(tab.locator('#display-summary')).toContainText('hex');
 
   tab.expectQuiet();
+});
+
+test('runs from a folder opened as a file, with no web server, and shares the port between tabs', async ({
+  context,
+}, testInfo) => {
+  // What `npm run build` assembles, put together here so the test needs no build of its own: the
+  // page, and the two library files it loads, side by side in one folder.
+  const folder = testInfo.outputPath('terminal');
+  const here = path.dirname(fileURLToPath(import.meta.url));
+  await cp(path.join(here, 'public'), folder, { recursive: true });
+  for (const file of ['serial-broker.global.js', 'serial-broker.worker.js']) {
+    await cp(
+      path.join(here, 'node_modules', 'serial-broker', 'dist', file),
+      path.join(folder, 'serial-broker', file),
+    );
+  }
+  const url = pathToFileURL(path.join(folder, 'index.html')).href;
+
+  await installLoopback(context, true);
+  const tabs = [
+    await ExampleTab.open(context, { ...UI, url }),
+    await ExampleTab.open(context, { ...UI, url }),
+  ];
+  for (const tab of tabs) {
+    await tab.expectOpenWithoutClick();
+  }
+
+  // A page opened from a file may start no SharedWorker; the library coordinates the tabs over a
+  // BroadcastChannel instead. What the operator sees is the same: one port, both tabs.
+  await tabs[1]?.sendLine('HELLO FROM A FILE');
+  for (const tab of tabs) {
+    await expect(tab.locator('#received')).toContainText('HELLO FROM A FILE');
+    await expect(tab.locator('#error')).toBeHidden();
+  }
 });

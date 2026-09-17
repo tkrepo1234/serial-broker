@@ -7,8 +7,9 @@ is tested in Chromium and in Microsoft Edge on the desktop. Firefox and Safari d
 Serial. Chrome for Android is [not a target](known-limits.md#chrome-for-android-is-not-a-target).
 `isSupported()`, [below](#checking-support-at-run-time), tells at run time.
 
-**A secure context.** Browsers offer Web Serial and Web Locks only on pages served over HTTPS, or
-from `localhost` during development.
+**A secure context.** Browsers offer Web Serial and Web Locks only on pages served over HTTPS, from
+`localhost` during development - or [opened from a file](#a-page-opened-from-a-file), which needs
+no server at all.
 
 **One origin.** Tabs share a port only with tabs of the same origin — scheme, host and port. Tabs of
 different origins never see each other.
@@ -55,6 +56,22 @@ source map beside it.
 
 It also ships a debugging surface under `dist/debug/`, as static files that nothing serves unless
 you do. See [The debugging surface](diagnostics.md#the-debugging-surface).
+
+### A page opened from a file
+
+A folder with the page and the library files in it, opened with a double click, works: Chromium
+counts a page loaded from `file://` as a secure context, offers it Web Serial, and lets the pages
+opened from files share Web Locks, a `BroadcastChannel` and `localStorage`. Two things differ from
+a served page:
+
+- **Use the classic script build**, `serial-broker.global.js`, with relative paths. A page opened
+  from a file may load neither an ES module nor an import map.
+- **No `SharedWorker` is started** - the browser refuses one there - so the tabs coordinate over the
+  `BroadcastChannel` and log `environment.transport-fallback` once. Naming the worker URL is still
+  right: the same folder then works unchanged when it is served.
+
+[The terminal example](examples/index.md) runs this way. One limit comes with it, and it is in
+[Known limits](known-limits.md#pages-opened-from-files-share-one-origin).
 
 ### TypeScript
 

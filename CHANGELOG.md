@@ -10,6 +10,22 @@ different protocol versions do not coordinate with each other. It is noted whene
 
 ## [Unreleased]
 
+### Added
+
+- **A page opened from a file works.** `isSupported()` answered `false` and `setup()` raised
+  `WEB_LOCKS_UNAVAILABLE` for a page loaded from `file://`, because its origin reads `null` like a
+  sandboxed frame's. Chromium treats the two differently: between pages opened from files, Web Locks
+  are granted and contended, a `BroadcastChannel` delivers and `localStorage` is shared; only a
+  `SharedWorker` is refused, and the transport falls back from that by itself. A folder copied to a
+  station and opened with a double click is now a supported place to run - with the classic script
+  build, since such a page may load no ES module. Measured in Edge 153 against the stand-in and
+  against the Arduino through the browser's own picker.
+
+### Changed
+
+- **The terminal example needs no web server.** It loads the classic script build by relative
+  paths, so `examples/terminal/dist/` runs from wherever it lies, opened as a file or served.
+
 ## [0.1.0-alpha.1] - 2026-09-17
 
 The first release. Nothing has been published under this name, so this section describes what the

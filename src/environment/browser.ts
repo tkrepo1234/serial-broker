@@ -56,9 +56,20 @@ export function isSupported(): boolean {
  * `true` in a context whose origin is opaque: a sandboxed iframe without `allow-same-origin`, for
  * one. `navigator.locks` exists there, but rejects every request with a `SecurityError`, so no tab
  * could ever hold the port, and the status would stay `idle` with nothing said.
+ *
+ * A page opened from a file is the exception. Its origin also serialises as `null`, but Chromium
+ * gives the pages of `file:` one storage partition between them: Web Locks are granted and
+ * contended across tabs, a `BroadcastChannel` reaches them, and `localStorage` is shared
+ * (measured in Edge 153, 2026-09-17). Only a `SharedWorker` is refused there, and the
+ * transport falls back from that by itself. So a folder on a station, opened with a double click,
+ * is a supported place to run.
  */
 function hasOpaqueOrigin(): boolean {
-  return (globalThis as { readonly origin?: unknown }).origin === 'null';
+  const scope = globalThis as {
+    readonly origin?: unknown;
+    readonly location?: { readonly protocol?: unknown };
+  };
+  return scope.origin === 'null' && scope.location?.protocol !== 'file:';
 }
 
 /**

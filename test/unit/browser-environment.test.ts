@@ -146,6 +146,14 @@ describe('isSupported', () => {
     expect(isSupported()).toBe(false);
   });
 
+  it('is true for a page opened from a file, whose origin reads null but whose locks work', () => {
+    stubBrowser();
+    vi.stubGlobal('origin', 'null');
+    vi.stubGlobal('location', { protocol: 'file:' });
+
+    expect(isSupported()).toBe(true);
+  });
+
   it.each([
     {
       platform: 'a SharedWorker and a BroadcastChannel',
@@ -224,6 +232,14 @@ describe('createBrowserEnvironment', () => {
         context: { opaqueOrigin: true },
       }),
     );
+  });
+
+  it('builds for a page opened from a file', () => {
+    stubBrowser();
+    vi.stubGlobal('origin', 'null');
+    vi.stubGlobal('location', { protocol: 'file:' });
+
+    expect(() => createBrowserEnvironment()).not.toThrow();
   });
 
   it('builds in a context with an ordinary origin', () => {

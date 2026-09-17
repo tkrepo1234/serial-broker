@@ -89,6 +89,16 @@ the port then end in `WRITE_TIMEOUT`, and what the device sends reaches only the
 port, until the page is reloaded. Only a worker that never answers when a tab connects is caught, by
 the handshake deadline.
 
+## Pages opened from files share one origin
+
+To the browser, every page opened from a file belongs to the same place, whatever folder it lies
+in. Two different applications opened from files therefore share their configuration names, their
+remembered configurations and the locks that decide who holds a port: a configuration called
+`Scale` in one is the configuration called `Scale` in the other.
+
+**What to do:** give configurations names that say which application they belong to, or serve the
+applications from a web server, where each origin is its own.
+
 ## Chrome for Android is not a target
 
 serial-broker is built for operator stations: desktop Chromium and Microsoft Edge, which is where it

@@ -121,7 +121,7 @@ const server = createServer((request, response) => {
 });
 
 try {
-  await readFile(path.join(LIBRARY_DIRECTORY, 'serial-broker.min.js'));
+  await readFile(path.join(LIBRARY_DIRECTORY, 'serial-broker.global.js'));
 } catch {
   process.stderr.write(
     'node_modules/serial-broker/dist/ is missing or incomplete. Run `npm run build` in the ' +

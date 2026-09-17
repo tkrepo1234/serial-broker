@@ -9,17 +9,12 @@
     <link rel="stylesheet" href="./terminal.css" />
 
     <!--
-      The only "build": the bare specifier the script imports is mapped to the library file this
-      origin serves. serve.mjs maps /serial-broker/ to node_modules/serial-broker/dist/, so the
-      worker script sits next to the library there.
+      The library as a classic script: one global, `SerialBroker`. Not a module and no import map,
+      because a page opened from a file may load neither - and this page is meant to work from a
+      folder on a station, with no web server. Every path is relative, so the folder can lie
+      anywhere. serve.mjs maps serial-broker/ to node_modules/serial-broker/dist/ in development.
     -->
-    <script type="importmap">
-      {
-        "imports": {
-          "serial-broker": "/serial-broker/serial-broker.min.js"
-        }
-      }
-    </script>
+    <script src="./serial-broker/serial-broker.global.js"></script>
   </head>
 
   <body>
@@ -128,7 +123,15 @@
         </p>
 
         <div class="grid">
-          <label>Baud rate<input id="baud-rate" name="baudRate" list="baud-rates" /></label>
+          <label
+            >Baud rate<input
+              id="baud-rate"
+              name="baudRate"
+              type="text"
+              inputmode="numeric"
+              autocomplete="off"
+              list="baud-rates"
+          /></label>
           <datalist id="baud-rates">
             <option value="9600"></option>
             <option value="19200"></option>
@@ -210,6 +213,6 @@
       </form>
     </dialog>
 
-    <script type="module" src="./terminal.js"></script>
+    <script src="./terminal.js"></script>
   </body>
 </html>
