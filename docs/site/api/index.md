@@ -1,4 +1,4 @@
-# API reference
+# Interface
 
 Everything an application imports from `serial-broker`, generated from the documentation comments
 in the source, so it always matches the version it was built from.

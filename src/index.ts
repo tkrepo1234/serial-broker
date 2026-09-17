@@ -1,6 +1,4 @@
 /**
- * serial-broker - cross-tab Web Serial access for Chromium.
- *
  * Everything exported here is public API covered by SemVer. Anything not exported here is
  * internal and may change in a patch release, even if its own module exports it.
  *

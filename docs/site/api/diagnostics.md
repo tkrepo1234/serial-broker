@@ -1,4 +1,4 @@
-# Diagnostics API reference
+# Diagnostics interface
 
 Everything `serial-broker/diagnostics` exports, generated from the source. This is the entry point
 for tools that show operators what every tab is doing; how to use it is explained in
@@ -7,8 +7,8 @@ for tools that show operators what every tab is doing; how to use it is explaine
 Start with **[`openDiagnostics`](reference/diagnostics/functions/openDiagnostics.md)** and the
 **[`DiagnosticsSnapshot`](reference/diagnostics/interfaces/DiagnosticsSnapshot.md)** it collects.
 
-Nothing here is needed to use a serial device from an application; that API is in the
-[API reference](index.md).
+Nothing here is needed to use a serial device from an application; that is in
+[Interface](index.md).
 
 - **[All exports of `serial-broker/diagnostics`](reference/diagnostics/index.md)**
 

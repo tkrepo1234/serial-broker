@@ -6,7 +6,7 @@ it and writes to it, another tab takes over when that one goes away, and the con
 when the device does.
 
 This is the developer documentation: how to install and use the library, what it promises when tabs
-and devices come and go, every option and error code, and the generated API reference.
+and devices come and go, every option and error code, and the interface, generated from the source.
 
 ```{include} ../../README.md
 :start-after: <!-- landing-snippet:start -->

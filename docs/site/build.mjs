@@ -71,8 +71,9 @@ run(process.execPath, [
   // and a warning would pass CI unnoticed while Sphinx below fails on every one of its own.
   '--treatWarningsAsErrors',
 ]);
-// TypeDoc names each module page after its entry file. Readers know them by the import path.
-retitle('docs/site/api/reference/index/index.md', 'serial-broker');
+// TypeDoc names each module page after its entry file. The main one is what the Interface chapter
+// opens with, so it is its introduction; the other is known by its import path.
+retitle('docs/site/api/reference/index/index.md', 'Introduction');
 retitle('docs/site/api/reference/diagnostics/index.md', 'serial-broker/diagnostics');
 // The interface an application actually calls, named for what it is rather than for its file.
 retitle('docs/site/api/reference/index/interfaces/SerialBrokerApi.md', 'Application API');
