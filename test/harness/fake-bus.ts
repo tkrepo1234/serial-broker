@@ -542,7 +542,7 @@ export class FakeBus {
         ) {
           deliver(tabListener, {
             type: 'welcome',
-            v: PROTOCOL_VERSION - 1,
+            v: PROTOCOL_VERSION + 1,
             from: BROKER_ID,
             to: clientId,
           });

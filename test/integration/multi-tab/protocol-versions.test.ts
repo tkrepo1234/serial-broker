@@ -77,11 +77,11 @@ describe.each(TRANSPORT_MODES)('tabs on different protocol versions (%s)', (tran
 
     // The new tab announced itself, and the tab already open answers, as its library would.
     expect(other.heard).toEqual([versionAnnouncement(PROTOCOL_VERSION, false)]);
-    other.post(versionAnnouncement(PROTOCOL_VERSION - 1, true));
+    other.post(versionAnnouncement(PROTOCOL_VERSION + 1, true));
     await harness.settle();
 
     expect(mismatches(tab).map((event) => event.error.context)).toEqual([
-      { theirVersion: PROTOCOL_VERSION - 1 },
+      { theirVersion: PROTOCOL_VERSION + 1 },
     ]);
   });
 

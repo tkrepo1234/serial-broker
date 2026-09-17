@@ -451,14 +451,14 @@ describe('SharedWorkerTransport, while its script is starting', () => {
 
     // The worker's answer to hello, in its own version (ADR-0024). Such a worker drops everything
     // this tab says, so nothing sent so far reached anyone - as with a script that did not load.
-    port.deliver({ ...WELCOME, v: PROTOCOL_VERSION - 1 });
+    port.deliver({ ...WELCOME, v: PROTOCOL_VERSION + 1 });
 
     expect(ready()).toBe(0);
     expect(loadFailures).toEqual([
       { event: expect.anything() as unknown, reason: 'worker-other-protocol-version' },
     ]);
     expect(decodeFailures).toEqual([
-      { reason: 'version-mismatch', theirVersion: PROTOCOL_VERSION - 1 },
+      { reason: 'version-mismatch', theirVersion: PROTOCOL_VERSION + 1 },
     ]);
     expect(transportErrors).toHaveLength(0);
   });
@@ -467,7 +467,7 @@ describe('SharedWorkerTransport, while its script is starting', () => {
     const { port, loadFailures, decodeFailures } = start();
 
     port.deliver(WELCOME);
-    port.deliver({ ...WELCOME, v: PROTOCOL_VERSION - 1 });
+    port.deliver({ ...WELCOME, v: PROTOCOL_VERSION + 1 });
 
     expect(loadFailures).toHaveLength(0);
     expect(decodeFailures).toHaveLength(1);
@@ -493,7 +493,7 @@ describe('SharedWorkerTransport, while its script is starting', () => {
       { onReady: () => undefined, onLoadFailed: (_event, reason) => loadFailures.push(reason) },
     );
 
-    port.deliver({ ...WELCOME, v: PROTOCOL_VERSION - 1 });
+    port.deliver({ ...WELCOME, v: PROTOCOL_VERSION + 1 });
 
     expect(loadFailures).toEqual([]);
   });

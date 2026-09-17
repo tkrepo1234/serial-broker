@@ -53,7 +53,7 @@ class WorkerPort extends FakeMessagePort {
       return;
     }
     this.deliver({
-      v: this.isOtherVersion ? PROTOCOL_VERSION - 1 : PROTOCOL_VERSION,
+      v: this.isOtherVersion ? PROTOCOL_VERSION + 1 : PROTOCOL_VERSION,
       from: BROKER_ID,
       to: SELF,
       type: 'welcome',
@@ -320,7 +320,7 @@ describe('SharedWorkerTransport, when its worker runs another protocol version',
     expect(worker(workers, 0).closed).toBe(true);
     expect(clock.pendingTimerCount).toBe(0);
     expect(fieldsOfEvent(records, 'transport.worker-other-protocol-version')).toEqual([
-      expect.objectContaining({ theirVersion: PROTOCOL_VERSION - 1 }),
+      expect.objectContaining({ theirVersion: PROTOCOL_VERSION + 1 }),
     ]);
     expect(fieldsOfEvent(records, 'transport.worker-restarted')).toEqual([]);
   });

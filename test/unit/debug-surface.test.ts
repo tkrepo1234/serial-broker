@@ -754,7 +754,7 @@ describe('debugging surface: formatting', () => {
     const lock = (name: string) => ({ name, mode: 'exclusive' as const, browserClientId: 'b' });
     const olderOwnerLock = ownerLockName('Scale').replace(
       `/v${String(PROTOCOL_VERSION)}/`,
-      `/v${String(PROTOCOL_VERSION - 1)}/`,
+      `/v${String(PROTOCOL_VERSION + 1)}/`,
     );
 
     expect(
@@ -771,7 +771,7 @@ describe('debugging surface: formatting', () => {
         PROTOCOL_VERSION,
       ),
     ).toBe(
-      `Scale: held, 2 waiting · Rack/COM 1: held · Scale (protocol ${String(PROTOCOL_VERSION - 1)}): held`,
+      `Scale: held, 2 waiting · Rack/COM 1: held · Scale (protocol ${String(PROTOCOL_VERSION + 1)}): held`,
     );
     expect(
       describeOwnershipLocks({ held: [], pending: [lock(ownerLockName('A'))] }, PROTOCOL_VERSION),

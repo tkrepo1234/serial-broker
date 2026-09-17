@@ -9,8 +9,8 @@ Work that is agreed but not yet started. Ordered by when it becomes relevant, no
 **No tag until Tim says so.** The code base is brought into order first and the release is made
 ready; the version and the date go into the changelog when Tim decides.
 
-- [x] The changelog's Unreleased section reads as the net change since `v0.1.0-alpha.1`, with an
-      Upgrading section, every statement checked against the tag and `main`.
+- [x] The changelog describes the current state rather than a path to it: one unreleased version,
+      every statement checked against `main`.
 - [x] The release workflow runs all of CI before it releases, marks only pre-release versions as
       pre-releases, and has a dry run (`workflow_dispatch`) that uploads notes and package; the dry
       run passed on 2026-09-15.
@@ -39,7 +39,7 @@ Done in the same round:
 - Found while answering the reviewers' questions: a write rejected with `started: false` could still
   be written when tabs ran different `writeTimeoutMs`, or when the request reached the tab holding
   the port late. The tab holding the port now asks the issuing tab before it begins a write from it
-  (protocol version 14, ADR-0013), which also closes the crash exception to at-most-once.
+  (ADR-0013), which also closes the crash exception to at-most-once.
 - The Arduino suite's first test could not open COM3 on 2026-09-15 evening while a program outside
   the browser held the port (Web Serial alone failed too). Run again with the port free on
   2026-09-16: **5 of 6 tests pass**, and `echoes a payload larger than the write chunk` fails because
@@ -122,8 +122,7 @@ further down says otherwise, this section wins.
 
 ### Release and distribution
 
-- Tag **`v0.1.0-alpha.1`** now. A stable `v0.1.0` follows once the library has served a real or
-  emulated port.
+- Tag the first version once the manual steps have run against a physical adapter. Tim's call.
 - **npm: not before 1.0.** At 1.0, bring the question back to Tim.
 - The repository stays **private** until Tim says otherwise. License stays MIT, "serial-broker
   contributors".
@@ -206,7 +205,7 @@ hardening round" below.
 ### Robustness - done 2026-09-14
 
 Done, see the CHANGELOG and ADR-0032, ADR-0033: one storage key per configuration plus an index
-(storage version 2, no migration); a monotonic clock for durations; the worker's `warn` records
+(one storage key per configuration); a monotonic clock for durations; the worker's `warn` records
 forwarded to the tabs (ADR-0029); structural Web Serial types, every emitted declaration checked
 without `@types/w3c-web-serial`.
 
@@ -427,7 +426,7 @@ Everything below holds, and nothing beyond it is part of this item.
 
 ## Follow-ups from the hardening round of 2026-09-14
 
-Protocol version 8 (ADR-0028 to ADR-0031), storage version 2 (ADR-0033), the monotonic clock
+The hardening decisions (ADR-0028 to ADR-0031), the storage layout (ADR-0033), the monotonic clock
 (ADR-0032), the worker's records in the tabs (ADR-0029) and the structural declarations are done.
 What the implementers left open:
 

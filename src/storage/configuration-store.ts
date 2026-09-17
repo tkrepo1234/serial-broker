@@ -13,7 +13,7 @@ import type { KeyValueStorage } from '../environment/environment.js';
  * is stored that the validation on read cannot absorb - as version 2 is: each configuration now
  * lives under a key of its own (ADR-0033).
  */
-export const STORAGE_SCHEMA_VERSION = 2;
+export const STORAGE_SCHEMA_VERSION = 1;
 
 /** What every key of the current format starts with. */
 const KEY_PREFIX = `serial-broker/configurations/v${String(STORAGE_SCHEMA_VERSION)}`;

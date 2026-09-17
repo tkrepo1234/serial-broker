@@ -189,11 +189,11 @@ When several applications of a team talk to devices, publish the folder once ins
      "exports": { ".": { "types": "./dist/index.d.ts", "default": "./dist/index.js" } },
      "files": ["dist"],
      "scripts": { "build": "tsc -p tsconfig.build.json" },
-     "peerDependencies": { "react": ">=18", "serial-broker": "^0.1.0-alpha.1" },
+     "peerDependencies": { "react": ">=18", "serial-broker": "^0.1.0" },
      "devDependencies": {
        "@types/react": "^19",
        "react": "^19",
-       "serial-broker": "^0.1.0-alpha.1",
+       "serial-broker": "^0.1.0",
        "typescript": "^6"
      }
    }

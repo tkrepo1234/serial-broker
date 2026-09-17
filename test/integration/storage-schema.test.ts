@@ -24,8 +24,8 @@ function harnessWithDevice(
 
 describe('the layout of remembered configurations', () => {
   it('carries a storage version, not the protocol version', () => {
-    expect(storageIndexKey()).toBe('serial-broker/configurations/v2/index');
-    expect(storageEntryKey('Reader')).toBe('serial-broker/configurations/v2/entry/Reader');
+    expect(storageIndexKey()).toBe('serial-broker/configurations/v1/index');
+    expect(storageEntryKey('Reader')).toBe('serial-broker/configurations/v1/entry/Reader');
   });
 
   it('keeps each configuration under its own key, listed in the index', async () => {
