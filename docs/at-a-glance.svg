@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 1400" width="760" height="1400"
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 92 760 1308" width="760" height="1308"
      role="img" aria-labelledby="ssg-title ssg-desc">
   <title id="ssg-title">serial-broker at a glance</title>
   <desc id="ssg-desc">One page about serial-broker. First the problem: the Web Serial API lets one browsing
@@ -44,11 +44,6 @@
   </defs>
 
   <rect width="760" height="1792" fill="#fcfcfc"/>
-
-  <!-- ─────────────────────────────  Header, in the theme's navigation blue  ───────────────────────────── -->
-  <rect width="760" height="92" fill="#2980b9"/>
-  <text class="slab b" x="24" y="46" font-size="30" fill="#ffffff">serial-broker</text>
-  <text class="sans" x="24" y="72" font-size="15.5" fill="#e7f2fa">One serial port, every tab of an origin.</text>
 
   <!-- ─────────────────────────────  The problem, and what changes  ───────────────────────────── -->
   <text class="slab h2" x="24" y="132">One port, many tabs</text>
