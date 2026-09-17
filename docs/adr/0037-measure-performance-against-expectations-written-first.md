@@ -9,7 +9,7 @@
 The library is for production interfaces (README, "Who it is for"), and until now nothing said
 what it costs: how long a chunk takes to reach ten tabs, how long a write from a tab that does not
 hold the port takes, how long a handover takes after a crash, or whether an hour of traffic leaves
-timers or memory behind. The backlog item "Performance tests and a usability review"
+timers or memory behind. Tim's request of 2026-09-14
 asks for those numbers in two places - the simulated browser of `test/harness/` and a real
 Chromium - for both transports, with one rule that shapes everything else: **the expected value of
 every scenario is written down before it is measured**, and a result more than ten times worse
@@ -73,7 +73,7 @@ A `bench/` directory holds both benchmarks and one file of expectations.
 - **Add `tsx` or a loader hook** to run the TypeScript directly. One more development dependency for
   what esbuild, already installed as the build's bundler, does in one call.
 - **Expectations in the report, adjusted after each run.** That is a changelog, not an expectation.
-  The backlog is explicit that the expectation is what a result is judged against, so it cannot
+  The request is explicit that the expectation is what a result is judged against, so it cannot
   be adjusted afterwards; keeping it in a source file with a reason next to it is what makes that
   visible in review.
 - **Git-ignore the results.** Then the Performance chapter would have nothing to include unless the

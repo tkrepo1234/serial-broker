@@ -62,7 +62,7 @@ tab.
 
 The expectations are data in `bench/expectations.ts`, one set for each place, and the reasoning
 for each number is in a comment next to it. They were written before anything was measured, and
-they are not adjusted to a result: the rule (BACKLOG.md, "Performance") is that a result more than
+they are not adjusted to a result: the rule (ADR-0037) is that a result more than
 ten times worse than its expectation becomes either a fix in the library, with a test, or a limit
 written down in this chapter. A result that is far better than expected is left as it is; the
 expectation stays what it was.

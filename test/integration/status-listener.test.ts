@@ -4,7 +4,7 @@ import { SerialBrokerStatus } from '../../src/core/types.js';
 import { BrowserHarness } from '../harness/browser-harness.js';
 import { READER, READER_OPTIONS } from '../harness/devices.js';
 
-/** A new `onStatusChange` listener is told the current status once (BACKLOG, P3). */
+/** A new `onStatusChange` listener is told the current status once. */
 
 async function openTab() {
   const harness = new BrowserHarness();

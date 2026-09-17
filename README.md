@@ -87,7 +87,7 @@ The documentation site is built with `npm run docs`; its chapters are readable h
 | `emulator/`, `bench/`           | A USB/IP serial device emulator; benchmarks and their expectations.            |
 | `docs/site/`                    | The documentation site (Sphinx).                                               |
 | `docs/adr/`, `docs/guidelines/` | Architecture decision records; the binding engineering guidelines.             |
-| `docs/manual-test-plan.md`      | The hardware test plan and its recorded runs.                                  |
+| `docs/manual-test-plan.md`      | The hardware test plan and its last run.                                       |
 | `scripts/`, `BACKLOG.md`        | Build and release helpers; open work.                                          |
 | `config/`                       | The toolchain's configuration: Prettier, tsup, Vitest, Playwright, TypeDoc.    |
 | `design/`                       | A draft illustration awaiting assessment; not part of the documentation.       |

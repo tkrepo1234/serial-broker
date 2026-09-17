@@ -3,7 +3,7 @@
  *
  * The expectation is what a result is judged against, so it is data here rather than a number in
  * a report: a result more than ten times worse than its expectation has to become a fix or a
- * documented limit (BACKLOG.md, "Performance"), and an expectation is never adjusted to a result.
+ * documented limit (ADR-0037), and an expectation is never adjusted to a result.
  * The reasoning behind each number is in the comment next to it, so that a reader can disagree
  * with the reasoning rather than only with the number.
  *

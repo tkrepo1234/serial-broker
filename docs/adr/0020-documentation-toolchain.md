@@ -6,7 +6,7 @@
 ## Context
 
 The README is a decision aid and the ADRs record reasoning; neither teaches use. The requirement
-(`BACKLOG.md`, 2026-09-12) is product-grade developer documentation modelled on
+(Tim, 2026-09-12) is product-grade developer documentation modelled on
 [open62541 1.3](https://www.open62541.org/doc/1.3/): Sphinx with the Read the Docs theme, an
 introduction, tutorials, chapters that explain behaviour, and every API function documented in
 full.

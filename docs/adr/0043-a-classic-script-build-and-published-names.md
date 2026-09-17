@@ -199,9 +199,5 @@ port between them, and Chromium lists exactly one `SharedWorker`; the global car
 documented surface and is the only global the build defines; and a page that does not call
 `configure({ workerUrl })` is told so, by name, in `environment.transport-fallback`.
 
-`npm run verify`, `npm run test:browser` and `npm run test:examples` (`minimal-js`, which loads
-these files by name) all pass.
-
-`npm run docs` was **not** run: it needs the Python environment at `docs/.venv` (ADR-0020), which
-this working tree does not have. This is why the source entry files were left where TypeDoc's
-configuration and the generated reference expect them.
+`examples/minimal-js` and `examples/terminal-openui5` load these files by name, and their smoke
+tests run in CI.

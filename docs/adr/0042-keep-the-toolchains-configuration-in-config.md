@@ -14,9 +14,7 @@ listing showed.
 
 That is what a visitor sees first, on the repository page and in an editor's file tree, and it is
 the wrong first impression: a reader looking for what this project _is_ must scroll past eight
-answers to how it is built. The reduction inventory of 2026-09-15 already listed the project
-directory as unaddressed work, noting that "the README does not describe the layout"
-(`docs/reviews/2026-09-15-reduction-inventory.md`).
+answers to how it is built.
 
 Nothing about these files requires the root. Each of these tools is started by an npm script, and
 npm scripts run from the directory holding `package.json`, so a script can name a configuration
@@ -164,14 +162,3 @@ toolchain's: it sits with the scenarios it runs and is already named by its scri
 and `npm run test:examples` all pass with the moved configurations, which is what exercises every
 path flag: `test:examples` runs through `config/playwright.examples.config.ts`, and the build runs
 through both tsup configurations.
-
-Two comparisons were made rather than assumed, because a wrong answer to either would have been
-silent:
-
-- The set of files Prettier matches was captured before and after the move and is identical, 457
-  files, `package-lock.json` and every other entry of the old `.prettierignore` still excluded.
-- `npm run test:coverage` reports the same files and the same per-directory thresholds as before.
-
-`npm run docs` was not run: it needs the Python environment at `docs/.venv` (ADR-0020), which this
-working tree does not have. TypeDoc itself was run directly against `config/typedoc.json`, which is
-how its path resolution was established.

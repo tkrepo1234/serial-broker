@@ -14,7 +14,7 @@
  *   its tabs unable to coordinate with tabs on any other build.
  * - A minified file is smaller than its readable counterpart.
  * - The size of every build is printed, as built and gzipped, so that CI reports it on every run.
- *   There is no size budget: the sizes are reported, not enforced (BACKLOG.md, decided
+ *   There is no size budget: the sizes are reported, not enforced (BACKLOG.md, standing decisions; decided
  *   2026-09-14).
  * - Every declaration the build emitted - not only the ones an entry point names - type-checks
  *   without the Web Serial types, which the package cannot make an application install.
