@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 1792" width="760" height="1792"
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 1400" width="760" height="1400"
      role="img" aria-labelledby="ssg-title ssg-desc">
   <title id="ssg-title">serial-broker at a glance</title>
   <desc id="ssg-desc">One page about serial-broker. First the problem: the Web Serial API lets one browsing
@@ -7,8 +7,18 @@
     serial-broker, connected by a message bus made of a SharedWorker or a BroadcastChannel, on top of the browser's
     Web Locks, Web Serial and localStorage, and below them the serial devices. Then four situations: several tabs
     using one device, the tab holding the port closing or crashing, the device being unplugged, and a tab limit that
-    gives one tab exclusive use. Finally what shows an operator what is happening — errors, logging, the diagnostics
-    entry point and the debugging surface — and the calls an application makes.</desc>
+    gives one tab exclusive use.</desc>
+  <!--
+    Maintained by hand. Shown in README.md and in the documentation's Introduction.
+    Colours and type are the documentation's Read the Docs theme, so the picture and a page read as
+    one: #2980b9 header and accents; #6ab0de/#e7f2fa the message bus; #f0b37e/#ffedcc the tab that
+    holds the port, and Web Locks; #f29f97/#fdf3f2 Web Serial alone; #1abc9c/#dbfaf4 with
+    serial-broker; #9b59b6/#f4ecf7 diagnostics; #e74c3c the cross on a route that does not exist;
+    #404040/#555555 text; #e1e4e5/#f3f6f6 borders and quiet fills; #fcfcfc the page. Lato for prose,
+    Roboto Slab for headings, a monospace stack for code; no font is loaded, so the layout leaves
+    room for the wider fallbacks (Arial, Georgia). No external resources, no scripts. 760 units wide,
+    so it stays legible in the documentation's 800 px column.
+  -->
 
   <style>
     /* The fonts and colours of the documentation's Read the Docs theme, so page and picture read as one. */
@@ -132,7 +142,7 @@
   <g transform="translate(24,484)">
     <!-- The browser, one origin -->
     <rect width="712" height="262" fill="#ffffff" stroke="#c9c9c9" stroke-dasharray="6 5"/>
-    <text class="sans b small" x="16" y="22">Browser · one origin · HTTPS or localhost</text>
+    <text class="sans b small" x="16" y="22">Browser · one origin · HTTPS, localhost or a folder opened as a file</text>
 
     <!-- The tabs: the application in each of them, and the debugging surface if it is served -->
     <g transform="translate(16,30)">
@@ -308,47 +318,5 @@
     </g>
   </g>
 
-  <!-- ─────────────────────────────  Seeing what is happening  ───────────────────────────── -->
-  <text class="slab h2" x="24" y="1380">Seeing what is happening</text>
-  <text class="sans lead" x="24" y="1404">Which tab holds the port is invisible to the application on purpose — and visible to whoever operates it.</text>
-
-  <g transform="translate(24,1420)">
-    <rect width="712" height="144" fill="#ffffff" stroke="#e1e4e5"/>
-    <path d="M364 16 H364 M364 16 V128" stroke="#e1e4e5"/>
-
-    <g transform="translate(16,0)">
-      <text class="sans b" y="28" font-size="13.5">Errors</text>
-      <text class="sans small" y="48">A stable code, the context it happened in, and one</text>
-      <text class="sans small" y="65">sentence saying what to do about it.</text>
-    </g>
-    <g transform="translate(388,0)">
-      <text class="sans b" y="28" font-size="13.5">Logging</text>
-      <text class="sans small" y="48">Records to the logger you pass, each naming the tab</text>
-      <text class="sans small" y="65">and configuration. Nothing is logged until you ask.</text>
-    </g>
-    <g transform="translate(16,66)">
-      <text class="mono b" y="28" font-size="13">serial-broker/diagnostics</text>
-      <text class="sans small" y="48">An observer on the bus: every tab, its role, status,</text>
-      <text class="sans small" y="65">settings and pending writes. It takes no port.</text>
-    </g>
-    <g transform="translate(388,66)">
-      <text class="sans b" y="28" font-size="13.5" fill="#7d3c98">Debugging surface</text>
-      <text class="sans small" y="48">The same state as a page, with the traffic and the</text>
-      <text class="sans small" y="65">locks. Opening it never moves a port.</text>
-    </g>
-  </g>
-
-  <!-- ─────────────────────────────  The calls, and what they need  ───────────────────────────── -->
-  <text class="slab b" x="24" y="1604" font-size="17">The same calls in every tab</text>
-
-  <rect x="24" y="1618" width="712" height="122" fill="#ffffff" stroke="#e1e4e5"/>
-  <g class="mono" font-size="13">
-    <text x="40" y="1642"><tspan fill="#007020" class="b">await</tspan> SerialBroker.setup(<tspan fill="#4070a0">'Scale'</tspan>, {</text>
-    <text x="56" y="1660">device: { vendorId: <tspan fill="#208050">0x0403</tspan>, productId: <tspan fill="#208050">0x6001</tspan> },</text>
-    <text x="56" y="1678">serial: { baudRate: <tspan fill="#208050">9600</tspan> }, encoding: { decodeText: <tspan fill="#007020" class="b">true</tspan> },</text>
-    <text x="40" y="1696">});</text>
-    <text x="40" y="1720">SerialBroker.subscribe(<tspan fill="#4070a0">'Scale'</tspan>, <tspan fill="#4070a0">'onReceive'</tspan>, (event) =&gt; show(event.text));</text>
-  </g>
-
-  <text class="sans small" x="24" y="1768">Chrome, Edge, Opera or Brave · HTTPS or localhost · all tabs on one origin · no runtime dependencies · MIT</text>
+  <text class="sans small" x="24" y="1376">Chrome or Edge on the desktop · HTTPS, localhost or a file · all tabs on one origin · no runtime dependencies · MIT</text>
 </svg>

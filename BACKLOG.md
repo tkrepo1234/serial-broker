@@ -23,13 +23,6 @@ Tim's, and not derivable from the code:
 - Dev dependencies stay on TypeScript 6 until typescript-eslint and typedoc support TypeScript 7;
   checked monthly, with `npm audit`.
 
-## Waiting for Tim
-
-- **The at-a-glance illustration.** `design/at-a-glance.svg` is reworked in the documentation's
-  palette, with `design/README.md` describing it. It stays out of the documentation and the README
-  until Tim has assessed it. If accepted: embed it in `docs/site/introduction.md` and the README,
-  with alternative text.
-
 ## By hand, before a release
 
 - **Step 18 of the [manual test plan](./docs/manual-test-plan.md):** revoke the device in the

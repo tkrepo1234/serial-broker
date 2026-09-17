@@ -26,6 +26,10 @@ The application never learns which tab holds the port, and has no need to. What 
 stated in [Guarantees](guarantees.md); how tabs share the port is described in
 [How shared ports behave](shared-ports.md).
 
+## At a glance
+
+![serial-broker at a glance: with Web Serial alone one tab opens the port and the others are refused; with serial-broker one tab holds the port and every tab reads and writes through a message bus. The library runs in every tab of one origin, on top of Web Serial, Web Locks and localStorage. Four situations: several tabs on one device, the holding tab going away, the device being unplugged, and a limit of one tab.](_static/at-a-glance.svg)
+
 ## Who it is for
 
 serial-broker is built for industrial use: production interfaces where a browser-based application

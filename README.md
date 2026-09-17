@@ -16,6 +16,8 @@ PLCs and instruments — where simple installation and predictable behaviour mat
 one worker script, no native helper or extension, a stable code for every failure, every limit
 written down.
 
+![serial-broker at a glance: with Web Serial alone one tab opens the port and the others are refused; with serial-broker one tab holds the port and every tab reads and writes through a message bus. The library runs in every tab of one origin, on top of Web Serial, Web Locks and localStorage. Four situations: several tabs on one device, the holding tab going away, the device being unplugged, and a limit of one tab.](./docs/site/_static/at-a-glance.svg)
+
 | Capability                | What it means                                                                                             |
 | ------------------------- | --------------------------------------------------------------------------------------------------------- |
 | **Shares one port**       | Every tab reads and writes. A write reaches the device at most once.                                      |
@@ -91,7 +93,6 @@ The documentation site is built with `npm run docs`; its chapters are readable h
 | `llms.txt`                      | What a language model needs to integrate the library; ships with the package.  |
 | `scripts/`, `BACKLOG.md`        | Build and release helpers; open work.                                          |
 | `config/`                       | The toolchain's configuration: Prettier, tsup, Vitest, Playwright, TypeDoc.    |
-| `design/`                       | A draft illustration awaiting assessment; not part of the documentation.       |
 
 ## Development
 
