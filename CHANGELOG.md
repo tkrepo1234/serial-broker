@@ -50,6 +50,10 @@ different protocol versions do not coordinate with each other. It is noted whene
   request of a walk through the whole page - and nothing else. The examples type-check with the
   repository's TypeScript instead of installing their own.
 
+- **The documentation's navigation has two arrows, up and down**, each shown only while there is more
+  its way, each moving the list two thirds of what is visible. The single arrow back to the top
+  never disappeared: the style sheet's `display: flex` won over the `hidden` attribute.
+
 ### Removed
 
 - **Eleven example applications**, on Tim's decision of 2026-09-17: `terminal`, `minimal`,

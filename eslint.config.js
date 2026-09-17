@@ -196,6 +196,8 @@ export default defineConfig(
         window: 'readonly',
         requestAnimationFrame: 'readonly',
         setTimeout: 'readonly',
+        clearTimeout: 'readonly',
+        ResizeObserver: 'readonly',
       },
     },
     // The environment is injected into the library so its tests can replace it (ADR-0014). This

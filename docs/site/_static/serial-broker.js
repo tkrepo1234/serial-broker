@@ -1,84 +1,139 @@
 /*
- * An arrow at the top of the navigation, shown once the navigation has been scrolled.
+ * Two arrows on the navigation: one up, one down, each shown only while there is more that way.
  *
  * The sidebar scrolls on its own, and its scrollbar is easy to miss: on a long page - the
- * application API lists every method - the reader ends up far down the list with no sign that
- * anything is above, and no obvious way back. The arrow appears as soon as the navigation is
- * scrolled at all, says where the reader is, and takes them back to the top when clicked.
+ * application API lists every method - the reader ends up somewhere in the list with no sign of
+ * what is above or below. An arrow says there is more in its direction, and a click moves the list
+ * two thirds of what is visible - far enough to get somewhere, short enough that the entries that
+ * were at the edge are still on screen, so the reader keeps their place.
  *
- * The theme's own markup is left alone: this adds one element and one listener, and does nothing
- * at all if the theme ever renames what it looks for.
+ * What a reader expects of such arrows, and what this therefore takes care of:
+ *
+ * - An arrow that is there can be used, and one that cannot be used is not there: at the top there
+ *   is no up arrow, at the bottom no down arrow, and a list that fits has neither. The position is
+ *   compared with a tolerance, because a zoomed page scrolls to fractions of a pixel and would
+ *   otherwise stop half a pixel short of "the end" for ever.
+ * - Clicking three times quickly moves three steps. A smooth scroll is still on its way when the
+ *   second click comes, so steps are counted from where the list is going, not from where it is.
+ * - An arrow that disappears under the keyboard user's finger does not drop the focus on the floor:
+ *   it goes to the list. Not to the other arrow - someone pressing Enter until the top is reached
+ *   would press it once more and be taken back down.
+ * - The list changes height without scrolling - a window resized, a chapter's entries unfolding -
+ *   so the arrows listen to that as well.
+ * - A reader who asked for less motion gets none: the move is the point, not the animation.
+ *
+ * The theme's own markup is left alone: this adds two elements, and does nothing at all if the
+ * theme ever renames what it looks for.
  */
 (() => {
   'use strict';
 
-  /** Below this the arrow would only cover the first entry it is meant to help reach. */
-  const SHOW_AFTER_PX = 24;
+  /** Closer to an end than this counts as being there; see the note on zoom above. */
+  const AT_THE_END_PX = 2;
+  /** How much of the visible list one click moves. */
+  const STEP = 2 / 3;
 
   function install() {
     // `.wy-side-scroll` is the element that scrolls; `.wy-nav-side` is the fixed frame around it,
-    // which is what the arrow is positioned against so it stays put while the list moves.
+    // which is what the arrows are positioned against so they stay put while the list moves.
     const scroller = document.querySelector('.wy-side-scroll');
     const frame = document.querySelector('.wy-nav-side');
     if (scroller === null || frame === null) {
       return;
     }
-
-    const button = document.createElement('button');
-    button.type = 'button';
-    button.className = 'serial-broker-to-top';
-    button.setAttribute('aria-label', 'Back to the top of the navigation');
-    button.title = 'Back to the top of the navigation';
-    button.hidden = true;
-    // Drawn rather than written: a character would follow the font and be read out by a screen
-    // reader as punctuation. `aria-hidden` leaves the label above as the only thing announced.
-    button.innerHTML =
-      '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">' +
-      '<path d="M12 5.5 5 13h4.2v5.5h5.6V13H19z" /></svg>';
-
-    button.addEventListener('click', () => {
-      // A reader who asked for less motion gets none: the jump is the point, not the animation.
-      const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-      scroller.scrollTo({ top: 0, behavior: reduced ? 'auto' : 'smooth' });
-      // A smooth scroll ends after the last scroll event this listens to, so the arrow is asked
-      // once more when the scrolling is over. `scrollend` is not in every browser this page is
-      // read in, hence the timeout as well; both only ever hide it.
-      scroller.addEventListener('scrollend', update, { once: true });
-      setTimeout(update, 700);
-    });
-
-    frame.append(button);
-
-    // The search box stays at the top of the list (see the stylesheet), and the arrow sits under
-    // it. How far under is measured, not assumed: the box is taller when the title wraps, and
-    // taller again on a narrow window.
     const search = frame.querySelector('.wy-side-nav-search');
+
+    /** Where the list is going: the end of a smooth scroll still under way, or where it is. */
+    let target = scroller.scrollTop;
+    let settling;
+
+    const arrow = (direction) => {
+      const button = document.createElement('button');
+      const label = `Scroll the navigation ${direction}`;
+      button.type = 'button';
+      button.className = `serial-broker-scroll serial-broker-scroll-${direction}`;
+      button.setAttribute('aria-label', label);
+      button.title = label;
+      button.hidden = true;
+      // Drawn rather than written: a character would follow the font and be read out by a screen
+      // reader as punctuation. `aria-hidden` leaves the label above as the only thing announced.
+      button.innerHTML =
+        '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">' +
+        '<path d="M12 5.5 5 13h4.2v5.5h5.6V13H19z" /></svg>';
+      button.addEventListener('click', () => {
+        // The search box stays at the top of the list and covers that much of it.
+        const visible = scroller.clientHeight - (search?.offsetHeight ?? 0);
+        const step = Math.max(40, Math.round(visible * STEP));
+        const last = scroller.scrollHeight - scroller.clientHeight;
+        target = Math.min(last, Math.max(0, target + (direction === 'up' ? -step : step)));
+        const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        scroller.scrollTo({ top: target, behavior: reduced ? 'auto' : 'smooth' });
+      });
+      frame.append(button);
+      return button;
+    };
+    const up = arrow('up');
+    const down = arrow('down');
+
+    const update = () => {
+      const last = scroller.scrollHeight - scroller.clientHeight;
+      const show = {
+        up: scroller.scrollTop > AT_THE_END_PX,
+        down: scroller.scrollTop < last - AT_THE_END_PX,
+      };
+      for (const [button, shown] of [
+        [up, show.up],
+        [down, show.down],
+      ]) {
+        if (!shown && document.activeElement === button) {
+          // The arrow did its job and goes; whoever pressed it with a key stays in the navigation.
+          scroller.setAttribute('tabindex', '-1');
+          scroller.focus({ preventScroll: true });
+        }
+        button.hidden = !shown;
+      }
+    };
+
+    // While a smooth scroll runs, `target` is where it ends. Once the list has been still for a
+    // moment - or the reader scrolled it themselves - the list's own position is the truth again.
+    scroller.addEventListener(
+      'scroll',
+      () => {
+        update();
+        clearTimeout(settling);
+        settling = setTimeout(() => {
+          target = scroller.scrollTop;
+          update();
+        }, 150);
+      },
+      { passive: true },
+    );
+    for (const event of ['wheel', 'touchmove', 'keydown']) {
+      scroller.addEventListener(event, () => (target = scroller.scrollTop), { passive: true });
+    }
+
+    // The search box is taller when the title wraps, and taller again on a narrow window; the up
+    // arrow sits under it, so how far under is measured, not assumed.
     const placeBelowSearch = () => {
       if (search !== null) {
         frame.style.setProperty('--serial-broker-search-height', `${search.offsetHeight}px`);
       }
     };
-    placeBelowSearch();
-    window.addEventListener('resize', placeBelowSearch, { passive: true });
-
-    // The theme scrolls this list to the entry for the page being read, which is not the reader
-    // scrolling: on a page deep in the reference the list starts far down, and an arrow on
-    // arrival would answer a question nobody asked. So the arrow waits for the reader's own
-    // first scroll - a wheel, a drag, a key - and from then on simply follows the position.
-    let readerHasScrolled = false;
-    const update = () => {
-      button.hidden = !readerHasScrolled || scroller.scrollTop <= SHOW_AFTER_PX;
-    };
-    const readerScrolled = () => {
-      readerHasScrolled = true;
+    const resized = () => {
+      placeBelowSearch();
+      target = scroller.scrollTop;
       update();
     };
-
-    // `passive`: none of these cancel the scrolling they are told about.
-    for (const event of ['wheel', 'touchmove', 'keydown']) {
-      scroller.addEventListener(event, readerScrolled, { passive: true });
+    window.addEventListener('resize', resized, { passive: true });
+    // The list grows and shrinks as chapters unfold, which scrolls nothing and moves both ends.
+    if (typeof ResizeObserver === 'function') {
+      const observer = new ResizeObserver(resized);
+      observer.observe(scroller);
+      for (const child of scroller.children) {
+        observer.observe(child);
+      }
     }
-    scroller.addEventListener('scroll', update, { passive: true });
+    placeBelowSearch();
     update();
 
     /**
@@ -116,11 +171,10 @@
       if (typeof jquery === 'function') {
         jquery(window).off('scroll').off('hashchange');
       }
-      // After the theme has placed the list, and only if the reader has not taken over already.
-      if (!readerHasScrolled) {
-        showTheChapterHeading();
-        update();
-      }
+      // After the theme has placed the list.
+      showTheChapterHeading();
+      target = scroller.scrollTop;
+      update();
     });
   }
 

@@ -51,17 +51,16 @@
 }
 
 /*
- * The arrow back to the top of the navigation (serial-broker.js).
+ * The arrows that scroll the navigation (serial-broker.js).
  *
  * The sidebar scrolls separately from the page and its scrollbar is easy to miss, so a reader
- * far down a long list - the application API lists every method - has no sign that anything is
- * above. It sits just under the search box, in the fixed sidebar frame rather than in the
- * scrolling list, and appears only once that list has been scrolled. The offset is measured
- * rather than assumed: the search box grows when the project title wraps.
+ * somewhere in a long list - the application API lists every method - has no sign of what is above
+ * or below. The arrows sit in the fixed sidebar frame rather than in the scrolling list: one just
+ * under the search box, one at the bottom, each shown only while there is more its way. The upper
+ * offset is measured rather than assumed: the search box grows when the project title wraps.
  */
-.serial-broker-to-top {
+.serial-broker-scroll {
   position: absolute;
-  top: calc(var(--serial-broker-search-height, 3rem) + 0.5rem);
   /* On the right: the entries are left-aligned and mostly shorter than the sidebar is wide, so
      this corner is usually empty and the arrow covers no text. */
   right: 0.5rem;
@@ -81,18 +80,36 @@
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
 }
 
-.serial-broker-to-top svg {
+/* `display: flex` above would win over the `hidden` attribute, and an arrow that is switched off
+   would stay on screen - which is what the first version of this did. */
+.serial-broker-scroll[hidden] {
+  display: none;
+}
+
+.serial-broker-scroll-up {
+  top: calc(var(--serial-broker-search-height, 3rem) + 0.5rem);
+}
+
+.serial-broker-scroll-down {
+  bottom: 0.5rem;
+}
+
+.serial-broker-scroll-down svg {
+  transform: rotate(180deg);
+}
+
+.serial-broker-scroll svg {
   width: 1.1rem;
   height: 1.1rem;
   fill: currentColor;
 }
 
-.serial-broker-to-top:hover {
+.serial-broker-scroll:hover {
   background: #3091d1;
 }
 
 /* Keyboard users must see what they are on: the theme removes outlines in this area. */
-.serial-broker-to-top:focus-visible {
+.serial-broker-scroll:focus-visible {
   outline: 2px solid #fcfcfc;
   outline-offset: 2px;
 }
