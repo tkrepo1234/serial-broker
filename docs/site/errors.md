@@ -308,9 +308,11 @@ received it, so treat it like `OWNER_LOST_DURING_WRITE`. If timeouts are frequen
 
 `WRITE_FAILED`
 : **Arises** when the device or the browser rejects the write.
-**Context:** `bytesWritten` of `byteLength` — how much was handed over before the failure. The tab
-holding the port reconnects, with `connection.autoReconnect` on; otherwise the configuration ends
-`failed`.
+**Context:** `bytesWritten` of `byteLength` — how much was handed over before the failure — where
+the write was still being handed over. A write the device rejected after it had stopped taking a
+chunk carries `chunkBytes` instead, the size of the chunk it refused: how much of the payload
+reached the device before that is not known there. The tab holding the port reconnects, with
+`connection.autoReconnect` on; otherwise the configuration ends `failed`.
 **Do:** decide, for the command, whether a partial write is safe to repeat.
 
 `WRITE_QUEUE_FULL`

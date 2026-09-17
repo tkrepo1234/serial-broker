@@ -164,7 +164,7 @@ export const REMEDIATION: Record<SerialBrokerErrorCode, string> = {
   NOT_CONNECTED:
     'Nothing to do: the connection was lost before the write was handed to the device, so nothing was written, and the tab that issued the write sends it again once the port is open. This code appears in logs and diagnostics only; a write that finds no connection before its deadline fails with WRITE_TIMEOUT.',
   WRITE_FAILED:
-    'The device rejected the write. `context.bytesWritten` shows how many bytes were handed over before the failure; decide whether your command is safe to repeat.',
+    'The device rejected the write. Where `context.bytesWritten` is there, it says how many bytes were handed over before the failure; otherwise `context.chunkBytes` says how large the refused chunk was. Decide whether your command is safe to repeat.',
   WRITE_TIMEOUT:
     'The write did not complete within connection.writeTimeoutMs. When `context.started` is false nothing was written and it can be sent again; otherwise the device may have received it. If timeouts are frequent while the port is open, check the flowControl serial option and whether the device is ready to receive.',
   WRITE_QUEUE_FULL:

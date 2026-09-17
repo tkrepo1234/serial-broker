@@ -348,7 +348,7 @@ fails with `INVALID_ARGUMENT`, and the application has to encode the bytes itsel
   `remember: false` forgets an entry left behind by an earlier setup, under the same condition. The
   tab that saved last decides the remembered options.
 - **Where it is kept:** one `localStorage` key per configuration,
-  `serial-broker/configurations/v2/entry/<name>`, listed in `serial-broker/configurations/v2/index`.
+  `serial-broker/configurations/v1/entry/<name>`, listed in `serial-broker/configurations/v1/index`.
   An entry that cannot be read — hand-edited, truncated, written by a version whose options no longer
   validate — is discarded on its own, with `STORAGE_CORRUPT` reported, and the other configurations
   are restored as usual. Where `localStorage` cannot be used, nothing is remembered beyond the page.

@@ -10,8 +10,8 @@ import type { KeyValueStorage } from '../environment/environment.js';
  *
  * Stored entries are the options `setup()` accepts and are validated again on every read, so a
  * change to the message protocol leaves them usable. This is incremented only for a change to what
- * is stored that the validation on read cannot absorb - as version 2 is: each configuration now
- * lives under a key of its own (ADR-0033).
+ * is stored that the validation on read cannot absorb - a different shape, a different key layout
+ * (ADR-0033). Nothing is migrated: entries under an older version are left where they are, unread.
  */
 export const STORAGE_SCHEMA_VERSION = 1;
 

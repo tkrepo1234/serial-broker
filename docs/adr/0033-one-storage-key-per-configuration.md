@@ -86,9 +86,10 @@ is promised about stored data (CONTRIBUTING.md).
 - **No index, enumerating the keys.** Widens the narrow storage interface
   ([ADR-0014](./0014-dependency-injection-of-the-environment.md)) and makes a restore scan every key
   of the origin, including the application's.
-- **Migrate earlier formats, or remove their keys on restore.** The first move from protocol-versioned
-  keys was migrated (2026-09-13), and version 1's keys were removed unread (2026-09-14). Both served
-  development setups only, and the removal was dropped with the rest of the reduction.
+- **Migrate earlier formats, or remove their keys on restore.** Both were tried and dropped: they
+  serve development setups only, and they buy a tidy `localStorage` with code that has to keep
+  every format the library ever wrote readable. A stale key costs a few hundred bytes and holds
+  nothing sensitive.
 - **Put the entry back on the `storage` event.** Leaves a window in which the entry is absent, and
   nobody puts it back when the other tabs are frozen or the browser closes right after the release.
 - **Ask the broker which tabs are attached.** Unavailable in the fallback, and a round trip to a

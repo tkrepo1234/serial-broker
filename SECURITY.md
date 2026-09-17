@@ -223,16 +223,14 @@ it. How tabs talk to each other is a separate matter.
 `localStorage` holds every remembered configuration — one set up with `remember: true`, the default —
 under two kinds of key:
 
-- `serial-broker/configurations/v2/index`, a JSON array of the remembered names;
-- `serial-broker/configurations/v2/entry/<name>`, one per configuration, holding the options passed
+- `serial-broker/configurations/v1/index`, a JSON array of the remembered names;
+- `serial-broker/configurations/v1/entry/<name>`, one per configuration, holding the options passed
   to `setup()`: the device filter — for a configuration in auto mode, the device the user chose,
   as `{ auto: true, resolved: … }` — line settings, reconnect and timeout settings, text encoding,
   receive settings, `remember` and `maxTabs`.
 
-Earlier releases stored all of them in one JSON object, under `serial-broker/configurations/v1` and,
-before that, `serial-broker/v1/configurations` to `serial-broker/v4/configurations`. Those keys are
-neither read nor removed (ADR-0033): a few hundred bytes each, holding nothing sensitive, left until
-the site data is cleared.
+A key written under an older storage version is neither read nor removed (ADR-0033): nothing is
+migrated, and what an earlier version left behind stays until the site data is cleared.
 
 - **Any same-origin script can read it, change it and delete it**, and it survives until the site
   data is cleared — also across a user logging out of the application. It holds no payload data,
