@@ -95,4 +95,4 @@ Each is a documented limit or a test that does not exist; none is a defect waiti
 
 **Documentation**
 
-- TSDoc is thin in places where the generated API reference shows it.
+- TSDoc is thin in places where the generated pages of the Interface chapter show it.

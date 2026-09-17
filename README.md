@@ -2,7 +2,7 @@
 
 One serial port, every tab.
 
-> **Alpha.** The API may still change between releases. Tested in a simulated
+> **Beta.** The API may still change between releases. Tested in a simulated
 > browser, in a real browser, and against an Arduino echo board and the USB/IP device emulator
 > ([manual test plan](./docs/manual-test-plan.md)) — a first run, not a field record.
 
@@ -67,7 +67,8 @@ a secure context (HTTPS, `localhost`, or a page opened from a file), all tabs on
 
 ## Documentation
 
-The documentation site is built with `npm run docs`; its chapters are readable here as well.
+The documentation of the released version is at <https://tkrepo1234.github.io/serial-broker/>. It is
+built with `npm run docs`, and its chapters are readable here as well.
 
 | Topic                                   | Chapter                                                                                                                                   |
 | --------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |

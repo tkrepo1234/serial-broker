@@ -29,7 +29,8 @@ npm run docs       # the documentation site: CI's docs job
 npm run test:browser  # the built package in a real browser: CI's browser job
 ```
 
-CI runs four independent jobs on every push to `main`, on every pull request, and when the release
+CI runs four independent jobs on every push to `develop`, `main`, a `release/` or a `hotfix/` branch,
+on every pull request, and when the release
 workflow calls it: `verify`, `examples` (every example's type-check and smoke test, see
 [examples/README.md](./examples/README.md)), `browser` and `docs`.
 
@@ -117,7 +118,8 @@ Every size has a `SERIAL_BROKER_EXTREME_*` variable; see
 
 ## Making a change
 
-1. Branch: `<type>/<short-description>`.
+1. Branch from `develop`: `feature/<short-description>`
+   ([git workflow](./docs/guidelines/git-workflow.md)).
 2. Write the failing test first. For anything touching `src/client/`, `src/worker/` or
    `src/owner/`, that test belongs in `test/integration/multi-tab/` and must run against both
    transports.
@@ -145,13 +147,20 @@ Every version gets a GitHub release, created by `.github/workflows/release.yml` 
 pushed. A version with a pre-release part, such as `0.1.0-rc.1`, gets one marked as a
 pre-release. Nothing is published to npm before 1.0.
 
-1. Rename the `[Unreleased]` section of `CHANGELOG.md` to the version and date, such as
+1. Branch from `develop`: `git switch -c release/0.2.0 develop`.
+2. Rename the `[Unreleased]` section of `CHANGELOG.md` to the version and date, such as
    `## [0.2.0] - 2026-10-01`, and start a new, empty `[Unreleased]` above it. The release notes
    are taken from that section; without it, the release fails before anything is built.
-2. Set `version` in `package.json` to the same version, and commit both.
-3. Run `npm run release:check`. It prints the notes the release will carry, or says what is
-   missing.
-4. Tag the commit and push the tag: `git tag v0.2.0 && git push origin v0.2.0`.
+3. Set `version` in `package.json` to the same version, and commit both. Last fixes go onto this
+   branch as well.
+4. Run `npm run release:check`. It prints the notes the release will carry, or says what is
+   missing. Push the branch and wait for CI.
+5. Merge into `main`, tag, and push both:
+   `git switch main && git merge --no-ff release/0.2.0 && git tag v0.2.0 && git push origin main v0.2.0`.
+6. Merge back and delete the branch:
+   `git switch develop && git merge --no-ff release/0.2.0 && git push && git branch -d release/0.2.0`.
+
+A hotfix is the same from step 2 on, on a `hotfix/<version>` branch taken from `main`.
 
 The workflow (`scripts/release-notes.mjs` does the checking) first checks that the tag matches
 `package.json` and that `CHANGELOG.md` has a section for the version. It then runs every CI job on
