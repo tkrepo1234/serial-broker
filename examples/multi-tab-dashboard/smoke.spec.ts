@@ -17,6 +17,7 @@ import {
   type ExampleManifest,
   type ExampleUi,
 } from '../smoke-support.js';
+import { crashRenderer } from '../../test/browser/support/crash.js';
 
 const UI: ExampleUi = {
   ...USUAL_IDS,
@@ -148,13 +149,7 @@ test.describe('the multi-tab dashboard', () => {
 
     // A killed renderer runs no pagehide, so no goodbye is said: the second tab has to notice
     // on its own, from the pings that go unanswered. Three of them, five seconds apart.
-    const session = await context.newCDPSession(first.page);
-    // Listening before the crash is ordered: the event can arrive before a listener added afterwards.
-    const crashed = first.page.waitForEvent('crash');
-    void session.send('Page.crash').catch(() => {
-      // The target is gone, which is what was asked for.
-    });
-    await crashed;
+    await crashRenderer(first.page);
     await expect(second.locator('#peers li[data-status]')).toHaveCount(0, { timeout: 30_000 });
     await expect(second.locator('#peers li')).toContainText('No other tab');
     // And the second tab took the port over meanwhile.
