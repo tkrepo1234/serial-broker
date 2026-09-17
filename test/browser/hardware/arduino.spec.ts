@@ -18,11 +18,12 @@
  * or policy is touched. Results of a run belong in `docs/manual-test-plan.md`. See ADR-0021.
  */
 
+import { spawn } from 'node:child_process';
 import process from 'node:process';
 
 import { expect, test as base, type BrowserContext } from '@playwright/test';
 
-import { echoConfiguration, openConnectedTabs, type Tab } from '../support/tab.js';
+import { echoConfiguration, openConnectedTabs, Tab } from '../support/tab.js';
 
 import {
   ARDUINO,
@@ -102,6 +103,41 @@ test.describe('an Arduino running an echo sketch', () => {
     await tab?.waitForReceivedText(CONFIGURATION, '1234\r\n');
     await tab?.page.waitForTimeout(500);
     expect(await tab?.receiveEventCount(CONFIGURATION)).toBe(1);
+  });
+
+  test('reports a port another program holds as OPEN_FAILED', async ({ hardware }) => {
+    // The one failure an integrator meets on their first day: a terminal program or the Arduino
+    // IDE's serial monitor still has the port. Chromium answers it exactly as it answers every
+    // other refusal of `open()` - `NetworkError` - so only the state around the call tells the
+    // two apart, and getting it wrong shows "No action required" for a device that will never
+    // come back on its own.
+    const holder = spawn('powershell.exe', [
+      '-NoProfile',
+      '-Command',
+      `$port = New-Object System.IO.Ports.SerialPort '${PORT_NAME}',9600; $port.Open(); Write-Output 'held'; Start-Sleep -Seconds 30; $port.Close()`,
+    ]);
+    try {
+      await new Promise<void>((resolve, reject) => {
+        holder.stdout.on('data', (chunk: Buffer) => {
+          if (chunk.toString().includes('held')) {
+            resolve();
+          }
+        });
+        holder.stderr.on('data', (chunk: Buffer) => {
+          reject(new Error(chunk.toString()));
+        });
+        holder.on('error', reject);
+      });
+
+      const tab = await Tab.open(hardware);
+      await tab.setup(CONFIGURATION, echoConfiguration({ device: ARDUINO }));
+
+      await tab.waitForErrorCode('OPEN_FAILED');
+      // The device is plugged in and listed; it is the operating system that says no.
+      expect(await tab.errorCodes()).not.toContain('DEVICE_DISCONNECTED');
+    } finally {
+      holder.kill();
+    }
   });
 
   test('echoes to both tabs sharing the port', async ({ hardware }) => {

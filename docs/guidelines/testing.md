@@ -117,7 +117,7 @@ It needs an Arduino (USB `0x2341`/`0x0078`) on a COM port running a sketch that 
 at 9600 baud, and nothing else using that port. The browser is given the permission through a
 throwaway profile written before it starts — no prompt is answered and no machine-wide setting is
 touched. `SERIAL_BROKER_HARDWARE_PORT` picks the port when several boards are attached. The
-documented command runs six tests. No large payload is among them: a payload beyond one write chunk
+documented command runs seven tests. No large payload is among them: a payload beyond one write chunk
 is the emulator's, below, which takes 64 KiB of every byte value in minutes and counts what reached
 the device. The board echoes at about 80 bytes a second and, without flow control, loses what
 arrives faster than its sketch reads - which says something about the board and nothing about the

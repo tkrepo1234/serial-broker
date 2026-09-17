@@ -50,7 +50,7 @@ The package contains:
 | `serial-broker/diagnostics/global` | `serial-broker.diagnostics.global.js`   | The diagnostics entry point as a classic script, on `SerialBrokerDiagnostics`.   |
 
 Every published file is named after the package rather than after the file it was built from, so
-that a file copied onto a web server says what it is ([ADR-0026][adr-0043]). Each build has a
+that a file copied onto a web server says what it is ([ADR-0026][adr-0026]). Each build has a
 source map beside it.
 
 It also ships a debugging surface under `dist/debug/`, as static files that nothing serves unless
@@ -267,4 +267,4 @@ browser that has no Web Serial at all, and during server-side rendering. It is a
 `SerialBroker.isSupported()`.
 
 [shared-worker]: https://developer.mozilla.org/en-US/docs/Web/API/SharedWorker
-[adr-0043]: https://github.com/tkrepo1234/serial-broker/blob/main/docs/adr/0026-a-classic-script-build-and-published-names.md
+[adr-0026]: https://github.com/tkrepo1234/serial-broker/blob/main/docs/adr/0026-a-classic-script-build-and-published-names.md

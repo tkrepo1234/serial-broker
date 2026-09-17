@@ -89,6 +89,11 @@ Each is a documented limit or a test that does not exist; none is a defect waiti
 - No browser test for `USER_GESTURE_REQUIRED`: every script an automation evaluates carries
   transient activation. The stand-in has no fault injection - an `open()` or a write that fails or
   hangs, a port without a USB identity.
+- The in-process harness announces an unplug the wrong way round: it dispatches `disconnect`
+  before the read of an open port rejects, where a browser does it the other way (measured in
+  Edge 153 against the USB/IP emulator). Putting it right perturbs a timing-sensitive test of
+  `maxAttempts`, so what the tab holding the port sees first is covered by the emulator suite and
+  by the mapping's own unit test instead.
 - The extreme suite, both benchmarks and the background-tab run never run in CI. After a change to
   the protocol, run them: `npm run test:extreme`, `npm run bench`,
   `SERIAL_BROKER_BENCH_BROWSER=1 npm run bench:browser`, `npm run test:background`.

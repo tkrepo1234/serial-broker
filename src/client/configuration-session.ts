@@ -492,12 +492,14 @@ export class ConfigurationSession {
         },
       );
     }
+    // The connection is open, so there is nothing to ask the user for - unless the user is to
+    // choose a different device. The same answer whichever tab this is: a picker that opens here
+    // and not there would say which tab holds the port, which no caller may learn (ADR-0009).
+    if (this.#status === SerialBrokerStatus.Open && !chooseAgain) {
+      return;
+    }
+
     if (this.#supervisor === undefined) {
-      // Another tab holds the port, or none does yet. If it is open, there is nothing to ask for -
-      // unless the user is to choose a different device.
-      if (this.#status === SerialBrokerStatus.Open && !chooseAgain) {
-        return;
-      }
       // The permission is the origin's, so any tab taking part may ask the user for it. A tab
       // waiting for a place, or one that has left the configuration, does not take part.
       if (

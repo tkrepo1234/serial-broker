@@ -66,7 +66,7 @@ SERIAL_BROKER_HARDWARE=arduino npm run test:browser -- test/browser/hardware
 $env:SERIAL_BROKER_HARDWARE='arduino'; npm run test:browser -- test/browser/hardware
 ```
 
-That runs six tests. Large payloads run against the USB/IP emulator
+That runs seven tests. Large payloads run against the USB/IP emulator
 (`SERIAL_BROKER_HARDWARE=emulator`) rather than the board, which echoes at about 80 bytes a second
 and loses what arrives faster than its sketch reads. `SERIAL_BROKER_HARDWARE_PORT` picks the port when several of
 these boards are attached.

@@ -190,7 +190,7 @@ The checklist exercises on real hardware what the scenario matrix in
 ## The last run
 
 **2026-09-17, Edge 153.0.4234.32, Windows 11 Home 26200**, on the commit released as
-0.1.0-beta.1:
+0.1.0-beta.1 and the fixes after it:
 
 | Suite                                                       | Result           |
 | ----------------------------------------------------------- | ---------------- |
@@ -198,7 +198,7 @@ The checklist exercises on real hardware what the scenario matrix in
 | `npm run test:browser` (stand-in)                           | passed           |
 | `npm run test:examples`                                     | passed           |
 | Emulator, usbip-win2 0.9.8.0 on COM4                        | 15 of 15 passed  |
-| Arduino echo board on COM3                                  | 6 of 6 passed    |
+| Arduino echo board on COM3                                  | 7 of 7 passed    |
 | Chromium's own picker, on the Arduino (`picker.spec.ts`)    | 2 of 2 passed    |
 | A tab in the background, 10 s and 330 s (`test:background`) | passed           |
 | `npm run test:extreme`, both benchmarks                     | every bound held |

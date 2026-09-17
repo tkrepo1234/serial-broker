@@ -19,14 +19,33 @@ import { describeUnknown, SerialBrokerError } from '../core/errors.js';
  * known about it, not for what the entry changes.
  */
 const OPEN_FAILURES: Readonly<Record<string, SerialBrokerErrorCode>> = {
-  /** The device is no longer attached. Not a failure to report to the user - it is a reconnect. */
-  NetworkError: SerialBrokerErrorCode.DEVICE_DISCONNECTED,
+  /**
+   * The operating system refused to open the port.
+   *
+   * Chromium answers every such refusal this way, and the commonest one by far is another program
+   * holding the port - a terminal program, a driver tool, a serial monitor. A device that is
+   * really away never reaches `open()`: the browser does not list a detached port, so the attempt
+   * ends earlier as `device-absent` with `DEVICE_DISCONNECTED`. Measured in Edge 153 against a
+   * COM port held by another process.
+   */
+  NetworkError: SerialBrokerErrorCode.OPEN_FAILED,
   /** The port is already open, which after another context crashed can be a stale state. */
   InvalidStateError: SerialBrokerErrorCode.OPEN_FAILED,
   /** Serial access is blocked by permissions policy, or the context is not secure. */
   SecurityError: SerialBrokerErrorCode.WEB_SERIAL_UNAVAILABLE,
   /** The serial settings were rejected - an unsupported baud rate, for instance. */
   NotSupportedError: SerialBrokerErrorCode.OPEN_FAILED,
+};
+
+/**
+ * What a rejection of the read stream means.
+ *
+ * Everything the line itself can do wrong - a framing error, a parity error, a break, an overrun -
+ * has a name of its own, so the one name left over says the device is gone. Measured in Edge 153
+ * against a USB serial device detached while open: `NetworkError: The device has been lost.`
+ */
+const READ_FAILURES: Readonly<Record<string, SerialBrokerErrorCode>> = {
+  NetworkError: SerialBrokerErrorCode.DEVICE_DISCONNECTED,
 };
 
 /** What `requestPort()` rejections mean. */
@@ -66,6 +85,27 @@ export function mapOpenError(error: unknown, context: MappingContext): SerialBro
     SerialBrokerErrorCode.OPEN_FAILED,
     context,
     (detail) => `Could not open the port: ${detail}`,
+  );
+}
+
+/**
+ * Maps a failure of the read stream.
+ *
+ * A device unplugged, powered off or otherwise lost is the commonest of these by a wide margin,
+ * and the remediation for it is "nothing, the library is already reconnecting" - not the advice
+ * about cables and line settings that a genuine read failure deserves.
+ */
+export function mapReadError(error: unknown, context: MappingContext): SerialBrokerError {
+  if (error instanceof SerialBrokerError) {
+    return error;
+  }
+
+  return build(
+    error,
+    READ_FAILURES,
+    SerialBrokerErrorCode.READ_FAILED,
+    context,
+    (detail) => `Reading from the device failed: ${detail}`,
   );
 }
 

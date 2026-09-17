@@ -35,7 +35,7 @@ Two mechanisms, kept apart:
 For every configuration, each tab that has set it up requests a [Web Lock][web-locks] named after
 it. The browser grants the lock to one tab. That tab opens the port, reads from it and performs
 every write. Holding the lock _is_ holding the port: there is no separate flag that could disagree
-with it and no election between tabs. The browser releases the lock whenever the tab goes away,
+with it and no vote between tabs. The browser releases the lock whenever the tab goes away,
 however it goes away, and grants it to the tab that has waited longest — which is why failover needs
 no heartbeat and no timeout.
 

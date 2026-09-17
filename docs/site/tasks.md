@@ -96,7 +96,8 @@ shows a channel that serialises commands.
 :end-before: // [/status]
 ```
 
-**Concepts:** eight statuses, listed in [Interface](api/index.md); the list may grow, so an
+**Concepts:** eight statuses, listed under `SerialBrokerStatus` in the [Interface](api/index.md);
+the list may grow, so an
 unknown value is shown, not thrown on. A new listener is told the current status once, so nothing
 has to read it separately.
 
