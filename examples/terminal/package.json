@@ -5,6 +5,9 @@
   "description": "A serial terminal built on serial-broker: static HTML, an import map, no build step.",
   "license": "MIT",
   "type": "module",
+  "engines": {
+    "node": ">=22.13"
+  },
   "scripts": {
     "start": "node serve.mjs",
     "typecheck": "tsc --noEmit",

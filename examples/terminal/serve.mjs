@@ -120,7 +120,19 @@ const server = createServer((request, response) => {
   );
 });
 
-server.listen(PORT, () => {
+try {
+  await readFile(path.join(LIBRARY_DIRECTORY, 'serial-broker.min.js'));
+} catch {
+  process.stderr.write(
+    'node_modules/serial-broker/dist/ is missing or incomplete. Run `npm run build` in the ' +
+      'repository root, then `npm install` here.\n',
+  );
+  process.exit(1);
+}
+
+// Loopback only, as the sibling examples bind: a development server has no business answering the
+// rest of the network, least of all one that serves a page which drives a serial port.
+server.listen(PORT, '127.0.0.1', () => {
   process.stdout.write(`Serial-Broker-Terminal on http://localhost:${String(PORT)}/\n`);
   process.stdout.write(`Without a device: http://localhost:${String(PORT)}/?stand-in\n`);
 });

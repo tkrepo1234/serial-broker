@@ -7,7 +7,7 @@
  * and has no business on a station.
  */
 
-import { cp, mkdir, rm } from 'node:fs/promises';
+import { cp, mkdir, rm, stat } from 'node:fs/promises';
 import path from 'node:path';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
@@ -24,6 +24,16 @@ const FILES = [
   'serial-broker.worker.js',
   'serial-broker.worker.js.map',
 ];
+
+try {
+  await stat(path.join(LIBRARY, 'serial-broker.min.js'));
+} catch {
+  process.stderr.write(
+    'node_modules/serial-broker/dist/ is missing or incomplete. Run `npm run build` in the ' +
+      'repository root, then `npm install` here.\n',
+  );
+  process.exit(1);
+}
 
 await rm(OUT, { recursive: true, force: true });
 await mkdir(path.join(OUT, 'serial-broker'), { recursive: true });

@@ -58,6 +58,8 @@ const el = (id) => /** @type {HTMLInputElement} */ (document.getElementById(id))
  * @property {boolean} autoscroll
  * @property {boolean} echo
  * @property {'dark' | 'light'} theme
+ * @property {string} sendMode
+ * @property {string} sendEnding
  * @property {typeof DEFAULT_SETTINGS} serial
  */
 
@@ -69,6 +71,10 @@ const preferences = {
   autoscroll: true,
   echo: true,
   theme: window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light',
+  // The composer is remembered like the display is. Someone working in hex comes back to a page
+  // that reads hex; coming back to Text and pasting bytes into it sends the digits as letters.
+  sendMode: 'text',
+  sendEnding: '\\r\\n',
   serial: { ...DEFAULT_SETTINGS },
 };
 
@@ -81,6 +87,23 @@ let historyAt = 0;
 /** The status the library last reported, so the page can answer "can I send?" without asking. */
 /** @type {string} */
 let status = SerialBrokerStatus.Idle;
+
+/** Undoing what {@link connect} subscribed, so connecting again does not subscribe twice over. */
+/** @type {(() => void)[]} */
+const subscriptions = [];
+
+/** The connect in flight, while one is: a second click waits for it instead of starting another. */
+/** @type {Promise<void> | undefined} */
+let connecting;
+
+/**
+ * Whether `setup()` has succeeded and not been released since.
+ *
+ * `status` cannot answer this. A `setup()` that throws leaves nothing registered under the name
+ * while the page shows `failed`, and `release()` on a name that was never set up resolves without
+ * doing anything - so the button would say "Disconnected in this tab" after disconnecting nothing.
+ */
+let isSetUp = false;
 
 // --- Preferences ------------------------------------------------------------------------------
 
@@ -263,7 +286,10 @@ function renderStatus(next) {
   // The picker opens during a click and at no other time, so Connect is offered exactly while the
   // library waits for one.
   el('connect').hidden = next !== SerialBrokerStatus.AwaitingPermission;
-  el('release').textContent = next === SerialBrokerStatus.Released ? 'Connect again' : 'Disconnect';
+  // One place decides this. A setup that threw leaves `isSetUp` false with the status `failed`,
+  // and offering *Disconnect* for a configuration that was never registered is how T6 read.
+  const canDisconnect = isSetUp && next !== SerialBrokerStatus.Released;
+  el('release').textContent = canDisconnect ? 'Disconnect' : 'Connect again';
   el('send-button').disabled = next !== SerialBrokerStatus.Open;
   renderSummary();
 }
@@ -316,6 +342,21 @@ function bytesToSend(input, mode, ending) {
   return /** @type {Uint8Array<ArrayBuffer>} */ (new TextEncoder().encode(input + line));
 }
 
+/**
+ * Shows what the composer will do with what is typed.
+ *
+ * Hex input is the bytes and nothing else - {@link bytesToSend} appends no ending to it, because
+ * the digits already say every byte to send. The control is therefore disabled rather than left
+ * enabled and ignored: a terminal that silently drops the CR LF you chose is a terminal you stop
+ * trusting the first time you find out.
+ */
+function renderComposer() {
+  const isHex = el('send-mode').value === 'hex';
+  const ending = el('send-ending');
+  ending.disabled = isHex;
+  ending.title = isHex ? 'Hex input is sent as the bytes you type; nothing is appended.' : '';
+}
+
 // --- Start ------------------------------------------------------------------------------------
 
 async function start() {
@@ -330,6 +371,9 @@ async function start() {
   ]) {
     el(String(id)).checked = Boolean(value);
   }
+  el('send-mode').value = preferences.sendMode;
+  el('send-ending').value = preferences.sendEnding;
+  renderComposer();
   renderSummary();
 
   // Without a device: `?stand-in` installs the repository's Web Serial stand-in before the library
@@ -357,9 +401,31 @@ async function start() {
   await connect();
 }
 
-/** Sets the configuration up with the settings in `preferences`, and subscribes to it. */
+/**
+ * Sets the configuration up with the settings in `preferences`, and subscribes to it.
+ *
+ * Every subscription is kept so it can be undone. `release()` removes this tab's listeners by
+ * itself, but connecting again without releasing - *Connect again* clicked twice, or a settings
+ * change while a connect is still in flight - would otherwise leave the old four in place, and
+ * every line would appear in the log as many times as the page had connected. Nothing on screen
+ * would say so, which is the worst way for a terminal to be wrong.
+ */
 async function connect() {
+  if (connecting !== undefined) {
+    await connecting;
+    return;
+  }
+  connecting = connectOnce();
+  try {
+    await connecting;
+  } finally {
+    connecting = undefined;
+  }
+}
+
+async function connectOnce() {
   clearError();
+  unsubscribeAll();
   try {
     await SerialBroker.setup(NAME, {
       // Any port the user grants. An application that knows its device names it instead, with
@@ -370,35 +436,50 @@ async function connect() {
     });
   } catch (error) {
     showError(error);
+    // `failed` here is this page's word for "the setup did not happen", not the library's status:
+    // nothing is registered under the name. `isSetUp` goes first, because `renderStatus` reads it
+    // to decide whether the button offers the way back - the only way out of a bad baud rate
+    // short of a reload.
+    isSetUp = false;
     renderStatus('failed');
     return;
   }
+  isSetUp = true;
 
-  SerialBroker.subscribe(NAME, 'onStatusChange', (event) => {
-    renderStatus(event.status);
-    if (event.status === SerialBrokerStatus.Open) {
-      clearError();
-    }
-  });
+  subscriptions.push(
+    SerialBroker.subscribe(NAME, 'onStatusChange', (event) => {
+      renderStatus(event.status);
+      if (event.status === SerialBrokerStatus.Open) {
+        clearError();
+      }
+    }),
 
-  SerialBroker.subscribe(NAME, 'onReceive', (event) => {
-    append(preferences.hex ? hexDump(event.data) : (event.text ?? ''), 'in');
-  });
+    SerialBroker.subscribe(NAME, 'onReceive', (event) => {
+      append(preferences.hex ? hexDump(event.data) : (event.text ?? ''), 'in');
+    }),
 
-  // Every tab's writes, this one's included: a second tab's command belongs in this log too.
-  SerialBroker.subscribe(NAME, 'onSend', (event) => {
-    if (!preferences.echo) {
-      return;
-    }
-    const text = preferences.hex
-      ? hexDump(event.data)
-      : new TextDecoder().decode(event.data).replace(/\r?\n$/, '');
-    append(`${text}${event.origin === 'remote' ? '   (another tab)' : ''}`, 'out');
-  });
+    // Every tab's writes, this one's included: a second tab's command belongs in this log too.
+    SerialBroker.subscribe(NAME, 'onSend', (event) => {
+      if (!preferences.echo) {
+        return;
+      }
+      const text = preferences.hex
+        ? hexDump(event.data)
+        : new TextDecoder().decode(event.data).replace(/\r?\n$/, '');
+      append(`${text}${event.origin === 'remote' ? '   (another tab)' : ''}`, 'out');
+    }),
 
-  SerialBroker.subscribe(NAME, 'onError', (event) => {
-    showError(event.error);
-  });
+    SerialBroker.subscribe(NAME, 'onError', (event) => {
+      showError(event.error);
+    }),
+  );
+}
+
+/** Undoes every subscription {@link connect} made, so a second connect does not double the log. */
+function unsubscribeAll() {
+  for (const unsubscribe of subscriptions.splice(0)) {
+    unsubscribe();
+  }
 }
 
 function wireUp() {
@@ -429,17 +510,30 @@ function wireUp() {
 
   el('release').addEventListener('click', () => {
     clearError();
-    if (status === SerialBrokerStatus.Released) {
+    // `isSetUp`, not the status: a setup that threw shows `failed` with nothing registered, and
+    // releasing that name would resolve silently and report a disconnection that never happened.
+    if (!isSetUp) {
       void connect();
       return;
     }
     // Releasing forgets nothing: the configuration stays, and connecting again needs no prompt.
     SerialBroker.release(NAME).then(() => {
+      isSetUp = false;
       append('Disconnected in this tab. Other tabs keep the device.', 'note');
     }, showError);
   });
 
   el('error-dismiss').addEventListener('click', clearError);
+
+  // --- The composer, remembered like the display options are.
+  for (const id of ['send-mode', 'send-ending']) {
+    el(id).addEventListener('change', () => {
+      preferences.sendMode = el('send-mode').value;
+      preferences.sendEnding = el('send-ending').value;
+      renderComposer();
+      savePreferences();
+    });
+  }
 
   // --- Display options
   /** @type {[string, keyof Preferences][]} */
@@ -508,16 +602,28 @@ function wireUp() {
     el('send-input').value = history[historyAt] ?? '';
   });
 
-  // --- Keyboard shortcuts, the two a terminal is expected to have.
+  // --- The one keyboard shortcut a page can have here. Ctrl+T is the browser's own (new tab) in
+  // both browsers this example supports, so it never reaches the page and is not offered.
   window.addEventListener('keydown', (event) => {
     const keyboard = /** @type {KeyboardEvent} */ (event);
-    if (!keyboard.ctrlKey || keyboard.altKey || keyboard.metaKey) {
+    if (!keyboard.ctrlKey || keyboard.altKey || keyboard.metaKey || keyboard.shiftKey) {
       return;
     }
-    const toggle = keyboard.key === 'h' ? 'opt-hex' : keyboard.key === 't' ? 'opt-timestamps' : '';
-    if (toggle !== '') {
+    // Not while the user is typing: Ctrl+H is a backspace-like editing chord in some layouts, and
+    // a terminal whose display flips while a command is being written is a terminal that fights
+    // its user. A dialog is an input context too.
+    const target = event.target;
+    const isTyping =
+      target instanceof HTMLInputElement ||
+      target instanceof HTMLTextAreaElement ||
+      target instanceof HTMLSelectElement ||
+      (target instanceof HTMLElement && target.isContentEditable);
+    if (isTyping || document.querySelector('dialog[open]') !== null) {
+      return;
+    }
+    if (keyboard.key === 'h') {
       event.preventDefault();
-      el(toggle).click();
+      el('opt-hex').click();
     }
   });
 

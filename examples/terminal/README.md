@@ -20,12 +20,14 @@ no framework, no dependencies at run time.
   walk through what you sent earlier.
 - **Display options**: hex view with an offset column and the printable characters beside it, ANSI
   colours, timestamps, auto-scroll, and whether your own writes are echoed into the log.
-  `Ctrl+H` toggles hex, `Ctrl+T` timestamps.
+  `Ctrl+H` toggles hex. (`Ctrl+T` is the browser's own shortcut for a new tab in Chrome and Edge,
+  so a page cannot have it.)
 - **Save the log** to a file, and clear the terminal.
 - **Dark and light**, remembered, starting from what the system asks for.
 - **Experimental: send a file** as raw bytes, in chunks, with a pause between them.
 
-Everything above is remembered between visits except the log itself.
+The display options, the theme and the connection settings are remembered between visits, as are
+the send mode and the line ending. The log itself is not.
 
 ## What serial-broker does for it
 
@@ -33,7 +35,7 @@ Open the terminal in a second tab and watch: **both show the same traffic**, bot
 only one of them holds the port. Close that one, and another takes the device over without a
 prompt — the page does not notice, because it never asks which tab holds the port.
 
-That is the whole reason this application is 500 lines and not 5 000: the failover, the
+That is the whole reason this application is some 650 lines and not 5 000: the failover, the
 reconnection after an unplugged adapter, the ordering of writes from two tabs, the permission that
 survives a reload, and the errors with a remediation sentence are the library's, not the page's.
 
@@ -123,7 +125,8 @@ Two decisions worth copying:
 - **ANSI colours, not an ANSI terminal.** The escape sequences for the eight colours, their bright
   forms and bold are honoured; cursor movement and clearing are dropped rather than acted on. This
   is a log, and a device must not be able to erase what it wrote a minute ago.
-- **The log is bounded** at 2 000 lines. A terminal left open on a station for a week must not grow
+- **The log is bounded** at 2 000 deliveries - one line each, except a hex dump, which is one
+  delivery over several rows. A terminal left open on a station for a week must not grow
   until the tab dies.
 - **The file transfer is not a protocol.** No XMODEM, no acknowledgement, no retry: the bytes go
   out in chunks with a pause between them, and the operator watches what comes back. It is marked
