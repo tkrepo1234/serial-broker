@@ -19,17 +19,23 @@ import { GRANTED_DEVICE, installStandIn } from './support/tab.js';
 /** Where the built page lives on the test server, which serves `dist/` as the package ships it. */
 const SURFACE = '/dist/debug/index.html';
 
-/** Opens the surface and waits until it has answered for this origin. */
+/**
+ * Opens the surface and waits until it has answered for this origin.
+ *
+ * By id rather than by label: the page offers _New configuration_ twice - in the header, and again
+ * in the empty state it shows when this origin has no configurations at all - so the label alone
+ * names two buttons in a browser that has never seen this page.
+ */
 async function openSurface(page: Page): Promise<void> {
   await page.goto(SURFACE);
-  await expect(page.getByRole('button', { name: 'New configuration' })).toBeVisible();
+  await expect(page.locator('#newButton')).toBeVisible();
 }
 
 /** Creates a configuration through the dialog, as the page's own buttons do. */
 async function createConfiguration(page: Page, name: string): Promise<void> {
-  await page.getByRole('button', { name: 'New configuration' }).click();
+  await page.locator('#newButton').click();
   await page.locator('#name').fill(name);
-  await page.locator('[data-part="submit"]', { hasText: 'Create and connect' }).click();
+  await page.locator('#setupDialog [data-part="submit"]').click();
 }
 
 test.describe('the debugging surface', () => {
@@ -77,7 +83,7 @@ test.describe('the debugging surface', () => {
     // Gone from the browser, not only from the list: a reload reads what is remembered afresh, so
     // an entry that survived it would be one this page had merely stopped showing.
     await page.reload();
-    await expect(page.getByRole('button', { name: 'New configuration' })).toBeVisible();
+    await expect(page.locator('#newButton')).toBeVisible();
     await expect(page.locator('#configurationRows')).not.toContainText('Scale');
   });
 });
