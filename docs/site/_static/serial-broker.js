@@ -80,6 +80,26 @@
     }
     scroller.addEventListener('scroll', update, { passive: true });
     update();
+
+    // The theme drags this list along with the page: its window scroll handler adds however far
+    // the content moved to the navigation's own position, so following a link into the middle of
+    // a page takes the navigation somewhere the reader never asked to go, and the entry they were
+    // looking at is gone. The navigation is a map, not a second view of the page - it should stay
+    // where it was put. Only that one handler is dropped; the theme highlights the current
+    // section from `hashchange`, which is left alone.
+    // The theme moves this list twice over. Its window scroll handler adds however far the content
+    // moved to the navigation's own position, so reading down a page drags the navigation with it;
+    // and its hashchange handler scrolls whichever entry matches the anchor into view, so following
+    // a link into the middle of a page takes the navigation somewhere the reader never asked to go.
+    // The navigation is a map, not a second view of the page: it should stay where it was put.
+    // Both are dropped. What survives is the highlighting done while the page loads, which is what
+    // says where the reader is - it just no longer moves the list to say it.
+    window.addEventListener('load', () => {
+      const jquery = window.jQuery;
+      if (typeof jquery === 'function') {
+        jquery(window).off('scroll').off('hashchange');
+      }
+    });
   }
 
   if (document.readyState === 'loading') {

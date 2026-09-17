@@ -101,6 +101,13 @@ Remembered configurations moved from **storage version 1 to 2** and are not migr
   picker in the same click, and the page carries a strict `Content-Security-Policy` (ADR-0019).
   _Choose device…_ is offered in every tab using a configuration that waits for permission, not only
   in the tab holding the port.
+- **The documentation's navigation stays where it is put.** The theme moved it twice over: reading
+  down a page dragged the navigation along by the same distance, and following a link into the
+  middle of a page scrolled it to whichever entry matched the anchor. Either way the entry the
+  reader was looking at was gone, in a list long enough that finding it again is work. The
+  navigation is a map, not a second view of the page; the highlighting that says where the reader
+  is remains.
+- **The navigation's search box stays in view** while the list under it scrolls.
 - **An arrow back to the top of the documentation's navigation.** The sidebar scrolls separately
   from the page and its scrollbar is easy to miss, so a reader far down a long list - the
   application API now lists every method - had no sign that anything was above. The arrow appears
