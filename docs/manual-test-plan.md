@@ -190,7 +190,7 @@ The checklist exercises on real hardware what the scenario matrix in
 ## The last run
 
 **2026-09-17, Edge 153.0.4234.32, Windows 11 Home 26200**, on the commit released as
-0.1.0-alpha.1 and the ones after it:
+0.1.0-beta.1:
 
 | Suite                                                       | Result           |
 | ----------------------------------------------------------- | ---------------- |

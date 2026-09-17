@@ -120,6 +120,36 @@ test.describe('a port shared across tabs', () => {
     expect(await second.sends('Echo')).toHaveLength(2);
   });
 
+  test('loses the port in the tab holding it when another tab gives the permission back', async ({
+    context,
+  }) => {
+    await installStandIn(context, GRANTED_DEVICE);
+    const first = await Tab.open(context);
+    const second = await Tab.open(context);
+    for (const tab of [first, second]) {
+      await tab.setup('Echo', echoConfiguration());
+      await tab.waitForStatus('Echo', 'open');
+    }
+    const tabs = [first, second] as const;
+    const holder = await waitForPortHolder(tabs);
+    const other = tabs[holder === 0 ? 1 : 0];
+
+    // What `release(name, { forgetDevice: true })` ends with, from the tab that does not hold the
+    // port: the permission is the origin's, so the tab that has the port open loses it.
+    await other.page.evaluate(async () => {
+      const serial = (
+        navigator as unknown as { serial: { getPorts(): Promise<{ forget(): Promise<void> }[]> } }
+      ).serial;
+      for (const port of await serial.getPorts()) {
+        await port.forget();
+      }
+    });
+
+    for (const tab of tabs) {
+      await tab.waitForStatus('Echo', 'awaiting-permission');
+    }
+  });
+
   test('decodes text whose characters are cut in half by a read boundary', async ({ context }) => {
     await installStandIn(context, GRANTED_DEVICE);
     const first = await Tab.open(context);

@@ -12,7 +12,8 @@
  *
  * - **Permission is per origin, not per page.** A device granted in one page is immediately
  *   visible to `getPorts()` in every other page, because the grant lives in `localStorage`, which
- *   the pages of an origin share. `forget()` takes it away everywhere.
+ *   the pages of an origin share. `forget()` takes it away everywhere, and a page that has the
+ *   device open loses it.
  * - **A device can be open in one page only.** Each page has its own `SerialPort` object for the
  *   same device, exactly as in the browser, so the object cannot be what enforces this. A Web Lock
  *   held for as long as the port is open does it instead - and the browser releases that lock when
@@ -372,6 +373,7 @@ export function installWebSerialStandIn(options: WebSerialStandInOptions): void 
         value: async (): Promise<void> => {
           teardown();
           updateState(device.id, { granted: false });
+          channel.postMessage({ type: 'forget', deviceId: device.id });
           await Promise.resolve();
         },
       },
@@ -521,7 +523,8 @@ export function installWebSerialStandIn(options: WebSerialStandInOptions): void 
     fireDeviceEvent('connect', portFor(deviceOf(deviceId)));
   }
 
-  // The pages of the origin share the device, so an unplug in one is an unplug in all.
+  // The pages of the origin share the device, so an unplug in one is an unplug in all, and so is a
+  // permission given back.
   const channel = new BroadcastChannel(CHANNEL_NAME);
   channel.addEventListener('message', (event: MessageEvent<unknown>) => {
     const message = event.data as { type?: unknown; deviceId?: unknown };
@@ -532,6 +535,10 @@ export function installWebSerialStandIn(options: WebSerialStandInOptions): void 
       applyUnplug(message.deviceId);
     } else if (message.type === 'plug') {
       applyPlug(message.deviceId);
+    } else if (message.type === 'forget') {
+      // Measured in Edge 153 against a real port: the page that has it open sees its read fail
+      // with a NetworkError, and no `disconnect` event.
+      ports.get(deviceOf(message.deviceId).id)?.lose();
     }
   });
 
