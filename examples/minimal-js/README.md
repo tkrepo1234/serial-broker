@@ -5,9 +5,7 @@
 imported from a folder of the example's own, and there is no build step. Read the file top to
 bottom and you have seen everything the page does.
 
-The same page written in TypeScript is [`examples/minimal`](../minimal/README.md). It is the
-richer one: every status with a sentence explaining it, an error box with code, message and
-remediation. This one is deliberately smaller - the way in for a developer
+It is deliberately small - the way in for a developer
 who writes plain JavaScript and wants to see the library work before reading anything else.
 
 Everything the page does, in the order the file does it:
@@ -114,7 +112,7 @@ Copy the `<script type="module">` block out of `index.html`, and with it the imp
 5. **Show `error.code` and `error.remediation`**, and branch on `code` - never on `message`.
 
 With a bundler the two URLs go away: it resolves `serial-broker` and finds the worker script
-itself. [`examples/minimal`](../minimal/README.md) is that same page with Vite.
+itself.
 
 ## Stable element ids
 
@@ -143,16 +141,15 @@ application, and CI runs it. The alternative - an example that is one HTML file 
 checked by nothing - would have left the plainest integration the only unchecked one.
 
 **`el(id)` is typed as an `HTMLInputElement`.** One helper, deliberately over-specific, so that
-`value`, `disabled`, `hidden` and `textContent` all need no annotation at their call sites. The
-richer TypeScript sibling names each element with its own type; here that would have been seven
-lines of casts in a page whose point is that there is nothing to wade through.
+`value`, `disabled`, `hidden` and `textContent` all need no annotation at their call sites. Naming
+each element with its own type would have been seven lines of casts in a page whose point is that
+there is nothing to wade through.
 
 **`device: { any: true }`.** The page cannot know the reader's device, and a first page should
 connect to whatever the user picks. It also means the smoke test's loopback device needs no ids.
 
 **No status table, no error box.** The page shows the status word, one error
-line, the data and a send box. [`examples/minimal`](../minimal/README.md) shows the rest; two
-pages that both explain everything would only be one page read twice.
+line, the data and a send box. The documentation site shows the rest, under Examples.
 
 **`<link rel="icon" href="data:,">`.** Without it the browser requests `/favicon.ico`, the server
 answers 404, and the console shows an error that is not the page's. The smoke test fails on any

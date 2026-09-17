@@ -1,8 +1,0 @@
-{
-  "extends": "./tsconfig.json",
-  "compilerOptions": {
-    "types": ["w3c-web-serial"],
-    "noEmit": true
-  },
-  "include": ["src/**/*.ts"]
-}

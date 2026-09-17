@@ -5,7 +5,7 @@
 sap.ui.define([], function () {
   'use strict';
 
-  /** Its own key: the plain terminal example keeps other things under its own. */
+  /** A key that says whose it is: pages opened from files share one `localStorage`. */
   const STORAGE_KEY = 'serial-broker-terminal-openui5/preferences/v1';
 
   /** @returns {TerminalPreferences} */

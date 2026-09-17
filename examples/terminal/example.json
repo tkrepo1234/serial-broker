@@ -1,7 +1,0 @@
-{
-  "name": "terminal",
-  "port": 8161,
-  "start": "npm start",
-  "readyPath": "/",
-  "summary": "A serial terminal: connect, read, send, with hex view, ANSI colours, timestamps, saved logs and an experimental file transfer. Static HTML, no build step."
-}

@@ -1,8 +1,7 @@
 # Serial-Broker-Terminal in OpenUI5
 
-[The terminal](../terminal/README.md) again, as a SAP OpenUI5 application in the `sap_horizon`
-theme: open a port, watch what the device says, type back. The same functions, the controls and the
-look of a Fiori application - and a build that **runs from a folder opened as a file**, with no web
+A serial terminal as a SAP OpenUI5 application in the `sap_horizon` theme: open a port, watch what
+the device says, type back. The controls and the look of a Fiori application - and a build that **runs from a folder opened as a file**, with no web
 server and no internet.
 
 Classic UI5 JavaScript: `sap.ui.define`, an XML view, a controller, fragments for the dialogs. No
@@ -96,8 +95,7 @@ library, the theme - works from a file as it is, so every module and both themes
 
 One thing to know when several applications are opened from files on one machine: to the browser
 they all belong to the same place, so they share configuration names. This terminal's is
-`Terminal`, the same as [the plain terminal](../terminal/README.md)'s - so the two, opened side by
-side from files, are one terminal: a line sent in one appears in the other.
+`Terminal`: another page opened from a file that uses the same name shares its port.
 
 ## Taking it into an application of your own
 
@@ -115,10 +113,9 @@ SerialBroker.subscribe('Terminal', 'onReceive', (event) => show(event.text));
 await SerialBroker.send('Terminal', new TextEncoder().encode('PING\r\n'));
 ```
 
-For an application that binds controls to a device - a status in an `ObjectStatus`, received lines
-in a `List` - take the `SerialBrokerModel` of [`examples/openui5-js`](../openui5-js/README.md)
-instead: it is a `JSONModel` that does exactly this. The terminal talks to the library directly
-because its log is not a binding (below).
+The terminal talks to the library directly, because its log is not a binding (below). An
+application that binds controls to a device - a status in an `ObjectStatus`, received lines in a
+`List` - would put the same four calls behind a `JSONModel` of its own.
 
 ## Design decisions
 
@@ -134,8 +131,8 @@ because its log is not a binding (below).
 - **English only.** The page fixes OpenUI5's language, because a page opened from a file can fetch
   no text bundle and the build embeds exactly one. An application served over http can drop
   `data-sap-ui-language` and translate `i18n.properties` as usual.
-- **Its own storage key.** Preferences live under `serial-broker-terminal-openui5/preferences/v1`,
-  so this terminal and the plain one do not overwrite each other's display options.
+- **Its own storage key.** Preferences live under `serial-broker-terminal-openui5/preferences/v1`:
+  pages opened from files share one `localStorage`, so a key says whose it is.
 
 ## Element ids the smoke test drives
 

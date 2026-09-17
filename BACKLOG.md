@@ -126,9 +126,7 @@ Open, and deliberately not done in this round - both change the public API, not 
       told it does not need.
 - [x] **A complete page with no build step, on the documentation site.** Done 2026-09-17 as
       "No build step" under Examples, embedding `examples/minimal-js` from the example itself, with
-      the line assembly written in plain JavaScript beside it. `examples/no-bundler` and
-      `examples/minimal-js` are exactly that, and the site names them without showing them, so the
-      audience least likely to clone a repository is sent to one. Related: assembling lines has no
+      the line assembly written in plain JavaScript beside it. Related: assembling lines has no
       answer for a page without a compiler - the only one shown is a 60-line TypeScript class.
 
 ## Decided on 2026-09-14
@@ -175,9 +173,8 @@ device from the chosen port, `{ nonUsb: true }` is the new kind for ports withou
 An auto-mode configuration waits for the user even when exactly one port is granted. Since
 2026-09-15 the real-browser suite runs auto mode (`device-lifecycle.spec.ts`: the picker, a second tab
 adopting the device, a later visit opening it unasked), step 4a of the manual test plan is the
-debugging surface's auto-mode flow, and the OpenUI5 example's Reader runs in auto mode. The hardware
-suites seed a permission and cannot answer a picker, so they keep explicit devices; the other
-examples keep `{ any: true }`, which a first page needs.
+debugging surface's auto-mode flow, and the terminal example runs in auto mode. The hardware
+suites seed a permission and cannot answer a picker, so they keep explicit devices.
 
 The original request, for the record:
 
@@ -242,9 +239,10 @@ without `@types/w3c-web-serial`.
 test:browser`, ADR-0035); the Web Serial stand-in in `test/browser/stand-in/` is for the example
   apps too.
 - **No size budget**: sizes are reported, not enforced.
-- Framework integrations for React, Vue, Svelte and Angular, and above all **SAP OpenUI5**: a runnable
-  example app plus a reusable integration module (model binding and events), on the current OpenUI5
-  long-term maintenance version, with UI5 Tooling and TypeScript, running without an SAP system.
+- Example applications: on 2026-09-17 Tim cut them down to two - `examples/minimal-js`, one page
+  without a toolchain, and `examples/terminal-openui5`, the terminal in SAP OpenUI5. The framework
+  integrations and the other applications written until then were removed, with everything that
+  referred to them.
 - Dev dependencies are updated now, `npm audit fix` included, and checked monthly after that.
 - The at-a-glance illustration is reworked in the documentation's style and then **shown to Tim for
   his assessment** before it goes into the documentation. Reworked on 2026-09-14
@@ -317,44 +315,30 @@ after this many iterations is what hardens the product now.
 - [x] The repository root and every directory contain only what is used, and the top-level README
       describes the layout.
 
-P3 and P4 from the usability review were done the same day (see "Performance tests, example apps and a
-usability review").
+P3 and P4 from the usability review were done the same day (see "Performance tests and a usability
+review").
 
 ---
 
-## Performance tests, example apps and a usability review
+## Performance tests and a usability review
 
 **Requested by Tim, 2026-09-14. Scheduled after the hardening round.** Test the software the way
-its users meet it: how fast it is, how it holds up in realistic applications, how much it takes to
-do simple things, and whether the documentation explains everything clearly and without ambiguity.
+its users meet it: how fast it is, how much it takes to do simple things, and whether the documentation explains everything clearly and without ambiguity.
 
 **Status, 2026-09-15:** done. The benchmarks (`npm run bench`, `bench:browser`, the Performance
 chapter, ADR-0037) and the extreme-usage suites (`npm run test:extreme`, the 20-page browser run)
 found one limit, the crash of the tab that started the worker (under "Follow-ups from the hardening
-round"). Every example application then written - eleven; a twelfth came later - exists with smoke tests. The usability review is
-`docs/site/tasks.md` and `docs/reviews/usability-review-2026-09-14.md`. What it and the examples left open:
+round"). The usability review is `docs/site/tasks.md`. What it left open:
 
 - **P1, a defect in auto mode:** a later visit that calls only `setup()` asks for the device again
   and overwrote the remembered resolution. Fixed on 2026-09-15 (ADR-0036, amendment): `setup()` in
   auto mode takes a remembered auto-mode resolution, and the documentation no longer calls
   `restore()` first.
 - **P2:** done on 2026-09-15 (ADR-0010): `setup()` with equal options starts a `failed`
-  configuration again, from any tab; the example applications use it.
-- **P3:** done on 2026-09-15: a new `onStatusChange` listener receives the current status once, and no
-  example calls `getStatus()` right after `subscribe()` any more.
+  configuration again, from any tab.
+- **P3:** done on 2026-09-15: a new `onStatusChange` listener receives the current status once.
 - **P4:** done on 2026-09-15 (ADR-0036): `requestAccess()` works from any tab taking part; the holding
   tab looks for the granted port again when told, with the device chosen in auto mode.
-- P2 to P4 change the API's behaviour; weigh them in the complexity reduction, where each removes
-  a step every example now takes.
-- Examples: done on 2026-09-15 - `examples/openui5`'s regular expression uses escapes, and its
-  Reader runs in auto mode, so it no longer takes the Printer's port and one example shows the mode.
-  The minimal and multi-tab-dashboard READMEs agree with Installing: Vite finds the worker through
-  `new URL(..., import.meta.url)`, and naming it is recommended. The Angular and OpenUI5 examples
-  record their install-script decisions in `allowScripts` (npm 11): esbuild's check of its binary
-  runs; lmdb, msgpackr-extract and @parcel/watcher use their prebuilt binaries instead of compiling;
-  the UI5 tooling scripts, which only edit `ui5.yaml` when asked to, do not run. The Svelte
-  example's `$state.snapshot(options)` stays: the options may be a `$state` proxy, which cannot be
-  passed between tabs.
 
 ### Performance
 
@@ -374,29 +358,13 @@ emulator (`emulator/`), where the platform's cost is included.
 Before measuring, write down the expected value for each scenario. The expectation is what a
 result is judged against, so it cannot be adjusted afterwards.
 
-### Example apps
-
-Runnable applications under `examples/`, each with its own README and one command to start it,
-using only the published entry points:
-
-1. **Minimal:** one page that connects, prints received lines and sends text.
-2. **Multi-tab dashboard:** several tabs on one device, status, errors, the permission flow,
-   remembering and restoring.
-3. **Exclusive operation:** `maxTabs: 1`, with the `queued` state shown to the user.
-4. **Without a bundler:** `serial-broker/min` with an import map.
-5. **Framework integrations:** SAP OpenUI5 first - an example app and a reusable integration module
-   (see "Decided on 2026-09-14") - then React as a hook, Vue as a composable, Svelte as a store and
-   Angular as a service.
-
-Each app runs against the Web Serial stand-in without hardware, and against a real device.
-
 ### Usability review
 
 - **Steps:** for connecting and printing received text, sending a command and awaiting it,
   showing the status, asking for permission, releasing, and exclusive use, count the calls, options
   and concepts needed. Put them next to the same task done with Web Serial alone.
-- **Cold read:** a reviewer with no knowledge of the code builds each example app from the
-  documentation alone and logs every question they had to ask and every guess they had to make.
+- **Cold read:** a reviewer with no knowledge of the code builds use cases from the documentation
+  alone and logs every question they had to ask and every guess they had to make.
 
 ### Definition of done
 
@@ -413,20 +381,13 @@ Everything below holds, and nothing beyond it is part of this item.
 - [x] Every result more than ten times worse than its expectation has become a fix or a
       documented limit.
 
-**Example apps**
-
-- [x] The apps above exist, one per framework integration. Each starts with one documented command, type-checks in CI, and has a
-      README that says what it shows.
-- [x] A smoke test per app runs in CI against the stand-in: the page loads, connects, receives and
-      sends.
-
 **Usability**
 
 - [x] The step count for each task above is a table in the documentation, with the code for each
       task, and the Web Serial comparison.
 - [x] No task needs a concept beyond `setup`, `subscribe`, `requestAccess`, `send` and `release`,
       or the task has a written design proposal that removes the extra step.
-- [x] The cold read is done for every app. Every logged question or guess is resolved, by a
+- [x] The cold read is done. Every logged question or guess is resolved, by a
       documentation fix or a recorded reason for leaving it, and the list is committed. Done twice:
       the ten-use-case round of 2026-09-15 (above), and the six-use-case round of 2026-09-17
       ("Second cold read of the documentation"), whose findings are fixed or recorded there.

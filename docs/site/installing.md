@@ -70,7 +70,7 @@ a served page:
   `BroadcastChannel` and log `environment.transport-fallback` once. Naming the worker URL is still
   right: the same folder then works unchanged when it is served.
 
-[The terminal example](examples/index.md) runs this way. One limit comes with it, and it is in
+[The OpenUI5 terminal example](examples/index.md) runs this way. One limit comes with it, and it is in
 [Known limits](known-limits.md#pages-opened-from-files-share-one-origin).
 
 ### TypeScript

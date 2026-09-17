@@ -4,21 +4,10 @@ Runnable applications that use serial-broker the way an application does: throug
 entry points only, never through `src/`. Each one lives in its own directory with its own
 `package.json`, dependencies and toolchain, deliberately kept out of the root `package.json`.
 
-| Directory              | Shows                                                                                     |
-| ---------------------- | ----------------------------------------------------------------------------------------- |
-| `terminal/`            | The terminal: settings, hex, ANSI, timestamps, saved logs, a file transfer. Start here.   |
-| `terminal-openui5/`    | The same terminal in SAP OpenUI5 (`sap_horizon`); its build runs from a file, offline.    |
-| `minimal/`             | One page: connect, print what arrives, send text.                                         |
-| `minimal-js/`          | The same page in plain JavaScript, as one HTML file: no modules, no build step.           |
-| `multi-tab-dashboard/` | Several tabs on one device: every status, errors, permission, remembering, diagnostics.   |
-| `exclusive/`           | `maxTabs: 1`: one tab at a time, `queued` shown as a wait, the takeover, a release.       |
-| `no-bundler/`          | Static HTML: `serial-broker/min` from an import map, a static server, no build step.      |
-| `openui5/`             | SAP OpenUI5: a reusable integration module (`JSONModel`) and an application using it.     |
-| `openui5-js/`          | The same application in classic SAPUI5 JavaScript: `sap.ui.define`, no transpile step.    |
-| `react/`               | React 19: a reusable `useSerialBroker` hook, shared by several components.                |
-| `vue/`                 | Vue 3 + Vite: a `useSerialBroker` composable returning refs, and a `<script setup>` app.  |
-| `svelte/`              | Svelte 5: `createSerialBroker()`, reactive state through runes, and an app using it.      |
-| `angular/`             | Angular: an injectable `SerialBrokerService` with signals, zoneless, and an app using it. |
+| Directory           | Shows                                                                                  |
+| ------------------- | -------------------------------------------------------------------------------------- |
+| `minimal-js/`       | One page in plain JavaScript, as one HTML file: no modules, no build step. Start here. |
+| `terminal-openui5/` | A serial terminal in SAP OpenUI5 (`sap_horizon`); its build runs from a file, offline. |
 
 ## The contract every example keeps
 
@@ -34,8 +23,8 @@ provides:
 
   ```json
   {
-    "name": "minimal",
-    "port": 8151,
+    "name": "minimal-js",
+    "port": 8159,
     "start": "npm start",
     "readyPath": "/",
     "summary": "One page that connects, prints received lines and sends text."
@@ -68,7 +57,7 @@ provides:
   ```sh
   npm run build            # once, at the repository root
   npm run test:examples    # every example's smoke test, in the installed Edge
-  npm run test:examples -- examples/minimal/smoke.spec.ts
+  npm run test:examples -- examples/minimal-js/smoke.spec.ts
   ```
 
   The root configuration (`config/playwright.examples.config.ts`) reads every `example.json`, starts each

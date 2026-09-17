@@ -1,7 +1,0 @@
-{
-  "name": "openui5-js",
-  "port": 8160,
-  "start": "npm start",
-  "readyPath": "/index.html",
-  "summary": "Classic SAPUI5 in JavaScript: sap.ui.define modules, no transpile step, and the same reusable serial-broker model as the TypeScript example."
-}

@@ -39,7 +39,7 @@ export interface ExampleUi {
   /**
    * The button that releases the configuration, where the example has one.
    *
-   * Optional, like the remediation above: three examples deliberately have no release button, and
+   * Optional, like the remediation above: an example may deliberately have no release button, and
    * a required field made them name ids their pages have never carried. A selector that matches
    * nothing reads like coverage and is not - it passes only for as long as no test clicks it.
    */
@@ -60,8 +60,8 @@ export const USUAL_IDS = {
   received: '#received',
   error: '#error',
   errorCode: '#error-code',
-  // No `release` here. Nine of the twelve examples have that button and name it themselves; a
-  // default handed it to the three that do not, where it matched nothing and looked deliberate.
+  // No `release` here. An example that has that button names it itself; a default handed it to
+  // examples without one, where it matched nothing and looked deliberate.
 } as const;
 
 /** The manifest the root reads, so that an example's port lives in one place. */

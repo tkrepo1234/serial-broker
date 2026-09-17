@@ -1,7 +1,0 @@
-{
-  "name": "svelte",
-  "port": 8157,
-  "start": "npm start",
-  "readyPath": "/",
-  "summary": "Svelte 5: a reusable createSerialBroker() exposing reactive state through runes, and an application using it."
-}

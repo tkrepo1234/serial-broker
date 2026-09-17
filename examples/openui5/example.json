@@ -1,7 +1,0 @@
-{
-  "name": "openui5",
-  "port": 8150,
-  "start": "npm start",
-  "readyPath": "/index.html",
-  "summary": "SAP OpenUI5: a reusable integration module exposing serial-broker as a JSONModel, and an application using it."
-}

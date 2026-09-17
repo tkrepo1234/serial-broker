@@ -1,7 +1,0 @@
-{
-  "name": "minimal",
-  "port": 8151,
-  "start": "npm start",
-  "readyPath": "/",
-  "summary": "One page that connects, prints received lines and sends text."
-}

@@ -21,28 +21,28 @@ different protocol versions do not coordinate with each other. It is noted whene
   build, since such a page may load no ES module. Measured in Edge 153 against the stand-in and
   against the Arduino through the browser's own picker.
 
+- **A terminal in SAP OpenUI5**, `examples/terminal-openui5`, in `sap_horizon` and
+  `sap_horizon_dark`: connection settings with a baud rate combo box, text and hex, ANSI colours,
+  timestamps, a saved log, _Change Port…_ (`requestAccess(name, { chooseAgain: true })` in auto
+  mode) and a disconnect dialog for `release()`'s two options. Its build runs from a folder opened
+  as a file, with no server and no internet: a self-contained bundle with the text bundles and
+  locale data OpenUI5 would otherwise fetch embedded into it. Checked against two real ports, the
+  Arduino and the USB/IP emulator, through the browser's own picker.
+
 ### Changed
 
-- **The terminal in SAP OpenUI5**, `examples/terminal-openui5`, in `sap_horizon` and
-  `sap_horizon_dark`. Its build runs from a folder opened as a file, with no server and no internet:
-  a self-contained bundle with the text bundles and locale data OpenUI5 would otherwise fetch
-  embedded into it.
 - **`USER_GESTURE_REQUIRED` says what is true.** Its remediation and the documentation claimed that any
   `await` before `requestAccess()` uses the click up. Chromium counts a click as a gesture for a few
   seconds; only what outlasts them loses it. Measured with the browser's own picker: `setup()` and
   then `requestAccess()` from one click opens it.
-- **Both terminals: the button that opens the browser's port picker says _Select Port_**, which is
-  what it does, rather than _Connect_; and the plain terminal's baud rate is a combo box that lists
-  the usual rates whatever the field holds - its `<datalist>` offered only the one in it.
-- **Both terminals change the port and ask what to forget.** _Change Port…_ is
-  `requestAccess(name, { chooseAgain: true })`, for which the terminals now name no device (auto
-  mode) - so a first visit always asks, and a later one reopens the port chosen. _Disconnect_ opens
-  a dialog for `release()`'s two options, the port and the remembered connection, both ticked.
-  Checked against two real ports, the Arduino and the USB/IP emulator, through the browser's picker.
-- **The plain terminal's log keeps its size.** It grew with every line and pushed the input out of the
-  window; it is a box of the window's height now, and what does not fit scrolls inside it.
-- **The terminal example needs no web server.** It loads the classic script build by relative
-  paths, so `examples/terminal/dist/` runs from wherever it lies, opened as a file or served.
+
+### Removed
+
+- **Eleven example applications**, on Tim's decision of 2026-09-17: `terminal`, `minimal`,
+  `multi-tab-dashboard`, `exclusive`, `no-bundler`, `openui5`, `openui5-js`, `react`, `vue`,
+  `svelte` and `angular`, with their smoke tests, their dependency trees and everything that
+  referred to them. Two remain: `minimal-js`, one page without a toolchain, and
+  `terminal-openui5`.
 
 ## [0.1.0-alpha.1] - 2026-09-17
 

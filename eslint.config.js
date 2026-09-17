@@ -18,9 +18,9 @@ export default defineConfig(
       'test-results/**',
       'node_modules/**',
       // The example applications are applications with their own toolchains and TypeScript
-      // configurations (examples/README.md). Each framework answers to conventions of its own -
-      // default exports, reading `window`, unbound event handlers - and these type-aware rules
-      // would need each example's own dependencies installed to say anything true about it. Every
+      // configurations (examples/README.md). A framework answers to conventions of its own -
+      // OpenUI5's `sap.ui.define`, reading `window` - and these type-aware rules would need each
+      // example's own dependencies installed to say anything true about it. Every
       // example is gated by its own `npm run typecheck` and its smoke test in CI instead, and
       // Prettier still formats it.
       //

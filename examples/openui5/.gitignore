@@ -1,6 +1,0 @@
-# The serial-broker runtime files copied out of node_modules before the app is served (see
-# scripts/copy-serial-broker-assets.mjs). They are build output of the library, not sources.
-webapp/serial-broker/
-
-# Bundle cache of ui5-tooling-modules.
-.ui5-tooling-modules/

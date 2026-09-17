@@ -34,6 +34,3 @@ bench/.build/
 # Example applications: their dependencies, builds and caches
 examples/*/node_modules/
 examples/*/dist/
-examples/*/.angular/
-# The Angular CLI writes this one beside the repository root when it is run from there
-.angular/

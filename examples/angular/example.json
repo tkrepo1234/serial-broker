@@ -1,7 +1,0 @@
-{
-  "name": "angular",
-  "port": 8158,
-  "start": "npm start",
-  "readyPath": "/",
-  "summary": "An Angular application using serial-broker through an injectable service with signals."
-}

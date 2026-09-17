@@ -1,7 +1,0 @@
-{
-  "name": "exclusive",
-  "port": 8153,
-  "start": "npm start",
-  "readyPath": "/",
-  "summary": "maxTabs: 1 - one tab at a time uses the device, the others show queued and take over when it releases or closes."
-}

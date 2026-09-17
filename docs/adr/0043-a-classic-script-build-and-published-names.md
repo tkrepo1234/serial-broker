@@ -8,7 +8,7 @@
 This library is for industrial production interfaces, and a large part of that audience runs a
 page on a station: served by whatever web server the site already has, maintained by people who
 own no JavaScript toolchain, and often written against a browser policy that was settled years
-ago. `examples/no-bundler/` is already built for them — but it still requires ES modules: a
+ago. The library could be loaded without a bundler already — but only as an ES module: a
 `<script type="module">`, an import map, and a bare specifier. That is three mechanisms a page has
 to get right before it can call `setup()`, and an inline import map additionally needs its own
 hash in `script-src` under a strict content security policy.
@@ -117,10 +117,10 @@ The worker script's minification belongs to the build outputs and is recorded in
 
 ## Alternatives considered
 
-- **No classic build; tell people to use an import map.** What the library did. It works, and
-  `examples/no-bundler/` shows it. Rejected because the import map is a fourth thing to get right
-  for an audience whose whole problem is that they own no toolchain, and because it is the part of
-  that example that most often needs a content security policy changed — an inline import map
+- **No classic build; tell people to use an import map.** What the library did, and it works.
+  Rejected because the import map is a fourth thing to get right for an audience whose whole
+  problem is that they own no toolchain, and because it is the part of such a page that most often
+  needs a content security policy changed — an inline import map
   needs its hash in `script-src`, which a static server cannot generate and a formatter can
   invalidate.
 - **A UMD build.** One file that works as CommonJS, AMD and a global. Rejected: the CommonJS build
@@ -199,8 +199,8 @@ port between them, and Chromium lists exactly one `SharedWorker`; the global car
 documented surface and is the only global the build defines; and a page that does not call
 `configure({ workerUrl })` is told so, by name, in `environment.transport-fallback`.
 
-`npm run verify`, `npm run test:browser` and `npm run test:examples` (`no-bundler` and
-`minimal-js`, which load these files by name) all pass.
+`npm run verify`, `npm run test:browser` and `npm run test:examples` (`minimal-js`, which loads
+these files by name) all pass.
 
 `npm run docs` was **not** run: it needs the Python environment at `docs/.venv` (ADR-0020), which
 this working tree does not have. This is why the source entry files were left where TypeDoc's
