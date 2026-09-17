@@ -17,8 +17,21 @@ export { SerialBroker, type SerialBrokerApi } from './facade.js';
 export {
   SerialBrokerError,
   isSerialBrokerError,
+  // Narrows an error to a code, and its context with it. Exported beside the error itself
+  // because that is where an application reaches for it.
+  hasCode,
+  type ContextFor,
+  type DescribedDevice,
+  type ErrorWithCode,
+  type ResolvedDescribedDevice,
   type SerializedCause,
   type SerializedSerialBrokerError,
+  // The structured detail an error carries, as it is read. Public because `context` is public:
+  // an application that passes one around, or writes a function taking one, has to name it.
+  type SerialBrokerErrorContext,
+  // The same fields as they are passed when an error is built, with room for ones a later
+  // version adds - which is what an error rebuilt from another tab carries.
+  type BuiltErrorContext,
   // Public because the constructor takes it: an application building an error in the same
   // shape - in a test double, or to report its own failure through the same channel - needs
   // to be able to name the options.

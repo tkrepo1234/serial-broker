@@ -86,7 +86,7 @@ describe('a tab of this build and a tab of the next protocol version', () => {
         .errors.filter(
           (event) => event.error.code === SerialBrokerErrorCode.PROTOCOL_VERSION_MISMATCH,
         )
-        .map((event) => event.error.context['theirVersion']);
+        .map((event) => event.error.context.theirVersion);
     expect(mismatches(ours)).toEqual([OTHER_VERSION]);
     expect(mismatches(theirs)).toEqual([PROTOCOL_VERSION]);
     // Not federated: the tab of the other build neither holds this build's open port nor hears it.

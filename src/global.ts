@@ -6,7 +6,8 @@
  * `.requestAccess()`, `.release()`, `.configure()` and the rest read exactly as they do in a
  * module - and it carries everything else the package exports as properties of itself:
  * `SerialBroker.SerialBrokerError`, `.SerialBrokerErrorCode`, `.SerialBrokerStatus`,
- * `.REMEDIATION`, `.isSerialBrokerError()`, `.isSupported()`, `.PROTOCOL_VERSION`. One name is
+ * `.REMEDIATION`, `.isSerialBrokerError()`, `.hasCode()`, `.isSupported()`, `.PROTOCOL_VERSION`.
+ * One name is
  * all a page has to know, and nothing else of this library is left on the page's globals. See
  * ADR-0043.
  *
@@ -27,6 +28,7 @@
  */
 
 import {
+  hasCode,
   isSerialBrokerError,
   isSupported,
   PROTOCOL_VERSION,
@@ -49,6 +51,7 @@ import {
 interface SerialBrokerGlobal extends SerialBrokerApi {
   readonly SerialBrokerError: typeof SerialBrokerError;
   readonly isSerialBrokerError: typeof isSerialBrokerError;
+  readonly hasCode: typeof hasCode;
   readonly SerialBrokerErrorCode: typeof SerialBrokerErrorCode;
   readonly REMEDIATION: typeof REMEDIATION;
   readonly SerialBrokerStatus: typeof SerialBrokerStatus;
@@ -67,6 +70,7 @@ const serialBroker: SerialBrokerGlobal = {
   isSupported,
   SerialBrokerError,
   isSerialBrokerError,
+  hasCode,
   SerialBrokerErrorCode,
   REMEDIATION,
   SerialBrokerStatus,

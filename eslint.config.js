@@ -174,6 +174,25 @@ export default defineConfig(
     rules: { '@typescript-eslint/explicit-module-boundary-types': 'off' },
   },
 
+  // The documentation's own browser script: plain JavaScript served to the reader's browser, with
+  // no TypeScript program behind it, so the type-aware rules cannot apply (as for the build
+  // scripts above).
+  {
+    files: ['docs/site/_static/*.js'],
+    extends: [tseslint.configs.disableTypeChecked],
+    languageOptions: {
+      globals: {
+        document: 'readonly',
+        window: 'readonly',
+        requestAnimationFrame: 'readonly',
+        setTimeout: 'readonly',
+      },
+    },
+    // The environment is injected into the library so its tests can replace it (ADR-0014). This
+    // script *is* the browser side: it runs in the reader's page, with nothing to inject into.
+    rules: { 'no-restricted-globals': 'off' },
+  },
+
   // The documentation's examples are application code shown to readers: they log to the
   // console and use browser globals directly, as the applications they stand for would.
   {

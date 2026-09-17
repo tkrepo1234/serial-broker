@@ -39,17 +39,32 @@
 }
 
 /*
+ * The search box stays at the top of the navigation while the list under it scrolls.
+ *
+ * It is the way back to everything else - the chapters, the search - and scrolling the list used
+ * to take it off screen entirely.
+ */
+.wy-side-nav-search {
+  position: sticky;
+  top: 0;
+  z-index: 250;
+}
+
+/*
  * The arrow back to the top of the navigation (serial-broker.js).
  *
  * The sidebar scrolls separately from the page and its scrollbar is easy to miss, so a reader
  * far down a long list - the application API lists every method - has no sign that anything is
- * above. It sits in the top left corner of the fixed sidebar frame, above the scrolling list,
- * and appears only once that list has been scrolled.
+ * above. It sits just under the search box, in the fixed sidebar frame rather than in the
+ * scrolling list, and appears only once that list has been scrolled. The offset is measured
+ * rather than assumed: the search box grows when the project title wraps.
  */
 .serial-broker-to-top {
   position: absolute;
-  top: 0.5rem;
-  left: 0.5rem;
+  top: calc(var(--serial-broker-search-height, 3rem) + 0.5rem);
+  /* On the right: the entries are left-aligned and mostly shorter than the sidebar is wide, so
+     this corner is usually empty and the arrow covers no text. */
+  right: 0.5rem;
   z-index: 300;
   display: flex;
   align-items: center;

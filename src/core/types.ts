@@ -303,6 +303,11 @@ export interface ReleaseOptions {
    * Independent of `forgetDevice` below: pass both to remove every trace of the
    * configuration in this browser.
    *
+   * **This tab does not have to be using the configuration.** What is remembered belongs to the
+   * origin, so a page that lists the entries - a support page, or the debugging surface - can drop
+   * one without setting it up first. There is then nothing to disconnect from, which is not an
+   * error; only the forgetting happens.
+   *
    * @defaultValue false
    */
   readonly forget?: boolean;

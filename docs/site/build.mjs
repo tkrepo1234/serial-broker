@@ -93,6 +93,11 @@ function tidyReference(directory) {
         breakUnions(
           text
             .replace(/\.md#(?:property|enumeration-member)-[\w-]+\)/g, '.md)')
+            // The same anchors without a file in front of them: an interface that extends a class
+            // gets a row pointing at its own page (`ErrorWithCode.configName` -> #property-configname)
+            // for a member it does not redeclare, so the anchor it names is never written. The
+            // reference is dropped and its text kept - the row already says where the member is from.
+            .replace(/\[([^\]]+)\]\(#(?:property|enumeration-member)-[\w-]+\)/g, '$1')
             .replaceAll('| \\| ', '| '),
         ),
       );

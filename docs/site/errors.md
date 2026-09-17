@@ -58,7 +58,12 @@ failed attempt carry `false`, in every tab, because nothing retries them. See
 
 `context`
 : Structured detail specific to the code, such as `argumentName` or `bytesWritten`. The fields for
-each code are listed below.
+each code are listed below, and each is typed: `context.started` is a boolean or absent, never a
+string, so a misspelt field name is a compile error rather than a silent `undefined`. What is
+**not** promised is that a field is there - which of them an error carries depends on where it
+arose, several codes arise in more than one place, and an error from another tab may come from a
+later version of the library carrying fields this one has never heard of. Check for `undefined`
+before acting on one.
 
 `cause`
 : The underlying exception, where there was one. For errors that arose in another tab this is a

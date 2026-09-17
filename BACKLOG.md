@@ -96,10 +96,14 @@ source, the examples and the changelog withheld. Fixed in the same round:
 
 Open, and deliberately not done in this round - both change the public API, not the documentation:
 
-- [ ] **Type `SerialBrokerError.context` per code.** It is `Readonly<Record<string, unknown>>`, while
-      `errors.md` documents the fields exhaustively for every code, so every read is an unchecked
-      cast (`error.context['started'] === true`) - in the library's own examples too. A discriminated
-      union keyed by `code` would generate from the table that already exists.
+- [x] **Type `SerialBrokerError.context`.** Done 2026-09-17, as a named interface of optional
+      fields rather than the discriminated union first considered: which fields an error carries
+      depends on where it arose, not on its code alone (`WRITE_TIMEOUT` arises in four places with
+      four shapes), and an error rebuilt from another tab carries whatever that tab put in it,
+      checked only as "an object". A union with required fields would have had to be enforced at
+      the bus, and would have promised what the library cannot keep. The reading side now names
+      every documented field with its type; the building side keeps room for fields a later
+      version adds. `ContextFor<Code>` and `hasCode()` mark where per-code narrowing would go.
 - [ ] **Put `maxTabs` in `SerialBrokerStatusSnapshot`.** A status component handed a name cannot tell
       whether `queued` is even reachable, or which `writeTimeoutMs` its message should cite;
       `EffectiveSettings` has it, but that is the diagnostics entry point, which application code is

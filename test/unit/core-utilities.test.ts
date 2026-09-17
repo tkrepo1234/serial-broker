@@ -152,7 +152,7 @@ describe('withDeadline', () => {
     const error = await settled;
     expect(error.code).toBe(SerialBrokerErrorCode.OPEN_TIMEOUT);
     expect(error.configName).toBe('Reader');
-    expect(error.context['timeoutMs']).toBe(1_000);
+    expect(error.context.timeoutMs).toBe(1_000);
   });
 
   it('clears its timer when the operation rejects first', async () => {

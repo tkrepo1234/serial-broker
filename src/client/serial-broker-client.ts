@@ -322,12 +322,17 @@ export class SerialBrokerClient {
         await this.release(validName, releaseOptions);
         return;
       }
-      // Releasing something that is not set up is a no-op, not an error: it leaves the caller
-      // in the state it asked for. A release of the name still under way is not that state yet: this
-      // call resolves with it, once the port is closed and the lock let go, as `release()` promises -
+      // A release of the name still under way is not the state the caller asked for yet: this call
+      // resolves with it, once the port is closed and the lock let go, as `release()` promises -
       // resolving at once would let the caller open the device elsewhere while this tab still holds
       // it. The options of the release under way apply.
       await releasing;
+
+      // Nothing to disconnect from here, but forgetting is not about this tab: the entry under
+      // the name belongs to the whole origin, and so does the browser's permission for the device.
+      // A page that lists what is remembered - the debugging surface does - must be able to drop
+      // one without connecting to it first, which would be an odd thing to make an operator do.
+      await this.#forgetAsAsked(validName, releaseOptions);
       return;
     }
 
@@ -469,6 +474,27 @@ export class SerialBrokerClient {
    * Reached by `release(name, { forget: true })` and by setting the name up with `remember: false`;
    * a name with nothing stored under it is left as it is rather than reported.
    */
+  /**
+   * Does what `forget` and `forgetDevice` ask for, for a name this context does not run.
+   *
+   * Both stores are the origin's, not this tab's: the entry under the name, and the browser's
+   * permission for the device it names. Neither needs a session, so neither needs the caller to
+   * connect first. The entry is still kept while another tab runs the configuration remembered
+   * (ADR-0033), and the device is looked up in what is remembered under the name, because there
+   * is no session to take it from.
+   */
+  async #forgetAsAsked(name: string, options: ReleaseOptions): Promise<void> {
+    if (options.forget === true) {
+      await this.#forgetUnlessRunElsewhere(name);
+    }
+    if (options.forgetDevice === true && !this.#sessions.has(name)) {
+      const remembered = this.#store.find(name);
+      if (remembered !== undefined) {
+        await this.#forgetDevice(remembered);
+      }
+    }
+  }
+
   async #forgetUnlessRunElsewhere(name: string): Promise<void> {
     // Let go first: this tab's own hold would otherwise be the one found.
     await this.#letGoOfHold(name);

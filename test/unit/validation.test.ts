@@ -19,7 +19,7 @@ function argumentOf(call: () => unknown): string {
   try {
     call();
   } catch (error) {
-    return String((error as SerialBrokerError).context['argumentName']);
+    return String((error as SerialBrokerError).context.argumentName);
   }
   throw new Error('expected the call to throw');
 }

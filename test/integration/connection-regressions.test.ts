@@ -209,7 +209,7 @@ describe('an attempt to connect', () => {
     await tab.setup('Reader', READER_OPTIONS);
 
     const [failure] = tab.recordFor('Reader').errors;
-    expect(failure?.error.context['attempt']).toBe(1);
+    expect(failure?.error.context.attempt).toBe(1);
     expect(fieldsOfEvent(records, 'supervisor.reconnect')[0]?.['attempt']).toBe(1);
     expect(tab.client.diagnostics()?.configurations[0]?.connection?.attempt).toBe(1);
   });

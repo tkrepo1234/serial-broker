@@ -166,7 +166,7 @@ describe('mapping platform failures', () => {
     const error = mapOpenError(domException('SomeFutureError', 'x'), context);
 
     expect(error.code).toBe(SerialBrokerErrorCode.OPEN_FAILED);
-    expect(error.context['domExceptionName']).toBe('SomeFutureError');
+    expect(error.context.domExceptionName).toBe('SomeFutureError');
   });
 
   it('never maps on message text', () => {
@@ -188,7 +188,7 @@ describe('mapping platform failures', () => {
     const error = mapOpenError('the port exploded', context);
 
     expect(error.code).toBe(SerialBrokerErrorCode.OPEN_FAILED);
-    expect(error.context['domExceptionName']).toBeUndefined();
+    expect(error.context.domExceptionName).toBeUndefined();
     expect(error.message).toContain('the port exploded');
   });
 
@@ -196,7 +196,7 @@ describe('mapping platform failures', () => {
     const error = mapOpenError(domException('constructor', 'x'), context);
 
     expect(error.code).toBe(SerialBrokerErrorCode.OPEN_FAILED);
-    expect(error.context['domExceptionName']).toBe('constructor');
+    expect(error.context.domExceptionName).toBe('constructor');
   });
 
   it('falls back for an error whose name is not a string or cannot be read', () => {
@@ -214,7 +214,7 @@ describe('mapping platform failures', () => {
     for (const hostile of [symbolName, throwingName]) {
       const error = mapOpenError(hostile, context);
       expect(error.code).toBe(SerialBrokerErrorCode.OPEN_FAILED);
-      expect(error.context['domExceptionName']).toBeUndefined();
+      expect(error.context.domExceptionName).toBeUndefined();
     }
   });
 
@@ -230,7 +230,7 @@ describe('mapping platform failures', () => {
       extra: { attempt: 3 },
     });
 
-    expect(error.context['attempt']).toBe(3);
+    expect(error.context.attempt).toBe(3);
     expect(error.configName).toBe('Reader');
     expect(error.timestamp).toBe(1234);
   });

@@ -129,6 +129,7 @@ needs:
 | `SerialBroker.setup()` and the rest  | `SerialBroker`          |
 | `SerialBroker.SerialBrokerError`     | `SerialBrokerError`     |
 | `SerialBroker.isSerialBrokerError()` | `isSerialBrokerError`   |
+| `SerialBroker.hasCode()`             | `hasCode`               |
 | `SerialBroker.SerialBrokerErrorCode` | `SerialBrokerErrorCode` |
 | `SerialBroker.SerialBrokerStatus`    | `SerialBrokerStatus`    |
 | `SerialBroker.REMEDIATION`           | `REMEDIATION`           |

@@ -134,7 +134,9 @@ export interface SerialBrokerApi {
    * `remember: true` - it is one entry per name for the whole origin (ADR-0033) - and does nothing
    * for a configuration set up with `remember: false`, which has nothing stored under its name.
    *
-   * @param name - The configuration name. Releasing one that is not set up is a no-op.
+   * @param name - The configuration name. One that is not set up in this tab has nothing to
+   *   disconnect from, and this does nothing - except what `forget` or `forgetDevice` ask for,
+   *   which is about what the browser stores rather than about this tab, and happens either way.
    * @param options - Whether to also forget the remembered configuration, and whether to revoke the
    *   browser's device permission. Read once, when the call is made.
    * @throws A `SerialBrokerError` with code `INVALID_ARGUMENT` for an invalid name, for `options`

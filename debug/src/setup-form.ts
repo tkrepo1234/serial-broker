@@ -287,7 +287,7 @@ export function rejectedField(error: unknown): string | undefined {
   if (!(error instanceof SerialBrokerError)) {
     return undefined;
   }
-  const argumentName = error.context['argumentName'];
+  const argumentName = error.context.argumentName;
   if (typeof argumentName !== 'string') {
     return undefined;
   }

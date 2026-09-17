@@ -40,20 +40,44 @@
       // A reader who asked for less motion gets none: the jump is the point, not the animation.
       const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
       scroller.scrollTo({ top: 0, behavior: reduced ? 'auto' : 'smooth' });
+      // A smooth scroll ends after the last scroll event this listens to, so the arrow is asked
+      // once more when the scrolling is over. `scrollend` is not in every browser this page is
+      // read in, hence the timeout as well; both only ever hide it.
+      scroller.addEventListener('scrollend', update, { once: true });
+      setTimeout(update, 700);
     });
 
     frame.append(button);
 
-    let shown = false;
-    const update = () => {
-      const should = scroller.scrollTop > SHOW_AFTER_PX;
-      if (should !== shown) {
-        shown = should;
-        button.hidden = !should;
+    // The search box stays at the top of the list (see the stylesheet), and the arrow sits under
+    // it. How far under is measured, not assumed: the box is taller when the title wraps, and
+    // taller again on a narrow window.
+    const search = frame.querySelector('.wy-side-nav-search');
+    const placeBelowSearch = () => {
+      if (search !== null) {
+        frame.style.setProperty('--serial-broker-search-height', `${search.offsetHeight}px`);
       }
     };
+    placeBelowSearch();
+    window.addEventListener('resize', placeBelowSearch, { passive: true });
 
-    // `passive`: this never cancels the scroll it is told about.
+    // The theme scrolls this list to the entry for the page being read, which is not the reader
+    // scrolling: on a page deep in the reference the list starts far down, and an arrow on
+    // arrival would answer a question nobody asked. So the arrow waits for the reader's own
+    // first scroll - a wheel, a drag, a key - and from then on simply follows the position.
+    let readerHasScrolled = false;
+    const update = () => {
+      button.hidden = !readerHasScrolled || scroller.scrollTop <= SHOW_AFTER_PX;
+    };
+    const readerScrolled = () => {
+      readerHasScrolled = true;
+      update();
+    };
+
+    // `passive`: none of these cancel the scrolling they are told about.
+    for (const event of ['wheel', 'touchmove', 'keydown']) {
+      scroller.addEventListener(event, readerScrolled, { passive: true });
+    }
     scroller.addEventListener('scroll', update, { passive: true });
     update();
   }

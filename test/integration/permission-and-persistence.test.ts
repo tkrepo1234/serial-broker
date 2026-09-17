@@ -166,6 +166,27 @@ describe('permission and persistence', () => {
     await expect(harness.openTab().client.restore()).resolves.toEqual([]);
   });
 
+  it('forgets a remembered configuration from a tab that never set it up', async () => {
+    const harness = new BrowserHarness();
+    const device = harness.serial.addDevice(READER.vendorId, READER.productId);
+    harness.serial.grant(device);
+
+    const first = harness.openTab();
+    await first.setup('Reader', READER_OPTIONS);
+    await first.client.release('Reader');
+    await first.close();
+
+    // A page that lists what the browser remembers - the debugging surface does - must be able to
+    // drop an entry without connecting to it first: what is remembered belongs to the origin, not
+    // to whichever tab happens to run it. Disconnecting has nothing to do here, and says so by
+    // doing nothing.
+    const listing = harness.openTab();
+    await expect(listing.client.release('Reader', { forget: true })).resolves.toBeUndefined();
+    await listing.close();
+
+    await expect(harness.openTab().client.restore()).resolves.toEqual([]);
+  });
+
   it('forgets nothing for a configuration that was never remembered, and reports nothing', async () => {
     const harness = new BrowserHarness();
     const device = harness.serial.addDevice(READER.vendorId, READER.productId);

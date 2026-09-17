@@ -112,6 +112,23 @@ Remembered configurations moved from **storage version 1 to 2** and are not migr
 - **Eleven example applications**, each with a README, a fixed port and a Playwright smoke test
   against a Web Serial stand-in: `minimal`, `multi-tab-dashboard`, `exclusive`, `no-bundler`,
   `openui5`, `react`, `vue`, `svelte` and `angular` (`npm run test:examples`, in CI).
+- **`release(name, { forget: true })` now forgets a configuration this tab has not set up.** It
+  used to return without doing anything, so a page listing what the browser remembers - the
+  debugging surface does - could only drop an entry by connecting to it first, which is an odd
+  thing to ask of an operator who wants it gone. What is remembered, and the browser's permission
+  for the device, belong to the origin rather than to a tab, so both are dropped when asked for;
+  the entry is still kept while another tab runs the configuration remembered (ADR-0033).
+  Disconnecting itself is unchanged: there is nothing to disconnect from, and that is still not an
+  error.
+- **`SerialBrokerError.context` is typed.** It was `Readonly<Record<string, unknown>>`, so every
+  read was an unchecked cast - `error.context['started'] === false` - even in this library's own
+  examples, while the documentation listed the fields for every code. The new
+  `SerialBrokerErrorContext` names each documented field with its type, so `error.context.started`
+  is a boolean or `undefined` and a misspelt name is a compile error. **Nothing is promised to be
+  present**: which fields an error carries depends on where it arose, and an error from another tab
+  may come from a later version carrying fields this one has never heard of - so every field is
+  optional, and the building side still accepts unknown ones. `ContextFor<Code>` and `hasCode()`
+  are exported for code that wants to name the connection between a code and its context.
 - **`getStatus()` reports `maxTabs`.** A status component handed only a configuration name can now
   tell whether `queued` is reachable at all, and say what a tab is waiting for, without being passed
   the options the configuration was set up with. `Number.POSITIVE_INFINITY` when there is no limit.
