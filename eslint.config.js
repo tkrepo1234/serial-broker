@@ -174,6 +174,13 @@ export default defineConfig(
     rules: { '@typescript-eslint/explicit-module-boundary-types': 'off' },
   },
 
+  // The background-tab run talks to the browser's debugging port itself, with Node's own `fetch`
+  // and `WebSocket` (test/browser/background-tab.mjs says why Playwright cannot do this one).
+  {
+    files: ['test/browser/background-tab.mjs'],
+    languageOptions: { globals: { fetch: 'readonly', WebSocket: 'readonly' } },
+  },
+
   // The documentation's own browser script: plain JavaScript served to the reader's browser, with
   // no TypeScript program behind it, so the type-aware rules cannot apply (as for the build
   // scripts above).

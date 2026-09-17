@@ -144,11 +144,11 @@ What they cover of the checklist below, step by step:
 | Step                             | Where it runs                                                                                      |
 | -------------------------------- | -------------------------------------------------------------------------------------------------- |
 | 1 (the debugging surface)        | in a browser (`debug-surface.spec.ts`): the page creates a configuration and shows its detail      |
-| 4a (choosing a device)           | **by hand**: Chromium's own picker                                                                 |
-| 2 (the port picker)              | a real click in a browser against the stand-in; Chromium's own picker **by hand**                  |
+| 4a (choosing a device)           | Chromium's own picker answered through UI Automation, on the Arduino (`picker.spec.ts`)            |
+| 2 (the port picker)              | a real click against the stand-in; Chromium's own picker on the Arduino (`picker.spec.ts`)         |
 | 3, 5, 6                          | in a browser against the stand-in, on the Arduino and on the emulator                              |
 | 4 (reload, no prompt)            | on the emulator: the reloaded page restores the configuration and opens the port                   |
-| 7 (a tab in the background)      | a frozen tab - the harsher case - in a browser; a tab merely in the background **by hand**         |
+| 7 (a tab in the background)      | a frozen tab in a browser; a hidden, throttled tab holding the port in `npm run test:background`   |
 | 8 (one `SharedWorker`)           | in a browser, counted in Chromium's target list                                                    |
 | 9                                | in a browser against the stand-in, on the Arduino and on the emulator                              |
 | 10 (a killed tab)                | in a browser, the renderer killed over CDP - the same path as the task manager's _End process_     |
@@ -160,7 +160,7 @@ What they cover of the checklist below, step by step:
 | 19 (forget the device)           | on the emulator: after `release(name, { forgetDevice: true })` the status is `awaiting-permission` |
 | 20                               | in a browser; 5 000 bytes on the Arduino; 65 536 bytes of every value on the emulator              |
 | 21                               | in a browser (reads of 8 bytes) and on the emulator (`chunk 1`, one byte per read)                 |
-| 22 (hex in the send box)         | the bytes on the emulator; the debugging surface's hex display **by hand**                         |
+| 22 (hex in the send box)         | the bytes on the emulator; the debugging surface's hex box and display in `debug-surface.spec.ts`  |
 | 23 (no payload in the log)       | in-process (`test/integration/diagnostics.test.ts`)                                                |
 | 24                               | on the emulator: the holder crashed while the device holds the write                               |
 | 25                               | in a browser, repeating 5, 6, 9 and 13 over the fallback                                           |
@@ -169,9 +169,15 @@ What they cover of the checklist below, step by step:
 | 28                               | in a browser                                                                                       |
 | 29                               | in a browser: the worker terminated, each tab reporting once, and a tab frozen throughout it       |
 
-So a release run by hand comes down to steps 2, 4a, 7's background tab, 18, 22's display and
-26, plus unplugging a physical adapter (13–16) once, since the emulator proves the software path
-and not the electrical one.
+So a release run by hand comes down to step 18 - the browser's settings offer nothing a test can
+hold on to - and step 26, plus unplugging a physical adapter (13–16) once, since the emulator proves
+the software path and not the electrical one. Two of the runs above need a desktop, because they
+show a browser window, and are opt-in like the hardware suites:
+
+```sh
+SERIAL_BROKER_HARDWARE=picker npm run test:browser -- test/browser/hardware/picker.spec.ts
+npm run test:background
+```
 
 ## Checklist
 
@@ -491,3 +497,34 @@ chunk`, and it failed the same way: the echo never completed within 180 seconds,
 `open`. The board is unchanged since then, so this is still the board dropping payloads from about
 255 bytes on, not the library; the emulator's 64 KiB round trip passed in the same session. It stays
 on the list for the release: repeat it against a board that keeps up.
+
+### 2026-09-17, later — steps 2, 4a, 7 and 22 taken off the list of what is done by hand
+
+**The picker (steps 2, 4, 4a).** `picker.spec.ts`, Edge 153.0.4234.32 with a window, a profile that
+had never been given the device, the Arduino on COM3. Chromium's picker is answered through Windows
+UI Automation. With the device configured, the picker offered exactly one port, the board's; picked,
+the status went to `open`, `HELLO` came back, and a reload reconnected with no picker. In auto mode
+the unfiltered picker was dismissed once - `dismissed`, no error, still `awaiting-permission` - and
+answered the second time: `open` without a second prompt, `HELLO` echoed. **2 of 2 passed.**
+
+**A tab in the background (step 7).** `npm run test:background`: a browser driven over the DevTools
+protocol alone, because Playwright keeps every page visible. The tab holding the port was hidden
+behind two others and its 50 ms interval ticked 5 times in 5 s; after **330 s** hidden it did not tick
+at all in 5 s. In both runs a write from the visible tab and one from the hidden tab each reached the
+device once and their echoes reached all three tabs, the hidden tab kept the port, and no tab reported
+an error. Against the stand-in, so it says nothing about what Chromium does to a hidden tab that
+holds a real port - it exempts those from freezing, which only makes this the harsher case.
+
+**Found on the way:** a fresh Edge profile installs the machine's extensions a few seconds in, and
+at that moment Edge ended the origin's `SharedWorker` and started another. Every tab reported
+`BROKER_UNAVAILABLE` once, logged `transport.broker-lost`, and carried on with the new worker -
+step 29, met in the wild. The background run starts its browser with `--disable-extensions` so that
+it measures step 7 and nothing else.
+
+**Hex (step 22).** `debug-surface.spec.ts` types `02 FF 03` with the send box set to hex: the line
+ending is greyed out, and the traffic shows `02 FF 03` for what was sent and for what came back.
+
+**Still by hand: step 18.** Tried the same day: Edge's settings pages list the site's serial
+permission as text without a control a test can address, and the address bar's page-info bubble
+did not stay open when opened through UI Automation. Whether Chromium sends `disconnect` on a
+revoked permission (ADR-0010) therefore remains assumed.

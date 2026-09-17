@@ -16,8 +16,10 @@ ready; the version and the date go into the changelog when Tim decides.
       run passed on 2026-09-15.
 - [x] Every step of `docs/manual-test-plan.md` names the suite that runs it; steps 4, 11, 12, 16
       and 19 were added to the emulator suite, and on 2026-09-17 a frozen tab - step 7's harsher
-      case and the second half of step 29 - joined the browser suite. What stays by hand: 1, 2, 4a,
-      7's background tab, 18, 22's display, 26, and unplugging a physical adapter once.
+      case and the second half of step 29 - joined the browser suite, and later that day steps 2, 4a,
+      7's background tab and 22's display were automated too (`picker.spec.ts`,
+      `npm run test:background`, `debug-surface.spec.ts`). What stays by hand: 18, 26, and
+      unplugging a physical adapter once.
 - [x] A second pass over every test file (1 410 → 1 345 tests).
 - [x] A documentation drift check against the code, and a cold-read usability test of ten industrial
       use cases built from the documentation alone (below).

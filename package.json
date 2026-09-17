@@ -107,6 +107,7 @@
     "test:coverage": "vitest run --coverage --config config/vitest.config.ts",
     "test:browser": "npm run build && playwright test --config config/playwright.config.ts",
     "test:extreme": "node scripts/test-extreme.mjs",
+    "test:background": "npm run build && node test/browser/background-tab.mjs",
     "docs": "node docs/site/build.mjs",
     "docs:links": "node docs/site/build.mjs --links",
     "debug": "npm run build && npx --yes serve dist -c ../config/serve.json",

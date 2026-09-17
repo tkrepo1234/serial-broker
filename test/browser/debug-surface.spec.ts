@@ -86,4 +86,30 @@ test.describe('the debugging surface', () => {
     await expect(page.locator('#newButton')).toBeVisible();
     await expect(page.locator('#configurationRows')).not.toContainText('Scale');
   });
+  test('sends hex bytes as typed and shows them as hex in the traffic (manual test plan, step 22)', async ({
+    context,
+  }) => {
+    await installStandIn(context, GRANTED_DEVICE);
+    const page = await context.newPage();
+    await openSurface(page);
+    await createConfiguration(page, 'Scale');
+
+    const detail = page.locator('#detail');
+    // A new configuration takes its device from the port the operator chooses; the stand-in's
+    // picker answers with the granted device.
+    await detail.locator('[data-part="choose"]').click();
+    await expect(detail.locator('[data-part="status"]')).toHaveText('Port open');
+    await detail.locator('[data-section="traffic"]').click();
+    await detail.locator('[data-part="mode"]').selectOption('hex');
+    // Hex bytes are sent as they are: a line ending appended to them would be a fourth byte.
+    await expect(detail.locator('[data-part="terminator"]')).toBeDisabled();
+    await detail.locator('[data-part="payload"]').fill('02 FF 03');
+    await detail.locator('[data-part="send"] button[type="submit"]').click();
+
+    // 0xFF is no text in any encoding the page would guess, so both lines - what was sent and
+    // what the stand-in, a loopback, sent back - show the bytes and not a replacement character.
+    const traffic = detail.locator('[data-part="traffic"]');
+    await expect(traffic.getByText('02 FF 03')).toHaveCount(2);
+    await expect(traffic).not.toContainText('\uFFFD');
+  });
 });

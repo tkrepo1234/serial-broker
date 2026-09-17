@@ -81,6 +81,11 @@ the emulator, lets usbip-win2 attach it, and unplugs, hangs and slows it down on
 may be listening on port 3240, and `SERIAL_BROKER_USBIP` points at `usbip.exe` if it is not in
 `C:\Program Files\USBip`.
 
+Two more runs show a browser window and so need a desktop: `SERIAL_BROKER_HARDWARE=picker` runs
+`picker.spec.ts`, which answers Chromium's own port picker on the Arduino through Windows UI
+Automation, and `npm run test:background` puts the tab holding the port in the background for real.
+[testing.md](./docs/guidelines/testing.md) says why neither could be an ordinary browser test.
+
 ### Benchmarks
 
 `npm run bench` measures what the library costs on the simulated browser - latency and throughput

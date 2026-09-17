@@ -101,7 +101,7 @@ later for a reason that is not the library's.
 ### Against real hardware
 
 `test/browser/hardware/` runs the same scenarios against a device that answers. It is skipped
-unless `SERIAL_BROKER_HARDWARE` names the device (`arduino` or `emulator`), it never runs in CI, and it **works on Windows
+unless `SERIAL_BROKER_HARDWARE` names the target (`arduino`, `emulator` or `picker`), it never runs in CI, and it **works on Windows
 only**: the permission is seeded as a Windows device instance ID, read with
 `Get-CimInstance Win32_PnPEntity`, and elsewhere no port is found.
 
@@ -128,6 +128,20 @@ to do on cue: unplugged and plugged in again, hung mid-write, answering one byte
 owner killed while its write is held at the device. It counts the bytes that reached the device
 rather than inferring them from the echo. It needs usbip-win2 (`SERIAL_BROKER_USBIP` points at
 `usbip.exe` if it is not in `C:\Program Files\USBip`) and nothing else listening on port 3240.
+
+`SERIAL_BROKER_HARDWARE=picker` runs `picker.spec.ts`: the first connection through Chromium's
+own port picker, against the Arduino, with a profile that has never been given the device. The
+picker is browser UI that neither a page nor the DevTools protocol can reach, so
+`support/port-picker.ps1` answers it through Windows UI Automation - it finds the picker by the
+origin in its name and its buttons by their position, never by a label in the browser's language.
+It needs a desktop, because a headless browser has no picker to show.
+
+`npm run test:background` (`test/browser/background-tab.mjs`) is the one browser run that does not
+use Playwright: Playwright keeps every page it drives visible and unthrottled, so a tab in the
+background cannot be had with it. The script starts a browser with a window, drives it over the
+DevTools protocol alone, and checks that the tab holding the port, hidden and throttled, still
+serves the others. `SERIAL_BROKER_BACKGROUND_SECONDS=330` keeps it hidden past the five minutes
+after which Chromium lets a hidden page's timers run once a minute. Opt-in, like the hardware runs.
 
 **Record every hardware run in [the manual test plan](../manual-test-plan.md)** — date, browser
 version, device, result.

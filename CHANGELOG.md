@@ -81,7 +81,9 @@ usbip-win2 - in Microsoft Edge on Windows. Before 1.0 a minor version may break 
   checks documented defaults, ranges and log events against the source.
 - **In a real browser** on every CI run against a Web Serial stand-in (ADR-0035), the debugging
   surface included; opt-in hardware runs against an Arduino and the USB/IP emulator
-  (`SERIAL_BROKER_HARDWARE=arduino|emulator`) that name the manual test plan's steps they run; an
-  opt-in extreme-usage suite (`npm run test:extreme`).
+  (`SERIAL_BROKER_HARDWARE=arduino|emulator`) that name the manual test plan's steps they run;
+  Chromium's own port picker answered through Windows UI Automation
+  (`SERIAL_BROKER_HARDWARE=picker`) and a tab really in the background (`npm run test:background`),
+  both opt-in because they show a window; an opt-in extreme-usage suite (`npm run test:extreme`).
 - **Benchmarks judged against expectations written down first** (ADR-0037), with build sizes, in
   the Performance chapter.

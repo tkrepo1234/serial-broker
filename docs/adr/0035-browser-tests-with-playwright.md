@@ -76,6 +76,14 @@ stores a grant), so no prompt is answered and no policy or registry key is touch
 trip on the Arduino needs `SERIAL_BROKER_HARDWARE_LARGE=1`. Runs are recorded in the manual test
 plan, which stays for what cannot be automated.
 
+**The browser's own UI.** Two steps of that plan are about what Playwright cannot reach or will not
+allow. Chromium's port picker is browser UI: `SERIAL_BROKER_HARDWARE=picker` runs
+`test/browser/hardware/picker.spec.ts`, which answers it through Windows UI Automation
+(`support/port-picker.ps1`), against the Arduino and a profile without the permission. And
+Playwright keeps every page visible and unthrottled, so `npm run test:background` drives a browser
+over the DevTools protocol alone to have a tab that is really in the background. Both need a
+desktop and are opt-in.
+
 ## Alternatives considered
 
 - **Keep checking all of this by hand.** It runs when someone remembers, takes half an hour, and its
