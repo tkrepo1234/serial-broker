@@ -100,24 +100,6 @@ test('reads and writes hex, and keeps the display options between visits', async
   tab.expectQuiet();
 });
 
-test('Connect again asks for the device in the same click when none was granted', async ({
-  context,
-}) => {
-  await installLoopback(context, false);
-  const tab = await ExampleTab.open(context, UI);
-  await tab.expectStatus('awaiting-permission');
-
-  // Disconnected without ever having chosen a device. Whoever clicks Connect again wants one, so
-  // the picker opens from that click - no second button to find.
-  await tab.locator('#release').click();
-  await tab.expectStatus('released');
-  await tab.locator('#release').click();
-
-  await tab.expectStatus('open');
-  await expect(tab.locator('#error')).toBeHidden();
-  await tab.sendLine('AFTER ONE CLICK');
-});
-
 test('offers the usual baud rates whatever the field holds, and takes any other', async ({
   context,
 }) => {

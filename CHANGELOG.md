@@ -31,9 +31,9 @@ different protocol versions do not coordinate with each other. It is noted whene
   `await` before `requestAccess()` uses the click up. Chromium counts a click as a gesture for a few
   seconds; only what outlasts them loses it. Measured with the browser's own picker: `setup()` and
   then `requestAccess()` from one click opens it.
-- **Both terminals: _Connect again_ asks for the device in the same click** when no permission is
-  there, instead of showing a second button; and the plain terminal's baud rate is a combo box that
-  lists the usual rates whatever the field holds - its `<datalist>` offered only the one in it.
+- **Both terminals: the button that opens the browser's port picker says _Select Port_**, which is
+  what it does, rather than _Connect_; and the plain terminal's baud rate is a combo box that lists
+  the usual rates whatever the field holds - its `<datalist>` offered only the one in it.
 - **The terminal example needs no web server.** It loads the classic script build by relative
   paths, so `examples/terminal/dist/` runs from wherever it lies, opened as a file or served.
 

@@ -11,7 +11,7 @@ transpile step; the files under `webapp/` are the files the browser loads.
 ## What it does
 
 - **Connect, disconnect, reconnect.** The status badge shows the library's own word - `open`,
-  `reconnecting`, `awaiting-permission`, `queued`, `failed` - and _Connect_ appears exactly while the
+  `reconnecting`, `awaiting-permission`, `queued`, `failed` - and _Select Port_ appears exactly while the
   browser's port picker is what is needed.
 - **Connection settings** in a dialog: baud rate (a combo box - the usual rates, or any you type),
   data bits, stop bits, parity, flow control. Applying them connects again with the new ones.

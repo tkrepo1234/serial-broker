@@ -75,8 +75,7 @@ SerialBroker.subscribe('Adapter', 'onStatusChange', (event) => {
 
 Call `requestAccess()` **directly** in the click handler. The browser counts a click as a gesture
 for a few seconds only; an `await` that outlasts them loses it, and the browser refuses to show the
-picker (`USER_GESTURE_REQUIRED`). A `setup()` before it is quick enough - that is how a _Connect
-again_ button can set up and ask in one click, as the terminal example does. `requestAccess()` resolves
+picker (`USER_GESTURE_REQUIRED`). A `setup()` before it is quick enough. `requestAccess()` resolves
 `false` when the user closes the picker without choosing.
 
 Every tab shows `awaiting-permission`, and the button works in each of them: the permission belongs to

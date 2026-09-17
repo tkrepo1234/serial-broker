@@ -495,43 +495,6 @@
     );
   }
 
-  /**
-   * Connects, and opens the browser's port picker at once if a permission is what is missing.
-   *
-   * For *Connect again*: whoever clicks it wants the device, and being shown a second button to
-   * click for the same thing is a step nobody asked for. The picker needs a click, and this still
-   * is one - Chromium counts a click as such for a few seconds, and a setup takes a fraction of
-   * one. Should it ever take longer, the library refuses with `USER_GESTURE_REQUIRED`; that is not
-   * shown as an error, because *Connect* is on the page by then and does the same.
-   */
-  async function connectAndAsk() {
-    await connect();
-    // `setup()` resolves a moment before the library knows whether a permission is there: the
-    // status is `idle`, then `connecting`, and only then says what is needed (20 ms, measured).
-    const deadline = Date.now() + 2000;
-    while (
-      isSetUp &&
-      Date.now() < deadline &&
-      [SerialBrokerStatus.Idle, SerialBrokerStatus.Connecting].includes(
-        /** @type {any} */ (SerialBroker.getStatus(NAME).status),
-      )
-    ) {
-      await new Promise((resolve) => setTimeout(resolve, 20));
-    }
-    if (!isSetUp || SerialBroker.getStatus(NAME).status !== SerialBrokerStatus.AwaitingPermission) {
-      return;
-    }
-    try {
-      if (!(await SerialBroker.requestAccess(NAME))) {
-        append('The picker was dismissed; nothing was chosen.', 'note');
-      }
-    } catch (error) {
-      if (!isSerialBrokerError(error) || error.code !== 'USER_GESTURE_REQUIRED') {
-        showError(error);
-      }
-    }
-  }
-
   /** Undoes every subscription {@link connect} made, so a second connect does not double the log. */
   function unsubscribeAll() {
     for (const unsubscribe of subscriptions.splice(0)) {
@@ -570,7 +533,7 @@
       // `isSetUp`, not the status: a setup that threw shows `failed` with nothing registered, and
       // releasing that name would resolve silently and report a disconnection that never happened.
       if (!isSetUp) {
-        void connectAndAsk();
+        void connect();
         return;
       }
       // Releasing forgets nothing: the configuration stays, and connecting again needs no prompt.

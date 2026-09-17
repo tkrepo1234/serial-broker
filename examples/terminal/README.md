@@ -13,7 +13,7 @@ framework, no dependencies at run time - and **no web server**: the folder runs 
 ## What it does
 
 - **Connect, disconnect, reconnect.** The status is the library's own word for it — `open`,
-  `reconnecting`, `awaiting-permission`, `queued`, `failed` — and _Connect_ appears exactly while
+  `reconnecting`, `awaiting-permission`, `queued`, `failed` — and _Select Port_ appears exactly while
   the browser's port picker is what is needed.
 - **Connection settings**: baud rate, data bits, stop bits, parity, flow control. Applying them
   connects again with the new ones, in this tab; other tabs keep theirs.

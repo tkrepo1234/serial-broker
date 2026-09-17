@@ -123,24 +123,6 @@ test('reads and writes hex, and keeps the display options between visits', async
   await expect(tab.locator(`${ID}displaySummary`)).toContainText('hex');
 });
 
-test('Connect again asks for the device in the same press when none was granted', async ({
-  context,
-}) => {
-  await installLoopback(context, false);
-  const tab = await ExampleTab.open(context, UI);
-  await tab.expectStatus('awaiting-permission');
-
-  // Disconnected without ever having chosen a device. Whoever presses Connect again wants one, so
-  // the picker opens from that press - no second button to find.
-  await tab.locator(`${ID}release`).click();
-  await tab.expectStatus('released');
-  await tab.locator(`${ID}release`).click();
-
-  await tab.expectStatus('open');
-  await expect(tab.locator(UI.error)).toBeHidden();
-  await tab.sendLine('AFTER ONE PRESS');
-});
-
 test('changes the baud rate in the settings dialog and connects again with it', async ({
   context,
 }) => {
