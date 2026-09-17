@@ -13,6 +13,8 @@
   <Page id="page" class="terminalPage" enableScrolling="false" showFooter="true">
     <customHeader>
       <OverflowToolbar id="header">
+        <!-- Relative to the page, so it is found from a web server and from a folder alike. -->
+        <Image id="icon" src="icon.svg" height="1.75rem" width="1.75rem" decorative="true" />
         <Title id="title" text="{i18n>appTitle}" level="H1" />
         <!-- The status the library reports, in the words the library uses. -->
         <ObjectStatus

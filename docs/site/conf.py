@@ -40,6 +40,9 @@ highlight_language = "ts"
 
 html_theme = "sphinx_rtd_theme"
 html_title = f"serial-broker {release}"
+# The product's icon, above the search box and in the browser tab. One file for the repository.
+html_logo = "../icon.svg"
+html_favicon = "../icon.svg"
 html_theme_options = {
     "navigation_depth": 3,
     "collapse_navigation": False,

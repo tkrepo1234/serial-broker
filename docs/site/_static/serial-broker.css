@@ -44,6 +44,38 @@
  * It is the way back to everything else - the chapters, the search - and scrolling the list used
  * to take it off screen entirely.
  */
+/*
+ * The icon sits left of the project's name, in one line with it.
+ *
+ * The theme puts a logo on a line of its own, centred, which spends the width of the sidebar on
+ * the space left and right of it. Beside the name it costs no height at all, so the whole header
+ * can stay where it is while the list scrolls. It takes the place of the theme's home glyph, which
+ * said the same thing: this leads to the first page.
+ *
+ * The file is drawn in the documentation's blue, for a white page; on the blue of this header the
+ * filter turns the one colour it has into white.
+ */
+.wy-side-nav-search > a.icon-home {
+  display: inline-flex;
+  flex-direction: row-reverse;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.wy-side-nav-search > a.icon-home::before {
+  display: none;
+}
+
+.wy-side-nav-search > a img.logo {
+  width: 2rem;
+  height: 2rem;
+  margin: 0;
+  padding: 0;
+  border-radius: 0;
+  background: none;
+  filter: brightness(0) invert(1);
+}
+
 .wy-side-nav-search {
   position: sticky;
   top: 0;
