@@ -22,7 +22,7 @@ hand. The serial-broker code imports `SerialBroker` from `serial-broker`.
 | [Send a command and await it](#send-a-command-and-await-it)                     | 1 / 0 / 3     | 4 / 0 / 3           | Every write sent to the tab holding the port, and its result |
 | [Show the status](#show-the-status)                                             | 1 / 0 / 2     | 2 / 0 / 3           | Every change sent to every tab, and asked for on joining     |
 | [Ask for permission](#ask-for-permission)                                       | 2 / 0 / 3     | 1 / 1 / 3           | The tab holding the port told to look again                  |
-| [Release](#release)                                                             | 1 / 1 / 2     | 3 / 0 / 2           | The port closed before the lock is let go                    |
+| [Release](#release)                                                             | 1 / 2 / 2     | 3 / 0 / 2           | The port closed before the lock is let go                    |
 | [Remember and restore](#remember-and-restore)                                   | 2 / 1 / 2     | 4 / 1 / 3           | A stored entry kept while any tab still runs it              |
 | [Use the device from one tab at a time](#use-the-device-from-one-tab-at-a-time) | 1 / 3 / 2     | 3 / 1 / 2           | A Web Lock around the port                                   |
 

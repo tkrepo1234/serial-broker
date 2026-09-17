@@ -6,8 +6,7 @@ import {
 } from '../../src/client/serial-broker-client.js';
 import { SerialBrokerErrorCode } from '../../src/core/error-codes.js';
 import { ANNOUNCEMENT_CHANNEL_NAME, versionAnnouncement } from '../../src/protocol/announcement.js';
-import { BrowserHarness } from '../harness/browser-harness.js';
-import { READER, READER_OPTIONS } from '../harness/devices.js';
+import { READER_OPTIONS, readerHarness } from '../harness/devices.js';
 import { fieldsOfEvent, recordingLogger } from '../harness/recording-logger.js';
 import { remember } from '../harness/stored-configurations.js';
 
@@ -19,8 +18,7 @@ import { remember } from '../harness/stored-configurations.js';
 describe('state a tab keeps about what it heard', () => {
   it('reports at most MAX_REPORTED_PEER_VERSIONS other protocol versions, and logs reaching the limit once', async () => {
     const { logger, records } = recordingLogger();
-    const harness = new BrowserHarness({ logger });
-    harness.serial.grant(harness.serial.addDevice(READER.vendorId, READER.productId));
+    const { harness } = readerHarness({ logger });
     const tab = harness.openTab();
     await tab.setup('Reader', READER_OPTIONS);
 
@@ -42,8 +40,7 @@ describe('state a tab keeps about what it heard', () => {
 
   it('keeps the latest MAX_UNHEARD_ERRORS errors nobody listened for, and logs dropping older ones once', async () => {
     const { logger, records } = recordingLogger();
-    const harness = new BrowserHarness({ logger });
-    harness.serial.grant(harness.serial.addDevice(READER.vendorId, READER.productId));
+    const { harness } = readerHarness({ logger });
     const broken: Record<string, unknown> = {};
     for (let index = 0; index < MAX_UNHEARD_ERRORS + 4; index += 1) {
       broken[`broken${String(index)}`] = { device: 'not a device' };

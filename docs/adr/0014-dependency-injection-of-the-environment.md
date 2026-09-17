@@ -1,4 +1,4 @@
-# ADR-0014: Inject the browser environment for testability
+# ADR-0014: Inject the browser environment, with a monotonic and a wall clock
 
 - **Status:** Accepted
 - **Date:** 2026-09-12
@@ -40,7 +40,7 @@ All platform access goes through a single injected `SerialBrokerEnvironment`:
     }
 
 No module outside the two composition roots - `src/environment/browser.ts` and the worker's entry
-point, `src/worker/serial-broker.worker.ts` - references `navigator`, `window`, `self`,
+point, `src/worker/serial-broker.worker.ts` - references `navigator`, `window`,
 `localStorage` or the timer functions; `no-restricted-globals` enforces it. Time and randomness come
 from the environment as well. The test environment is plain Node with no browser globals, so a
 violation fails loudly rather than silently working in production.
@@ -106,6 +106,6 @@ a dozen independent simulated tabs.
 
 The lint rule fails the build on direct global access outside the composition roots; the harness
 has its own conformance suite (`test/harness/harness-conformance.test.ts`, including
-`FakeClock.monotonicNow()` ignoring `jumpWallClock`). `test/integration/monotonic-time.test.ts`,
-`test/integration/multi-tab/browser-lifecycle.test.ts` and `test/unit/late-deadline.test.ts` hold
-durations to the monotonic clock. `scripts/check-dist.mjs` type-checks the published declarations.
+`FakeClock.monotonicNow()` ignoring `jumpWallClock`). `test/integration/reconnect.test.ts` ("a
+system clock that is set"), `test/integration/multi-tab/browser-lifecycle.test.ts` and
+`test/unit/pending-writes.test.ts` (`scheduleDeadline`) hold durations to the monotonic clock. `scripts/check-dist.mjs` type-checks the published declarations.

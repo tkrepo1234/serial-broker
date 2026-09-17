@@ -6,9 +6,8 @@
 ## Context
 
 [ADR-0013](./0013-write-ordering-and-delivery-semantics.md) lets the tab that issued a write decide
-its fate: not repeatable once it has let the tab holding the port begin it (originally: once that tab
-reported `write-started`), settled by `write-result`, and - when that tab is gone - failed if it had
-started, handed on if it had not.
+its fate: not repeatable once it has let the tab holding the port begin it, settled by
+`write-result`, and - when that tab is gone - failed if it had started, handed on if it had not.
 Everything depends on knowing when the tab holding the port is gone and when its last word has
 arrived.
 
@@ -43,10 +42,9 @@ configuration name comes last, because it is the only part that may contain a `/
 - **The term lock is taken inside the election.** The ownership lock's callback takes the term's
   lock before the context counts as the owner; a term lock the browser refuses lets the ownership
   lock go too, and both are requested again. No tab holds the ownership lock without a term.
-- **Messages name their term.** `owner-claimed`, `owner-released`, `status` and `write-ready`
-  (originally `write-started`) carry the sender's term; `owner-claimed` and `status` carry its
-  `maxTabs`. A `write-request` names the term it is **addressed** to, and only the tab holding that
-  term writes it.
+- **Messages name their term.** `owner-claimed`, `owner-released`, `status` and `write-ready` carry
+  the sender's term; `owner-claimed` and `status` carry its `maxTabs`. A `write-request` names the
+  term it is **addressed** to, and only the tab holding that term writes it.
 - **A term ends cleanly in a fixed order.** The holder closes the port, waits until every write it
   performed has been answered (bounded by `writeTimeoutMs`), queues a second request of its own on
   the term's lock - the **goodbye request** - sends `owner-released` as the term's last message,
@@ -91,10 +89,9 @@ about the term: the tab forgets it, and the next message naming it is checked af
 
 - **Keep the claim as the proof, and wait a fixed delay after it.** A clean handover then waits for
   nothing, and a late message cannot be attributed to the old owner or the new.
-- **Term identifiers without locks, a succeeded term ending after a grace period.** What ADR-0030
-  decided on 2026-09-14: one second without a word. Too short and a slow message becomes a repeated
-  command, too long and every failover waits; and a message could invent a term, or keep a dead one
-  alive.
+- **Term identifiers without locks, a succeeded term ending after a grace period** of one second
+  without a word. Too short and a slow message becomes a repeated command, too long and every
+  failover waits; and a message could invent a term, or keep a dead one alive.
 - **Order all messages through one sequencer.** The fallback has no broker, and a busy tab does not
   process queued tasks in a defined order either.
 - **Number the terms.** A new owner cannot know the number of a term it never heard of, and storage
@@ -133,10 +130,9 @@ about the term: the tab forgets it, and the next message naming it is checked af
 
 ### Risks and mitigations
 
-- **A word from a crashed holder that arrives after the browser freed its lock is too late.** Until
-  2026-09-15 that let a write look unstarted whose `write-started` a crash delayed: it was handed on
-  and could reach the device twice. Since the holder asks the issuing tab before it begins, and that
-  tab counts what it let begin as begun, a late word no longer changes whether a write began
+- **A word from a crashed holder that arrives after the browser freed its lock is too late.** The
+  holder asks the issuing tab before it begins, and that tab counts what it let begin as begun, so a
+  late word does not change whether a write began
   ([ADR-0013](./0013-write-ordering-and-delivery-semantics.md)); only a late result is lost, and the
   write is `OWNER_LOST_DURING_WRITE`.
 - **A script of the origin can take Web Locks.** It can hold a lock named for a term it invented, or
@@ -154,4 +150,5 @@ reproduces both handover defects with messages from the former owner held back, 
 `failover.test.ts` the exact end after a crash, in both transport modes.
 `test/integration/multi-tab/hostile-bus.test.ts` posts forged claims, statuses, goodbyes, write
 results and device data as a script of the origin, including a goodbye with a request of the
-script's own queued on the real term's lock; `session-regressions.test.ts` covers a clean release.
+script's own queued on the real term's lock; `handover-races.test.ts` also covers a clean release,
+and `failover.test.ts` a browser that refuses the lock of a term.

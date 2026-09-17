@@ -97,7 +97,7 @@ try {
 }
 ```
 
-- Branch on `code`, never on `message`.
+- Branch on `code`, never on `message`. `hasCode(error, code)` tests for one code as a type guard.
 - Give every `switch` over codes a default branch. A later version may add a code, and an error with
   a code the application does not know is still an error, with a `remediation` to show.
 - Do not show retryable errors as problems while the status shows the recovery.

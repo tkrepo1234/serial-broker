@@ -13,7 +13,7 @@ import { OwnershipElection } from '../../src/owner/election.js';
 import type { TermId } from '../../src/protocol/messages.js';
 import { ownerLockName } from '../../src/protocol/version.js';
 import { BrowserHarness, VirtualTab } from '../harness/browser-harness.js';
-import { READER, READER_OPTIONS } from '../harness/devices.js';
+import { READER, READER_OPTIONS, readerHarness } from '../harness/devices.js';
 import { FakeClock, flushMicrotasks } from '../harness/fake-clock.js';
 import { FakeLockManager } from '../harness/fake-locks.js';
 import { domException } from '../harness/fake-serial.js';
@@ -123,9 +123,7 @@ function connectionState(tab: VirtualTab): string | undefined {
 
 describe('listing the granted ports', () => {
   it('keeps retrying when listing the ports hangs during a reconnect', async () => {
-    const harness = new BrowserHarness();
-    const device = harness.serial.addDevice(READER.vendorId, READER.productId);
-    harness.serial.grant(device);
+    const { harness, device } = readerHarness();
     const { tab, timing } = openSlowTab(harness, 'slow-tab');
     await tab.setup('Reader', { ...READER_OPTIONS, connection: { openTimeoutMs: 1_000 } });
 
@@ -148,9 +146,7 @@ describe('listing the granted ports', () => {
   });
 
   it('reports the connection as listing while the ports are listed for the first time', async () => {
-    const harness = new BrowserHarness();
-    const device = harness.serial.addDevice(READER.vendorId, READER.productId);
-    harness.serial.grant(device);
+    const { harness } = readerHarness();
     const { tab, timing } = openSlowTab(harness, 'slow-tab');
     timing.listingHangs = true;
 
@@ -161,9 +157,7 @@ describe('listing the granted ports', () => {
   });
 
   it('reports the connection as listing, with no attempt scheduled, while a retry lists the ports', async () => {
-    const harness = new BrowserHarness();
-    const device = harness.serial.addDevice(READER.vendorId, READER.productId);
-    harness.serial.grant(device);
+    const { harness, device } = readerHarness();
     const { tab, timing } = openSlowTab(harness, 'slow-tab');
     await tab.setup('Reader', READER_OPTIONS);
 
@@ -180,9 +174,7 @@ describe('listing the granted ports', () => {
 
 describe('an attempt to connect', () => {
   it('looks again for a device plugged in during the listing as part of the same attempt', async () => {
-    const harness = new BrowserHarness();
-    const device = harness.serial.addDevice(READER.vendorId, READER.productId);
-    harness.serial.grant(device);
+    const { harness, device } = readerHarness();
     harness.serial.unplug(device);
     harness.serial.onListingPorts = () => {
       harness.serial.onListingPorts = undefined;
@@ -200,9 +192,7 @@ describe('an attempt to connect', () => {
 
   it('numbers an attempt alike in its error, its log record and the diagnostics', async () => {
     const { logger, records } = recordingLogger();
-    const harness = new BrowserHarness({ logger });
-    const device = harness.serial.addDevice(READER.vendorId, READER.productId);
-    harness.serial.grant(device);
+    const { harness, device } = readerHarness({ logger });
     device.faults.failOpenWith = 'InvalidStateError';
 
     const tab = harness.openTab();
@@ -230,9 +220,7 @@ describe('an attempt to connect', () => {
 describe('closing a lost connection', () => {
   it('records a teardown step that failed, which the next open may run into', async () => {
     const { logger, records } = recordingLogger();
-    const harness = new BrowserHarness({ logger });
-    const device = harness.serial.addDevice(READER.vendorId, READER.productId);
-    harness.serial.grant(device);
+    const { harness, device } = readerHarness({ logger });
     const tab = harness.openTab();
     await tab.setup('Reader', READER_OPTIONS);
 
@@ -250,9 +238,7 @@ describe('closing a lost connection', () => {
 
 describe('retrying after a lost connection', () => {
   it('waits for the lost connection to close before opening the port again', async () => {
-    const harness = new BrowserHarness();
-    const device = harness.serial.addDevice(READER.vendorId, READER.productId);
-    harness.serial.grant(device);
+    const { harness, device } = readerHarness();
     const { tab, timing } = openSlowTab(harness, 'slow-tab');
     await tab.setup('Reader', { ...READER_OPTIONS, connection: { maxAttempts: 2 } });
 
@@ -310,9 +296,7 @@ describe('a device event for another port', () => {
 
 describe('handing the port over', () => {
   it('does not let the next tab open the port before a pending open has been closed', async () => {
-    const harness = new BrowserHarness();
-    const device = harness.serial.addDevice(READER.vendorId, READER.productId);
-    harness.serial.grant(device);
+    const { harness, device } = readerHarness();
     const { tab: first, timing } = openSlowTab(harness, 'slow-tab');
     timing.openDelayMs = 50;
     await first.setup('Reader', READER_OPTIONS);
@@ -334,9 +318,7 @@ describe('handing the port over', () => {
   });
 
   it('does not let the next tab open the port while a lost connection is still closing', async () => {
-    const harness = new BrowserHarness();
-    const device = harness.serial.addDevice(READER.vendorId, READER.productId);
-    harness.serial.grant(device);
+    const { harness, device } = readerHarness();
     const { tab: first, timing } = openSlowTab(harness, 'slow-tab');
     await first.setup('Reader', READER_OPTIONS);
     const second = harness.openTab();
@@ -362,9 +344,7 @@ describe('an unplugged device', () => {
     device: ReturnType<BrowserHarness['serial']['addDevice']>;
     tab: VirtualTab;
   }> {
-    const harness = new BrowserHarness();
-    const device = harness.serial.addDevice(READER.vendorId, READER.productId);
-    harness.serial.grant(device);
+    const { harness, device } = readerHarness();
     const tab = harness.openTab();
     await tab.setup('Reader', { ...READER_OPTIONS, connection });
     return { harness, device, tab };
@@ -455,9 +435,7 @@ describe('a device that stops taking writes', () => {
     records: ReturnType<typeof recordingLogger>['records'];
   }> {
     const { logger, records } = recordingLogger();
-    const harness = new BrowserHarness({ logger });
-    const device = harness.serial.addDevice(READER.vendorId, READER.productId);
-    harness.serial.grant(device);
+    const { harness, device } = readerHarness({ logger });
     const tab = harness.openTab();
     await tab.setup('Reader', { ...READER_OPTIONS, connection: { writeTimeoutMs: 1_000 } });
     return { harness, device, tab, records };
@@ -588,9 +566,7 @@ describe('leaving the election', () => {
 
 describe('a port that throws where the platform would reject', () => {
   it('counts a throwing open() as a failed attempt, and connects with the next one', async () => {
-    const harness = new BrowserHarness();
-    const device = harness.serial.addDevice(READER.vendorId, READER.productId);
-    harness.serial.grant(device);
+    const { harness } = readerHarness();
     const tab = harness.openTab();
     const [port] = await harness.serial.forContext(tab.id).getPorts();
     if (port === undefined) {
@@ -623,9 +599,7 @@ describe('a port that throws where the platform would reject', () => {
   });
 
   it('counts streams that cannot be taken as a failed attempt, and closes the port', async () => {
-    const harness = new BrowserHarness();
-    const device = harness.serial.addDevice(READER.vendorId, READER.productId);
-    harness.serial.grant(device);
+    const { harness, device } = readerHarness();
     const tab = harness.openTab();
     const [port] = await harness.serial.forContext(tab.id).getPorts();
     if (port === undefined) {

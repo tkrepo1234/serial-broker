@@ -84,7 +84,7 @@ measured on the environment's monotonic clock, and only moments that are shown o
 clock.
 
 The environment describes each of those APIs in types of its own — `SerialLike`, `SerialPortLike`,
-`LockManagerLike`, `KeyValueStorage`, `Clock` — naming no ambient Web Serial type, so that nothing
+`LockManagerLike`, `KeyValueStorage` — naming no ambient Web Serial type, so that nothing
 this package publishes needs `@types/w3c-web-serial`. `scripts/check-dist.mjs` type-checks every
 emitted `.d.ts` without those types after each build [ADR-0014].
 

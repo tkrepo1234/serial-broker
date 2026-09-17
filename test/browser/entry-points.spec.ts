@@ -1,13 +1,14 @@
 /**
- * `dist/serial-broker.global.js`, loaded by a page that has no modules at all.
+ * The published builds a page loads without the readable ES module: `dist/serial-broker.min.js` and
+ * `dist/serial-broker.global.js`.
  *
- * The classic script build is a published artefact with two failure modes of its own. A global
- * that is missing part of the surface leaves such a page unable to call the library:
- * `scripts/check-dist.mjs` compares the global with the ES module's exports after every build,
- * and the second test here checks the same thing in a browser, where `window` is real. A build
- * that looked for a worker of its own would split the tabs into groups that cannot see each
- * other, and nothing but loading both builds in one browser catches that - which is the first
- * test. See ADR-0043 and ADR-0035.
+ * Each is a separate artefact with a failure mode of its own. A minifier that renames something
+ * the worker script agrees on, or a build that looked for a worker of its own, would split the
+ * tabs into groups that cannot see each other, and nothing but loading two builds in one browser
+ * catches that - which is the first test of each build. A classic script global that is missing
+ * part of the surface leaves its page unable to call the library: `scripts/check-dist.mjs` compares
+ * the global with the ES module's exports after every build, and the second test of the classic
+ * build checks the same thing in a browser, where `window` is real. See ADR-0035 and ADR-0043.
  */
 
 import { expect, test } from '@playwright/test';
@@ -57,38 +58,59 @@ const CARRIED_EXPORTS = [
   'SerialBrokerStatus',
 ];
 
-test.describe('the classic script build', () => {
-  test('shares the port with a tab running the ES module build', async ({ context }) => {
-    await installStandIn(context, GRANTED_DEVICE);
-    const classic = await Tab.open(context, { page: 'tab-global.html', workerUrl: WORKER_URL });
-    const esModule = await Tab.open(context, { page: 'tab.html' });
-    const tabs = [classic, esModule];
+/** The builds that must share one port, one broker and one protocol with the readable ES module. */
+const BUILDS = [
+  {
+    name: 'the minified entry point',
+    shares: 'shares the port with a tab running the readable build',
+    open: { page: 'tab-min.html' },
+    says: 'MINIFIED',
+  },
+  {
+    name: 'the classic script build',
+    shares: 'shares the port with a tab running the ES module build',
+    open: { page: 'tab-global.html', workerUrl: WORKER_URL },
+    says: 'CLASSIC',
+  },
+] as const;
 
-    for (const tab of tabs) {
-      await tab.setup('Echo', echoConfiguration());
-      await tab.waitForStatus('Echo', 'open');
-    }
-    await classic.send('Echo', 'CLASSIC');
-    for (const tab of tabs) {
-      await tab.waitForReceivedText('Echo', 'CLASSIC');
-    }
-    await esModule.send('Echo', 'MODULE');
-    for (const tab of tabs) {
-      await tab.waitForReceivedText('Echo', 'MODULE');
-    }
+for (const build of BUILDS) {
+  test.describe(build.name, () => {
+    test(build.shares, async ({ context }) => {
+      await installStandIn(context, GRANTED_DEVICE);
+      const built = await Tab.open(context, build.open);
+      const esModule = await Tab.open(context, { page: 'tab.html' });
+      const tabs = [built, esModule];
 
-    // One port and one broker for both builds: they agree on the protocol version, the lock names
-    // and - the claim this build could most easily break - the worker script's URL.
-    expect(await classic.protocolVersion()).toBe(await esModule.protocolVersion());
-    await waitForPortHolder(tabs);
-    const workers = await sharedWorkersOf(classic);
-    expect(workers).toHaveLength(1);
-    for (const tab of tabs) {
-      expect(await tab.logEvents()).not.toContain('environment.transport-fallback');
-      expect(tab.pageErrors).toEqual([]);
-    }
+      for (const tab of tabs) {
+        await tab.setup('Echo', echoConfiguration());
+        await tab.waitForStatus('Echo', 'open');
+      }
+      await built.send('Echo', build.says);
+      for (const tab of tabs) {
+        await tab.waitForReceivedText('Echo', build.says);
+      }
+      await esModule.send('Echo', 'MODULE');
+      for (const tab of tabs) {
+        await tab.waitForReceivedText('Echo', 'MODULE');
+      }
+
+      // One port and one broker for both builds: they agree on the protocol version, the lock
+      // names and - the claim a build could most easily break - the worker script's URL, which is
+      // what `serial-broker/min` and the classic script build promise.
+      expect(await built.protocolVersion()).toBe(await esModule.protocolVersion());
+      await waitForPortHolder(tabs);
+      const workers = await sharedWorkersOf(built);
+      expect(workers).toHaveLength(1);
+      for (const tab of tabs) {
+        expect(await tab.logEvents()).not.toContain('environment.transport-fallback');
+        expect(tab.pageErrors).toEqual([]);
+      }
+    });
   });
+}
 
+test.describe('the classic script build', () => {
   test('puts the documented surface on one global, and only that one', async ({ context }) => {
     await installStandIn(context, GRANTED_DEVICE);
     const classic = await Tab.open(context, { page: 'tab-global.html', workerUrl: WORKER_URL });

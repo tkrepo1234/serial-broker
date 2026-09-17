@@ -1,4 +1,4 @@
-# ADR-0033: One storage key per configuration, with an index of the names
+# ADR-0033: Remembered configurations: one storage key each, kept while any tab runs them
 
 - **Status:** Accepted
 - **Date:** 2026-09-14
@@ -95,11 +95,11 @@ is promised about stored data (BACKLOG.md, standing decisions).
 - **Ask the broker which tabs are attached.** Unavailable in the fallback, and a round trip to a
   worker that may have ended.
 - **Keep a list of running tabs in the entry.** A crashed tab never removes itself.
-- **Forget on every `release()`.** The rule until 2026-09-16, on the reading that `release()` is how
-  an application says a configuration is not wanted any more. It made a disconnect a deletion: with
-  one tab open - the normal case on a production line - pressing _Disconnect_ took the entry with
-  it, and the next visit had nothing to restore. Closing a port and deleting its configuration are
-  different intentions, and only the caller knows which one it means.
+- **Forget on every `release()`**, on the reading that `release()` is how an application says a
+  configuration is not wanted any more. It makes a disconnect a deletion: with one tab open - the
+  normal case on a production line - pressing _Disconnect_ takes the entry with it, and the next
+  visit has nothing to restore. Closing a port and deleting its configuration are different
+  intentions, and only the caller knows which one it means.
 - **Never forget at all, and let the application clear storage itself.** The entries are in keys
   this library owns, names and versions; reaching into them from outside is what this record exists
   to avoid.
@@ -142,8 +142,9 @@ is promised about stored data (BACKLOG.md, standing decisions).
 
 `test/unit/configuration-store.test.ts` holds the proof of the lost update: two stores over the same
 entries, one reading from a copy taken before the other's write, and the newer entry survives the
-stale tab's save. `test/integration/storage-schema.test.ts` covers the shape of the keys, an
-unreadable or partly broken index, and a listed name whose entry is gone.
+stale tab's save, and covers a listed name whose entry is gone and storage that refuses one entry.
+`test/integration/permission-and-persistence.test.ts` ("the layout of remembered configurations")
+covers the shape of the keys and an unreadable or partly broken index.
 `test/integration/multi-tab/remembered-configurations.test.ts`, in both transport modes: a release
 that forgets nothing and the `restore()` that brings the configuration back, `forget: true` while
 another tab runs the configuration, the last release, a closed and a crashed tab,

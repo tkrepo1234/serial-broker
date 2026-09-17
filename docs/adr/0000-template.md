@@ -1,8 +1,7 @@
 # ADR-0000: Title in the imperative
 
-- **Status:** Proposed | Accepted | Superseded by ADR-NNNN (YYYY-MM-DD)
+- **Status:** Proposed | Accepted
 - **Date:** YYYY-MM-DD
-- **Deciders:** role or team
 
 ## Context
 
@@ -35,6 +34,6 @@ How we know this decision holds: which tests, which manual checks.
 <!--
 A record states what holds today and nothing else: no history section, no amendments (ADR-0001).
 When the decision moves, rewrite the record; version control keeps what it used to say, next to
-the change that moved it. A superseded record keeps only its title, status, date and the decision
-as first recorded in one sentence.
+the change that moved it. A record that stops holding is removed, and the citations of its number
+move to the record that now holds the decision.
 -->

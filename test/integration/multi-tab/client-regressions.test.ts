@@ -8,7 +8,7 @@ import {
 } from '../../../src/protocol/announcement.js';
 import { ownerLockName, PROTOCOL_VERSION } from '../../../src/protocol/version.js';
 import { BrowserHarness, TRANSPORT_MODES } from '../../harness/browser-harness.js';
-import { READER, READER_OPTIONS } from '../../harness/devices.js';
+import { READER, READER_OPTIONS, readerHarness } from '../../harness/devices.js';
 import { remember } from '../../harness/stored-configurations.js';
 
 /**
@@ -19,9 +19,7 @@ describe.each(TRANSPORT_MODES)('a write issued during an owner change (%s)', (tr
   it.each(['closes', 'crashes'] as const)(
     'reaches the device once when the tab holding the port %s',
     async (how) => {
-      const harness = new BrowserHarness({ transport });
-      const device = harness.serial.addDevice(READER.vendorId, READER.productId);
-      harness.serial.grant(device);
+      const { harness, device } = readerHarness({ transport });
       const first = harness.openTab();
       await first.setup('Reader', READER_OPTIONS);
       const second = harness.openTab();
@@ -57,9 +55,7 @@ describe.each(TRANSPORT_MODES)(
   'setting a configuration up again while it is released (%s)',
   (transport) => {
     it('keeps the new session on the bus in a tab that does not hold the port', async () => {
-      const harness = new BrowserHarness({ transport });
-      const device = harness.serial.addDevice(READER.vendorId, READER.productId);
-      harness.serial.grant(device);
+      const { harness, device } = readerHarness({ transport });
       const owner = harness.openTab();
       await owner.setup('Reader', READER_OPTIONS);
       const tab = harness.openTab();
@@ -75,9 +71,7 @@ describe.each(TRANSPORT_MODES)(
     });
 
     it('keeps taking writes from other tabs in a tab that holds the port alone', async () => {
-      const harness = new BrowserHarness({ transport });
-      const device = harness.serial.addDevice(READER.vendorId, READER.productId);
-      harness.serial.grant(device);
+      const { harness, device } = readerHarness({ transport });
       const tab = harness.openTab();
       await tab.setup('Reader', READER_OPTIONS);
 
@@ -97,8 +91,7 @@ describe.each(TRANSPORT_MODES)(
 
 describe.each(TRANSPORT_MODES)('releasing and setting up in quick succession (%s)', (transport) => {
   it('leaves the configuration released when release() follows a setup() that waits', async () => {
-    const harness = new BrowserHarness({ transport });
-    harness.serial.grant(harness.serial.addDevice(READER.vendorId, READER.productId));
+    const { harness } = readerHarness({ transport });
     const tab = harness.openTab();
     await tab.setup('Reader', READER_OPTIONS);
 
@@ -113,9 +106,7 @@ describe.each(TRANSPORT_MODES)('releasing and setting up in quick succession (%s
   });
 
   it('keeps a listener registered on the new session when an earlier registration is removed', async () => {
-    const harness = new BrowserHarness({ transport });
-    const device = harness.serial.addDevice(READER.vendorId, READER.productId);
-    harness.serial.grant(device);
+    const { harness, device } = readerHarness({ transport });
     const tab = harness.openTab();
     await tab.setup('Reader', READER_OPTIONS);
     const listener = vi.fn();
@@ -132,9 +123,7 @@ describe.each(TRANSPORT_MODES)('releasing and setting up in quick succession (%s
   });
 
   it('lets dispose() finish only once a release still in progress has closed the port', async () => {
-    const harness = new BrowserHarness({ transport });
-    const device = harness.serial.addDevice(READER.vendorId, READER.productId);
-    harness.serial.grant(device);
+    const { harness, device } = readerHarness({ transport });
     const tab = harness.openTab();
     await tab.setup('Reader', READER_OPTIONS);
 

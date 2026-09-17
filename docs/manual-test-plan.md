@@ -79,7 +79,7 @@ What they cover of the checklist below, step by step:
 | 24                               | on the emulator: the holder crashed while the device holds the write                               |
 | 25                               | in a browser, repeating 5, 6, 9 and 13 over the fallback                                           |
 | 26                               | withdrawn: Chrome for Android is not a target (see [Known limits](./site/known-limits.md))         |
-| 27 (worker script answers 404)   | in-process (`test/integration/multi-tab/worker-script-fallback.test.ts`)                           |
+| 27 (worker script answers 404)   | in-process (`test/integration/multi-tab/shared-worker.test.ts`)                                    |
 | 28                               | in a browser                                                                                       |
 | 29                               | in a browser: the worker terminated, each tab reporting once, and a tab frozen throughout it       |
 

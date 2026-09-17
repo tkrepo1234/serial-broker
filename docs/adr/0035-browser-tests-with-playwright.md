@@ -1,4 +1,4 @@
-# ADR-0035: Test the built package in a real browser, and against real hardware
+# ADR-0035: Test in a real browser, against an emulated device and against real hardware
 
 - **Status:** Accepted
 - **Date:** 2026-09-14
@@ -128,7 +128,7 @@ desktop and are opt-in.
 - The browser suite is not deterministic in the way the rest is; nothing in it is retried.
 - Using the emulator means installing a third-party kernel driver (usbip-win2). It is open source
   and Microsoft-signed, but one release (0.9.7.8) carried a bug its author warned could cause a blue
-  screen; the emulator's README pins the version.
+  screen; the emulator's README names the version to use.
 - The emulator proves the software path, not the electrical one, and its timing is a socket's.
 
 ### Risks and mitigations
@@ -145,8 +145,9 @@ desktop and are opt-in.
 ## Verification
 
 `test/browser/shared-port.spec.ts`, `failover.spec.ts` (the holder closes, its renderer is killed,
-the broker is terminated), `transports.spec.ts`, `minified-entry.spec.ts` and
-`device-lifecycle.spec.ts`; `test/browser/hardware/arduino.spec.ts` and `emulator.spec.ts`, first run
-under usbip-win2 0.9.8.0 on 2026-09-15; `emulator/test/` - descriptors, the wire format at the
+the broker is terminated), `transports.spec.ts`, `entry-points.spec.ts` (the minified and the
+classic script build, each sharing a port with the readable one), `debug-surface.spec.ts` and
+`device-lifecycle.spec.ts`; `test/browser/hardware/arduino.spec.ts`, `picker.spec.ts` and
+`emulator.spec.ts` (first run under usbip-win2 0.9.8.0 on 2026-09-15); `emulator/test/` - descriptors, the wire format at the
 specification's byte offsets, unlink and hang, and the server over real TCP. Runs are recorded in
 [the manual test plan](../manual-test-plan.md).

@@ -19,8 +19,9 @@ import {
   PROTOCOL_VERSION,
 } from '../../../src/protocol/version.js';
 import { persistenceLockName } from '../../../src/storage/persistence-hold.js';
-import { BrowserHarness, TRANSPORT_MODES } from '../../harness/browser-harness.js';
-import { READER, READER_OPTIONS } from '../../harness/devices.js';
+import type { BrowserHarness } from '../../harness/browser-harness.js';
+import { TRANSPORT_MODES } from '../../harness/browser-harness.js';
+import { READER, READER_OPTIONS, readerHarness } from '../../harness/devices.js';
 import { fieldsOfEvent, recordingLogger } from '../../harness/recording-logger.js';
 import { sampleReport } from '../../unit/fixtures/diagnostics-report.js';
 
@@ -41,9 +42,7 @@ describe.each(TRANSPORT_MODES)('diagnostics observer (%s)', (transport) => {
     owner: ReturnType<BrowserHarness['openTab']>;
     peer: ReturnType<BrowserHarness['openTab']>;
   }> {
-    const harness = new BrowserHarness({ transport });
-    const device = harness.serial.addDevice(READER.vendorId, READER.productId);
-    harness.serial.grant(device);
+    const { harness, device } = readerHarness({ transport });
     const owner = harness.openTab();
     await owner.setup('Reader', READER_OPTIONS);
     const peer = harness.openTab();
@@ -124,9 +123,7 @@ describe.each(TRANSPORT_MODES)('diagnostics observer (%s)', (transport) => {
   });
 
   it('says when the owner will next try to reconnect', async () => {
-    const harness = new BrowserHarness({ transport });
-    const device = harness.serial.addDevice(READER.vendorId, READER.productId);
-    harness.serial.grant(device);
+    const { harness, device } = readerHarness({ transport });
     device.faults.failOpenWith = 'NetworkError';
     const tab = harness.openTab();
     await tab.setup('Reader', READER_OPTIONS);
@@ -225,8 +222,7 @@ describe.each(TRANSPORT_MODES)('diagnostics observer (%s)', (transport) => {
   });
 
   it('never joins the election, so a port nobody else wants stays with nobody', async () => {
-    const harness = new BrowserHarness({ transport });
-    harness.serial.grant(harness.serial.addDevice(READER.vendorId, READER.productId));
+    const { harness } = readerHarness({ transport });
     const tab = harness.openTab();
     await tab.setup('Reader', READER_OPTIONS);
     const observer = harness.openObserver();
@@ -350,8 +346,7 @@ describe.each(TRANSPORT_MODES)('diagnostics observer (%s)', (transport) => {
 describe('an observer collecting while a script of the origin answers', () => {
   it('keeps a bounded number of reports, and logs the ones it drops once', async () => {
     const { logger, records } = recordingLogger();
-    const harness = new BrowserHarness({ transport: 'broadcastchannel', logger });
-    harness.serial.grant(harness.serial.addDevice(READER.vendorId, READER.productId));
+    const { harness } = readerHarness({ transport: 'broadcastchannel', logger });
     const tab = harness.openTab();
     await tab.setup('Reader', READER_OPTIONS);
     const observer = harness.openObserver();
@@ -387,8 +382,7 @@ describe('an observer collecting while a script of the origin answers', () => {
 
   it('keeps a bounded number of characters in them, and logs the ones it drops once', async () => {
     const { logger, records } = recordingLogger();
-    const harness = new BrowserHarness({ transport: 'broadcastchannel', logger });
-    harness.serial.grant(harness.serial.addDevice(READER.vendorId, READER.productId));
+    const { harness } = readerHarness({ transport: 'broadcastchannel', logger });
     const tab = harness.openTab();
     await tab.setup('Reader', READER_OPTIONS);
     const observer = harness.openObserver();

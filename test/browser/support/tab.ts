@@ -404,6 +404,35 @@ export class Tab {
 }
 
 /**
+ * Opens `count` tabs, sets `name` up in every one of them and waits until all are connected.
+ *
+ * Every tab is set up before any is waited for, so the tabs contend for the port as tabs opened
+ * together do.
+ */
+export async function openConnectedTabs(
+  context: BrowserContext,
+  count: number,
+  name = 'Echo',
+  options: SerialBrokerOptions = echoConfiguration(),
+): Promise<[Tab, ...Tab[]]> {
+  const tabs: Tab[] = [];
+  for (let index = 0; index < count; index += 1) {
+    tabs.push(await Tab.open(context));
+  }
+  for (const tab of tabs) {
+    await tab.setup(name, options);
+  }
+  for (const tab of tabs) {
+    await tab.waitForStatus(name, 'open');
+  }
+  const [first, ...rest] = tabs;
+  if (first === undefined) {
+    throw new Error('A scenario needs at least one tab.');
+  }
+  return [first, ...rest];
+}
+
+/**
  * Waits until exactly one of these tabs holds the device open, and says which.
  *
  * Polling the device rather than the library: a handover is not instantaneous, and the moment it

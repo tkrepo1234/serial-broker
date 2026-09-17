@@ -191,6 +191,20 @@ describe('normalizeConfiguration', () => {
       expect((error as SerialBrokerError).code).toBe(SerialBrokerErrorCode.INVALID_ARGUMENT);
     }
   });
+
+  it('rejects null instead of treating it as not set', () => {
+    expect(() =>
+      normalizeConfiguration('Reader', {
+        ...VALID,
+        serial: { baudRate: 9600, dataBits: null },
+      }),
+    ).toThrow(
+      expect.objectContaining({
+        code: SerialBrokerErrorCode.INVALID_ARGUMENT,
+        context: expect.objectContaining({ argumentName: 'options.serial.dataBits' }) as unknown,
+      }),
+    );
+  });
 });
 
 describe('isDeviceCompatible', () => {
@@ -341,5 +355,27 @@ describe('the device filter in auto mode (ADR-0036)', () => {
 
     expect(normalizeConfiguration('Reader', options)).toEqual(configuration);
     expect(options.device).toEqual(device ?? { auto: true });
+  });
+});
+
+describe('options with getters', () => {
+  it('reads each device field once, so the value checked is the value kept', () => {
+    let reads = 0;
+    const device = {
+      get vendorId(): unknown {
+        reads += 1;
+        return reads === 1 ? 0x1a86 : 'not a number';
+      },
+      productId: 0x7523,
+    };
+
+    const configuration = normalizeConfiguration('Reader', { device, serial: { baudRate: 9600 } });
+
+    expect(reads).toBe(1);
+    expect(configuration.device).toEqual({
+      kind: 'usb',
+      vendorId: 0x1a86,
+      productId: 0x7523,
+    });
   });
 });

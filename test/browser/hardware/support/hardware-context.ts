@@ -7,6 +7,7 @@
  */
 
 import { writeFile } from 'node:fs/promises';
+import process from 'node:process';
 
 import { chromium, expect, type BrowserContext, type TestInfo } from '@playwright/test';
 
@@ -14,6 +15,21 @@ import type { Tab } from '../../support/tab.js';
 
 import { createProfileWithSerialPermission } from './seeded-profile.js';
 import { findWindowsSerialDevices } from './windows-serial-device.js';
+
+/** The board the Arduino and picker suites run against: an Arduino with an echo sketch. */
+export const ARDUINO = { vendorId: 0x2341, productId: 0x0078 } as const;
+
+/** Which COM port to use when several of these boards are attached. */
+export const ARDUINO_PORT_NAME = process.env['SERIAL_BROKER_HARDWARE_PORT'] ?? 'COM3';
+
+/**
+ * How long to wait after the port opens before asserting on what arrives.
+ *
+ * Opening a serial port asserts DTR, which resets most Arduino boards: the sketch starts again,
+ * and a bootloader may say something of its own first. A real application sees the same thing;
+ * the test simply forgets what arrived before this point.
+ */
+export const SETTLE_AFTER_OPEN_MS = 2_500;
 
 /** A USB device, by the IDs a configuration filters on. */
 export interface UsbDevice {

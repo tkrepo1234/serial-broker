@@ -32,6 +32,8 @@ Every exported symbol carries a doc comment with:
 - `@example` with runnable code for every public method.
 - `@defaultValue` on every optional option property.
 
+The shape, with `@throws` abridged (`src/facade.ts` lists every code of `send()`):
+
 ````ts
 /**
  * Sends data to the device.

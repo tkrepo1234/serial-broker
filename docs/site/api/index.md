@@ -13,6 +13,7 @@ you need:
 | [`setup()`](reference/index/interfaces/SerialBrokerApi.md#setup)                 | [`send()`](reference/index/interfaces/SerialBrokerApi.md#send)               | [`getStatus()`](reference/index/interfaces/SerialBrokerApi.md#getstatus)     | [`release()`](reference/index/interfaces/SerialBrokerApi.md#release)       |
 | [`requestAccess()`](reference/index/interfaces/SerialBrokerApi.md#requestaccess) | [`subscribe()`](reference/index/interfaces/SerialBrokerApi.md#subscribe)     | [`exists()`](reference/index/interfaces/SerialBrokerApi.md#exists)           | [`releaseAll()`](reference/index/interfaces/SerialBrokerApi.md#releaseall) |
 | [`restore()`](reference/index/interfaces/SerialBrokerApi.md#restore)             | [`unsubscribe()`](reference/index/interfaces/SerialBrokerApi.md#unsubscribe) | [`isSupported()`](reference/index/interfaces/SerialBrokerApi.md#issupported) | [`dispose()`](reference/index/interfaces/SerialBrokerApi.md#dispose)       |
+|                                                                                  |                                                                              | [`names()`](reference/index/interfaces/SerialBrokerApi.md#names)             |                                                                            |
 
 `configure()` comes before all of them; its options are explained with their reasoning in
 [Configuration](../configuration.md), and every error code in [Errors](../errors.md).

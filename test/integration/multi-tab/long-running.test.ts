@@ -1,11 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
-import type { SerialBrokerClient } from '../../../src/client/serial-broker-client.js';
 import { SerialBrokerStatus } from '../../../src/core/types.js';
 import { ownerLockName } from '../../../src/protocol/version.js';
 import { persistenceLockName } from '../../../src/storage/persistence-hold.js';
-import { BrowserHarness, TRANSPORT_MODES } from '../../harness/browser-harness.js';
-import { READER, READER_OPTIONS } from '../../harness/devices.js';
+import type { BrowserHarness } from '../../harness/browser-harness.js';
+import { TRANSPORT_MODES } from '../../harness/browser-harness.js';
+import { READER_OPTIONS, readerHarness } from '../../harness/devices.js';
+import { footprintOf } from '../../harness/outcomes.js';
 import { rememberedNames } from '../../harness/stored-configurations.js';
 
 /**
@@ -17,33 +18,6 @@ import { rememberedNames } from '../../harness/stored-configurations.js';
  * port. Something that grows with time or with load shows up as a difference.
  */
 
-/** What can be counted from outside, for one configuration. */
-interface Footprint {
-  readonly timers: number;
-  readonly deviceListeners: number;
-  readonly ownerLockQueue: number;
-  readonly pendingWrites: number;
-  readonly queuedWritesAtPort: number;
-}
-
-function footprintOf(harness: BrowserHarness, clients: readonly SerialBrokerClient[]): Footprint {
-  let pendingWrites = 0;
-  let queuedWritesAtPort = 0;
-  for (const client of clients) {
-    for (const configuration of client.diagnostics()?.configurations ?? []) {
-      pendingWrites += configuration.pendingWrites.total;
-      queuedWritesAtPort += configuration.connection?.queuedWrites ?? 0;
-    }
-  }
-  return {
-    timers: harness.clock.pendingTimerCount,
-    deviceListeners: harness.serial.listenerCount,
-    ownerLockQueue: harness.locks.queueLength(ownerLockName('Reader')),
-    pendingWrites,
-    queuedWritesAtPort,
-  };
-}
-
 /** Moves the library's clock and the bus's together, as real time moves both. */
 async function elapse(harness: BrowserHarness, ms: number): Promise<void> {
   await harness.busClock.advance(ms);
@@ -52,9 +26,7 @@ async function elapse(harness: BrowserHarness, ms: number): Promise<void> {
 
 describe.each(TRANSPORT_MODES)('a deployment left running (%s)', (transport) => {
   it('returns to where it started after an hour of the device dropping out every five minutes', async () => {
-    const harness = new BrowserHarness({ transport });
-    const device = harness.serial.addDevice(READER.vendorId, READER.productId);
-    harness.serial.grant(device);
+    const { harness, device } = readerHarness({ transport });
     const owner = harness.openTab();
     await owner.client.setup('Reader', READER_OPTIONS);
     const participant = harness.openTab();
@@ -76,9 +48,7 @@ describe.each(TRANSPORT_MODES)('a deployment left running (%s)', (transport) => 
   });
 
   it('returns to where it started after tabs keep dying and opening for 20 rounds', async () => {
-    const harness = new BrowserHarness({ transport });
-    const device = harness.serial.addDevice(READER.vendorId, READER.productId);
-    harness.serial.grant(device);
+    const { harness, device } = readerHarness({ transport });
     const live = [harness.openTab(), harness.openTab(), harness.openTab()];
     for (const tab of live) {
       await tab.client.setup('Reader', READER_OPTIONS);
@@ -116,8 +86,7 @@ describe.each(TRANSPORT_MODES)('a deployment left running (%s)', (transport) => 
   });
 
   it('leaves nothing behind after 20 names are set up and released twice over', async () => {
-    const harness = new BrowserHarness({ transport });
-    harness.serial.grant(harness.serial.addDevice(READER.vendorId, READER.productId));
+    const { harness } = readerHarness({ transport });
     const tabs = [harness.openTab(), harness.openTab()];
     const names = Array.from({ length: 20 }, (_, index) => `Device ${String(index)}`);
     await tabs[0]?.client.setup('Reader', READER_OPTIONS);
@@ -151,9 +120,7 @@ describe.each(TRANSPORT_MODES)('a deployment left running (%s)', (transport) => 
   });
 
   it('returns to where it started after 1,000 watchers and 10 collections come and go', async () => {
-    const harness = new BrowserHarness({ transport });
-    const device = harness.serial.addDevice(READER.vendorId, READER.productId);
-    harness.serial.grant(device);
+    const { harness, device } = readerHarness({ transport });
     const tab = harness.openTab();
     await tab.client.setup('Reader', READER_OPTIONS);
     const observer = harness.openObserver();

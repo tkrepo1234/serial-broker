@@ -2,8 +2,9 @@ import { describe, expect, it } from 'vitest';
 
 import { SerialBrokerStatus } from '../../../src/core/types.js';
 import { persistenceLockName } from '../../../src/storage/persistence-hold.js';
-import { BrowserHarness, TRANSPORT_MODES } from '../../harness/browser-harness.js';
-import { READER, READER_OPTIONS } from '../../harness/devices.js';
+import type { BrowserHarness } from '../../harness/browser-harness.js';
+import { TRANSPORT_MODES } from '../../harness/browser-harness.js';
+import { READER_OPTIONS, readerHarness } from '../../harness/devices.js';
 
 /**
  * A remembered configuration is one entry for the whole origin.
@@ -18,9 +19,7 @@ describe.each(TRANSPORT_MODES)(
   'a remembered configuration run in several tabs (%s)',
   (transport) => {
     function harnessWithDevice(): BrowserHarness {
-      const harness = new BrowserHarness({ transport });
-      const device = harness.serial.addDevice(READER.vendorId, READER.productId);
-      harness.serial.grant(device);
+      const { harness } = readerHarness({ transport });
       return harness;
     }
 

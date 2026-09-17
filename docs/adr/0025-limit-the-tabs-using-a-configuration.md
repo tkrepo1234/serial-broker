@@ -85,5 +85,6 @@ is reached, and still nothing about which tab holds the port.
 `test/unit/tab-slot.test.ts` (places, queue order, a dying holder, leaving the queue) and
 `test/integration/multi-tab/tab-limit.test.ts` (in both transport modes: waiting and admission after
 a release and after a crash, the tab holding the port counted, writes while queued, a differing
-limit, validation, storage); `test/integration/multi-tab/hostile-bus.test.ts` posts a status with
+limit); `test/unit/validation.test.ts` and `test/unit/documentation.test.ts` for the range and the
+default, `test/unit/configuration-store.test.ts` for remembering the limit; `test/integration/multi-tab/hostile-bus.test.ts` posts a status with
 another limit.

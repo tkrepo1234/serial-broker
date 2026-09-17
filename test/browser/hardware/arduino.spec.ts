@@ -22,31 +22,19 @@ import process from 'node:process';
 
 import { expect, test as base, type BrowserContext } from '@playwright/test';
 
-import { echoConfiguration, Tab } from '../support/tab.js';
+import { echoConfiguration, openConnectedTabs, type Tab } from '../support/tab.js';
 
 import {
+  ARDUINO,
+  ARDUINO_PORT_NAME as PORT_NAME,
+  SETTLE_AFTER_OPEN_MS,
   holderOf,
   launchWithSerialPermission,
   occurrences,
   recordTabHistories,
 } from './support/hardware-context.js';
 
-/** The device under test: an Arduino with an echo sketch. */
-const ARDUINO = { vendorId: 0x2341, productId: 0x0078 } as const;
-
-/** Which COM port to use when several of these boards are attached. */
-const PORT_NAME = process.env['SERIAL_BROKER_HARDWARE_PORT'] ?? 'COM3';
-
 const CONFIGURATION = 'ArduinoEcho';
-
-/**
- * How long to wait after the port opens before asserting on what arrives.
- *
- * Opening a serial port asserts DTR, which resets most Arduino boards: the sketch starts again,
- * and a bootloader may say something of its own first. A real application sees the same thing;
- * the test simply forgets what arrived before this point.
- */
-const SETTLE_AFTER_OPEN_MS = 2_500;
 
 const test = base.extend<{ hardware: BrowserContext }>({
   // eslint-disable-next-line no-empty-pattern -- Playwright's fixture signature.
@@ -69,17 +57,13 @@ const test = base.extend<{ hardware: BrowserContext }>({
 
 /** Opens `count` tabs, connects them to the device and waits until the board has settled. */
 async function connectedTabs(context: BrowserContext, count: number): Promise<Tab[]> {
-  const tabs: Tab[] = [];
-  for (let index = 0; index < count; index += 1) {
-    tabs.push(await Tab.open(context));
-  }
-  for (const tab of tabs) {
-    await tab.setup(CONFIGURATION, echoConfiguration({ device: ARDUINO }));
-  }
-  for (const tab of tabs) {
-    await tab.waitForStatus(CONFIGURATION, 'open');
-  }
-  await tabs[0]?.page.waitForTimeout(SETTLE_AFTER_OPEN_MS);
+  const tabs = await openConnectedTabs(
+    context,
+    count,
+    CONFIGURATION,
+    echoConfiguration({ device: ARDUINO }),
+  );
+  await tabs[0].page.waitForTimeout(SETTLE_AFTER_OPEN_MS);
   for (const tab of tabs) {
     await tab.clearReceived(CONFIGURATION);
   }

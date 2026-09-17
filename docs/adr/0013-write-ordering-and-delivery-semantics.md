@@ -136,10 +136,9 @@ closing it works.
 - **Rejecting all writes during an ownership transfer.** Turns a 50 ms handover into a visible error
   for writes that were never at risk. The hold-and-hand-on window, bounded by `writeTimeoutMs`,
   covers the common case correctly.
-- **Tear the connection down when a write times out.** What the supervisor did until 2026-09-15. On
-  a device that pauses, the close never completes, so the configuration reconnected for ever and
-  the port stayed held for every tab. A longer close deadline does not help: the close does not
-  complete late, it does not complete.
+- **Tear the connection down when a write times out.** On a device that pauses, the close never
+  completes, so the configuration reconnects for ever and the port stays held for every tab. A
+  longer close deadline does not help: the close does not complete late, it does not complete.
 - **Abort without closing, and keep using the port.** An aborted writable stream cannot be written
   to again, and a new one exists only after a close.
 - **Keep writing behind the stuck chunk.** The browser would queue the bytes and deliver them when
@@ -211,8 +210,9 @@ Scenario matrix rows 4, 7 and 15. `test/unit/pending-writes.test.ts` (approvals,
 run, `NOT_CONNECTED` after an approval), `test/unit/accepted-writes.test.ts` and
 `test/unit/write-queue.test.ts`; `test/integration/multi-tab/failover.test.ts` kills the tab holding
 the port between queued and started, and after started; `handover-races.test.ts` with a question and
-a result held back past a crash or a close, and `peer-write-regressions.test.ts`;
-`frozen-tabs.test.ts` with a frozen issuer; `write-backlog.test.ts` for `WRITE_QUEUE_FULL`;
+a result held back past a crash or a close;
+`frozen-tabs.test.ts` with a frozen issuer; `write-backlog.test.ts` for `WRITE_QUEUE_FULL` and for
+a write that found the port closed and is written once it is open again;
 `write-deadlines.test.ts` for tabs with different `writeTimeoutMs`, writes that reach the port part
 way through their time, a request that waited 4 s before the holder handled it, an approval just
 before the deadline, and an issuer that closes or crashes before answering; `hostile-bus.test.ts` for

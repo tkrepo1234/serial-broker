@@ -3,16 +3,9 @@ import { describe, expect, it } from 'vitest';
 import { SerialBrokerErrorCode } from '../../../src/core/error-codes.js';
 import { SerialBrokerStatus } from '../../../src/core/types.js';
 import { ownerLockName } from '../../../src/protocol/version.js';
-import { BrowserHarness, TRANSPORT_MODES } from '../../harness/browser-harness.js';
-import { READER, READER_OPTIONS } from '../../harness/devices.js';
-
-/** How a promise settled, attached at once so a rejection is never unhandled. */
-function outcomeOf(promise: Promise<void>): Promise<unknown> {
-  return promise.then(
-    () => 'resolved',
-    (error: unknown) => error,
-  );
-}
+import { TRANSPORT_MODES } from '../../harness/browser-harness.js';
+import { READER_OPTIONS, readerHarness } from '../../harness/devices.js';
+import { outcomeOf } from '../../harness/outcomes.js';
 
 /**
  * A hidden tab can be frozen by the browser, and every tab stops with a machine that sleeps. A
@@ -21,9 +14,7 @@ function outcomeOf(promise: Promise<void>): Promise<unknown> {
  */
 describe.each(TRANSPORT_MODES)('a tab that was frozen (%s)', (transport) => {
   async function twoTabs() {
-    const harness = new BrowserHarness({ transport });
-    const device = harness.serial.addDevice(READER.vendorId, READER.productId);
-    harness.serial.grant(device);
+    const { harness, device } = readerHarness({ transport });
     const owner = harness.openTab();
     await owner.setup('Reader', READER_OPTIONS);
     const participant = harness.openTab();
@@ -88,9 +79,7 @@ describe.each(TRANSPORT_MODES)('a tab that was frozen (%s)', (transport) => {
   });
 
   it('writes once a write the former holder performed, when the deadline runs before its words on resume', async () => {
-    const harness = new BrowserHarness({ transport });
-    const device = harness.serial.addDevice(READER.vendorId, READER.productId);
-    harness.serial.grant(device);
+    const { harness, device } = readerHarness({ transport });
     const first = harness.openTab();
     await first.setup('Reader', READER_OPTIONS);
     const second = harness.openTab();

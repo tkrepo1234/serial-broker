@@ -1,4 +1,4 @@
-# ADR-0019: Ship the debugging surface in the package, as static content
+# ADR-0019: Ship the debugging surface in the package, as static content, under its own policy
 
 - **Status:** Accepted
 - **Date:** 2026-09-13
@@ -72,9 +72,9 @@ can resolve its files.
   requirement leaves to them. Rejected.
 - **Build it into the main bundle behind a call** (`SerialBroker.openDebugPage()`). Puts an
   operator tool one call away from application code and grows every application's bundle.
-- **Derive a configuration from the chosen port in the page itself.** What the page did from
-  2026-09-14 until auto mode moved the derivation into the library; it helped this page only, and
-  the configuration it produced was not shared with other tabs.
+- **Derive a configuration from the chosen port in the page itself.** Auto mode does it in the
+  library; in the page it helps this page only, and the configuration it produces is not shared with
+  other tabs.
 - **Keep the styles inline and allow `'unsafe-inline'`, or hash the block.** The allowance covers
   any inline style an injection places; a hash breaks on every edit, and `style` attributes would
   still need `'unsafe-hashes'`. A stylesheet file costs one request and needs neither.
@@ -114,4 +114,4 @@ exact reproduction of a running configuration from its reported settings, settin
 auto mode by default, formatting, and the header controls against `SETUP_ACTION_IDS`. The policy
 was checked in Chromium against a build served from `dist/`: no `securitypolicyviolation` while the
 page is used, and an inline `<script>` added to the loaded page does not execute. The page itself is
-exercised by the manual test plan.
+exercised by `test/browser/debug-surface.spec.ts` and by the manual test plan.

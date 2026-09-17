@@ -3,8 +3,8 @@ import { describe, expect, it } from 'vitest';
 import { SerialBrokerErrorCode } from '../../src/core/error-codes.js';
 import { SerialBrokerStatus } from '../../src/core/types.js';
 import type { SerialBrokerOptions } from '../../src/core/types.js';
-import { BrowserHarness, TRANSPORT_MODES } from '../harness/browser-harness.js';
-import { READER, READER_OPTIONS } from '../harness/devices.js';
+import { TRANSPORT_MODES } from '../harness/browser-harness.js';
+import { READER_OPTIONS, readerHarness } from '../harness/devices.js';
 
 /**
  * `connection.autoReconnect: false`: the application reconnects, the library does not (ADR-0010).
@@ -14,9 +14,7 @@ import { READER, READER_OPTIONS } from '../harness/devices.js';
 const MANUAL: SerialBrokerOptions = { ...READER_OPTIONS, connection: { autoReconnect: false } };
 
 async function connectedTab() {
-  const harness = new BrowserHarness();
-  const device = harness.serial.addDevice(READER.vendorId, READER.productId);
-  harness.serial.grant(device);
+  const { harness, device } = readerHarness();
   const tab = harness.openTab();
   await tab.setup('Reader', MANUAL);
   await harness.settle();
@@ -58,9 +56,7 @@ describe('a configuration that does not reconnect by itself', () => {
   });
 
   it('still connects to a device that was never there when it is plugged in: that is no reconnect', async () => {
-    const harness = new BrowserHarness();
-    const device = harness.serial.addDevice(READER.vendorId, READER.productId);
-    harness.serial.grant(device);
+    const { harness, device } = readerHarness();
     harness.serial.unplug(device);
     const tab = harness.openTab();
 
@@ -74,9 +70,7 @@ describe('a configuration that does not reconnect by itself', () => {
   });
 
   it('ends in failed when the first attempt fails, ignores a replug, and connects on setup() again', async () => {
-    const harness = new BrowserHarness();
-    const device = harness.serial.addDevice(READER.vendorId, READER.productId);
-    harness.serial.grant(device);
+    const { harness, device } = readerHarness();
     device.faults.failOpenTimes = 1;
     const tab = harness.openTab();
 
@@ -104,9 +98,7 @@ async function connectedTabs(
   options: SerialBrokerOptions,
   transport: (typeof TRANSPORT_MODES)[number],
 ) {
-  const harness = new BrowserHarness({ transport });
-  const device = harness.serial.addDevice(READER.vendorId, READER.productId);
-  harness.serial.grant(device);
+  const { harness, device } = readerHarness({ transport });
   const tabs = [];
   for (let index = 0; index < count; index += 1) {
     const tab = harness.openTab();
@@ -223,9 +215,7 @@ describe.each(TRANSPORT_MODES)('whether an error says the library recovers (%s)'
   );
 
   it('is false for a failed attempt with autoReconnect off, in every tab', async () => {
-    const harness = new BrowserHarness({ transport });
-    const device = harness.serial.addDevice(READER.vendorId, READER.productId);
-    harness.serial.grant(device);
+    const { harness, device } = readerHarness({ transport });
     // Another program holds the device: `OPEN_FAILED`, which the library retries when it may.
     device.faults.failOpenWith = 'InvalidStateError';
     const holder = harness.openTab();
@@ -245,5 +235,30 @@ describe.each(TRANSPORT_MODES)('whether an error says the library recovers (%s)'
       expect(errors.every((error) => error.code === SerialBrokerErrorCode.OPEN_FAILED)).toBe(true);
       expect(errors.every((error) => !error.isRetryable)).toBe(true);
     }
+  });
+});
+
+describe.each(TRANSPORT_MODES)('a configuration that failed (%s)', (transport) => {
+  it('connects again when a tab that does not hold the port sets it up again', async () => {
+    const { harness, device } = readerHarness({ transport });
+    const manual = { ...READER_OPTIONS, connection: { autoReconnect: false } };
+    const holder = harness.openTab();
+    await holder.setup('Reader', manual);
+    const other = harness.openTab();
+    await other.setup('Reader', manual);
+
+    harness.serial.unplug(device);
+    await harness.settle();
+    harness.serial.plug(device);
+    await harness.advance(60_000);
+    expect(other.client.getStatus('Reader').status).toBe('failed');
+
+    // Setting a configuration up again is how an application says "try again" (ADR-0010), in
+    // whichever tab it happens.
+    await other.client.setup('Reader', manual);
+    await harness.settle();
+
+    expect(holder.client.getStatus('Reader').status).toBe('open');
+    expect(other.client.getStatus('Reader').status).toBe('open');
   });
 });

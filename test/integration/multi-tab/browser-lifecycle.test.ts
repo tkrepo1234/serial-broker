@@ -1,37 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
-import type { SerialBrokerClient } from '../../../src/client/serial-broker-client.js';
 import { SerialBrokerErrorCode } from '../../../src/core/error-codes.js';
 import { SerialBrokerStatus } from '../../../src/core/types.js';
 import { ownerLockName } from '../../../src/protocol/version.js';
-import { BrowserHarness, TRANSPORT_MODES } from '../../harness/browser-harness.js';
-import { READER, READER_OPTIONS } from '../../harness/devices.js';
-
-/** How a promise settled, attached at once so a rejection is never unhandled. */
-function outcomeOf(promise: Promise<void>): Promise<unknown> {
-  return promise.then(
-    () => 'resolved',
-    (error: unknown) => error,
-  );
-}
-
-/** Timers still scheduled, and writes outstanding or queued at the port, across the given tabs. */
-function footprintOf(harness: BrowserHarness, clients: readonly SerialBrokerClient[]) {
-  let pendingWrites = 0;
-  let queuedWritesAtPort = 0;
-  for (const client of clients) {
-    for (const configuration of client.diagnostics()?.configurations ?? []) {
-      pendingWrites += configuration.pendingWrites.total;
-      queuedWritesAtPort += configuration.connection?.queuedWrites ?? 0;
-    }
-  }
-  return {
-    timers: harness.clock.pendingTimerCount,
-    ownerLockQueue: harness.locks.queueLength(ownerLockName('Reader')),
-    pendingWrites,
-    queuedWritesAtPort,
-  };
-}
+import { TRANSPORT_MODES } from '../../harness/browser-harness.js';
+import { READER_OPTIONS, readerHarness } from '../../harness/devices.js';
+import { footprintOf, outcomeOf } from '../../harness/outcomes.js';
 
 /**
  * What a browser does to a tab over a long life: hides it and throttles its timers, freezes it,
@@ -40,9 +14,7 @@ function footprintOf(harness: BrowserHarness, clients: readonly SerialBrokerClie
  */
 describe.each(TRANSPORT_MODES)('the browser lifecycle (%s)', (transport) => {
   async function twoTabs(options: object = READER_OPTIONS) {
-    const harness = new BrowserHarness({ transport });
-    const device = harness.serial.addDevice(READER.vendorId, READER.productId);
-    harness.serial.grant(device);
+    const { harness, device } = readerHarness({ transport });
     const owner = harness.openTab();
     await owner.client.setup('Reader', options);
     const participant = harness.openTab();

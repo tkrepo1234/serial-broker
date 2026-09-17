@@ -14,37 +14,17 @@
  * `chrome://inspect/#workers`; what the tabs then do is ADR-0041. See ADR-0035.
  */
 
-import { expect, test, type BrowserContext } from '@playwright/test';
+import { expect, test } from '@playwright/test';
 
 import {
-  echoConfiguration,
   GRANTED_DEVICE,
   installStandIn,
+  openConnectedTabs,
   sharedWorkersOf,
-  Tab,
   tabHoldingThePort,
   terminateSharedWorkers,
   waitForPortHolder,
 } from './support/tab.js';
-
-/** Opens `count` tabs on one configuration and waits until all of them are connected. */
-async function openConnectedTabs(context: BrowserContext, count: number): Promise<[Tab, ...Tab[]]> {
-  const tabs: Tab[] = [];
-  for (let index = 0; index < count; index += 1) {
-    tabs.push(await Tab.open(context));
-  }
-  for (const tab of tabs) {
-    await tab.setup('Echo', echoConfiguration());
-  }
-  for (const tab of tabs) {
-    await tab.waitForStatus('Echo', 'open');
-  }
-  const [first, ...rest] = tabs;
-  if (first === undefined) {
-    throw new Error('A scenario needs at least one tab.');
-  }
-  return [first, ...rest];
-}
 
 test.describe('the tab holding the port goes away', () => {
   test('another tab takes the port over when its renderer is killed', async ({ context }) => {

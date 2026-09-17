@@ -19,14 +19,14 @@ Never hand-format; never argue about it in review. `npm run format` is the final
 
 Following the Google TypeScript Style Guide:
 
-| Kind                                            | Convention                         | Example                   |
-| ----------------------------------------------- | ---------------------------------- | ------------------------- |
-| Class, interface, type alias, enum              | `UpperCamelCase`                   | `PortSupervisor`          |
-| Variable, parameter, function, method, property | `lowerCamelCase`                   | `reconnectDelayMs`        |
-| Module-level constant (deeply immutable)        | `CONSTANT_CASE`                    | `DEFAULT_OPEN_TIMEOUT_MS` |
-| Type parameter                                  | single capital or `UpperCamelCase` | `T`, `TPayload`           |
-| File                                            | `kebab-case.ts`                    | `port-supervisor.ts`      |
-| Test file                                       | `<unit-under-test>.test.ts`        | `port-supervisor.test.ts` |
+| Kind                                            | Convention                         | Example                     |
+| ----------------------------------------------- | ---------------------------------- | --------------------------- |
+| Class, interface, type alias, enum              | `UpperCamelCase`                   | `PortSupervisor`            |
+| Variable, parameter, function, method, property | `lowerCamelCase`                   | `openTimeoutMs`             |
+| Module-level constant (deeply immutable)        | `CONSTANT_CASE`                    | `DEFAULT_COLLECT_WINDOW_MS` |
+| Type parameter                                  | single capital or `UpperCamelCase` | `T`, `TPayload`             |
+| File                                            | `kebab-case.ts`                    | `port-supervisor.ts`        |
+| Test file                                       | `<unit-under-test>.test.ts`        | `write-queue.test.ts`       |
 
 Additional rules:
 
@@ -45,8 +45,8 @@ Additional rules:
 Every source file follows this order, top to bottom:
 
 1. Licence/file header comment (only where it carries information — no boilerplate banners).
-2. `import` statements in groups — built-in, external, internal, parent, sibling — separated by a
-   blank line and sorted alphabetically inside each group; enforced by `import-x/order`.
+2. `import` statements in groups — built-in, external, internal, parent, sibling, index — separated
+   by a blank line and sorted alphabetically inside each group; enforced by `import-x/order`.
 3. Module constants.
 4. Types and interfaces.
 5. The primary export (one concept per file).
@@ -72,8 +72,8 @@ Every source file follows this order, top to bottom:
 
   `environment/` holds the platform interfaces that client, owner and storage import, and
   `environment/browser.ts` is the composition root that builds the client's transports. `core/`
-  imports nothing from the layers above it. A circular import is a lint failure
-  (`import-x/no-cycle`); the direction itself is kept in review.
+  imports nothing from the layers above it, and from `environment/` only types. A circular import is
+  a lint failure (`import-x/no-cycle`); the direction itself is kept in review.
 
 - Import a module by its file. `src/index.ts` and `src/diagnostics.ts` gather exports for the
   package's consumers only; nothing inside the library imports through them. The two exceptions

@@ -57,11 +57,12 @@ up no configuration, requests no Web Lock, and never answers for a port.
 - **The worker's warnings reach the tabs.** The worker sends its `warn` and `error` records to every
   connected context as `worker-log`, and each tab writes them to its own logger at the recorded
   level, under the worker's own events (`worker.message-refused`, `worker.limit-exceeded`,
-  `broker.limit-exceeded`, `worker.other-protocol-version`, `worker.message-error`). Every warning
-  is written once per key, so what is forwarded is bounded without a budget; a record is forwarded
-  only if it decodes as a tab would decode it. `debug` and `info` records stay in the worker. A tab
-  logs a `worker-log` only from the broker's identity; `clientId` in it stays the identity the record
-  concerns, and `reportedBy` names the tab that wrote the copy.
+  `broker.limit-exceeded`, `worker.other-protocol-version`, `worker.message-error`,
+  `worker.lock-failed`). Every warning is written once per key, so what is forwarded is bounded
+  without a budget; a record is forwarded only if it decodes as a tab would decode it. `debug` and
+  `info` records stay in the worker. A tab logs a `worker-log` only from the broker's identity;
+  `clientId` in it stays the identity the record concerns, and `reportedBy` names the tab that wrote
+  the copy.
 - **The main entry point does not change.** `getStatus()`, the events and every payload keep
   exactly the keys ADR-0011 pins, and a test asserts that nothing diagnostic is exported from it.
 
@@ -82,8 +83,8 @@ application code.
   meant to be watching.
 - **Logger only.** Requires enabling in advance, in the application's code, in every tab, and
   produces a stream rather than a state. Kept as the complement, not the answer.
-- **Validate every field of a report on arrival.** What the decoder did until 2026-09-15, in some 150
-  lines repeating the report's type, for data that is only displayed.
+- **Validate every field of a report on arrival.** Some 150 lines repeating the report's type, for
+  data that is only displayed.
 - **Send the worker's records only to the tab concerned.** Half of them concern a port that is no
   participant, and a refused message is as likely to come from the script causing the trouble as
   from the tab suffering it.
@@ -91,8 +92,8 @@ application code.
   an observer is open, and makes the worker hold state ([ADR-0006](./0006-sharedworker-as-message-broker.md)).
 - **Give the worker a `console`, or forward every level.** A worker's console goes to its own
   inspector page; `debug` and `info` are per message and would become the bus's busiest traffic.
-- **An interval budget for forwarded records.** What the forwarding had until 2026-09-15; writing
-  each warning once per key bounds the same thing with less code.
+- **An interval budget for forwarded records.** Writing each warning once per key bounds the same
+  thing with less code.
 
 ## Consequences
 
@@ -122,8 +123,8 @@ application code.
   tab with roles and settings, the owner's connection state, pending writes, listener counts, lock
   listing, streamed events, that observing never changes who owns the port, and a collection
   answered under invented identities held to its bounds.
-- `test/unit/decode-diagnostics.test.ts` and the decode matrix: a report that cannot be filed is
-  rejected.
+- `test/unit/decode-matrix.test.ts` (`isParticipantDiagnostics` and the decode matrix): a report
+  that cannot be filed is rejected.
 - `test/unit/worker-ports.test.ts` and `test/unit/transports.test.ts`: records go to every connected
   port, `debug` and `info` go nowhere, and a tab logs a forwarded record only from the broker.
 - `test/integration/encapsulation.test.ts`: the main entry point exports nothing diagnostic.

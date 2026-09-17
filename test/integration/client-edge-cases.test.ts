@@ -4,7 +4,7 @@ import { SerialBrokerClient } from '../../src/client/serial-broker-client.js';
 import { DEFAULT_CONNECTION_SETTINGS } from '../../src/core/defaults.js';
 import { SerialBrokerErrorCode } from '../../src/core/error-codes.js';
 import { BrowserHarness } from '../harness/browser-harness.js';
-import { READER, READER_OPTIONS } from '../harness/devices.js';
+import { READER, READER_OPTIONS, readerHarness } from '../harness/devices.js';
 import { fieldsOfEvent, recordingLogger } from '../harness/recording-logger.js';
 
 describe('unusable environments', () => {
@@ -65,65 +65,9 @@ describe('a disposed client', () => {
   });
 });
 
-describe('argument validation at the boundary', () => {
-  it('rejects a listener that is not a function', async () => {
-    const harness = new BrowserHarness();
-    harness.serial.grant(harness.serial.addDevice(READER.vendorId, READER.productId));
-    const tab = harness.openTab();
-    await tab.client.setup('Reader', READER_OPTIONS);
-
-    expect(() => tab.client.subscribe('Reader', 'onReceive', 'not a function' as never)).toThrow(
-      expect.objectContaining({ code: SerialBrokerErrorCode.INVALID_ARGUMENT }),
-    );
-  });
-
-  it('rejects an event name it does not know, rather than registering a listener never called', async () => {
-    const harness = new BrowserHarness();
-    harness.serial.grant(harness.serial.addDevice(READER.vendorId, READER.productId));
-    const tab = harness.openTab();
-    await tab.client.setup('Reader', READER_OPTIONS);
-
-    expect(() => tab.client.subscribe('Reader', 'onData' as never, vi.fn())).toThrow(
-      expect.objectContaining({
-        code: SerialBrokerErrorCode.INVALID_ARGUMENT,
-        context: expect.objectContaining({ argumentName: 'event' }) as unknown,
-      }),
-    );
-    expect(tab.client.diagnostics()?.configurations[0]?.listeners).toEqual({
-      onReceive: 0,
-      onSend: 0,
-      onError: 0,
-      onStatusChange: 0,
-    });
-  });
-
-  it('rejects an invalid name before doing anything with it', async () => {
-    const harness = new BrowserHarness();
-    const tab = harness.openTab();
-
-    await expect(tab.client.send('', 'x')).rejects.toMatchObject({
-      code: SerialBrokerErrorCode.INVALID_ARGUMENT,
-    });
-    expect(() => tab.client.exists(42 as never)).toThrow(
-      expect.objectContaining({ code: SerialBrokerErrorCode.INVALID_ARGUMENT }),
-    );
-  });
-
-  it('ignores unsubscribing from a configuration that is not set up', () => {
-    const harness = new BrowserHarness();
-    const tab = harness.openTab();
-
-    expect(() => {
-      tab.client.unsubscribe('Nothing', 'onReceive', vi.fn());
-    }).not.toThrow();
-  });
-});
-
 describe('a device that cannot be forgotten', () => {
   it('still releases the configuration', async () => {
-    const harness = new BrowserHarness();
-    const device = harness.serial.addDevice(READER.vendorId, READER.productId);
-    harness.serial.grant(device);
+    const { harness } = readerHarness();
     const tab = harness.openTab();
     await tab.setup('Reader', READER_OPTIONS);
 
@@ -142,8 +86,7 @@ describe('a device that cannot be forgotten', () => {
 
   it('still releases it where the browser has no forget() at all', async () => {
     const { logger, records } = recordingLogger();
-    const harness = new BrowserHarness({ logger });
-    harness.serial.grant(harness.serial.addDevice(READER.vendorId, READER.productId));
+    const { harness } = readerHarness({ logger });
     const tab = harness.openTab();
     await tab.setup('Reader', READER_OPTIONS);
     for (const port of await harness.serial.forContext(tab.id).getPorts()) {
@@ -159,8 +102,7 @@ describe('a device that cannot be forgotten', () => {
 
   it('still releases it where forget() never answers', async () => {
     const { logger, records } = recordingLogger();
-    const harness = new BrowserHarness({ logger });
-    harness.serial.grant(harness.serial.addDevice(READER.vendorId, READER.productId));
+    const { harness } = readerHarness({ logger });
     const tab = harness.openTab();
     await tab.setup('Reader', READER_OPTIONS);
     for (const port of await harness.serial.forContext(tab.id).getPorts()) {
@@ -187,8 +129,7 @@ describe('a device that cannot be forgotten', () => {
 
 describe('a released configuration', () => {
   it('refuses a send after release', async () => {
-    const harness = new BrowserHarness();
-    harness.serial.grant(harness.serial.addDevice(READER.vendorId, READER.productId));
+    const { harness } = readerHarness();
     const tab = harness.openTab();
     await tab.setup('Reader', READER_OPTIONS);
 
@@ -197,5 +138,37 @@ describe('a released configuration', () => {
     await expect(tab.client.send('Reader', 'x')).rejects.toMatchObject({
       code: SerialBrokerErrorCode.UNKNOWN_CONFIGURATION,
     });
+  });
+});
+
+describe('disposing a client', () => {
+  it('logs a cleanup step that failed instead of dropping it', async () => {
+    const { logger, records } = recordingLogger();
+    const harness = new BrowserHarness({ logger });
+    const environment = harness.createEnvironment('page');
+    const serial = environment.serial;
+    const client = new SerialBrokerClient({
+      ...environment,
+      serial: {
+        getPorts: () => serial.getPorts(),
+        requestPort: (options) => serial.requestPort(options),
+        addEventListener: (type, listener) => {
+          serial.addEventListener(type, listener);
+        },
+        removeEventListener: () => {
+          throw new Error('the platform refused');
+        },
+      },
+    });
+    harness.serial.grant(harness.serial.addDevice(READER.vendorId, READER.productId));
+    await client.setup('Reader', READER_OPTIONS);
+
+    await client.dispose();
+
+    expect(fieldsOfEvent(records, 'client.dispose-failed')).toEqual([
+      expect.objectContaining({
+        reason: expect.stringContaining('the platform refused') as unknown,
+      }),
+    ]);
   });
 });

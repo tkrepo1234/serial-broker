@@ -1,10 +1,16 @@
 import { describe, expect, it } from 'vitest';
 
-import { PendingWrites, type PendingWriteHost } from '../../src/client/pending-writes.js';
+import {
+  LATE_DEADLINE_MS,
+  PendingWrites,
+  scheduleDeadline,
+  type PendingWriteHost,
+} from '../../src/client/pending-writes.js';
 import { SerialBrokerErrorCode } from '../../src/core/error-codes.js';
 import { SerialBrokerError } from '../../src/core/errors.js';
 import type { RequestId, TermId } from '../../src/protocol/messages.js';
 import { FakeClock, flushMicrotasks } from '../harness/fake-clock.js';
+import { outcomeOf } from '../harness/outcomes.js';
 
 const PAYLOAD = new Uint8Array([1, 2, 3]);
 
@@ -63,14 +69,6 @@ function createHarness(options: { writeTimeoutMs?: number } = {}): Harness {
       writes.handleTermEnded(value);
     },
   };
-}
-
-/** Attaches a handler immediately, so a later rejection is never unhandled. */
-function outcomeOf(promise: Promise<void>): Promise<unknown> {
-  return promise.then(
-    () => 'resolved',
-    (error: unknown) => error,
-  );
 }
 
 const notConnected = (): SerialBrokerError =>
@@ -363,5 +361,78 @@ describe('PendingWrites', () => {
     expect(harness.dispatched).toEqual(['w1@t1', 'w2@t1', 'w2@t2']);
     harness.writes.settle(id('w2'), undefined);
     expect(await waiting).toBe('resolved');
+  });
+});
+
+/**
+ * A deadline that runs late lets the tasks already queued run before it decides. Another timer due
+ * at the same moment, scheduled after the deadline, stands in for such a task: the browser runs it
+ * before a timer scheduled later still.
+ */
+describe('scheduleDeadline', () => {
+  /**
+   * Runs a deadline due in 100 ms `lateMs` late: the clock stalls past the due time, as a frozen or
+   * throttled tab does, and the timers run when it comes back.
+   */
+  async function race(clock: FakeClock, lateMs: number): Promise<string[]> {
+    const order: string[] = [];
+    scheduleDeadline(clock, () => order.push('deadline'), 100);
+    clock.setTimer(() => order.push('queued task'), 100);
+    await clock.stall(100 + lateMs);
+    await clock.advance(0);
+    return order;
+  }
+
+  it('decides at once when it runs on time', async () => {
+    expect(await race(new FakeClock(), 0)).toEqual(['deadline', 'queued task']);
+  });
+
+  it('decides at once when it runs a little late, as a hidden tab`s aligned timers do', async () => {
+    expect(await race(new FakeClock(), LATE_DEADLINE_MS - 1)).toEqual(['deadline', 'queued task']);
+  });
+
+  it('lets the tasks already queued run first when it runs late', async () => {
+    expect(await race(new FakeClock(), LATE_DEADLINE_MS)).toEqual(['queued task', 'deadline']);
+  });
+
+  it('is unmoved by the system clock being set forward, which makes no timer late', async () => {
+    const clock = new FakeClock();
+    const order: string[] = [];
+    scheduleDeadline(clock, () => order.push('deadline'), 100);
+    clock.setTimer(() => order.push('queued task'), 100);
+    clock.jumpWallClock(10 * LATE_DEADLINE_MS);
+
+    await clock.advance(100);
+
+    // Lateness is measured on the monotonic clock (ADR-0014): a punctual deadline stays punctual.
+    expect(order).toEqual(['deadline', 'queued task']);
+    expect(clock.pendingTimerCount).toBe(0);
+  });
+
+  it('yields only once, however late it is', async () => {
+    const clock = new FakeClock();
+    let expired = 0;
+    scheduleDeadline(clock, () => (expired += 1), 100);
+
+    await clock.stall(100 + 10 * LATE_DEADLINE_MS);
+    await clock.advance(0);
+
+    expect(expired).toBe(1);
+    expect(clock.pendingTimerCount).toBe(0);
+  });
+
+  it('does not expire when cancelled while it yields', async () => {
+    const clock = new FakeClock();
+    let expired = false;
+    const deadline = scheduleDeadline(clock, () => (expired = true), 100);
+    clock.setTimer(() => {
+      deadline.cancel();
+    }, 100);
+
+    await clock.stall(100 + LATE_DEADLINE_MS);
+    await clock.advance(0);
+
+    expect(expired).toBe(false);
+    expect(clock.pendingTimerCount).toBe(0);
   });
 });

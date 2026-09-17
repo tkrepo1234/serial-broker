@@ -1,4 +1,4 @@
-# ADR-0036: Take the device identity from the port the user chooses
+# ADR-0036: Device identity, permission and auto mode: the port the user chooses
 
 - **Status:** Accepted
 - **Date:** 2026-09-14
@@ -52,11 +52,11 @@ options are written out. An application may pass `resolved` itself.
 
 **`requestAccess()` may be called before the tab holds the port** - in the same gesture that set the
 configuration up, while the election is one lock round trip away. The choice is used once the tab
-holds the port; if another tab turns out to hold it, the holder's device is adopted. A tab that knows
-another tab holds the port may ask too, since the permission is the origin's: it sends the device its
-user chose with its request to try again, and the tab holding the port adopts it and looks for the port
-again. Only a tab that is `queued`, or withdrew, is refused with `PERMISSION_REQUIRED`
-(2026-09-15; before, every tab but the holder was refused).
+holds the port; if another tab turns out to hold it, the holder's device is adopted. A tab that
+knows another tab holds the port may ask too, since the permission is the origin's: it sends the
+device its user chose with its request to try again, and the tab holding the port adopts it and
+looks for the port again. Only a tab that is `queued`, or withdrew, is refused with
+`PERMISSION_REQUIRED`.
 
 **The resolution is remembered, reported and shared.**
 
@@ -86,7 +86,7 @@ remembered stays (ADR-0033) and the browser permission is kept, so the next `set
 prompt-free. `{ forget: true }` also removes the remembered entry, under the rule of ADR-0033. `release(name, { forgetDevice: true })` also calls `SerialPort.forget()` where the
 browser supports it.
 
-**Choosing again** (2026-09-15). `requestAccess(name, { chooseAgain: true })`, in any tab taking part
+**Choosing again.** `requestAccess(name, { chooseAgain: true })`, in any tab taking part
 in an auto-mode configuration, opens the picker unfiltered although the configuration has resolved,
 and the chosen port's resolution replaces the one before: remembered, and sent with the request to try
 again exactly as a first choice is - the wire format is unchanged. The tab holding the port, having

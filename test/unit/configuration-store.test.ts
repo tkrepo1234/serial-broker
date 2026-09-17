@@ -101,15 +101,19 @@ describe('ConfigurationStore', () => {
     expect(entries.size).toBe(0);
   });
 
-  it('removes a stored entry whose name is also on the prototype chain', () => {
-    const { store, entries } = createStore();
-    store.save(normalizeConfiguration('toString', OPTIONS));
+  it.each(['toString', '__proto__'])(
+    'restores and removes a stored entry named "%s", which is also on the prototype chain',
+    (name) => {
+      const { store, entries } = createStore();
+      store.save(normalizeConfiguration(name, OPTIONS));
+      expect(store.load().map((configuration) => configuration.name)).toEqual([name]);
 
-    store.remove('toString');
+      store.remove(name);
 
-    expect(store.load()).toEqual([]);
-    expect(entries.has(storageEntryKey('toString'))).toBe(false);
-  });
+      expect(store.load()).toEqual([]);
+      expect(entries.has(storageEntryKey(name))).toBe(false);
+    },
+  );
 
   it('restores a configuration exactly as it was saved, Infinity included', () => {
     const { store } = createStore();
@@ -378,5 +382,37 @@ describe('ConfigurationStore', () => {
       SerialBrokerErrorCode.STORAGE_UNAVAILABLE,
     ]);
     expect(writes).toEqual([]);
+  });
+
+  it('keeps the configurations it has when storing another one is refused', () => {
+    const storage = new Map<string, string>();
+    const refused = storageEntryKey('Too much');
+    const quota: KeyValueStorage = {
+      getItem: (key) => storage.get(key) ?? null,
+      setItem: (key, value) => {
+        if (key === refused) {
+          throw new DOMException('quota', 'QuotaExceededError');
+        }
+        storage.set(key, value);
+      },
+      removeItem: (key) => {
+        storage.delete(key);
+      },
+    };
+    const reported: SerialBrokerError[] = [];
+    const store = new ConfigurationStore(quota, new ScopedLogger(NOOP_LOGGER, {}), (error) =>
+      reported.push(error),
+    );
+
+    store.save(normalizeConfiguration('Kept', OPTIONS));
+    store.save(normalizeConfiguration('Too much', OPTIONS));
+
+    // The entry that could not be written is not listed either: a name in the index with no entry
+    // behind it is a configuration reported as gone, on a restore where nothing was ever lost.
+    expect(storage.get(storageIndexKey())).toBe(JSON.stringify(['Kept']));
+    expect(store.load().map((configuration) => configuration.name)).toEqual(['Kept']);
+    expect(reported.map((error) => error.code)).toEqual([
+      SerialBrokerErrorCode.STORAGE_UNAVAILABLE,
+    ]);
   });
 });

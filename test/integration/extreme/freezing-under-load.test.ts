@@ -3,13 +3,13 @@ import { describe, expect, it } from 'vitest';
 import { SerialBrokerStatus } from '../../../src/core/types.js';
 import { TRANSPORT_MODES, type VirtualTab } from '../../harness/browser-harness.js';
 import { READER } from '../../harness/devices.js';
+import { outcomeOf } from '../../harness/outcomes.js';
 
 import {
   expectEveryTabStillWorks,
   IS_EXTREME,
   measured,
   MeteredHarness,
-  outcomeOf,
   SIZES,
   stateOf,
 } from './support/extreme.js';

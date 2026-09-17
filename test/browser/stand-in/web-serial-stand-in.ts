@@ -86,8 +86,6 @@ export interface WebSerialStandInOptions {
 export interface WebSerialStandInControl {
   /** `true` while this page holds the device open. */
   isOpenHere(deviceId?: string): boolean;
-  /** How many bytes this page has written to the device since the page loaded. */
-  writtenHere(deviceId?: string): number;
   /**
    * Makes the device say something of its own: `bytes` arrive on the read stream, cut into
    * `bufferSize` pieces as an echo is, without anything having been written.
@@ -134,7 +132,6 @@ export function installWebSerialStandIn(options: WebSerialStandInOptions): void 
   interface StandInPort extends EventTarget {
     readonly device: Device;
     readonly isOpenHere: boolean;
-    readonly writtenByteCount: number;
     readonly connected: boolean;
     readonly readable: ReadableStream<Uint8Array> | null;
     readonly writable: WritableStream<Uint8Array> | null;
@@ -225,7 +222,6 @@ export function installWebSerialStandIn(options: WebSerialStandInOptions): void 
     let controller: ReadableStreamDefaultController<Uint8Array> | undefined;
     let releaseDevice: (() => void) | undefined;
     let bufferSize = DEFAULT_BUFFER_SIZE;
-    let written = 0;
 
     /**
      * Takes the device, if no other page holds it.
@@ -280,7 +276,6 @@ export function installWebSerialStandIn(options: WebSerialStandInOptions): void 
     }
 
     function echo(chunk: Uint8Array): void {
-      written += chunk.byteLength;
       say(chunk);
     }
 
@@ -302,7 +297,6 @@ export function installWebSerialStandIn(options: WebSerialStandInOptions): void 
     Object.defineProperties(port, {
       device: { value: device, enumerable: true },
       isOpenHere: { get: () => isOpen, enumerable: true },
-      writtenByteCount: { get: () => written, enumerable: true },
       connected: { get: () => stateOf(device.id).attached, enumerable: true },
       readable: { get: () => readable, enumerable: true },
       writable: { get: () => writable, enumerable: true },
@@ -543,7 +537,6 @@ export function installWebSerialStandIn(options: WebSerialStandInOptions): void 
 
   const control: WebSerialStandInControl = {
     isOpenHere: (deviceId) => ports.get(deviceOf(deviceId).id)?.isOpenHere === true,
-    writtenHere: (deviceId) => ports.get(deviceOf(deviceId).id)?.writtenByteCount ?? 0,
     emit: (bytes, deviceId) => ports.get(deviceOf(deviceId).id)?.emit(bytes) === true,
     isGranted: (deviceId) => stateOf(deviceOf(deviceId).id).granted,
     unplug: (deviceId) => {

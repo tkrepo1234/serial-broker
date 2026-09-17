@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { SerialBrokerErrorCode } from '../../src/core/error-codes.js';
 import { SerialBrokerStatus } from '../../src/core/types.js';
 import { BrowserHarness } from '../harness/browser-harness.js';
-import { READER, READER_OPTIONS } from '../harness/devices.js';
+import { connectedTab, READER, READER_OPTIONS, readerHarness } from '../harness/devices.js';
 import { fieldsOfEvent, recordingLogger } from '../harness/recording-logger.js';
 
 /**
@@ -14,19 +14,6 @@ import { fieldsOfEvent, recordingLogger } from '../harness/recording-logger.js';
  * the library chose to report.
  */
 describe('error reporting', () => {
-  async function connectedTab(): Promise<{
-    harness: BrowserHarness;
-    device: ReturnType<BrowserHarness['serial']['addDevice']>;
-    tab: ReturnType<BrowserHarness['openTab']>;
-  }> {
-    const harness = new BrowserHarness();
-    const device = harness.serial.addDevice(READER.vendorId, READER.productId);
-    harness.serial.grant(device);
-    const tab = harness.openTab();
-    await tab.setup('Reader', READER_OPTIONS);
-    return { harness, device, tab };
-  }
-
   it('reports a failed write to the caller, and to every other tab as it was raised', async () => {
     const { harness, device, tab } = await connectedTab();
     const peer = harness.openTab();
@@ -135,9 +122,7 @@ describe('logging', () => {
       vi.spyOn(console, method as 'log').mockImplementation(() => undefined),
     );
     try {
-      const harness = new BrowserHarness();
-      const device = harness.serial.addDevice(READER.vendorId, READER.productId);
-      harness.serial.grant(device);
+      const { harness, device } = readerHarness();
       const tab = harness.openTab();
 
       // No logger configured, and a run that would log at every level: setup, traffic, a lost
@@ -163,8 +148,7 @@ describe('logging', () => {
 
   it('records lifecycle milestones with correlating fields', async () => {
     const { logger, records } = recordingLogger();
-    const harness = new BrowserHarness({ logger });
-    harness.serial.grant(harness.serial.addDevice(READER.vendorId, READER.productId));
+    const { harness } = readerHarness({ logger });
     const tab = harness.openTab();
     await tab.setup('Reader', READER_OPTIONS);
 
@@ -182,9 +166,7 @@ describe('logging', () => {
 
   it('records traffic at debug level only, as a byte count with no bytes', async () => {
     const { logger, records } = recordingLogger();
-    const harness = new BrowserHarness({ logger });
-    const device = harness.serial.addDevice(READER.vendorId, READER.productId);
-    harness.serial.grant(device);
+    const { harness, device } = readerHarness({ logger });
     const tab = harness.openTab();
     await tab.setup('Reader', READER_OPTIONS);
 
@@ -215,9 +197,7 @@ describe('logging', () => {
 
   it('includes payload bytes only when the application asks for them', async () => {
     const { logger, records } = recordingLogger();
-    const harness = new BrowserHarness({ logger, logPayloads: true });
-    const device = harness.serial.addDevice(READER.vendorId, READER.productId);
-    harness.serial.grant(device);
+    const { harness } = readerHarness({ logger, logPayloads: true });
     const tab = harness.openTab();
     await tab.setup('Reader', READER_OPTIONS);
 
@@ -229,9 +209,7 @@ describe('logging', () => {
 
   it('warns when a reconnect is scheduled, with the reason and the delay', async () => {
     const { logger, records } = recordingLogger();
-    const harness = new BrowserHarness({ logger });
-    const device = harness.serial.addDevice(READER.vendorId, READER.productId);
-    harness.serial.grant(device);
+    const { harness, device } = readerHarness({ logger });
     const tab = harness.openTab();
     await tab.setup('Reader', READER_OPTIONS);
 

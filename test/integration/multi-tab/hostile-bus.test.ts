@@ -11,7 +11,7 @@ import {
   termLockName,
 } from '../../../src/protocol/version.js';
 import { BrowserHarness } from '../../harness/browser-harness.js';
-import { READER, READER_OPTIONS } from '../../harness/devices.js';
+import { READER, READER_OPTIONS, readerHarness } from '../../harness/devices.js';
 import { fieldsOfEvent, recordingLogger } from '../../harness/recording-logger.js';
 
 /**
@@ -30,9 +30,7 @@ async function twoTabs(transport: 'sharedworker' | 'broadcastchannel'): Promise<
   records: ReturnType<typeof recordingLogger>['records'];
 }> {
   const { logger, records } = recordingLogger();
-  const harness = new BrowserHarness({ transport, logger });
-  const device = harness.serial.addDevice(READER.vendorId, READER.productId);
-  harness.serial.grant(device);
+  const { harness, device } = readerHarness({ transport, logger });
   const owner = harness.openTab();
   await owner.setup('Reader', READER_OPTIONS);
   const other = harness.openTab();
@@ -88,9 +86,7 @@ async function twoWatchedTabs(): Promise<{
   records: ReturnType<typeof recordingLogger>['records'];
 }> {
   const { logger, records } = recordingLogger();
-  const harness = new BrowserHarness({ transport: 'broadcastchannel', logger });
-  const device = harness.serial.addDevice(READER.vendorId, READER.productId);
-  harness.serial.grant(device);
+  const { harness, device } = readerHarness({ transport: 'broadcastchannel', logger });
   const mallory = eavesdrop(harness);
   const owner = harness.openTab();
   await owner.setup('Reader', READER_OPTIONS);
@@ -277,9 +273,7 @@ describe('a script of the origin that forges messages about the port', () => {
   });
 
   it('cannot begin a write its issuer has not let begin, by approving it in its own name', async () => {
-    const harness = new BrowserHarness({ transport: 'broadcastchannel' });
-    const device = harness.serial.addDevice(READER.vendorId, READER.productId);
-    harness.serial.grant(device);
+    const { harness, device } = readerHarness({ transport: 'broadcastchannel' });
     const mallory = eavesdrop(harness);
     const owner = harness.openTab();
     await owner.setup('Reader', READER_OPTIONS);
@@ -464,9 +458,7 @@ describe('a script on the SharedWorker that uses the identity of a tab', () => {
   });
 
   it('begins no write another tab issued by approving it, in its own name or in that tab`s', async () => {
-    const harness = new BrowserHarness({ transport: 'sharedworker' });
-    const device = harness.serial.addDevice(READER.vendorId, READER.productId);
-    harness.serial.grant(device);
+    const { harness, device } = readerHarness({ transport: 'sharedworker' });
     const owner = harness.openTab();
     await owner.setup('Reader', READER_OPTIONS);
     const issuer = harness.openBusyTab();
@@ -606,5 +598,33 @@ describe('a script flooding the BroadcastChannel with messages beyond a limit', 
     expect(fieldsOfEvent(records, 'client.malformed-message')).toEqual([]);
     expect(other.receivedText('Reader')).toBe('REAL');
     expect(device.writtenText()).toBe('PING');
+  });
+});
+
+/**
+ * No tab of another build posts here: the channel's name carries the protocol version, and builds
+ * learn of each other through the announcement channel (protocol-versions.test.ts). What can arrive
+ * is a message some script of the origin stamped with another version. It is decoded like any other
+ * and ends in the same report.
+ */
+describe('a message of another protocol version on this build`s channel', () => {
+  it('is reported once per foreign protocol version, not once per message, with what to do', async () => {
+    const harness = new BrowserHarness({ transport: 'broadcastchannel' });
+    const tab = harness.openTab();
+    await tab.setup('Reader', READER_OPTIONS);
+    const foreign = { v: PROTOCOL_VERSION + 1, from: 'mallory', to: 'all', type: 'hello' };
+
+    harness.bus.broadcastHub.injectForeign(brokerChannelName(), foreign);
+    harness.bus.broadcastHub.injectForeign(brokerChannelName(), foreign);
+    await harness.settle();
+
+    const mismatches = tab
+      .recordFor('Reader')
+      .errors.filter(
+        (event) => event.error.code === SerialBrokerErrorCode.PROTOCOL_VERSION_MISMATCH,
+      );
+    expect(mismatches).toHaveLength(1);
+    // The report is the one a tab left open across a deployment gets: only a reload joins them.
+    expect(mismatches[0]?.error.remediation).toContain('reload every tab');
   });
 });

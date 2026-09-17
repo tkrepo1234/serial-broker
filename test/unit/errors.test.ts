@@ -9,6 +9,8 @@ import {
   SerialBrokerError,
   type SerializedSerialBrokerError,
 } from '../../src/core/errors.js';
+import { mapOpenError, mapRequestPortError } from '../../src/owner/serial-errors.js';
+import { domException } from '../harness/fake-serial.js';
 
 describe('SerialBrokerError', () => {
   it('carries a remediation for every code, without being told one', () => {
@@ -224,5 +226,147 @@ describe('describeUnknown', () => {
     revoke();
 
     expect(describeUnknown(proxy)).toBe('a value that cannot be described');
+  });
+});
+
+describe('reporting hostile errors', () => {
+  it('describes an error whose name is a Symbol or whose message getter throws', () => {
+    const symbolName = Object.assign(new Error('x'), { name: Symbol('odd') as unknown as string });
+    const throwing = new Error('x');
+    Object.defineProperty(throwing, 'message', {
+      get: () => {
+        throw new Error('no');
+      },
+    });
+
+    expect(describeUnknown(symbolName)).toBe('Symbol(odd): x');
+    expect(describeUnknown(throwing)).toBe('[object Error]');
+  });
+
+  it('rejects a serialized error whose configName is not a string', () => {
+    const serialized = new SerialBrokerError(SerialBrokerErrorCode.WRITE_FAILED, 'x').toJSON();
+
+    expect(isSerializedError({ ...serialized, configName: { evil: true } })).toBe(false);
+    expect(isSerializedError({ ...serialized, configName: 'Reader' })).toBe(true);
+  });
+});
+
+describe('SerialBrokerError built by application code', () => {
+  it('has a remediation sentence for a code that is not in the table, whatever it is called', () => {
+    for (const code of ['toString', '__proto__', 'constructor', 'NOT_A_CODE']) {
+      const error = new SerialBrokerError(code as never, 'from a test double');
+
+      expect(typeof error.remediation).toBe('string');
+      expect(error.remediation).toBe(REMEDIATION.UNKNOWN);
+    }
+  });
+
+  it('can be built with null options, as JavaScript may pass them', () => {
+    const error = new SerialBrokerError(SerialBrokerErrorCode.WRITE_FAILED, 'x', null as never);
+
+    expect(error.remediation).toBe(REMEDIATION.WRITE_FAILED);
+    expect(error.context).toEqual({});
+  });
+});
+
+/**
+ * The `DOMException` mapping table.
+ *
+ * ADR-0012 says the mapping is by name and never by message text, because message text differs
+ * between Chromium versions. These tests are what keeps that true.
+ */
+describe('mapping platform failures', () => {
+  const context = { configName: 'Reader', timestamp: 1234 };
+
+  it.each([
+    ['NetworkError', SerialBrokerErrorCode.DEVICE_DISCONNECTED],
+    ['InvalidStateError', SerialBrokerErrorCode.OPEN_FAILED],
+    ['SecurityError', SerialBrokerErrorCode.WEB_SERIAL_UNAVAILABLE],
+    ['NotSupportedError', SerialBrokerErrorCode.OPEN_FAILED],
+  ])('maps a %s from open() to %s', (name, expected) => {
+    expect(mapOpenError(domException(name, 'x'), context).code).toBe(expected);
+  });
+
+  // The same name maps differently depending on the operation: SecurityError means "this context
+  // may not use serial at all" when opening, and "you called me outside a user gesture" when
+  // asking for a port. One table could not say both.
+  it.each([
+    ['SecurityError', SerialBrokerErrorCode.USER_GESTURE_REQUIRED],
+    ['NotFoundError', SerialBrokerErrorCode.PERMISSION_DENIED],
+  ])('maps a %s from requestPort() to %s', (name, expected) => {
+    expect(mapRequestPortError(domException(name, 'x'), context).code).toBe(expected);
+  });
+
+  it('falls back without losing the name, so an unmapped case is reportable', () => {
+    const error = mapOpenError(domException('SomeFutureError', 'x'), context);
+
+    expect(error.code).toBe(SerialBrokerErrorCode.OPEN_FAILED);
+    expect(error.context.domExceptionName).toBe('SomeFutureError');
+  });
+
+  it('never maps on message text', () => {
+    // A message that says "NetworkError" while the name says otherwise must not be believed.
+    const misleading = domException('NotSupportedError', 'NetworkError: the device has been lost');
+
+    expect(mapOpenError(misleading, context).code).toBe(SerialBrokerErrorCode.OPEN_FAILED);
+  });
+
+  it('passes a library error through unchanged', () => {
+    const original = mapOpenError(domException('NetworkError', 'x'), context);
+
+    expect(mapOpenError(original, context)).toBe(original);
+  });
+
+  it('maps something that is not an Error at all', () => {
+    // An adapter or a polyfill can reject with a string. There is no name to key on, so the
+    // fallback applies - but the caller still gets a library error rather than a bare string.
+    const error = mapOpenError('the port exploded', context);
+
+    expect(error.code).toBe(SerialBrokerErrorCode.OPEN_FAILED);
+    expect(error.context.domExceptionName).toBeUndefined();
+    expect(error.message).toContain('the port exploded');
+  });
+
+  it('does not take a name every object inherits for a mapped one', () => {
+    const error = mapOpenError(domException('constructor', 'x'), context);
+
+    expect(error.code).toBe(SerialBrokerErrorCode.OPEN_FAILED);
+    expect(error.context.domExceptionName).toBe('constructor');
+  });
+
+  it('falls back for an error whose name is not a string or cannot be read', () => {
+    const symbolName = domException('x', 'x');
+    Object.defineProperty(symbolName, 'name', { value: Symbol('NetworkError') });
+    const throwingName = domException('x', 'x');
+    Object.defineProperty(throwingName, 'name', {
+      get: () => {
+        throw new Error('no name for you');
+      },
+    });
+
+    // A Symbol cannot cross postMessage, and a throw here would escape the supervisor's failure
+    // handling and leave the attempt stuck.
+    for (const hostile of [symbolName, throwingName]) {
+      const error = mapOpenError(hostile, context);
+      expect(error.code).toBe(SerialBrokerErrorCode.OPEN_FAILED);
+      expect(error.context.domExceptionName).toBeUndefined();
+    }
+  });
+
+  it('keeps the original as the cause', () => {
+    const underlying = domException('NetworkError', 'the device has been lost');
+
+    expect(mapOpenError(underlying, context).cause).toBe(underlying);
+  });
+
+  it('carries the operation-specific detail it was given', () => {
+    const error = mapOpenError(domException('NetworkError', 'x'), {
+      ...context,
+      extra: { attempt: 3 },
+    });
+
+    expect(error.context.attempt).toBe(3);
+    expect(error.configName).toBe('Reader');
+    expect(error.timestamp).toBe(1234);
   });
 });

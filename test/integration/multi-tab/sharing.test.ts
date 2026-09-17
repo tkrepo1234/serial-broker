@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { SerialBrokerStatus } from '../../../src/core/types.js';
 import { BrowserHarness, TRANSPORT_MODES } from '../../harness/browser-harness.js';
-import { READER, READER_OPTIONS } from '../../harness/devices.js';
+import { READER, READER_OPTIONS, readerHarness } from '../../harness/devices.js';
 
 /**
  * The product claim, tested end to end: several tabs, one port.
@@ -16,9 +16,7 @@ describe.each(TRANSPORT_MODES)('sharing one port across tabs (%s)', (transport) 
     harness: BrowserHarness;
     device: ReturnType<BrowserHarness['serial']['addDevice']>;
   }> {
-    const harness = new BrowserHarness({ transport });
-    const device = harness.serial.addDevice(READER.vendorId, READER.productId);
-    harness.serial.grant(device);
+    const { harness, device } = readerHarness({ transport });
     return { harness, device };
   }
 

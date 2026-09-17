@@ -66,6 +66,7 @@ string matching on the message.
 
 ## Verification
 
-Unit tests assert the mapping table, round-trip serialisation, cause chaining, and that every
-code has a non-empty remediation string. `test/integration/auto-reconnect.test.ts` asserts that
+`test/unit/errors.test.ts` asserts the mapping table, round-trip serialisation, cause chaining, and
+that every code has a non-empty remediation string; `test/integration/non-retryable-failures.test.ts`
+and `reconnect.test.ts` exercise the mapping through a port that fails. `test/integration/auto-reconnect.test.ts` asserts that
 `isRetryable` follows `connection.autoReconnect` in every tab.

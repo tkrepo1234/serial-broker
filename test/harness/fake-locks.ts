@@ -9,9 +9,6 @@ interface QueuedRequest {
   readonly contextId: string;
   readonly mode: 'exclusive' | 'shared';
   readonly grant: (lock: LockLike | null) => void;
-  readonly failed: (reason: unknown) => void;
-  readonly signal: AbortSignal | undefined;
-  readonly onAbort: (() => void) | undefined;
 }
 
 interface HeldLock {
@@ -135,9 +132,6 @@ export class FakeLockManager {
           holder = this.#held.get(name)?.at(-1);
           resolve(lock);
         },
-        failed: reject,
-        signal: options.signal,
-        onAbort: undefined,
       };
 
       if (options.signal !== undefined) {

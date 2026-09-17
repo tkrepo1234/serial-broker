@@ -1,11 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
-import { SerialBrokerErrorCode } from '../../src/core/error-codes.js';
-import { mapOpenError, mapRequestPortError } from '../../src/owner/serial-errors.js';
+import { SerialBrokerStatus } from '../../src/core/types.js';
 import { ownerLockName } from '../../src/protocol/version.js';
 import { BrowserHarness } from '../harness/browser-harness.js';
-import { READER, READER_OPTIONS } from '../harness/devices.js';
-import { domException } from '../harness/fake-serial.js';
+import { connectedTab, READER, READER_OPTIONS, readerHarness } from '../harness/devices.js';
+import { rememberedNames } from '../harness/stored-configurations.js';
 
 /**
  * Row 16 of the scenario matrix: rapid setup/release churn leaks nothing.
@@ -18,9 +17,7 @@ import { domException } from '../harness/fake-serial.js';
  */
 describe('resource lifecycle', () => {
   it('leaves nothing behind when churn happens in several tabs at once', async () => {
-    const harness = new BrowserHarness();
-    const device = harness.serial.addDevice(READER.vendorId, READER.productId);
-    harness.serial.grant(device);
+    const { harness, device } = readerHarness();
     const tabs = [harness.openTab(), harness.openTab(), harness.openTab()];
 
     for (let round = 0; round < 5; round += 1) {
@@ -43,9 +40,7 @@ describe('resource lifecycle', () => {
   });
 
   it('stops delivering to listeners of a released configuration', async () => {
-    const harness = new BrowserHarness();
-    const device = harness.serial.addDevice(READER.vendorId, READER.productId);
-    harness.serial.grant(device);
+    const { harness, device } = readerHarness();
     const tab = harness.openTab();
 
     await tab.setup('Reader', READER_OPTIONS);
@@ -85,9 +80,7 @@ describe('resource lifecycle', () => {
   });
 
   it('cleans up after a configuration that was reconnecting when it was released', async () => {
-    const harness = new BrowserHarness();
-    const device = harness.serial.addDevice(READER.vendorId, READER.productId);
-    harness.serial.grant(device);
+    const { harness, device } = readerHarness();
     device.faults.failOpenWith = 'NetworkError';
     const tab = harness.openTab();
 
@@ -105,8 +98,7 @@ describe('resource lifecycle', () => {
   });
 
   it('releases everything when several configurations are disposed together', async () => {
-    const harness = new BrowserHarness();
-    harness.serial.grant(harness.serial.addDevice(READER.vendorId, READER.productId));
+    const { harness } = readerHarness();
     harness.serial.grant(harness.serial.addDevice(0x0403, 0x6001));
     const tab = harness.openTab();
 
@@ -126,112 +118,23 @@ describe('resource lifecycle', () => {
   });
 });
 
-/**
- * The `DOMException` mapping table.
- *
- * ADR-0012 says the mapping is by name and never by message text, because message text differs
- * between Chromium versions. These tests are what keeps that true.
- */
-describe('mapping platform failures', () => {
-  const context = { configName: 'Reader', timestamp: 1234 };
+describe('releasing a configuration', () => {
+  it('reports released as its last status', async () => {
+    const { tab } = await connectedTab();
 
-  it.each([
-    ['NetworkError', SerialBrokerErrorCode.DEVICE_DISCONNECTED],
-    ['InvalidStateError', SerialBrokerErrorCode.OPEN_FAILED],
-    ['SecurityError', SerialBrokerErrorCode.WEB_SERIAL_UNAVAILABLE],
-    ['NotSupportedError', SerialBrokerErrorCode.OPEN_FAILED],
-  ])('maps a %s from open() to %s', (name, expected) => {
-    expect(mapOpenError(domException(name, 'x'), context).code).toBe(expected);
+    await tab.client.release('Reader');
+
+    expect(tab.statusTrail('Reader').at(-1)).toBe(SerialBrokerStatus.Released);
   });
 
-  it.each([
-    ['SecurityError', SerialBrokerErrorCode.USER_GESTURE_REQUIRED],
-    ['NotFoundError', SerialBrokerErrorCode.PERMISSION_DENIED],
-  ])('maps a %s from requestPort() to %s', (name, expected) => {
-    expect(mapRequestPortError(domException(name, 'x'), context).code).toBe(expected);
-  });
+  it('keeps remembering a configuration set up again while the port was still closing', async () => {
+    const { harness, tab } = await connectedTab();
 
-  it('maps the same name differently depending on the operation', () => {
-    // SecurityError means "this context may not use serial at all" when opening, and "you
-    // called me outside a user gesture" when asking for a port. One table could not say both.
-    expect(mapOpenError(domException('SecurityError', 'x'), context).code).toBe(
-      SerialBrokerErrorCode.WEB_SERIAL_UNAVAILABLE,
-    );
-    expect(mapRequestPortError(domException('SecurityError', 'x'), context).code).toBe(
-      SerialBrokerErrorCode.USER_GESTURE_REQUIRED,
-    );
-  });
+    const releasing = tab.client.release('Reader');
+    await tab.client.setup('Reader', READER_OPTIONS);
+    await releasing;
+    await harness.settle();
 
-  it('falls back without losing the name, so an unmapped case is reportable', () => {
-    const error = mapOpenError(domException('SomeFutureError', 'x'), context);
-
-    expect(error.code).toBe(SerialBrokerErrorCode.OPEN_FAILED);
-    expect(error.context.domExceptionName).toBe('SomeFutureError');
-  });
-
-  it('never maps on message text', () => {
-    // A message that says "NetworkError" while the name says otherwise must not be believed.
-    const misleading = domException('NotSupportedError', 'NetworkError: the device has been lost');
-
-    expect(mapOpenError(misleading, context).code).toBe(SerialBrokerErrorCode.OPEN_FAILED);
-  });
-
-  it('passes a library error through unchanged', () => {
-    const original = mapOpenError(domException('NetworkError', 'x'), context);
-
-    expect(mapOpenError(original, context)).toBe(original);
-  });
-
-  it('maps something that is not an Error at all', () => {
-    // An adapter or a polyfill can reject with a string. There is no name to key on, so the
-    // fallback applies - but the caller still gets a library error rather than a bare string.
-    const error = mapOpenError('the port exploded', context);
-
-    expect(error.code).toBe(SerialBrokerErrorCode.OPEN_FAILED);
-    expect(error.context.domExceptionName).toBeUndefined();
-    expect(error.message).toContain('the port exploded');
-  });
-
-  it('does not take a name every object inherits for a mapped one', () => {
-    const error = mapOpenError(domException('constructor', 'x'), context);
-
-    expect(error.code).toBe(SerialBrokerErrorCode.OPEN_FAILED);
-    expect(error.context.domExceptionName).toBe('constructor');
-  });
-
-  it('falls back for an error whose name is not a string or cannot be read', () => {
-    const symbolName = domException('x', 'x');
-    Object.defineProperty(symbolName, 'name', { value: Symbol('NetworkError') });
-    const throwingName = domException('x', 'x');
-    Object.defineProperty(throwingName, 'name', {
-      get: () => {
-        throw new Error('no name for you');
-      },
-    });
-
-    // A Symbol cannot cross postMessage, and a throw here would escape the supervisor's failure
-    // handling and leave the attempt stuck.
-    for (const hostile of [symbolName, throwingName]) {
-      const error = mapOpenError(hostile, context);
-      expect(error.code).toBe(SerialBrokerErrorCode.OPEN_FAILED);
-      expect(error.context.domExceptionName).toBeUndefined();
-    }
-  });
-
-  it('keeps the original as the cause', () => {
-    const underlying = domException('NetworkError', 'the device has been lost');
-
-    expect(mapOpenError(underlying, context).cause).toBe(underlying);
-  });
-
-  it('carries the operation-specific detail it was given', () => {
-    const error = mapOpenError(domException('NetworkError', 'x'), {
-      ...context,
-      extra: { attempt: 3 },
-    });
-
-    expect(error.context.attempt).toBe(3);
-    expect(error.configName).toBe('Reader');
-    expect(error.timestamp).toBe(1234);
+    expect(rememberedNames(harness.storage)).toEqual(['Reader']);
   });
 });

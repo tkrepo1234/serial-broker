@@ -57,11 +57,6 @@ export class VirtualTab {
     private readonly harness: BrowserHarness,
   ) {}
 
-  /** `false` once this tab has been closed or killed. */
-  get isAlive(): boolean {
-    return this.#isAlive;
-  }
-
   /**
    * Sets up a configuration and records every event it produces.
    *
@@ -434,11 +429,6 @@ export class BrowserHarness {
         held?.splice(index, 1);
       }
     }
-  }
-
-  /** Every tab still open. */
-  get tabs(): readonly VirtualTab[] {
-    return [...this.#tabs.values()];
   }
 
   /**

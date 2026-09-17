@@ -13,13 +13,13 @@ the browser to reclaim memory, or be terminated from `chrome://inspect`. The bro
 Microsoft Edge the worker ends with the renderer of the page that started it - usually the first tab
 to hold the port.
 
-Heartbeats answered both directions until 2026-09-15: a message from every tab every 15 seconds,
-answered by the worker, a sweep forgetting tabs silent for three minutes, and a new worker after
-three unanswered heartbeats. It cost traffic while nothing happened, and it was slow where it
-mattered: after the worker ended, every tab but the new holder stayed `reconnecting` for 60 seconds -
-four minutes in a hidden tab - and a write sent meanwhile ended in `WRITE_TIMEOUT`, 240 times the
-expectation. A timeout short enough to matter would fire for every hidden tab, whose timers the
-browser throttles.
+Heartbeats answer both directions: a message from every tab every 15 seconds, answered by the
+worker, a sweep forgetting tabs silent for three minutes, and a new worker after three unanswered
+heartbeats. They cost traffic while nothing happens, and they are slow where it matters. Measured
+with them: after the worker ended, every tab but the new holder stayed `reconnecting` for 60
+seconds - four minutes in a hidden tab - and a write sent meanwhile ended in `WRITE_TIMEOUT`, 240
+times the expectation. A timeout short enough to matter would fire for every hidden tab, whose
+timers the browser throttles.
 
 What the whole library already rests on answers it exactly ([ADR-0005](./0005-owner-election-via-web-locks.md)):
 the browser lets go of a context's locks when the context goes, however it goes, and grants the lock
@@ -60,8 +60,8 @@ to whoever waits. `navigator.locks` is exposed to workers in every browser that 
 
 ## Alternatives considered
 
-- **Heartbeats with a sweep in the worker and a count of unanswered heartbeats in the tabs.** What
-  ADR-0041 decided on 2026-09-13. Rejected for the cost and the delay above.
+- **Heartbeats with a sweep in the worker and a count of unanswered heartbeats in the tabs.**
+  Rejected for the cost and the delay above.
 - **Keep the heartbeats and shorten the timeouts.** A timeout short enough to matter fires for every
   throttled tab, and every hidden tab is throttled.
 - **Close the port of a silent participant.** A tab that was only throttled would lose its connection
@@ -109,7 +109,7 @@ to whoever waits. `navigator.locks` is exposed to workers in every browser that 
 
 `test/unit/worker-ports.test.ts`, `test/unit/worker-script.test.ts`,
 `test/unit/worker-transport-liveness.test.ts`, `test/unit/transports.test.ts`,
-`test/integration/multi-tab/departed-tabs.test.ts`, `test/integration/multi-tab/worker-restart.test.ts`
+`test/integration/multi-tab/shared-worker.test.ts` (tabs that go away, and a worker that dies)
 and the harness conformance test that a terminated worker's lock is let go. In a real browser,
 `test/browser/failover.spec.ts` "the broker dies" terminates the `SharedWorker` and every tab is on a
 new one within the default wait, and the browser benchmark's `handover/crash`.

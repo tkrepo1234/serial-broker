@@ -2,8 +2,10 @@ import { describe, expect, it } from 'vitest';
 
 import { SerialBrokerErrorCode } from '../../src/core/error-codes.js';
 import { SerialBrokerStatus } from '../../src/core/types.js';
+import { storageEntryKey, storageIndexKey } from '../../src/storage/configuration-store.js';
 import { BrowserHarness } from '../harness/browser-harness.js';
-import { READER, READER_OPTIONS } from '../harness/devices.js';
+import { connectedTab, READER, READER_OPTIONS, readerHarness } from '../harness/devices.js';
+import { remember, rememberedEntry, rememberedNames } from '../harness/stored-configurations.js';
 
 /**
  * Remembering a device across visits.
@@ -101,9 +103,7 @@ describe('permission and persistence', () => {
   });
 
   it('restores a persisted configuration in a new tab, with no prompt', async () => {
-    const harness = new BrowserHarness();
-    const device = harness.serial.addDevice(READER.vendorId, READER.productId);
-    harness.serial.grant(device);
+    const { harness, device } = readerHarness();
     // Would be taken by a picker, had one been shown.
     harness.serial.pickerQueue.push(device);
 
@@ -123,9 +123,7 @@ describe('permission and persistence', () => {
   });
 
   it('keeps the browser permission when a configuration is released, and revokes it only when asked to', async () => {
-    const harness = new BrowserHarness();
-    const device = harness.serial.addDevice(READER.vendorId, READER.productId);
-    harness.serial.grant(device);
+    const { harness } = readerHarness();
     const tab = harness.openTab();
     await tab.setup('Reader', READER_OPTIONS);
 
@@ -141,35 +139,8 @@ describe('permission and persistence', () => {
     expect(tab.client.getStatus('Reader').status).toBe(SerialBrokerStatus.AwaitingPermission);
   });
 
-  it('keeps a released configuration remembered, and forgets it only when asked to', async () => {
-    const harness = new BrowserHarness();
-    const device = harness.serial.addDevice(READER.vendorId, READER.productId);
-    harness.serial.grant(device);
-
-    const tab = harness.openTab();
-    await tab.setup('Reader', READER_OPTIONS);
-    // Disconnecting is not deleting. With one tab open - a screen on a production line, which is
-    // the ordinary case - the old rule took the configuration away with the release, and the next
-    // visit had nothing to reconnect to.
-    await tab.client.release('Reader');
-    await tab.close();
-
-    const reloaded = harness.openTab();
-    await expect(reloaded.client.restore()).resolves.toEqual(['Reader']);
-    await reloaded.close();
-
-    const forgetting = harness.openTab();
-    await forgetting.setup('Reader', READER_OPTIONS);
-    await forgetting.client.release('Reader', { forget: true });
-    await forgetting.close();
-
-    await expect(harness.openTab().client.restore()).resolves.toEqual([]);
-  });
-
   it('forgets a remembered configuration from a tab that never set it up', async () => {
-    const harness = new BrowserHarness();
-    const device = harness.serial.addDevice(READER.vendorId, READER.productId);
-    harness.serial.grant(device);
+    const { harness } = readerHarness();
 
     const first = harness.openTab();
     await first.setup('Reader', READER_OPTIONS);
@@ -188,9 +159,7 @@ describe('permission and persistence', () => {
   });
 
   it('forgets nothing for a configuration that was never remembered, and reports nothing', async () => {
-    const harness = new BrowserHarness();
-    const device = harness.serial.addDevice(READER.vendorId, READER.productId);
-    harness.serial.grant(device);
+    const { harness } = readerHarness();
 
     const tab = harness.openTab();
     await tab.setup('Reader', { ...READER_OPTIONS, remember: false });
@@ -203,9 +172,7 @@ describe('permission and persistence', () => {
   });
 
   it('keeps working when storage is unavailable', async () => {
-    const harness = new BrowserHarness();
-    const device = harness.serial.addDevice(READER.vendorId, READER.productId);
-    harness.serial.grant(device);
+    const { harness } = readerHarness();
     harness.storage.isUnavailable = true;
 
     const tab = harness.openTab();
@@ -221,5 +188,96 @@ describe('permission and persistence', () => {
     expect(tab.client.getStatus('Reader').lastErrorCode).toBe(
       SerialBrokerErrorCode.STORAGE_UNAVAILABLE,
     );
+  });
+});
+
+describe('asking for a device that is already connected', () => {
+  it('leaves the working connection alone, in the tab holding the port and in another', async () => {
+    const { harness, device, tab } = await connectedTab();
+    const peer = harness.openTab();
+    await peer.setup('Reader', READER_OPTIONS);
+
+    harness.serial.pickerQueue.push(device);
+    await expect(tab.client.requestAccess('Reader')).resolves.toBe(true);
+    // The port is open, so the other tab has nothing to ask the user for.
+    await expect(peer.client.requestAccess('Reader')).resolves.toBe(true);
+    await harness.settle();
+
+    expect(tab.client.getStatus('Reader').status).toBe(SerialBrokerStatus.Open);
+    expect(peer.client.getStatus('Reader').status).toBe(SerialBrokerStatus.Open);
+    expect(device.openCount).toBe(1);
+    expect(tab.recordFor('Reader').errors).toHaveLength(0);
+  });
+});
+
+describe('remembered configurations', () => {
+  it('removes an entry left behind when the same name is set up without being remembered', async () => {
+    const harness = new BrowserHarness();
+    remember(harness.storage, { Reader: { device: READER, serial: { baudRate: 9600 } } });
+    const tab = harness.openTab();
+
+    await tab.setup('Reader', { ...READER_OPTIONS, remember: false });
+    await tab.close();
+
+    await expect(harness.openTab().client.restore()).resolves.toEqual([]);
+    expect(rememberedNames(harness.storage)).toEqual([]);
+  });
+});
+
+/**
+ * How remembered configurations are laid out in storage (ADR-0033).
+ *
+ * One key per configuration and an index of their names, carrying a storage version of their own,
+ * so that a change to the message protocol costs nobody their configurations and two tabs saving at
+ * the same moment cannot overwrite each other's entry.
+ */
+
+describe('the layout of remembered configurations', () => {
+  it('carries a storage version, not the protocol version', () => {
+    expect(storageIndexKey()).toBe('serial-broker/configurations/v1/index');
+    expect(storageEntryKey('Reader')).toBe('serial-broker/configurations/v1/entry/Reader');
+  });
+
+  it('keeps each configuration under its own key, listed in the index', async () => {
+    const { harness } = readerHarness();
+    const tab = harness.openTab();
+
+    await tab.setup('Reader', READER_OPTIONS);
+    await tab.setup('Scale', READER_OPTIONS);
+
+    expect(rememberedNames(harness.storage)).toEqual(['Reader', 'Scale']);
+    expect(rememberedEntry(harness.storage, 'Scale')).toMatchObject({ remember: true });
+  });
+
+  it('restores what an earlier visit stored, and nothing else', async () => {
+    const { harness } = readerHarness();
+    remember(harness.storage, {
+      Reader: { device: READER, serial: { baudRate: 9600 } },
+    });
+
+    await expect(harness.openTab().client.restore()).resolves.toEqual(['Reader']);
+  });
+
+  it('drops an index that cannot be read, and reports it once', async () => {
+    const { harness } = readerHarness();
+    harness.storage.poison(storageIndexKey(), '["Reader"');
+    const tab = harness.openTab();
+
+    await expect(tab.client.restore()).resolves.toEqual([]);
+    await tab.setup('Reader', READER_OPTIONS);
+    await harness.settle();
+
+    expect(tab.errorCodes('Reader')).toEqual([SerialBrokerErrorCode.STORAGE_CORRUPT]);
+    // Removed rather than left to be reported again on every restore.
+    expect(rememberedNames(harness.storage)).toEqual(['Reader']);
+  });
+
+  it('keeps the names an index that is partly rubbish still lists', async () => {
+    const { harness } = readerHarness();
+    remember(harness.storage, { Reader: { device: READER, serial: { baudRate: 9600 } } });
+    harness.storage.poison(storageIndexKey(), JSON.stringify(['Reader', 17, null, 'Reader']));
+
+    await expect(harness.openTab().client.restore()).resolves.toEqual(['Reader']);
+    expect(rememberedNames(harness.storage)).toEqual(['Reader']);
   });
 });

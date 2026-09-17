@@ -13,6 +13,7 @@ import { FakeBroadcastHub, FakeWorkerHost } from './fake-bus.js';
 import { FakeClock, flushMicrotasks } from './fake-clock.js';
 import { FakeLockManager } from './fake-locks.js';
 import { FakeSerialRegistry } from './fake-serial.js';
+import { fieldsOfEvent, recordingLogger } from './recording-logger.js';
 
 /**
  * Tests for the fakes themselves.
@@ -881,4 +882,24 @@ describe.each(TRANSPORT_MODES)('FakeBus (%s)', (transport) => {
       expect(client.deref()).toBeUndefined();
     },
   );
+});
+
+describe('a killed tab', () => {
+  it('runs none of its timers any more', async () => {
+    const { logger, records } = recordingLogger();
+    const harness = new BrowserHarness({ logger });
+    const device = harness.serial.addDevice(READER.vendorId, READER.productId);
+    harness.serial.grant(device);
+    device.faults.failOpenWith = 'NetworkError';
+    const tab = harness.openTab();
+    await tab.setup('Reader', READER_OPTIONS);
+    await harness.advance(1_000);
+    const before = fieldsOfEvent(records, 'supervisor.reconnect').length;
+    expect(before).toBeGreaterThan(0);
+
+    await tab.kill();
+    await harness.advance(60_000);
+
+    expect(fieldsOfEvent(records, 'supervisor.reconnect')).toHaveLength(before);
+  });
 });

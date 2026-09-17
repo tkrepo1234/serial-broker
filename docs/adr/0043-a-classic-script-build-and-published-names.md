@@ -1,4 +1,4 @@
-# ADR-0043: Ship a classic script build on one global, and name published files after the package
+# ADR-0043: Ship a classic script build on one global; name published files after the package
 
 - **Status:** Accepted
 - **Date:** 2026-09-16
@@ -73,8 +73,8 @@ take.
 
 **One worker file, one URL, for every build.** There is no second worker script and no second URL.
 The classic build looks for the same `serial-broker.worker.js` as the readable, minified and
-CommonJS builds; `scripts/check-dist.mjs` asserts that every one of the six published entry-point
-files names it, and `test/browser/global-entry.spec.ts` proves it in a browser by having a tab on
+CommonJS builds; `scripts/check-dist.mjs` asserts that every one of the eight published entry-point
+files names it, and `test/browser/entry-points.spec.ts` proves it in a browser by having a tab on
 the classic build and a tab on the ES module build share one port and one `SharedWorker`.
 
 **`configure({ workerUrl })` is required with the classic build**, before the first `setup()`.
@@ -149,11 +149,10 @@ The worker script's minification belongs to the build outputs and is recorded in
   files by hand is the audience this library is for, and for them `index.min.js` in a folder of
   their own files is an unlabelled box.
 - **Rename the source entry files instead of the emitted declarations**, so `tsc` produces the
-  published names directly. It would have removed `scripts/entry-declarations.mjs`. Rejected
-  because `src/index.ts` is the name the guidelines, TypeDoc's entry points, the documentation site
-  and its generated reference directories all use, and because the documentation build could not be
-  run in the working tree that made this change (see Verification) — trading a checked twenty-line
-  script for an unverifiable change to the documentation toolchain was the wrong way round.
+  published names directly. It would have removed `scripts/entry-declarations.mjs`. Rejected because
+  `src/index.ts` is the name the guidelines, TypeDoc's entry points, the documentation site and its
+  generated reference directories all use: a checked twenty-line script costs less than a change to
+  all of them.
 
 ## Consequences
 
@@ -190,10 +189,10 @@ The worker script's minification belongs to the build outputs and is recorded in
 
 `scripts/check-dist.mjs` after every build: every `exports` target exists; the minified and classic
 builds expose what the readable build exports; every published entry-point file names
-`serial-broker.worker.js`; each classic build loads outside a browser without throwing, leaves
-exactly one global, and reports `isSupported()` as `false` there.
+`serial-broker.worker.js`; each classic build loads outside a browser without throwing and leaves
+exactly one global, and `SerialBroker.isSupported()` is `false` there.
 
-`test/browser/global-entry.spec.ts` in a real browser: a tab on `dist/serial-broker.global.js` and
+`test/browser/entry-points.spec.ts` in a real browser: a tab on `dist/serial-broker.global.js` and
 a tab on `dist/serial-broker.js` set up the same configuration, see each other's traffic, hold one
 port between them, and Chromium lists exactly one `SharedWorker`; the global carries the
 documented surface and is the only global the build defines; and a page that does not call

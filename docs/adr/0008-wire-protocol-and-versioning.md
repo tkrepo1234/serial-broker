@@ -1,4 +1,4 @@
-# ADR-0008: Version the wire protocol independently
+# ADR-0008: Version the wire protocol; announce it; freeze the worker handshake
 
 - **Status:** Accepted
 - **Date:** 2026-09-12
@@ -100,5 +100,8 @@ storage version of their own ([ADR-0033](./0033-one-storage-key-per-configuratio
 `test/integration/multi-tab/protocol-versions.test.ts` and `two-builds.test.ts`, in both transport
 modes; `test/unit/worker-script.test.ts` (a worker answers a `hello` in another version),
 `test/unit/transports.test.ts`, `test/unit/fallback-transport.test.ts` and
-`test/unit/worker-transport-liveness.test.ts`; `test/integration/multi-tab/worker-script-fallback.test.ts`;
+`test/unit/worker-transport-liveness.test.ts`; `test/unit/bus-limits.test.ts` (the frozen shape of
+the announcement and its decoder); `test/integration/multi-tab/shared-worker.test.ts` (a worker
+script of another version) and `hostile-bus.test.ts` (a message of another version on this build's
+channel);
 and `test/browser/transports.spec.ts`, which serves a worker of another protocol version.

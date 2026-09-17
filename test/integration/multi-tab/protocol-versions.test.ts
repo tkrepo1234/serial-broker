@@ -5,7 +5,6 @@ import { SerialBrokerErrorCode } from '../../../src/core/error-codes.js';
 import type { ErrorEvent } from '../../../src/core/types.js';
 import {
   ANNOUNCEMENT_CHANNEL_NAME,
-  decodeAnnouncement,
   versionAnnouncement,
 } from '../../../src/protocol/announcement.js';
 import { PROTOCOL_VERSION } from '../../../src/protocol/version.js';
@@ -61,6 +60,8 @@ describe.each(TRANSPORT_MODES)('tabs on different protocol versions (%s)', (tran
     expect(mismatches(tab).map((event) => event.error.context)).toEqual([
       { theirVersion: PROTOCOL_VERSION + 1 },
     ]);
+    // A tab left open across a deployment that changed the protocol: only a reload joins them.
+    expect(mismatches(tab)[0]?.error.remediation).toContain('reload every tab');
     // Answered each time: a tab opened later has to learn of this one too.
     expect(other.heard).toEqual([
       versionAnnouncement(PROTOCOL_VERSION, true),
@@ -150,26 +151,5 @@ describe('a platform without BroadcastChannel', () => {
 
     await expect(client.setup('Reader', READER_OPTIONS)).resolves.toBeUndefined();
     await client.dispose();
-  });
-});
-
-describe('the announcement message', () => {
-  it('keeps the shape every version has to understand', () => {
-    // Frozen (ADR-0008): changing this loses the ability to detect every earlier version.
-    expect(versionAnnouncement(7, false)).toEqual({
-      type: 'serial-broker/protocol-version',
-      protocolVersion: 7,
-      isReply: false,
-    });
-    expect(ANNOUNCEMENT_CHANNEL_NAME).toBe('serial-broker/announcements');
-  });
-
-  it('reads only well-formed announcements', () => {
-    expect(decodeAnnouncement(versionAnnouncement(3, true))).toEqual(versionAnnouncement(3, true));
-    expect(decodeAnnouncement({ ...versionAnnouncement(3, true), protocolVersion: 3.5 })).toBe(
-      undefined,
-    );
-    expect(decodeAnnouncement({ ...versionAnnouncement(3, true), type: 'other' })).toBeUndefined();
-    expect(decodeAnnouncement([versionAnnouncement(3, true)])).toBeUndefined();
   });
 });

@@ -19,7 +19,7 @@ import process from 'node:process';
 import { expect, test as base, type BrowserContext } from '@playwright/test';
 
 import type { SerialBrokerOptions } from '../../../src/core/types.js';
-import { echoConfiguration, Tab } from '../support/tab.js';
+import { echoConfiguration, openConnectedTabs, Tab } from '../support/tab.js';
 
 import { EMULATED_DEVICE, EmulatorProcess } from './support/emulator-process.js';
 import {
@@ -70,17 +70,12 @@ async function connectedTabs(
   count: number,
   overrides: Partial<SerialBrokerOptions> = {},
 ): Promise<Tab[]> {
-  const tabs: Tab[] = [];
-  for (let index = 0; index < count; index += 1) {
-    tabs.push(await Tab.open(context));
-  }
-  for (const tab of tabs) {
-    await tab.setup(CONFIGURATION, echoConfiguration({ device: EMULATED_DEVICE, ...overrides }));
-  }
-  for (const tab of tabs) {
-    await tab.waitForStatus(CONFIGURATION, 'open');
-  }
-  return tabs;
+  return await openConnectedTabs(
+    context,
+    count,
+    CONFIGURATION,
+    echoConfiguration({ device: EMULATED_DEVICE, ...overrides }),
+  );
 }
 
 test.describe('the USB/IP emulator, attached by usbip-win2', () => {

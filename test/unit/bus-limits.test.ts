@@ -11,7 +11,11 @@ import {
 import { SerialBrokerErrorCode } from '../../src/core/error-codes.js';
 import { SerialBrokerError } from '../../src/core/errors.js';
 import { OnceLog, ScopedLogger } from '../../src/core/logger.js';
-import { decodeAnnouncement } from '../../src/protocol/announcement.js';
+import {
+  ANNOUNCEMENT_CHANNEL_NAME,
+  decodeAnnouncement,
+  versionAnnouncement,
+} from '../../src/protocol/announcement.js';
 import { decodeMessage, describeDecodeFailure } from '../../src/protocol/decode.js';
 import { helloSenderOf } from '../../src/protocol/handshake.js';
 import {
@@ -342,16 +346,6 @@ describe('the frozen decoders within their limits', () => {
     },
   );
 
-  it('reads an announcement of another version', () => {
-    expect(
-      decodeAnnouncement({
-        type: 'serial-broker/protocol-version',
-        protocolVersion: 3,
-        isReply: true,
-      }),
-    ).toEqual({ type: 'serial-broker/protocol-version', protocolVersion: 3, isReply: true });
-  });
-
   it('reads the sender of a hello up to MAX_IDENTIFIER_LENGTH characters, and not one more', () => {
     const hello = { v: 1, to: 'all', type: 'hello' };
 
@@ -549,5 +543,26 @@ describe('Broker within MAX_CONFIGURATIONS', () => {
       message(alice, { type: 'status-request', configName: 'Overflow', retry: false }),
     );
     expect(delivered).toEqual([bob]);
+  });
+});
+
+describe('the announcement message', () => {
+  it('keeps the shape every version has to understand', () => {
+    // Frozen (ADR-0008): changing this loses the ability to detect every earlier version.
+    expect(versionAnnouncement(7, false)).toEqual({
+      type: 'serial-broker/protocol-version',
+      protocolVersion: 7,
+      isReply: false,
+    });
+    expect(ANNOUNCEMENT_CHANNEL_NAME).toBe('serial-broker/announcements');
+  });
+
+  it('reads only well-formed announcements', () => {
+    expect(decodeAnnouncement(versionAnnouncement(3, true))).toEqual(versionAnnouncement(3, true));
+    expect(decodeAnnouncement({ ...versionAnnouncement(3, true), protocolVersion: 3.5 })).toBe(
+      undefined,
+    );
+    expect(decodeAnnouncement({ ...versionAnnouncement(3, true), type: 'other' })).toBeUndefined();
+    expect(decodeAnnouncement([versionAnnouncement(3, true)])).toBeUndefined();
   });
 });

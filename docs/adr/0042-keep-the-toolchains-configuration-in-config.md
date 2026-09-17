@@ -133,9 +133,9 @@ toolchain's: it sits with the scenarios it runs and is already named by its scri
 
 ### Positive
 
-- The root lists 14 files instead of 22, and eight of the nine remaining non-source entries are
-  documents a reader wants (`README.md`, `CHANGELOG.md`, `CONTRIBUTING.md`, `SECURITY.md`,
-  `BACKLOG.md`, `LICENSE`) rather than settings.
+- The root lists 14 files: seven documents a reader wants (`README.md`, `CHANGELOG.md`,
+  `CONTRIBUTING.md`, `SECURITY.md`, `BACKLOG.md`, `LICENSE`, `llms.txt`) and seven files a tool
+  requires there.
 - A tool's configuration is now found by looking in one named place, instead of by knowing which
   dotfile belongs to which tool.
 - `config/README.md` gives the toolchain a single description, which no file previously held.

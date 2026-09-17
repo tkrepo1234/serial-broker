@@ -9,6 +9,7 @@ import {
   type VirtualTab,
 } from '../../../harness/browser-harness.js';
 import type { FakeDevice } from '../../../harness/fake-serial.js';
+import { outcomeOf } from '../../../harness/outcomes.js';
 
 /**
  * What the extreme suite shares: the switch that runs it, the sizes it runs at, a harness that
@@ -291,14 +292,6 @@ export function record(result: ScenarioResult): void {
   }
   mkdirSync(dirname(path), { recursive: true });
   appendFileSync(path, `${JSON.stringify(result)}\n`);
-}
-
-/** How a promise settled, attached at once so a rejection is never unhandled. */
-export function outcomeOf(promise: Promise<void>): Promise<unknown> {
-  return promise.then(
-    () => 'resolved',
-    (error: unknown) => error,
-  );
 }
 
 /** What one tab counted of a configuration's traffic, without keeping any of it. */

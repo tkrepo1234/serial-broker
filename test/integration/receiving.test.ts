@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest';
 
 import { SerialBrokerStatus } from '../../src/core/types.js';
 import type { SerialBrokerOptions } from '../../src/core/types.js';
-import { BrowserHarness, type VirtualTab } from '../harness/browser-harness.js';
-import { READER } from '../harness/devices.js';
+import { type VirtualTab } from '../harness/browser-harness.js';
+import { READER, readerHarness } from '../harness/devices.js';
 
 /**
  * How what the device sends is collected into `onReceive` events (ADR-0002): the tab holding the
@@ -18,9 +18,7 @@ const OPTIONS: SerialBrokerOptions = {
 };
 
 async function twoTabs(options: Partial<SerialBrokerOptions> = {}) {
-  const harness = new BrowserHarness();
-  const device = harness.serial.addDevice(READER.vendorId, READER.productId);
-  harness.serial.grant(device);
+  const { harness, device } = readerHarness();
   const owner = harness.openTab();
   await owner.setup('Reader', { ...OPTIONS, ...options });
   const peer = harness.openTab();

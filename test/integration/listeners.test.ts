@@ -1,15 +1,14 @@
 import { describe, expect, it, vi } from 'vitest';
 
+import { SerialBrokerErrorCode } from '../../src/core/error-codes.js';
 import { SerialBrokerStatus } from '../../src/core/types.js';
-import { BrowserHarness } from '../harness/browser-harness.js';
-import { READER, READER_OPTIONS } from '../harness/devices.js';
+import { TRANSPORT_MODES } from '../harness/browser-harness.js';
+import { READER_OPTIONS, readerHarness, twoTabs } from '../harness/devices.js';
 
 /** A new `onStatusChange` listener is told the current status once. */
 
 async function openTab() {
-  const harness = new BrowserHarness();
-  const device = harness.serial.addDevice(READER.vendorId, READER.productId);
-  harness.serial.grant(device);
+  const { harness } = readerHarness();
   const tab = harness.openTab();
   await tab.client.setup('Reader', READER_OPTIONS);
   await harness.settle();
@@ -58,4 +57,30 @@ describe('a new status listener', () => {
 
     expect(good).toHaveBeenCalledOnce();
   });
+});
+
+/**
+ * A listener that throws is a defect in the tab it belongs to, and is reported there only.
+ */
+
+describe.each(TRANSPORT_MODES)('a listener that throws (%s)', (transport) => {
+  it.each(['the tab holding the port', 'another tab'] as const)(
+    'in %s is reported there only, and the others still receive',
+    async (where) => {
+      const { harness, device, owner, other } = await twoTabs({ transport });
+      const [throwing, quiet] = where === 'another tab' ? [other, owner] : [owner, other];
+      throwing.client.subscribe('Reader', 'onReceive', () => {
+        throw new Error('application bug');
+      });
+
+      device.emit('x');
+      await harness.settle();
+
+      // Both tabs heard the chunk, so each had every chance to report something.
+      expect(throwing.errorCodes('Reader')).toContain(SerialBrokerErrorCode.LISTENER_THREW);
+      expect(quiet.errorCodes('Reader')).not.toContain(SerialBrokerErrorCode.LISTENER_THREW);
+      expect(throwing.receivedText('Reader')).toBe('x');
+      expect(quiet.receivedText('Reader')).toBe('x');
+    },
+  );
 });

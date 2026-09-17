@@ -58,5 +58,6 @@ compile time.
 
 ## Verification
 
-Unit tests for the streaming decoder across chunk boundaries and across reconnects;
+`test/integration/text-and-binary.test.ts` for the streaming decoder across chunk boundaries and
+across reconnects, and for encoding labels; `copyBytes` in `test/unit/core-utilities.test.ts`;
 scenario matrix row 15 for chunked writes.

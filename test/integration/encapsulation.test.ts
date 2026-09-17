@@ -1,10 +1,11 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { SerialBrokerErrorCode } from '../../src/core/error-codes.js';
+import type { SerialBrokerError } from '../../src/core/errors.js';
 import { SerialBrokerStatus } from '../../src/core/types.js';
 import * as publicApi from '../../src/index.js';
 import { BrowserHarness } from '../harness/browser-harness.js';
-import { READER, READER_OPTIONS } from '../harness/devices.js';
+import { connectedTab, READER_OPTIONS, readerHarness } from '../harness/devices.js';
 
 /**
  * The encapsulation boundary, asserted rather than trusted.
@@ -20,9 +21,7 @@ describe('encapsulation', () => {
     owner: ReturnType<BrowserHarness['openTab']>;
     peer: ReturnType<BrowserHarness['openTab']>;
   }> {
-    const harness = new BrowserHarness();
-    const device = harness.serial.addDevice(READER.vendorId, READER.productId);
-    harness.serial.grant(device);
+    const { harness } = readerHarness();
     const owner = harness.openTab();
     await owner.setup('Reader', READER_OPTIONS);
     const peer = harness.openTab();
@@ -56,9 +55,7 @@ describe('encapsulation', () => {
   });
 
   it('exposes exactly the documented receive payload', async () => {
-    const harness = new BrowserHarness();
-    const device = harness.serial.addDevice(READER.vendorId, READER.productId);
-    harness.serial.grant(device);
+    const { harness, device } = readerHarness();
     const tab = harness.openTab();
     await tab.setup('Reader', READER_OPTIONS);
 
@@ -150,9 +147,7 @@ describe('argument handling at the public surface', () => {
   });
 
   it('checks release options in the client itself, and keeps the configuration running', async () => {
-    const harness = new BrowserHarness();
-    const device = harness.serial.addDevice(READER.vendorId, READER.productId);
-    harness.serial.grant(device);
+    const { harness, device } = readerHarness();
     const tab = harness.openTab();
     await tab.client.setup('Reader', READER_OPTIONS);
     await harness.settle();
@@ -187,9 +182,7 @@ describe('argument handling at the public surface', () => {
 
   it('refuses a payload larger than the bus carries in every tab, the one holding the port included', async () => {
     const { harness, owner, peer } = await (async () => {
-      const harness = new BrowserHarness();
-      const device = harness.serial.addDevice(READER.vendorId, READER.productId);
-      harness.serial.grant(device);
+      const { harness } = readerHarness();
       const owner = harness.openTab();
       await owner.client.setup('Reader', READER_OPTIONS);
       await harness.settle();
@@ -218,9 +211,7 @@ describe('argument handling at the public surface', () => {
   });
 
   it('treats a repeated setup with equal options as a no-op', async () => {
-    const harness = new BrowserHarness();
-    const device = harness.serial.addDevice(READER.vendorId, READER.productId);
-    harness.serial.grant(device);
+    const { harness, device } = readerHarness();
     const tab = harness.openTab();
 
     await tab.client.setup('Reader', READER_OPTIONS);
@@ -233,9 +224,7 @@ describe('argument handling at the public surface', () => {
   });
 
   it('refuses a setup that would reopen the port differently', async () => {
-    const harness = new BrowserHarness();
-    const device = harness.serial.addDevice(READER.vendorId, READER.productId);
-    harness.serial.grant(device);
+    const { harness } = readerHarness();
     const tab = harness.openTab();
     await tab.client.setup('Reader', READER_OPTIONS);
 
@@ -244,10 +233,19 @@ describe('argument handling at the public surface', () => {
     ).rejects.toMatchObject({ code: SerialBrokerErrorCode.CONFIGURATION_CONFLICT });
   });
 
+  it('conflicts when only the buffer size differs, since the port opens with it', async () => {
+    const { tab } = await connectedTab();
+
+    await expect(
+      tab.client.setup('Reader', {
+        ...READER_OPTIONS,
+        serial: { baudRate: 9600, bufferSize: 4096 },
+      }),
+    ).rejects.toMatchObject({ code: SerialBrokerErrorCode.CONFIGURATION_CONFLICT });
+  });
+
   it('returns an unsubscribe function that is safe to call twice', async () => {
-    const harness = new BrowserHarness();
-    const device = harness.serial.addDevice(READER.vendorId, READER.productId);
-    harness.serial.grant(device);
+    const { harness, device } = readerHarness();
     const tab = harness.openTab();
     await tab.client.setup('Reader', READER_OPTIONS);
     // `setup()` does not wait for the port: without this the chunk below reaches nobody, and the
@@ -270,9 +268,7 @@ describe('argument handling at the public surface', () => {
   });
 
   it('leaves a later registration of the same listener alone when an old unsubscribe runs', async () => {
-    const harness = new BrowserHarness();
-    const device = harness.serial.addDevice(READER.vendorId, READER.productId);
-    harness.serial.grant(device);
+    const { harness, device } = readerHarness();
     const tab = harness.openTab();
     await tab.client.setup('Reader', READER_OPTIONS);
     await harness.settle();
@@ -296,5 +292,122 @@ describe('argument handling at the public surface', () => {
     await harness.settle();
 
     expect(received).toHaveLength(1);
+  });
+});
+
+async function thrown(action: () => unknown): Promise<SerialBrokerError> {
+  try {
+    await action();
+  } catch (error) {
+    return error as SerialBrokerError;
+  }
+  throw new Error('expected the action to throw');
+}
+
+describe('errors thrown at the public surface', () => {
+  it('carry the time they reached the caller, not zero', async () => {
+    const harness = new BrowserHarness();
+    await harness.advance(12_345);
+    const now = harness.clock.now();
+    const tab = harness.openTab();
+    await tab.setup('Reader', READER_OPTIONS);
+
+    const errors = [
+      await thrown(() => tab.client.setup('', READER_OPTIONS)),
+      await thrown(() => tab.client.setup('Other', { ...READER_OPTIONS, maxTabs: 0 })),
+      await thrown(() => tab.client.getStatus('')),
+      await thrown(() => tab.client.send('Reader', 42 as never)),
+      await thrown(() => tab.client.subscribe('Reader', 'onRecieve' as never, () => undefined)),
+      await thrown(() => tab.client.subscribe('Reader', 'onReceive', 'not a function' as never)),
+    ];
+
+    for (const error of errors) {
+      expect(error.code).toBe(SerialBrokerErrorCode.INVALID_ARGUMENT);
+      expect(error.timestamp).toBe(now);
+    }
+  });
+
+  it('describe an invalid argument alike, whichever check rejected it', async () => {
+    const harness = new BrowserHarness();
+    const tab = harness.openTab();
+    await tab.setup('Reader', READER_OPTIONS);
+
+    const event = await thrown(() =>
+      tab.client.subscribe('Reader', 'onRecieve' as never, () => undefined),
+    );
+    const listener = await thrown(() =>
+      tab.client.subscribe('Reader', 'onReceive', 'not a function' as never),
+    );
+
+    expect(event).toMatchObject({
+      configName: 'Reader',
+      context: { argumentName: 'event', actualType: 'string', actualValue: 'onRecieve' },
+    });
+    expect(listener).toMatchObject({
+      configName: 'Reader',
+      context: { argumentName: 'listener', expected: 'a function', actualType: 'string' },
+    });
+  });
+
+  it('describe an invalid argument to the diagnostics observer alike, with its time', async () => {
+    const harness = new BrowserHarness();
+    await harness.advance(5_000);
+    const observer = harness.openObserver();
+
+    const window = await thrown(() => observer.collect(-1));
+    const listener = await thrown(() => observer.watch('Reader', 42 as never));
+    observer.close();
+
+    expect(window).toMatchObject({
+      code: SerialBrokerErrorCode.INVALID_ARGUMENT,
+      timestamp: harness.clock.now(),
+      context: { argumentName: 'windowMs', expected: 'a non-negative integer', actualValue: -1 },
+    });
+    expect(listener).toMatchObject({
+      timestamp: harness.clock.now(),
+      context: { argumentName: 'listener', actualType: 'number' },
+    });
+  });
+});
+
+describe('argument validation at the boundary', () => {
+  it('rejects an event name it does not know, rather than registering a listener never called', async () => {
+    const { harness } = readerHarness();
+    const tab = harness.openTab();
+    await tab.client.setup('Reader', READER_OPTIONS);
+
+    expect(() => tab.client.subscribe('Reader', 'onData' as never, vi.fn())).toThrow(
+      expect.objectContaining({
+        code: SerialBrokerErrorCode.INVALID_ARGUMENT,
+        context: expect.objectContaining({ argumentName: 'event' }) as unknown,
+      }),
+    );
+    expect(tab.client.diagnostics()?.configurations[0]?.listeners).toEqual({
+      onReceive: 0,
+      onSend: 0,
+      onError: 0,
+      onStatusChange: 0,
+    });
+  });
+
+  it('rejects an invalid name before doing anything with it', async () => {
+    const harness = new BrowserHarness();
+    const tab = harness.openTab();
+
+    await expect(tab.client.send('', 'x')).rejects.toMatchObject({
+      code: SerialBrokerErrorCode.INVALID_ARGUMENT,
+    });
+    expect(() => tab.client.exists(42 as never)).toThrow(
+      expect.objectContaining({ code: SerialBrokerErrorCode.INVALID_ARGUMENT }),
+    );
+  });
+
+  it('ignores unsubscribing from a configuration that is not set up', () => {
+    const harness = new BrowserHarness();
+    const tab = harness.openTab();
+
+    expect(() => {
+      tab.client.unsubscribe('Nothing', 'onReceive', vi.fn());
+    }).not.toThrow();
   });
 });

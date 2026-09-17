@@ -2,10 +2,12 @@ import { describe, expect, it } from 'vitest';
 
 import { SerialBrokerErrorCode } from '../../../src/core/error-codes.js';
 import { SerialBrokerStatus } from '../../../src/core/types.js';
-import { ownerLockName } from '../../../src/protocol/version.js';
-import { BrowserHarness, TRANSPORT_MODES, type VirtualTab } from '../../harness/browser-harness.js';
-import { READER, READER_OPTIONS } from '../../harness/devices.js';
+import { brokerChannelName, ownerLockName } from '../../../src/protocol/version.js';
+import type { BrowserHarness } from '../../harness/browser-harness.js';
+import { TRANSPORT_MODES, type VirtualTab } from '../../harness/browser-harness.js';
+import { READER_OPTIONS, readerHarness } from '../../harness/devices.js';
 import type { FakeDevice } from '../../harness/fake-serial.js';
+import { outcomeOf, queuedWritesAt } from '../../harness/outcomes.js';
 
 /**
  * Messages from the tab that held the port and from the tab that holds it now come from different
@@ -15,19 +17,9 @@ import type { FakeDevice } from '../../harness/fake-serial.js';
  * write handed to it (ADR-0030).
  */
 
-/** How a promise settled, attached at once so a rejection is never unhandled. */
-function outcomeOf(promise: Promise<void>): Promise<unknown> {
-  return promise.then(
-    () => 'resolved',
-    (error: unknown) => error,
-  );
-}
-
 describe.each(TRANSPORT_MODES)('a handover heard out of order (%s)', (transport) => {
   async function threeTabs() {
-    const harness = new BrowserHarness({ transport });
-    const device = harness.serial.addDevice(READER.vendorId, READER.productId);
-    harness.serial.grant(device);
+    const { harness, device } = readerHarness({ transport });
     const first = harness.openTab();
     await first.setup('Reader', READER_OPTIONS);
     const second = harness.openTab();
@@ -179,5 +171,107 @@ describe.each(TRANSPORT_MODES)('a handover heard out of order (%s)', (transport)
     await harness.settle();
 
     expect(busy.client.getStatus('Reader').status).toBe(SerialBrokerStatus.Open);
+  });
+});
+
+describe.each(TRANSPORT_MODES)('the tab that holds the port (%s)', (transport) => {
+  it('keeps its own status when a status from the former holder arrives late', async () => {
+    const { harness, device } = readerHarness({ transport });
+    const first = harness.openTab();
+    await first.setup('Reader', READER_OPTIONS);
+    const busy = harness.openBusyTab();
+    await busy.client.setup('Reader', READER_OPTIONS);
+    await harness.settle();
+
+    // The first tab loses the connection and says so; the busy tab has not heard yet when the
+    // first tab dies and hands it the port.
+    busy.hold();
+    device.breakStream();
+    await harness.settle();
+    await first.kill();
+    await harness.advance(0);
+    expect(busy.client.getStatus('Reader').status).toBe('open');
+    busy.deliverHeld();
+    await harness.settle();
+
+    expect(busy.client.getStatus('Reader').status).toBe('open');
+    await busy.client.send('Reader', 'PING');
+    expect(device.writtenText()).toBe('PING');
+  });
+
+  it('writes its own write once when a former holder turns it away late', async () => {
+    const { harness, device } = readerHarness({ transport });
+    const first = harness.openTab();
+    await first.setup('Reader', READER_OPTIONS);
+    const busy = harness.openBusyTab();
+    await busy.client.setup('Reader', READER_OPTIONS);
+    await harness.settle();
+
+    // The busy tab still believes the first tab's port is open, and sends two writes there. The
+    // first tab has lost the connection and turns both away; the answers are held.
+    busy.hold();
+    device.breakStream();
+    await harness.settle();
+    void busy.client.send('Reader', 'ONE').catch(() => undefined);
+    void busy.client.send('Reader', 'TWO').catch(() => undefined);
+    await harness.settle();
+
+    // The busy tab takes the port over and writes both itself: the first hangs at the device, the
+    // second waits behind it. Then the old answers arrive.
+    device.faults.hangOnWrite = true;
+    await first.kill();
+    expect(queuedWritesAt(busy.client)).toBe(2);
+    busy.deliverHeld();
+    await harness.settle();
+
+    expect(queuedWritesAt(busy.client)).toBe(2);
+  });
+});
+
+describe('a write of another tab during a clean release', () => {
+  it('is sent once, and written by the next holder once the term has ended', async () => {
+    const { harness, device } = readerHarness({ transport: 'broadcastchannel' });
+    const holder = harness.openTab();
+    await holder.setup('Reader', READER_OPTIONS);
+    const other = harness.openTab();
+    await other.setup('Reader', READER_OPTIONS);
+    const requests: unknown[] = [];
+    const spy = harness.bus.broadcastHub.create(brokerChannelName(), 'spy');
+    spy.addEventListener('message', (event: { data: unknown }) => {
+      if ((event.data as { type?: unknown }).type === 'write-request') {
+        requests.push(event.data);
+      }
+    });
+
+    // A write of the other tab is in flight at the port, so the release waits for its answer, and
+    // the next write reaches the holding tab after it let go of the port and before its
+    // owner-released.
+    device.pauseWrites();
+    const first = other.client.send('Reader', 'A').catch((error: unknown) => error);
+    await harness.settle();
+    const releasing = holder.client.release('Reader');
+    for (let round = 0; round < 10; round += 1) {
+      await harness.settle();
+    }
+    const second = other.client.send('Reader', 'B');
+    for (let round = 0; round < 20; round += 1) {
+      await harness.settle();
+    }
+
+    // One request per write: a releasing tab hears nothing more, so nothing turns the second write
+    // away to be sent to the same term again; its issuer waits for the term to end.
+    expect(requests).toHaveLength(2);
+
+    device.resumeWrites();
+    // The release completes and the write is handed on within the first half second. One jump to
+    // 5 s would hand it on only at the moment its issuer's deadline runs out, where it is rightly
+    // not begun (ADR-0013).
+    await harness.advance(500);
+    await harness.advance(4_500);
+    await releasing;
+    await first;
+    await harness.settle();
+    await expect(second).resolves.toBeUndefined();
+    expect(device.writtenText()).toContain('B');
   });
 });

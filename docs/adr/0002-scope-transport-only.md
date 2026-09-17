@@ -1,4 +1,4 @@
-# ADR-0002: Wrap the transport only, no protocol layer
+# ADR-0002: Wrap the transport only; collect received bytes until the line is quiet
 
 - **Status:** Accepted
 - **Date:** 2026-09-12

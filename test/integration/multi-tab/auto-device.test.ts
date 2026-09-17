@@ -4,7 +4,7 @@ import { SerialBrokerClient } from '../../../src/client/serial-broker-client.js'
 import { SerialBrokerErrorCode } from '../../../src/core/error-codes.js';
 import { SerialBrokerStatus } from '../../../src/core/types.js';
 import { BrowserHarness, TRANSPORT_MODES } from '../../harness/browser-harness.js';
-import { READER } from '../../harness/devices.js';
+import { READER, readerHarness } from '../../harness/devices.js';
 import type { FakeDevice } from '../../harness/fake-serial.js';
 import { fieldsOfEvent, recordingLogger } from '../../harness/recording-logger.js';
 import { remember, rememberedEntry } from '../../harness/stored-configurations.js';
@@ -20,9 +20,7 @@ const OTHER = { vendorId: 0x0403, productId: 0x6001 };
 
 describe('a configuration in auto mode', () => {
   it('waits for the user even when exactly one port is granted', async () => {
-    const harness = new BrowserHarness();
-    const device = harness.serial.addDevice(READER.vendorId, READER.productId);
-    harness.serial.grant(device);
+    const { harness, device } = readerHarness();
 
     const tab = harness.openTab();
     await tab.setup('Reader', AUTO);
@@ -77,8 +75,7 @@ describe('a configuration in auto mode', () => {
   });
 
   it('is the same with { auto: true } spelled out', async () => {
-    const harness = new BrowserHarness();
-    harness.serial.grant(harness.serial.addDevice(READER.vendorId, READER.productId));
+    const { harness } = readerHarness();
 
     const tab = harness.openTab();
     await tab.setup('Reader', { device: { auto: true }, ...AUTO });
@@ -233,8 +230,7 @@ describe('a configuration in auto mode', () => {
   });
 
   it('restores a remembered auto-mode configuration that never resolved as one that waits', async () => {
-    const harness = new BrowserHarness();
-    harness.serial.grant(harness.serial.addDevice(READER.vendorId, READER.productId));
+    const { harness } = readerHarness();
     remember(harness.storage, { Reader: { device: { auto: true }, serial: { baudRate: 9600 } } });
 
     const tab = harness.openTab();
@@ -314,9 +310,7 @@ describe('a configuration in auto mode', () => {
   });
 
   it('lets auto mode follow an explicit configuration set up in the same tab first', async () => {
-    const harness = new BrowserHarness();
-    const device = harness.serial.addDevice(READER.vendorId, READER.productId);
-    harness.serial.grant(device);
+    const { harness } = readerHarness();
 
     const tab = harness.openTab();
     await tab.setup('Reader', { device: READER, ...AUTO });
@@ -423,9 +417,7 @@ describe.each(TRANSPORT_MODES)('a later visit in auto mode (%s)', (transport) =>
   });
 
   it('lets an explicit setup() ignore a remembered auto-mode resolution of the same name', async () => {
-    const harness = new BrowserHarness({ transport });
-    const device = harness.serial.addDevice(READER.vendorId, READER.productId);
-    harness.serial.grant(device);
+    const { harness, device } = readerHarness({ transport });
     const other = harness.serial.addDevice(OTHER.vendorId, OTHER.productId);
     harness.serial.grant(other);
     remember(harness.storage, {
@@ -461,8 +453,7 @@ describe('what a later visit in auto mode takes from the remembered entry', () =
     ['any port', { any: true }],
     ['a port without USB identity', { nonUsb: true }],
   ])('takes nothing from an entry naming %s explicitly', async (_label, remembered) => {
-    const harness = new BrowserHarness();
-    harness.serial.grant(harness.serial.addDevice(READER.vendorId, READER.productId));
+    const { harness } = readerHarness();
     harness.serial.grant(harness.serial.addNonUsbPort());
     remember(harness.storage, { Reader: { device: remembered, serial: { baudRate: 9600 } } });
 
@@ -479,8 +470,7 @@ describe('what a later visit in auto mode takes from the remembered entry', () =
   });
 
   it('takes nothing for a configuration set up with remember: false', async () => {
-    const harness = new BrowserHarness();
-    harness.serial.grant(harness.serial.addDevice(READER.vendorId, READER.productId));
+    const { harness } = readerHarness();
     remember(harness.storage, {
       Reader: { device: { auto: true, resolved: READER }, serial: { baudRate: 9600 } },
     });
@@ -493,9 +483,7 @@ describe('what a later visit in auto mode takes from the remembered entry', () =
   });
 
   it('lets a resolution passed to setup() win over the remembered one', async () => {
-    const harness = new BrowserHarness();
-    const device = harness.serial.addDevice(READER.vendorId, READER.productId);
-    harness.serial.grant(device);
+    const { harness, device } = readerHarness();
     const other = harness.serial.addDevice(OTHER.vendorId, OTHER.productId);
     harness.serial.grant(other);
     remember(harness.storage, {
@@ -594,9 +582,7 @@ describe.each(TRANSPORT_MODES)('auto mode across tabs (%s)', (transport) => {
   });
 
   it('adopts the device of a tab set up explicitly, and an explicit tab adopts nothing', async () => {
-    const harness = new BrowserHarness({ transport });
-    const device = harness.serial.addDevice(READER.vendorId, READER.productId);
-    harness.serial.grant(device);
+    const { harness } = readerHarness({ transport });
     const other = harness.serial.addDevice(OTHER.vendorId, OTHER.productId);
     harness.serial.grant(other);
 
@@ -761,9 +747,7 @@ describe.each(TRANSPORT_MODES)('choosing a different device in auto mode (%s)', 
   });
 
   it('is refused for a configuration that names its device', async () => {
-    const harness = new BrowserHarness({ transport });
-    const device = harness.serial.addDevice(READER.vendorId, READER.productId);
-    harness.serial.grant(device);
+    const { harness, device } = readerHarness({ transport });
     const other = harness.serial.addDevice(OTHER.vendorId, OTHER.productId);
     const tab = harness.openTab();
     await tab.setup('Reader', { device: READER, ...AUTO });

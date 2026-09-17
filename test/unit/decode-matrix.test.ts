@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
+import { isParticipantDiagnostics } from '../../src/protocol/decode-diagnostics.js';
 import { decodeMessage, describeDecodeFailure } from '../../src/protocol/decode.js';
 import type { ProtocolMessageType } from '../../src/protocol/messages.js';
-import { PROTOCOL_VERSION } from '../../src/protocol/version.js';
+import { brokerChannelName, ownerLockName, PROTOCOL_VERSION } from '../../src/protocol/version.js';
 
+import { sampleReport } from './fixtures/diagnostics-report.js';
 import { ERROR_PAYLOAD, validMessages } from './fixtures/valid-messages.js';
 
 const BASE = { v: PROTOCOL_VERSION, from: 'c-1', to: 'all' };
@@ -236,5 +238,79 @@ describe('decode matrix', () => {
 
     expect(() => decodeMessage(hostile)).not.toThrow();
     expect(decodeMessage(hostile).ok).toBe(false);
+  });
+});
+
+/**
+ * The names every tab derives from the protocol version.
+ */
+describe('namespaced names', () => {
+  it('puts the protocol version in the lock name', () => {
+    // Two incompatible versions must not contend for the same lock, or they would take turns
+    // owning a port they cannot talk to each other about (ADR-0008).
+    expect(ownerLockName('Reader')).toContain(`v${String(PROTOCOL_VERSION)}`);
+    expect(ownerLockName('Reader')).toContain('Reader');
+  });
+
+  it('puts the protocol version in the broker name', () => {
+    expect(brokerChannelName()).toContain(`v${String(PROTOCOL_VERSION)}`);
+  });
+});
+
+/** Returns a copy of the sample report with the value at `path` replaced. */
+function withField(path: readonly (string | number)[], value: unknown): unknown {
+  const report = structuredClone(sampleReport()) as unknown as Record<string, unknown>;
+  let target: Record<string, unknown> = report;
+  for (const key of path.slice(0, -1)) {
+    target = target[key] as Record<string, unknown>;
+  }
+  const last = path.at(-1) as string | number;
+  if (value === REMOVE) {
+    delete target[last];
+  } else {
+    target[last] = value;
+  }
+  return report;
+}
+
+const REMOVE = Symbol('remove');
+const CONFIGURATION = ['configurations', 0] as const;
+
+/**
+ * A report is display-only, and bounded by the decoder before this check. Only what files it - its
+ * sender and its named configurations - is checked; the rest is displayed defensively (ADR-0018).
+ */
+describe('isParticipantDiagnostics', () => {
+  it('accepts a complete report, and one from a context with no configurations', () => {
+    expect(isParticipantDiagnostics(structuredClone(sampleReport()))).toBe(true);
+    expect(isParticipantDiagnostics(withField(['configurations'], []))).toBe(true);
+  });
+
+  it('leaves the fields of a configuration to whatever displays them', () => {
+    // A build that reports differently is still listed; what it says is shown as it said it.
+    expect(isParticipantDiagnostics(withField([...CONFIGURATION, 'status'], 'sleeping'))).toBe(
+      true,
+    );
+    expect(isParticipantDiagnostics(withField([...CONFIGURATION, 'settings'], REMOVE))).toBe(true);
+  });
+
+  it.each([
+    ['with no client id', ['clientId'], REMOVE],
+    ['from an unknown transport', ['transport'], 'carrier-pigeon'],
+    ['with no protocol version', ['protocolVersion'], REMOVE],
+    ['with an infinite report time', ['reportedAt'], Infinity],
+    ['whose configurations are not a list', ['configurations'], { 0: {} }],
+    ['with a configuration that is not an object', [...CONFIGURATION], 'Reader'],
+    ['with a configuration that has no name', [...CONFIGURATION, 'name'], ''],
+  ] as const)('rejects a report %s', (_label, path, value) => {
+    expect(isParticipantDiagnostics(withField(path, value))).toBe(false);
+  });
+
+  it.each([
+    ['null', null],
+    ['a string', 'report'],
+    ['an array', []],
+  ])('rejects %s', (_label, value) => {
+    expect(isParticipantDiagnostics(value)).toBe(false);
   });
 });

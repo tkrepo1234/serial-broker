@@ -4,8 +4,9 @@ import { SerialBrokerClient } from '../../src/client/serial-broker-client.js';
 import { SerialBrokerErrorCode } from '../../src/core/error-codes.js';
 import { SerialBrokerStatus } from '../../src/core/types.js';
 import type { SerialLike } from '../../src/environment/environment.js';
-import { BrowserHarness, TRANSPORT_MODES, VirtualTab } from '../harness/browser-harness.js';
-import { READER, READER_OPTIONS } from '../harness/devices.js';
+import type { BrowserHarness } from '../harness/browser-harness.js';
+import { TRANSPORT_MODES, VirtualTab } from '../harness/browser-harness.js';
+import { READER_OPTIONS, readerHarness } from '../harness/devices.js';
 import { domException } from '../harness/fake-serial.js';
 import { fieldsOfEvent, recordingLogger } from '../harness/recording-logger.js';
 
@@ -20,9 +21,7 @@ import { fieldsOfEvent, recordingLogger } from '../harness/recording-logger.js';
 
 function harnessWithBlockedDevice() {
   const { logger, records } = recordingLogger();
-  const harness = new BrowserHarness({ logger });
-  const device = harness.serial.addDevice(READER.vendorId, READER.productId);
-  harness.serial.grant(device);
+  const { harness, device } = readerHarness({ logger });
   device.faults.failOpenWith = 'SecurityError';
   return { harness, device, records };
 }
@@ -100,9 +99,7 @@ describe('an open() the browser refuses for security reasons', () => {
   });
 
   it('still retries an open() that fails for a retryable reason', async () => {
-    const harness = new BrowserHarness();
-    const device = harness.serial.addDevice(READER.vendorId, READER.productId);
-    harness.serial.grant(device);
+    const { harness, device } = readerHarness();
     device.faults.failOpenWith = 'InvalidStateError';
     const tab = harness.openTab();
     await tab.setup('Reader', READER_OPTIONS);
@@ -114,9 +111,7 @@ describe('an open() the browser refuses for security reasons', () => {
 
 describe.each(TRANSPORT_MODES)('a refused open() seen from another tab (%s)', (transport) => {
   it('shows failed there too', async () => {
-    const harness = new BrowserHarness({ transport });
-    const device = harness.serial.addDevice(READER.vendorId, READER.productId);
-    harness.serial.grant(device);
+    const { harness, device } = readerHarness({ transport });
     device.faults.failOpenWith = 'SecurityError';
     const owner = harness.openTab();
     await owner.setup('Reader', READER_OPTIONS);
@@ -157,9 +152,7 @@ describe('granted ports the browser refuses to list', () => {
   }
 
   it('end in failed, not in awaiting-permission, and are not listed again', async () => {
-    const harness = new BrowserHarness();
-    const device = harness.serial.addDevice(READER.vendorId, READER.productId);
-    harness.serial.grant(device);
+    const { harness, device } = readerHarness();
     const { tab, refuse } = openRefusingTab(harness);
     await tab.setup('Reader', READER_OPTIONS);
 

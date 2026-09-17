@@ -6,8 +6,8 @@ import { SerialBrokerErrorCode } from '../../../src/core/error-codes.js';
 import { SerialBrokerStatus } from '../../../src/core/types.js';
 import type * as versionModule from '../../../src/protocol/version.js';
 import { PROTOCOL_VERSION } from '../../../src/protocol/version.js';
-import { BrowserHarness, VirtualTab } from '../../harness/browser-harness.js';
-import { READER, READER_OPTIONS } from '../../harness/devices.js';
+import { VirtualTab } from '../../harness/browser-harness.js';
+import { READER_OPTIONS, readerHarness } from '../../harness/devices.js';
 
 /**
  * Row 13 of the scenario matrix with two real tabs: one of this build, and one of a build whose
@@ -59,9 +59,7 @@ afterEach(() => {
 describe('a tab of this build and a tab of the next protocol version', () => {
   it('do not share the port, and each reports the other once', async () => {
     const { Client, Transport } = await clientOfBuild(OTHER_VERSION);
-    const harness = new BrowserHarness({ transport: 'broadcastchannel' });
-    const device = harness.serial.addDevice(READER.vendorId, READER.productId);
-    harness.serial.grant(device);
+    const { harness, device } = readerHarness({ transport: 'broadcastchannel' });
     const ours = harness.openTab();
     await ours.setup('Reader', READER_OPTIONS);
     const environment = harness.createEnvironment('other-build');

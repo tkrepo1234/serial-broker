@@ -1,11 +1,16 @@
 import { describe, expect, it } from 'vitest';
 
+import { SerialBrokerClient } from '../../../src/client/serial-broker-client.js';
 import { SerialBrokerErrorCode } from '../../../src/core/error-codes.js';
 import { SerialBrokerError } from '../../../src/core/errors.js';
+import { LOCK_RETRY_DELAY_MS } from '../../../src/core/held-lock.js';
+import { ScopedLogger } from '../../../src/core/logger.js';
 import { SerialBrokerStatus } from '../../../src/core/types.js';
 import { ownerLockName } from '../../../src/protocol/version.js';
-import { BrowserHarness, TRANSPORT_MODES } from '../../harness/browser-harness.js';
-import { READER, READER_OPTIONS } from '../../harness/devices.js';
+import type { BrowserHarness } from '../../harness/browser-harness.js';
+import { TRANSPORT_MODES } from '../../harness/browser-harness.js';
+import { connectedTab, READER_OPTIONS, readerHarness } from '../../harness/devices.js';
+import { fieldsOfEvent, recordingLogger } from '../../harness/recording-logger.js';
 
 /**
  * What happens when the tab holding the port goes away.
@@ -22,9 +27,7 @@ describe.each(TRANSPORT_MODES)('ownership failover (%s)', (transport) => {
     owner: ReturnType<BrowserHarness['openTab']>;
     peer: ReturnType<BrowserHarness['openTab']>;
   }> {
-    const harness = new BrowserHarness({ transport });
-    const device = harness.serial.addDevice(READER.vendorId, READER.productId);
-    harness.serial.grant(device);
+    const { harness, device } = readerHarness({ transport });
 
     const owner = harness.openTab();
     await owner.setup('Reader', READER_OPTIONS);
@@ -70,9 +73,7 @@ describe.each(TRANSPORT_MODES)('ownership failover (%s)', (transport) => {
   });
 
   it('holds a write while no port is open and sends it once the connection comes up', async () => {
-    const harness = new BrowserHarness({ transport });
-    const device = harness.serial.addDevice(READER.vendorId, READER.productId);
-    harness.serial.grant(device);
+    const { harness, device } = readerHarness({ transport });
     device.faults.failOpenTimes = 1;
 
     const tab = harness.openTab();
@@ -140,5 +141,79 @@ describe.each(TRANSPORT_MODES)('ownership failover (%s)', (transport) => {
     // would silently take ownership of something it no longer participates in.
     expect(harness.locks.queueLength(ownerLockName('Reader'))).toBe(0);
     expect(harness.locks.holderOf(ownerLockName('Reader'))).toBe(owner.id);
+  });
+});
+
+describe('handing the port over by releasing it', () => {
+  it('lets the next tab open the port while the releasing tab stays open', async () => {
+    const { harness, device, tab: owner } = await connectedTab();
+    const other = harness.openTab();
+    await other.setup('Reader', READER_OPTIONS);
+
+    // The releasing tab lives on, so nothing but its own close() can free the device.
+    await owner.client.release('Reader');
+    await harness.settle();
+
+    expect(other.client.getStatus('Reader').status).toBe(SerialBrokerStatus.Open);
+    expect(device.openCount).toBe(2);
+  });
+});
+
+/**
+ * The lock of a term of holding the port is taken before the tab says anything in that term
+ * (ADR-0030). A browser that refuses the request would otherwise leave a tab holding the ownership
+ * lock without ever opening the port - the one state in which nobody can use the device.
+ */
+describe('a browser that refuses the lock for a term of holding the port', () => {
+  it('opens the port once the request is made again', async () => {
+    const { harness, device } = readerHarness();
+    const { logger, records } = recordingLogger();
+    const environment = harness.createEnvironment('tab1');
+    let refusals = 1;
+    const client = new SerialBrokerClient({
+      ...environment,
+      logger: new ScopedLogger(logger, {}),
+      locks: {
+        request: async (name, options, callback) => {
+          if (name.startsWith('serial-broker/term/') && refusals > 0) {
+            refusals -= 1;
+            throw new Error('the browser refused this lock request');
+          }
+          return await environment.locks.request(name, options, callback);
+        },
+      },
+    });
+
+    await client.setup('Reader', READER_OPTIONS);
+    await harness.settle();
+    expect(client.getStatus('Reader').status).not.toBe('open');
+
+    await harness.advance(LOCK_RETRY_DELAY_MS);
+
+    expect(client.getStatus('Reader').status).toBe('open');
+    expect(device.isOpen).toBe(true);
+    expect(fieldsOfEvent(records, 'election.failed')).toHaveLength(1);
+  });
+
+  it('leaves no timer behind when the configuration is released while it waits', async () => {
+    const { harness } = readerHarness();
+    const environment = harness.createEnvironment('tab1');
+    const client = new SerialBrokerClient({
+      ...environment,
+      locks: {
+        request: async (name, options, callback) => {
+          if (name.startsWith('serial-broker/term/')) {
+            throw new Error('the browser refused this lock request');
+          }
+          return await environment.locks.request(name, options, callback);
+        },
+      },
+    });
+    await client.setup('Reader', READER_OPTIONS);
+    await harness.settle();
+
+    await client.release('Reader');
+
+    expect(harness.clock.pendingTimerCount).toBe(0);
   });
 });

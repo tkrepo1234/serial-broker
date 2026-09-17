@@ -1,4 +1,4 @@
-# ADR-0001: Record architecture decisions
+# ADR-0001: Record architecture decisions, one current record per decision
 
 - **Status:** Accepted
 - **Date:** 2026-09-12

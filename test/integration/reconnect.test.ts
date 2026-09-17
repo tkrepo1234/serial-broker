@@ -2,8 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { SerialBrokerErrorCode } from '../../src/core/error-codes.js';
 import { SerialBrokerStatus } from '../../src/core/types.js';
-import { BrowserHarness } from '../harness/browser-harness.js';
-import { READER, READER_OPTIONS } from '../harness/devices.js';
+import { connectedTab, READER_OPTIONS, readerHarness } from '../harness/devices.js';
 
 /**
  * Keeping the port open across a device being switched off, unplugged or power-cycled.
@@ -12,19 +11,6 @@ import { READER, READER_OPTIONS } from '../harness/devices.js';
  * schedule is a sequence of numbers a test can name. See ADR-0010.
  */
 describe('reconnect supervision', () => {
-  async function connectedTab(): Promise<{
-    harness: BrowserHarness;
-    device: ReturnType<BrowserHarness['serial']['addDevice']>;
-    tab: ReturnType<BrowserHarness['openTab']>;
-  }> {
-    const harness = new BrowserHarness();
-    const device = harness.serial.addDevice(READER.vendorId, READER.productId);
-    harness.serial.grant(device);
-    const tab = harness.openTab();
-    await tab.setup('Reader', READER_OPTIONS);
-    return { harness, device, tab };
-  }
-
   it('reopens the port and resumes receiving after a power cycle, with no application action', async () => {
     const { harness, device, tab } = await connectedTab();
 
@@ -47,9 +33,7 @@ describe('reconnect supervision', () => {
   });
 
   it('does not wait before the first retry', async () => {
-    const harness = new BrowserHarness();
-    const device = harness.serial.addDevice(READER.vendorId, READER.productId);
-    harness.serial.grant(device);
+    const { harness, device } = readerHarness();
     device.faults.failOpenTimes = 1;
 
     const tab = harness.openTab();
@@ -63,9 +47,7 @@ describe('reconnect supervision', () => {
   });
 
   it('retries at once only once, then backs off as from a fresh start', async () => {
-    const harness = new BrowserHarness();
-    const device = harness.serial.addDevice(READER.vendorId, READER.productId);
-    harness.serial.grant(device);
+    const { harness, device } = readerHarness();
     await harness.openTab().setup('Reader', READER_OPTIONS);
     // Longer than stableAfterMs, so the attempt count starts over when the connection breaks.
     await harness.advance(6_000);
@@ -85,9 +67,7 @@ describe('reconnect supervision', () => {
   });
 
   it('never waits longer than maxDelayMs between attempts', async () => {
-    const harness = new BrowserHarness();
-    const device = harness.serial.addDevice(READER.vendorId, READER.productId);
-    harness.serial.grant(device);
+    const { harness, device } = readerHarness();
     device.faults.failOpenWith = 'NetworkError';
 
     const tab = harness.openTab();
@@ -105,9 +85,7 @@ describe('reconnect supervision', () => {
   });
 
   it('stops retrying after maxAttempts and says so once in every tab', async () => {
-    const harness = new BrowserHarness();
-    const device = harness.serial.addDevice(READER.vendorId, READER.productId);
-    harness.serial.grant(device);
+    const { harness, device } = readerHarness();
     device.faults.failOpenWith = 'NetworkError';
     const options = { ...READER_OPTIONS, connection: { maxAttempts: 3 } };
 
@@ -148,9 +126,7 @@ describe('reconnect supervision', () => {
   });
 
   it('revives a failed configuration when the device is plugged in again', async () => {
-    const harness = new BrowserHarness();
-    const device = harness.serial.addDevice(READER.vendorId, READER.productId);
-    harness.serial.grant(device);
+    const { harness, device } = readerHarness();
     device.faults.failOpenWith = 'NetworkError';
 
     const tab = harness.openTab();
@@ -167,9 +143,7 @@ describe('reconnect supervision', () => {
   });
 
   it('cancels a pending backoff delay when the device reappears', async () => {
-    const harness = new BrowserHarness();
-    const device = harness.serial.addDevice(READER.vendorId, READER.productId);
-    harness.serial.grant(device);
+    const { harness, device } = readerHarness();
     device.faults.failOpenWith = 'NetworkError';
 
     const tab = harness.openTab();
@@ -187,9 +161,7 @@ describe('reconnect supervision', () => {
   });
 
   it('treats a hung open() as a failed attempt rather than wedging', async () => {
-    const harness = new BrowserHarness();
-    const device = harness.serial.addDevice(READER.vendorId, READER.productId);
-    harness.serial.grant(device);
+    const { harness, device } = readerHarness();
     device.faults.hangOnOpen = true;
 
     const tab = harness.openTab();
@@ -220,5 +192,56 @@ describe('reconnect supervision', () => {
 
     expect(peer.client.getStatus('Reader').status).toBe(SerialBrokerStatus.Reconnecting);
     expect(tab.statusTrail('Reader')).toContain(SerialBrokerStatus.Reconnecting);
+  });
+});
+
+/**
+ * Durations survive the system clock being set (ADR-0014).
+ *
+ * The user correcting the time, a time zone change, an NTP step: `Date.now()` jumps forwards or
+ * backwards while the timers keep counting. Everything this library times - how long a connection
+ * held, how long a write has waited, how late a deadline ran - is therefore measured on the
+ * monotonic clock, and a jump must change none of it.
+ */
+describe('a system clock that is set', () => {
+  async function connectedAfterAFailedOpen() {
+    const { harness, device } = readerHarness();
+    // One failed open first, so the attempt counter is above zero and a reset is visible.
+    device.faults.failOpenTimes = 1;
+    const tab = harness.openTab();
+    await tab.setup('Reader', READER_OPTIONS);
+    await harness.advance(0);
+    await harness.settle();
+    return { harness, device, tab };
+  }
+
+  it('does not make a connection that held for stableAfterMs count as unstable', async () => {
+    const { harness, device } = await connectedAfterAFailedOpen();
+
+    // An hour back while the port is open: the connection has still held for six seconds.
+    harness.clock.jumpWallClock(-3_600_000);
+    await harness.advance(6_000);
+    device.faults.failOpenWith = 'NetworkError';
+    device.breakStream();
+    await harness.settle();
+
+    // The immediate retry a connection that held earns. Measured on the wall clock, it would have
+    // been a 250 ms backoff delay.
+    expect(harness.clock.nextTimerInMs).toBe(0);
+  });
+
+  it('does not make a connection that broke at once count as stable', async () => {
+    const { harness, device } = await connectedAfterAFailedOpen();
+
+    // An hour forward while the port is open: the connection has still held for a moment only.
+    harness.clock.jumpWallClock(3_600_000);
+    await harness.advance(100);
+    device.faults.failOpenWith = 'NetworkError';
+    device.breakStream();
+    await harness.settle();
+
+    // Measured on the wall clock, the connection would have looked an hour old and the retry
+    // immediate - which is how a device that opens and drops at once loops forever.
+    expect(harness.clock.nextTimerInMs).toBe(250);
   });
 });

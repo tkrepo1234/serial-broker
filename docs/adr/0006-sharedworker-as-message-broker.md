@@ -1,4 +1,4 @@
-# ADR-0006: Use a SharedWorker as the message broker
+# ADR-0006: A SharedWorker broker routing to all participants, with a BroadcastChannel fallback
 
 - **Status:** Accepted
 - **Date:** 2026-09-12
@@ -89,19 +89,19 @@ and nothing else.
   configuration and receive every other tab's writes, which then timed out. Having the worker check
   the term's lock would cost it an asynchronous lock request per claim, and `BroadcastChannel`
   would still deliver to all.
-- **Bind each identity on the worker to a secret sent in `hello`.** Decided on 2026-09-14 and
-  removed on 2026-09-15. It kept a script from connecting as a tab whose identity it heard, but not
-  from claiming the port under its own identity; it held on the `SharedWorker` only; and it cost a
-  secret source, a binding table with its own bound and two refusal reasons. A script of the origin
-  can call the library itself, so an identity on the bus was never what integrity rested on.
+- **Bind each identity on the worker to a secret sent in `hello`.** It keeps a script from
+  connecting as a tab whose identity it heard, but not from claiming the port under its own
+  identity; it holds on the `SharedWorker` only; and it costs a secret source, a binding table with
+  its own bound and two refusal reasons. A script of the origin can call the library itself, so an
+  identity on the bus is not what integrity rests on.
 - **A worker that elects the owner by observing port disconnects.** Presence is not mutual
   exclusion (ADR-0005).
-- **No fallback; throw `SHARED_WORKER_UNAVAILABLE`.** Honest and simple, but an application that
+- **No fallback; fail where the worker is missing.** Honest and simple, but an application that
   cannot open a port at all where the worker is missing is a worse outcome than one on a slower bus.
 - **Fall back to "every tab opens its own port".** Violates the entire premise.
-- **Replay what was sent before the `welcome` into the fallback.** What the fallback did until
-  2026-09-15, bounded at 1000 messages. Restating what the other tabs need to know is smaller and
-  needs no record; what is lost is traffic sent in the moments before the switch.
+- **Replay what was sent before the `welcome` into the fallback**, bounded at 1000 messages.
+  Restating what the other tabs need to know is smaller and needs no record; what is lost is traffic
+  sent in the moments before the switch.
 - **Fall back only on a timeout.** A slow network would switch tabs whose worker was merely late,
   splitting them from tabs whose worker arrived.
 
@@ -134,7 +134,7 @@ and nothing else.
 ## Verification
 
 `test/unit/broker.test.ts`, `test/unit/worker-ports.test.ts`, `test/unit/transports.test.ts` and
-`test/unit/fallback-transport.test.ts`; `test/integration/multi-tab/worker-script-fallback.test.ts`
-and `test/integration/multi-tab/hostile-bus.test.ts` (a forged claim diverts no write; a `hello` in a
+`test/unit/fallback-transport.test.ts`; `test/integration/multi-tab/shared-worker.test.ts` (a worker
+script that fails to load, or is of another protocol version) and `test/integration/multi-tab/hostile-bus.test.ts` (a forged claim diverts no write; a `hello` in a
 tab's name leaves it connected); the multi-context suite is parameterised over both transports, and
 `test/browser/transports.spec.ts` runs the fallback in a real browser.

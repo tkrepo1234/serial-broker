@@ -1,17 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
 import { SerialBrokerErrorCode } from '../../../src/core/error-codes.js';
-import { BrowserHarness, TRANSPORT_MODES, type VirtualTab } from '../../harness/browser-harness.js';
-import { READER, READER_OPTIONS } from '../../harness/devices.js';
+import type { BrowserHarness } from '../../harness/browser-harness.js';
+import { TRANSPORT_MODES, type VirtualTab } from '../../harness/browser-harness.js';
+import { READER_OPTIONS, readerHarness } from '../../harness/devices.js';
 import type { FakeDevice } from '../../harness/fake-serial.js';
-
-/** How a promise settled, attached at once so a rejection is never unhandled. */
-function outcomeOf(promise: Promise<void>): Promise<unknown> {
-  return promise.then(
-    () => 'resolved',
-    (error: unknown) => error,
-  );
-}
+import { outcomeOf } from '../../harness/outcomes.js';
 
 /** One byte per chunk, so that a test can let a write through chunk by chunk. */
 function chunkedOptions(writeTimeoutMs?: number) {
@@ -46,9 +40,7 @@ describe.each(TRANSPORT_MODES)(
       ownerTimeoutMs: number | undefined,
       participantTimeoutMs: number | undefined,
     ) {
-      const harness = new BrowserHarness({ transport });
-      const device = harness.serial.addDevice(READER.vendorId, READER.productId);
-      harness.serial.grant(device);
+      const { harness, device } = readerHarness({ transport });
       const owner = harness.openTab();
       await owner.setup('Reader', chunkedOptions(ownerTimeoutMs));
       const participant = harness.openTab();
@@ -155,9 +147,7 @@ describe.each(TRANSPORT_MODES)(
 
     /** A tab holding the port whose incoming messages can be held back, and a tab that writes. */
     async function busyHolder(writeTimeoutMs?: number) {
-      const harness = new BrowserHarness({ transport });
-      const device = harness.serial.addDevice(READER.vendorId, READER.productId);
-      harness.serial.grant(device);
+      const { harness, device } = readerHarness({ transport });
       const holder = harness.openBusyTab();
       await holder.client.setup('Reader', withTimeout(writeTimeoutMs));
       await harness.settle();
@@ -169,9 +159,7 @@ describe.each(TRANSPORT_MODES)(
 
     /** A tab holding the port, and a tab that writes whose incoming messages can be held back. */
     async function busyIssuer(issuerTimeoutMs?: number) {
-      const harness = new BrowserHarness({ transport });
-      const device = harness.serial.addDevice(READER.vendorId, READER.productId);
-      harness.serial.grant(device);
+      const { harness, device } = readerHarness({ transport });
       const holder = harness.openTab();
       await holder.setup('Reader', READER_OPTIONS);
       const issuer = harness.openBusyTab();

@@ -373,11 +373,6 @@ export class FakeBus {
     this.#workerHost = new FakeWorkerHost(locks, NOOP_LOGGER, this.meter);
   }
 
-  /** In `sharedworker` mode, the script the browser runs for a worker started now. */
-  get workerScript(): WorkerScript {
-    return this.#workerScript;
-  }
-
   /** The worker a tab reaches if it starts one now: the first, or the one since the last crash. */
   get workerHost(): FakeWorkerHost {
     return this.#workerHost;

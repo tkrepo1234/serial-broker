@@ -3,16 +3,9 @@ import { describe, expect, it } from 'vitest';
 import { SerialBrokerErrorCode } from '../../../src/core/error-codes.js';
 import { ownerLockName } from '../../../src/protocol/version.js';
 import { persistenceLockName } from '../../../src/storage/persistence-hold.js';
-import { BrowserHarness, TRANSPORT_MODES } from '../../harness/browser-harness.js';
-import { READER, READER_OPTIONS } from '../../harness/devices.js';
-
-/** How a promise settled, attached at once so a rejection is never unhandled. */
-function outcomeOf(promise: Promise<void>): Promise<unknown> {
-  return promise.then(
-    () => 'resolved',
-    (error: unknown) => error,
-  );
-}
+import { TRANSPORT_MODES, type VirtualTab } from '../../harness/browser-harness.js';
+import { READER_OPTIONS, readerHarness } from '../../harness/devices.js';
+import { outcomeOf } from '../../harness/outcomes.js';
 
 const SCALE_OPTIONS = {
   device: { vendorId: 0x0403, productId: 0x6001 },
@@ -26,12 +19,10 @@ const SCALE_OPTIONS = {
  */
 describe('calling release again while a release is closing the port', () => {
   it.each([
-    ['release()', (client: BrowserHarness['tabs'][number]['client']) => client.release('Reader')],
-    ['releaseAll()', (client: BrowserHarness['tabs'][number]['client']) => client.releaseAll()],
+    ['release()', (client: VirtualTab['client']) => client.release('Reader')],
+    ['releaseAll()', (client: VirtualTab['client']) => client.releaseAll()],
   ])('resolves %s only once the port is closed', async (_name, releaseAgain) => {
-    const harness = new BrowserHarness();
-    const device = harness.serial.addDevice(READER.vendorId, READER.productId);
-    harness.serial.grant(device);
+    const { harness, device } = readerHarness();
     const tab = harness.openTab();
     await tab.setup('Reader', READER_OPTIONS);
     // A write the device holds keeps the port open while the release drains it.
@@ -63,9 +54,7 @@ describe.each(TRANSPORT_MODES)(
     for (const issuer of ['the tab holding the port', 'another tab'] as const) {
       for (const call of ['release', 'dispose'] as const) {
         it(`does not fail the write it was told reached the device, issued by ${issuer}, when the listener calls ${call}()`, async () => {
-          const harness = new BrowserHarness({ transport });
-          const device = harness.serial.addDevice(READER.vendorId, READER.productId);
-          harness.serial.grant(device);
+          const { harness, device } = readerHarness({ transport });
           const owner = harness.openTab();
           await owner.setup('Reader', READER_OPTIONS);
           const participant = harness.openTab();
@@ -88,8 +77,7 @@ describe.each(TRANSPORT_MODES)(
 
 describe('a listener that releases a configuration while it is being set up', () => {
   it('leaves no hold behind on the remembered configuration', async () => {
-    const harness = new BrowserHarness();
-    harness.serial.grant(harness.serial.addDevice(READER.vendorId, READER.productId));
+    const { harness } = readerHarness();
     const tab = harness.openTab();
     await tab.setup('Reader', READER_OPTIONS);
     // Storage that fails reports to every configuration - the one being set up is already one.
@@ -116,9 +104,7 @@ describe('a listener that releases a configuration while it is being set up', ()
 
 describe.each(TRANSPORT_MODES)('a diagnostics watcher calling the observer (%s)', (transport) => {
   async function watchedDevice() {
-    const harness = new BrowserHarness({ transport });
-    const device = harness.serial.addDevice(READER.vendorId, READER.productId);
-    harness.serial.grant(device);
+    const { harness, device } = readerHarness({ transport });
     const tab = harness.openTab();
     await tab.setup('Reader', READER_OPTIONS);
     const observer = harness.openObserver();

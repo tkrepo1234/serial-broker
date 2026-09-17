@@ -17,15 +17,15 @@ import { chromium, expect, test as base, type BrowserContext } from '@playwright
 
 import { echoConfiguration, Tab } from '../support/tab.js';
 
-import { recordTabHistories } from './support/hardware-context.js';
+import {
+  ARDUINO,
+  ARDUINO_PORT_NAME as PORT_NAME,
+  recordTabHistories,
+  SETTLE_AFTER_OPEN_MS,
+} from './support/hardware-context.js';
 import { PortPicker } from './support/port-picker.js';
 
-/** The device under test: an Arduino with an echo sketch. */
-const ARDUINO = { vendorId: 0x2341, productId: 0x0078 } as const;
-const PORT_NAME = process.env['SERIAL_BROKER_HARDWARE_PORT'] ?? 'COM3';
 const CONFIGURATION = 'Picked';
-/** Opening the port resets the board; what it says before this has passed is forgotten. */
-const SETTLE_AFTER_OPEN_MS = 2_500;
 
 const test = base.extend<{ fresh: { context: BrowserContext; picker: PortPicker } }>({
   // eslint-disable-next-line no-empty-pattern -- Playwright's fixture signature.

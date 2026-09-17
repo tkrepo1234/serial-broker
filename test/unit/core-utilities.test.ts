@@ -290,3 +290,48 @@ describe('toHex', () => {
     expect(hex).toContain('100 bytes');
   });
 });
+
+describe('disposal', () => {
+  it('reports a failure of a disposer registered while disposing, in the same call', () => {
+    const stack = new DisposalStack();
+    stack.add(() => {
+      stack.add(() => {
+        throw new Error('late');
+      });
+    });
+
+    expect(stack.disposeAll()).toEqual(['Error: late']);
+  });
+});
+
+describe('copying payload bytes', () => {
+  it('accepts an ArrayBuffer from another realm', async () => {
+    const { runInNewContext } = await import('node:vm');
+    const foreign = runInNewContext('new Uint8Array([1, 2, 3]).buffer') as ArrayBuffer;
+
+    expect([...copyBytes(foreign)]).toEqual([1, 2, 3]);
+  });
+
+  it('copies a view of shared memory into memory of its own', () => {
+    const shared = new Uint8Array(new SharedArrayBuffer(4));
+    shared.set([1, 2, 3, 4]);
+
+    const copy = copyBytes(shared.subarray(1, 3) as unknown as BufferSource);
+
+    expect(copy.buffer).toBeInstanceOf(ArrayBuffer);
+    expect([...copy]).toEqual([2, 3]);
+  });
+
+  it('reports a view of a transferred buffer as a serial-broker error', () => {
+    const buffer = new ArrayBuffer(4);
+    const view = new Uint8Array(buffer, 1, 2);
+    structuredClone(buffer, { transfer: [buffer] });
+
+    expect(() => copyBytes(view)).toThrow(
+      expect.objectContaining({
+        code: SerialBrokerErrorCode.INVALID_ARGUMENT,
+        context: expect.objectContaining({ detached: true }) as unknown,
+      }),
+    );
+  });
+});

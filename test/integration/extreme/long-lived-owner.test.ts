@@ -5,6 +5,7 @@ import { SerialBrokerStatus } from '../../../src/core/types.js';
 import { ownerLockName } from '../../../src/protocol/version.js';
 import { TRANSPORT_MODES, type VirtualTab } from '../../harness/browser-harness.js';
 import { READER, READER_OPTIONS } from '../../harness/devices.js';
+import { outcomeOf } from '../../harness/outcomes.js';
 
 import {
   countTraffic,
@@ -12,7 +13,6 @@ import {
   IS_EXTREME,
   measured,
   MeteredHarness,
-  outcomeOf,
   SIZES,
   stateOf,
 } from './support/extreme.js';

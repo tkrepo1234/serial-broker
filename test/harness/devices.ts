@@ -1,3 +1,8 @@
+import type { SerialBrokerOptions } from '../../src/core/types.js';
+
+import { BrowserHarness, type HarnessOptions, type VirtualTab } from './browser-harness.js';
+import type { FakeDevice } from './fake-serial.js';
+
 /**
  * The USB IDs of a CH340 USB-serial adapter (QinHeng Electronics, `0x1a86:0x7523`).
  *
@@ -20,3 +25,52 @@ export const READER_OPTIONS = {
   serial: { baudRate: 9600 },
   receive: { idleMs: 0 },
 };
+
+/** A simulated browser in which {@link READER} is plugged in and the user has granted it. */
+export function readerHarness(options: HarnessOptions = {}): {
+  harness: BrowserHarness;
+  device: FakeDevice;
+} {
+  const harness = new BrowserHarness(options);
+  const device = harness.serial.addDevice(READER.vendorId, READER.productId);
+  harness.serial.grant(device);
+  return { harness, device };
+}
+
+/**
+ * {@link readerHarness} with `count` tabs that have each set `Reader` up, one after the other, and
+ * settled: the first tab holds the port. A scene that differs in any of this - a tab that must not
+ * settle, a busy tab, a fault staged before the first open - stays in its own test file.
+ */
+export async function connectedTabs(
+  count: number,
+  harnessOptions: HarnessOptions = {},
+  options: SerialBrokerOptions = READER_OPTIONS,
+): Promise<{ harness: BrowserHarness; device: FakeDevice; tabs: VirtualTab[] }> {
+  const { harness, device } = readerHarness(harnessOptions);
+  const tabs: VirtualTab[] = [];
+  for (let index = 0; index < count; index += 1) {
+    const tab = harness.openTab();
+    await tab.setup('Reader', options);
+    tabs.push(tab);
+  }
+  return { harness, device, tabs };
+}
+
+/** {@link connectedTabs} for two tabs: `owner` holds the port, `other` shares it. */
+export async function twoTabs(
+  harnessOptions: HarnessOptions = {},
+  options: SerialBrokerOptions = READER_OPTIONS,
+): Promise<{ harness: BrowserHarness; device: FakeDevice; owner: VirtualTab; other: VirtualTab }> {
+  const { harness, device, tabs } = await connectedTabs(2, harnessOptions, options);
+  return { harness, device, owner: tabs[0] as VirtualTab, other: tabs[1] as VirtualTab };
+}
+
+/** {@link connectedTabs} for the common case of one tab. */
+export async function connectedTab(
+  harnessOptions: HarnessOptions = {},
+  options: SerialBrokerOptions = READER_OPTIONS,
+): Promise<{ harness: BrowserHarness; device: FakeDevice; tab: VirtualTab }> {
+  const { harness, device, tabs } = await connectedTabs(1, harnessOptions, options);
+  return { harness, device, tab: tabs[0] as VirtualTab };
+}
