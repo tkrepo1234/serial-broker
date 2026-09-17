@@ -104,11 +104,13 @@ Open, and deliberately not done in this round - both change the public API, not 
       the bus, and would have promised what the library cannot keep. The reading side now names
       every documented field with its type; the building side keeps room for fields a later
       version adds. `ContextFor<Code>` and `hasCode()` mark where per-code narrowing would go.
-- [ ] **Put `maxTabs` in `SerialBrokerStatusSnapshot`.** A status component handed a name cannot tell
+- [x] **Put `maxTabs` in `SerialBrokerStatusSnapshot`.** Done 2026-09-17. A status component handed a name cannot tell
       whether `queued` is even reachable, or which `writeTimeoutMs` its message should cite;
       `EffectiveSettings` has it, but that is the diagnostics entry point, which application code is
       told it does not need.
-- [ ] **A complete page with no build step, on the documentation site.** `examples/no-bundler` and
+- [x] **A complete page with no build step, on the documentation site.** Done 2026-09-17 as
+      "No build step" under Examples, embedding `examples/minimal-js` from the example itself, with
+      the line assembly written in plain JavaScript beside it. `examples/no-bundler` and
       `examples/minimal-js` are exactly that, and the site names them without showing them, so the
       audience least likely to clone a repository is sent to one. Related: assembling lines has no
       answer for a page without a compiler - the only one shown is a 60-line TypeScript class.
@@ -409,13 +411,17 @@ Everything below holds, and nothing beyond it is part of this item.
       task, and the Web Serial comparison.
 - [x] No task needs a concept beyond `setup`, `subscribe`, `requestAccess`, `send` and `release`,
       or the task has a written design proposal that removes the extra step.
-- [ ] The cold read is done for every app. Every logged question or guess is resolved, by a
-      documentation fix or a recorded reason for leaving it, and the list is committed.
+- [x] The cold read is done for every app. Every logged question or guess is resolved, by a
+      documentation fix or a recorded reason for leaving it, and the list is committed. Done twice:
+      the ten-use-case round of 2026-09-15 (above), and the six-use-case round of 2026-09-17
+      ("Second cold read of the documentation"), whose findings are fixed or recorded there.
 
 **Stop rule**
 
-- [ ] Each area gets exactly one round of review, fix and re-review. What the re-review finds that
-      is not a defect goes to this backlog as a new item, not into another round.
+- [x] Each area gets exactly one round of review, fix and re-review. What the re-review finds that
+      is not a defect goes to this backlog as a new item, not into another round. Held to: the
+      second cold read's three API-level findings became backlog items rather than a third round,
+      and were then done on their own (typed error context, `maxTabs`, the no-build page).
 
 ---
 
