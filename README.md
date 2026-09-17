@@ -88,6 +88,7 @@ The documentation site is built with `npm run docs`; its chapters are readable h
 | `docs/site/`                    | The documentation site (Sphinx).                                               |
 | `docs/adr/`, `docs/guidelines/` | Architecture decision records; the binding engineering guidelines.             |
 | `docs/manual-test-plan.md`      | The hardware test plan and its last run.                                       |
+| `llms.txt`                      | What a language model needs to integrate the library; ships with the package.  |
 | `scripts/`, `BACKLOG.md`        | Build and release helpers; open work.                                          |
 | `config/`                       | The toolchain's configuration: Prettier, tsup, Vitest, Playwright, TypeDoc.    |
 | `design/`                       | A draft illustration awaiting assessment; not part of the documentation.       |

@@ -38,7 +38,8 @@
     "dist",
     "README.md",
     "LICENSE",
-    "CHANGELOG.md"
+    "CHANGELOG.md",
+    "llms.txt"
   ],
   "main": "./dist/serial-broker.cjs",
   "module": "./dist/serial-broker.js",

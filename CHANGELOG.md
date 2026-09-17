@@ -30,6 +30,10 @@ different protocol versions do not coordinate with each other. It is noted whene
   and locale data OpenUI5 would otherwise fetch embedded into it. Checked against the Arduino through
   the browser's own picker.
 
+- **`llms.txt`**, in the repository and in the package: what a language model needs to integrate the
+  library correctly - entry points, the API with every default, statuses, events, error codes, the
+  rules that matter - in about 3 000 tokens.
+
 ### Changed
 
 - **`USER_GESTURE_REQUIRED` says what is true.** Its remediation and the documentation claimed that any

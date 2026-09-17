@@ -1,0 +1,214 @@
+# serial-broker
+
+> A TypeScript library that shares one Web Serial port between all tabs of a web origin. One tab
+> holds the port; every tab reads and writes through it; another tab takes over when the holding
+> tab closes or crashes; the connection comes back when the device does. Chromium-based desktop
+> browsers only (Chrome, Edge). No framing, no protocol: bytes in, bytes out.
+
+This file tells a language model what it needs to integrate serial-broker into an application
+correctly. It is complete for the common cases; the full documentation is in `docs/site/`.
+
+## When to use it
+
+- A web application talks to a serial device (scale, scanner, label printer, PLC, instrument,
+  microcontroller) through the Web Serial API and may be open in more than one tab or window.
+  Plain Web Serial gives the second tab `InvalidStateError`; serial-broker makes every tab work.
+- Also useful in a single tab: automatic reconnection, a remembered device, stable error codes.
+
+Not for: Firefox, Safari, Chrome for Android (no Web Serial, or not a target); Node.js; sharing a
+port between different origins; message framing or request/response protocols (write those on top).
+
+## Requirements
+
+- Chromium-based desktop browser. A secure context: HTTPS, `localhost`, or a page opened from a
+  file (`file://`).
+- All tabs on the same origin. Note: every page opened from a file is ONE origin for the browser.
+- The worker script `serial-broker.worker.js` must be served as a file of its own, at the SAME URL
+  for every tab.
+
+## Install
+
+Not on the npm registry before 1.0. Each GitHub release attaches `serial-broker-<version>.tgz`
+(`npm install ./serial-broker-<version>.tgz`) and `serial-broker-<version>-browser.zip` (the
+browser files, for a page without a package manager). Where documentation says
+`npm install serial-broker`, that is the command from 1.0 on.
+
+Entry points of the package:
+
+| Import                          | File in `dist/`                        | Use                                   |
+| ------------------------------- | -------------------------------------- | ------------------------------------- |
+| `serial-broker`                 | `serial-broker.js` / `.cjs` + types    | bundler or native ES module           |
+| `serial-broker/min`             | `serial-broker.min.js`                 | ES module without a bundler           |
+| `serial-broker/global`          | `serial-broker.global.js`              | classic `<script>`, global `SerialBroker` |
+| `serial-broker/worker`          | `serial-broker.worker.js`              | the worker script; serve it as a file |
+| `serial-broker/diagnostics`     | `serial-broker.diagnostics.js`         | read-only view for operator tools     |
+
+## Minimal integration (bundler, TypeScript)
+
+```ts
+import { SerialBroker, SerialBrokerStatus, isSerialBrokerError } from 'serial-broker';
+import workerUrl from 'serial-broker/worker?url'; // Vite. Otherwise copy the file and pass its path.
+
+// 1. Once, before the first setup(): where the worker script is served.
+SerialBroker.configure({ workerUrl });
+
+// 2. Register a named configuration. The name is what tabs share: same name = same device.
+await SerialBroker.setup('Scale', {
+  serial: { baudRate: 9600 },
+  encoding: { decodeText: true }, // also deliver event.text
+});
+
+// 3. Listen. subscribe() returns a function that unsubscribes.
+SerialBroker.subscribe('Scale', 'onReceive', (event) => console.log(event.text, event.data));
+SerialBroker.subscribe('Scale', 'onStatusChange', (event) => render(event.status));
+SerialBroker.subscribe('Scale', 'onError', (event) => show(event.error.code, event.error.remediation));
+
+// 4. The browser shows its port picker only during a user gesture.
+connectButton.addEventListener('click', () => {
+  SerialBroker.requestAccess('Scale').catch(showError); // resolves false if the picker is dismissed
+});
+
+// 5. Send: string (encoded as UTF-8 by default) or bytes. Nothing is appended.
+await SerialBroker.send('Scale', 'T\r\n');
+await SerialBroker.send('Scale', new Uint8Array([0x02, 0xff, 0x03]));
+```
+
+Show the connect button exactly while the status is `awaiting-permission`. On a later visit the
+port opens without a prompt: the browser remembers the permission, the library the configuration.
+
+## Without a bundler, or opened from a file
+
+A page opened from a file (`file://`) may load neither ES modules nor import maps, and the browser
+starts no SharedWorker for it. Use the classic build with relative paths; the library then
+coordinates tabs over a BroadcastChannel by itself.
+
+```html
+<script src="./serial-broker/serial-broker.global.js"></script>
+<script>
+  SerialBroker.configure({
+    workerUrl: new URL('./serial-broker/serial-broker.worker.js', document.baseURI).href,
+  });
+  // SerialBroker.setup(...), .subscribe(...), .send(...) as above.
+  // Also on the global: isSupported, isSerialBrokerError, hasCode, SerialBrokerStatus,
+  // SerialBrokerErrorCode, SerialBrokerError, REMEDIATION, PROTOCOL_VERSION.
+</script>
+```
+
+With the classic and CommonJS builds `configure({ workerUrl })` is REQUIRED before `setup()`.
+
+## API (`SerialBroker`)
+
+```ts
+configure(options: { workerUrl?: string | URL; transport?: 'auto' | 'sharedworker' | 'broadcastchannel';
+                     logger?: { log(level, message, fields): void }; logPayloads?: boolean }): void
+isSupported(): boolean                       // Web Serial + Web Locks + a message bus are there
+setup(name: string, options: SerialBrokerOptions): Promise<void>
+requestAccess(name: string, options?: { chooseAgain?: boolean }): Promise<boolean>  // from a click
+send(name: string, data: string | BufferSource): Promise<void>
+subscribe(name, event, listener): () => void // events: onReceive | onSend | onError | onStatusChange
+unsubscribe(name, event, listener): void
+getStatus(name: string): SerialBrokerStatusSnapshot   // status, deviceKind, vendorId, productId,
+                                                      // serialOptions, maxTabs, since, lastErrorCode
+exists(name: string): boolean                // for THIS tab
+names(): readonly string[]
+restore(): Promise<readonly string[]>        // sets up every remembered configuration
+release(name: string, options?: { forget?: boolean; forgetDevice?: boolean }): Promise<void>
+releaseAll(options?): Promise<void>
+dispose(): Promise<void>
+```
+
+### `SerialBrokerOptions` (defaults in brackets)
+
+- `device`: which port. Omit it, or `{ auto: true }` = **auto mode**: the device is taken from the
+  port the user picks, remembered, and adopted by the other tabs; `requestAccess(name, {
+  chooseAgain: true })` picks another later. `{ vendorId, productId }` = a known USB device (picker
+  filtered, a granted port opens without a prompt). `{ nonUsb: true }` = a port without USB
+  identity. `{ any: true }` = the first granted port.
+- `serial`: `baudRate` (required, 1-20,000,000), `dataBits` 7|8 [8], `stopBits` 1|2 [1], `parity`
+  'none'|'even'|'odd' ['none'], `flowControl` 'none'|'hardware' ['none'], `bufferSize` [255].
+- `connection`: `autoReconnect` [true], `initialDelayMs` [250], `factor` [2], `maxDelayMs` [30000],
+  `jitter` [0.5], `maxAttempts` [Infinity], `stableAfterMs` [5000], `openTimeoutMs` [10000],
+  `writeTimeoutMs` [5000], `maxWriteChunkBytes` [4096].
+- `receive`: `idleMs` [50], `maxWaitMs` [500] - received bytes are collected until the line is
+  quiet, then delivered as one `onReceive`. Use `idleMs: 0` to get every read as it arrives.
+- `encoding`: `decodeText` [false] (adds `event.text`), `encoding` ['utf-8'].
+- `remember` [true]: keep the configuration for `restore()` and later visits.
+- `maxTabs` [Infinity]: at most N tabs use it at once; `1` = exclusive. The others are `queued`.
+
+### Statuses
+
+`idle` → `queued`? → `awaiting-permission`? → `connecting` → `open` ⇄ `reconnecting`; `failed`
+(gave up; `setup()` again with the same options restarts it); `released` (last event of a tab).
+Compare with `SerialBrokerStatus.Open` etc. A new `onStatusChange` listener is told the current
+status once, immediately.
+
+### Events
+
+- `onReceive`: `{ name, data: Uint8Array, text: string | undefined, timestamp }` - the same in every tab.
+- `onSend`: `{ name, data, origin: 'local' | 'remote', timestamp }` - every tab's writes, this one's included.
+- `onStatusChange`: `{ name, status, previousStatus, timestamp }`.
+- `onError`: `{ name, error: SerialBrokerError, timestamp }`.
+
+### Errors
+
+Every failure is a `SerialBrokerError` with a stable `code`, a `message`, a `remediation` sentence,
+`isRetryable` (true = the library is recovering by itself; show it as a note), `context`,
+`configName`, `timestamp`. **Branch on `code`, never on `message`.** Use `isSerialBrokerError(e)`
+and `hasCode(e, 'WRITE_TIMEOUT')`.
+
+Codes: `INVALID_ARGUMENT`, `UNKNOWN_CONFIGURATION`, `CONFIGURATION_CONFLICT`,
+`CONFIGURATION_RELEASED`, `WEB_SERIAL_UNAVAILABLE`, `WEB_LOCKS_UNAVAILABLE`,
+`TRANSPORT_UNAVAILABLE`, `BROKER_UNAVAILABLE`, `PERMISSION_REQUIRED`, `PERMISSION_DENIED`,
+`USER_GESTURE_REQUIRED`, `DEVICE_MISMATCH`, `OPEN_FAILED`, `OPEN_TIMEOUT`, `DEVICE_DISCONNECTED`,
+`RECONNECT_EXHAUSTED`, `READ_FAILED`, `NOT_CONNECTED`, `WRITE_FAILED`, `WRITE_TIMEOUT`,
+`WRITE_QUEUE_FULL`, `OWNER_LOST_DURING_WRITE`, `PROTOCOL_VERSION_MISMATCH`, `STORAGE_UNAVAILABLE`,
+`STORAGE_CORRUPT`, `LISTENER_THREW`, `INTERNAL_INVARIANT`, `UNKNOWN`.
+
+## Rules that matter
+
+1. `configure()` before the first `setup()`. Every tab must name the same `workerUrl`.
+2. Call `requestAccess()` from a click or key handler, before anything slow. The browser counts a
+   click as a gesture for a few seconds; `setup()` then `requestAccess()` in one click is fine.
+3. One configuration name per device, the same name in every tab. Calling `setup()` again in the
+   same tab with a different device, line settings or `maxTabs` raises `CONFIGURATION_CONFLICT`:
+   `release()` first. Between tabs, the tab holding the port opens it with its own line settings;
+   a different `maxTabs` makes the other tab withdraw with that error.
+4. **A write reaches the device at most once.** `send()` rejecting with `context.started === false`
+   means nothing was written and it is safe to send again. `OWNER_LOST_DURING_WRITE` or a
+   `WRITE_TIMEOUT` with `started: true` means the device MAY have received it - never retry such a
+   write blindly for a command with side effects.
+5. The library does no framing. One `onReceive` is "what arrived until the line went quiet", not a
+   message. Split lines or frames yourself and keep a buffer across events.
+6. Writes of one tab keep their order. Writes of different tabs have no defined order - if two tabs
+   command one device, give one of them the job (`maxTabs: 1`, or an application rule).
+7. Never ask which tab holds the port. The API does not say, on purpose: the answer is wrong a
+   moment later.
+8. `release(name)` forgets nothing. `{ forget: true }` drops the remembered configuration,
+   `{ forgetDevice: true }` gives the browser's permission back (for every tab of the origin).
+9. Data sent by the device during a handover between tabs, or while reconnecting, is lost. Design
+   the device protocol so that a missed message can be asked for again.
+10. Show `error.code` and `error.remediation` to the operator; log with `configure({ logger })`.
+    Payload bytes are logged only with `logPayloads: true` - serial data can be sensitive.
+
+## Typical patterns
+
+- **Operator station, several windows:** every window `setup()`s the same name and subscribes;
+  one window sends. Nothing else to do.
+- **Exclusive control:** `maxTabs: 1`; show `queued` as "in use in another window".
+- **Known device:** `device: { vendorId, productId }`; after the first grant it opens by itself.
+- **Device chosen by the user, changeable later:** omit `device`; `requestAccess(name)` for the
+  first choice, `requestAccess(name, { chooseAgain: true })` to change it.
+- **No automatic reconnect:** `connection: { autoReconnect: false }`; a loss ends in `failed` until
+  `setup()` is called again.
+- **Request/answer:** send, then resolve on the next complete line from `onReceive`, with your own
+  timeout; serialise requests within the tab.
+
+## Where things are
+
+- `README.md` - overview. `docs/site/` - the documentation (Sphinx, Markdown): `installing.md`,
+  `first-connection.md`, `configuration.md`, `errors.md`, `shared-ports.md`, `guarantees.md`,
+  `known-limits.md`, `deploying.md`, `diagnostics.md`, `examples/`.
+- `examples/minimal-js/` - one HTML page, no build step. `examples/terminal-openui5/` - a serial
+  terminal in SAP OpenUI5 whose build runs from a folder opened as a file.
+- `dist/debug/` - a debugging surface shipped with the package (static files; serve them yourself).
+- `docs/adr/` - why the library is built the way it is.
