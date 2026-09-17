@@ -279,7 +279,7 @@ describe('mapping platform failures', () => {
   const context = { configName: 'Reader', timestamp: 1234 };
 
   it.each([
-    ['NetworkError', SerialBrokerErrorCode.DEVICE_DISCONNECTED],
+    ['NetworkError', SerialBrokerErrorCode.OPEN_FAILED],
     ['InvalidStateError', SerialBrokerErrorCode.OPEN_FAILED],
     ['SecurityError', SerialBrokerErrorCode.WEB_SERIAL_UNAVAILABLE],
     ['NotSupportedError', SerialBrokerErrorCode.OPEN_FAILED],

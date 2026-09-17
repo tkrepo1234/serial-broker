@@ -19,8 +19,16 @@ import { describeUnknown, SerialBrokerError } from '../core/errors.js';
  * known about it, not for what the entry changes.
  */
 const OPEN_FAILURES: Readonly<Record<string, SerialBrokerErrorCode>> = {
-  /** The device is no longer attached. Not a failure to report to the user - it is a reconnect. */
-  NetworkError: SerialBrokerErrorCode.DEVICE_DISCONNECTED,
+  /**
+   * The operating system refused to open the port.
+   *
+   * Chromium answers every such refusal this way, and the commonest one by far is another program
+   * holding the port - a terminal program, a driver tool, a serial monitor. A device that is
+   * really away never reaches `open()`: the browser does not list a detached port, so the attempt
+   * ends earlier as `device-absent` with `DEVICE_DISCONNECTED`. Measured in Edge 153 against a
+   * COM port held by another process.
+   */
+  NetworkError: SerialBrokerErrorCode.OPEN_FAILED,
   /** The port is already open, which after another context crashed can be a stale state. */
   InvalidStateError: SerialBrokerErrorCode.OPEN_FAILED,
   /** Serial access is blocked by permissions policy, or the context is not secure. */

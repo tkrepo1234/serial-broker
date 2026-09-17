@@ -390,6 +390,31 @@ describe('argument validation at the boundary', () => {
     });
   });
 
+  it('rejects an event name it does not know on the way out as well', async () => {
+    const { harness } = readerHarness();
+    const tab = harness.openTab();
+    await tab.client.setup('Reader', READER_OPTIONS);
+    const listener = vi.fn();
+    tab.client.subscribe('Reader', 'onReceive', listener);
+
+    // A misspelt name here removes nothing. Told nothing, the caller looks for the listener that
+    // is still there anywhere but at this call.
+    expect(() => tab.client.unsubscribe('Reader', 'onRecieve' as never, listener)).toThrow(
+      expect.objectContaining({
+        code: SerialBrokerErrorCode.INVALID_ARGUMENT,
+        context: expect.objectContaining({ argumentName: 'event' }) as unknown,
+      }),
+    );
+    expect(() => tab.client.unsubscribe('Reader', 'onReceive', 42 as never)).toThrow(
+      expect.objectContaining({
+        context: expect.objectContaining({ argumentName: 'listener' }) as unknown,
+      }),
+    );
+
+    // The listener that was registered is untouched by either refusal.
+    expect(tab.client.diagnostics()?.configurations[0]?.listeners?.onReceive).toBe(1);
+  });
+
   it('rejects an invalid name before doing anything with it', async () => {
     const harness = new BrowserHarness();
     const tab = harness.openTab();

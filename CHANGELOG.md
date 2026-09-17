@@ -10,6 +10,23 @@ different protocol versions do not coordinate with each other. It is noted whene
 
 ## [Unreleased]
 
+### Fixed
+
+- **A port another program holds is reported as `OPEN_FAILED`**, not as `DEVICE_DISCONNECTED`.
+  Chromium answers every refusal of `open()` with a `NetworkError`, and the commonest one by far is
+  a terminal program or driver tool holding the port; the operator now reads "Another application
+  may hold the device" instead of "No action required". A device that is really away never reaches
+  `open()` and is unaffected.
+- **Writes are taken again after a connection is lost while one was stalled.** A chunk the device
+  never took holds the write queue, as it must while that connection lasts; it no longer holds it
+  across the reconnect, where every later write timed out against a connection that was open and
+  well.
+- **`unsubscribe()` refuses an event name it does not know**, and a listener that is not a
+  function, as `subscribe()` does and as its documentation says: a misspelt name removed nothing
+  and said nothing.
+- **`requestAccess()` answers the same in every tab** while the connection is open: it opens no
+  picker. The tab holding the port used to open one, which told the caller which tab that was.
+
 ## [0.1.0-beta.1] - 2026-09-17
 
 The first release, so this section says what the library is: **wire protocol version 1**, **storage

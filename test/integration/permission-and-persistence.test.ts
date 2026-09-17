@@ -197,9 +197,9 @@ describe('asking for a device that is already connected', () => {
     const peer = harness.openTab();
     await peer.setup('Reader', READER_OPTIONS);
 
+    // Fed so that a picker opening anyway would answer rather than hang; nothing should take it.
     harness.serial.pickerQueue.push(device);
     await expect(tab.client.requestAccess('Reader')).resolves.toBe(true);
-    // The port is open, so the other tab has nothing to ask the user for.
     await expect(peer.client.requestAccess('Reader')).resolves.toBe(true);
     await harness.settle();
 
@@ -207,6 +207,9 @@ describe('asking for a device that is already connected', () => {
     expect(peer.client.getStatus('Reader').status).toBe(SerialBrokerStatus.Open);
     expect(device.openCount).toBe(1);
     expect(tab.recordFor('Reader').errors).toHaveLength(0);
+    // The port is open, so neither tab has anything to ask the user for. Were the picker opened
+    // in one of them and not the other, the answer would say which tab holds the port (ADR-0009).
+    expect(harness.serial.pickerQueue).toHaveLength(1);
   });
 });
 

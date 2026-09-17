@@ -457,6 +457,33 @@ describe('a device that stops taking writes', () => {
     expect(tab.statusTrail('Reader')).not.toContain(SerialBrokerStatus.Reconnecting);
   });
 
+  it('takes writes again once the connection it stalled on has been replaced', async () => {
+    const { harness, device, tab } = await connectedTab();
+
+    // A chunk the device never takes: unlike `pauseWrites()`, this one is never completed, which
+    // is what an operating system holding a write looks like.
+    device.faults.hangOnWrite = true;
+    const held = tab.client.send('Reader', 'HELD').catch((reason: unknown) => reason);
+    await harness.settle();
+    await harness.advance(PAST_THE_DEADLINE_MS);
+    expect(await held).toMatchObject({ code: SerialBrokerErrorCode.WRITE_TIMEOUT });
+
+    // The connection is lost for a reason of its own while that chunk is still out there.
+    device.faults.hangOnWrite = false;
+    device.breakStream(domException('NetworkError', 'The device has been lost'));
+    await harness.settle();
+    await harness.advance(10_000);
+    await harness.settle();
+    expect(tab.client.getStatus('Reader').status).toBe(SerialBrokerStatus.Open);
+
+    // The chunk stays with the operating system, but the queue it held is not held across the
+    // reconnect: a write to the new connection is a write like any other.
+    await expect(tab.client.send('Reader', 'AGAIN')).resolves.toBeUndefined();
+    expect(
+      tab.client.diagnostics()?.configurations[0]?.connection?.stalledWriteSince,
+    ).toBeUndefined();
+  });
+
   it('reports stalledWriteSince while the write is stalled, and not once the device takes it', async () => {
     const { harness, device, tab } = await connectedTab();
     const stalledWriteSince = () =>

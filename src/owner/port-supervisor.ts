@@ -92,6 +92,14 @@ type ConnectionState =
  */
 export class PortSupervisor {
   #state: ConnectionState = { kind: 'idle' };
+
+  /**
+   * Tells a wait on the open connection that it has ended, however it ended.
+   *
+   * Registered only while something waits: a chunk the device never took (see
+   * {@link #awaitStalledWrite}).
+   */
+  #connectionEnded: (() => void) | undefined;
   #status: SerialBrokerStatus = SerialBrokerStatus.Idle;
   /** A device was plugged in while the ports were being listed, possibly too late to be listed. */
   #deviceConnectedWhileListing = false;
@@ -194,7 +202,7 @@ export class PortSupervisor {
       return;
     }
     if (from === 'failed') {
-      this.#state = { kind: 'failed' };
+      this.#enterState({ kind: 'failed' });
       this.#setStatus(SerialBrokerStatus.Failed);
       return;
     }
@@ -229,7 +237,7 @@ export class PortSupervisor {
     if (previous.kind === 'open') {
       previous.received.flush();
     }
-    this.#state = { kind: 'stopped' };
+    this.#enterState({ kind: 'stopped' });
     this.#nextAttemptAt = undefined;
     this.#openedAt = undefined;
 
@@ -288,7 +296,7 @@ export class PortSupervisor {
       return;
     }
     this.#backoff.reset();
-    this.#state = { kind: 'idle' };
+    this.#enterState({ kind: 'idle' });
     void this.#connect();
   }
 
@@ -318,7 +326,7 @@ export class PortSupervisor {
     // A listing in progress may have been taken before the grant, so it is started over rather
     // than awaited.
     this.#backoff.reset();
-    this.#state = { kind: 'idle' };
+    this.#enterState({ kind: 'idle' });
     await this.#connect();
   }
 
@@ -365,7 +373,7 @@ export class PortSupervisor {
       previousState: current.kind,
     });
     this.#backoff.reset();
-    this.#state = { kind: 'idle' };
+    this.#enterState({ kind: 'idle' });
     // The attempt waits for the old port to be closed before it lists the ports.
     await this.#connect();
   }
@@ -563,11 +571,26 @@ export class PortSupervisor {
   }
 
   /**
+   * Moves to the next connection state.
+   *
+   * One place, so that everything waiting on the connection being left is told here rather than at
+   * each of the ways a connection can end.
+   */
+  #enterState(next: ConnectionState): void {
+    const ended = this.#connectionEnded;
+    if (this.#state.kind === 'open' && next !== this.#state && ended !== undefined) {
+      this.#connectionEnded = undefined;
+      ended();
+    }
+    this.#state = next;
+  }
+
+  /**
    * Waits for a chunk the device did not accept in time, once its caller has been told so.
    *
    * Taken late, the chunk changes nothing but the byte count: its write has already failed. A
    * stream that fails instead is a lost connection, like any failed write - unless the connection
-   * it was written to has already been replaced.
+   * it was written to has already been replaced, which also ends this wait.
    */
   async #awaitStalledWrite(
     written: Promise<unknown>,
@@ -580,27 +603,46 @@ export class PortSupervisor {
       chunkBytes,
     });
     this.#stalledSince = this.environment.clock.now();
-    try {
-      await written;
+    // Whichever comes first. The chunk belongs to the operating system now and may never settle
+    // (ADR-0011), so if the connection ends first this stops waiting for it: the queue it holds
+    // would otherwise stay held across the reconnect, and every later write time out against a
+    // connection that is open and well.
+    const outcome = await Promise.race([
+      written.then(
+        () => 'taken' as const,
+        (error: unknown) => ({ rejected: error }),
+      ),
+      new Promise<'ended'>((resolve) => {
+        this.#connectionEnded = () => {
+          resolve('ended');
+        };
+      }),
+    ]);
+    this.#stalledSince = undefined;
+    if (this.#connectionEnded !== undefined) {
+      this.#connectionEnded = undefined;
+    }
+    if (outcome === 'taken') {
       this.#bytesSent += chunkBytes;
-    } catch (error) {
-      if (this.#state === state) {
-        this.#handleConnectionLoss(
-          'write-failed',
-          new SerialBrokerError(
-            SerialBrokerErrorCode.WRITE_FAILED,
-            `The device rejected the write: ${describeUnknown(error)}`,
-            {
-              configName: this.configuration.name,
-              context: { chunkBytes },
-              timestamp: this.environment.clock.now(),
-              cause: error,
-            },
-          ),
-        );
-      }
-    } finally {
-      this.#stalledSince = undefined;
+      return;
+    }
+    if (outcome === 'ended') {
+      return;
+    }
+    if (this.#state === state) {
+      this.#handleConnectionLoss(
+        'write-failed',
+        new SerialBrokerError(
+          SerialBrokerErrorCode.WRITE_FAILED,
+          `The device rejected the write: ${describeUnknown(outcome.rejected)}`,
+          {
+            configName: this.configuration.name,
+            context: { chunkBytes },
+            timestamp: this.environment.clock.now(),
+            cause: outcome.rejected,
+          },
+        ),
+      );
     }
   }
 
@@ -728,7 +770,7 @@ export class PortSupervisor {
     }
     if (this.#state.kind === 'failed' || this.#state.kind === 'awaiting-permission') {
       this.#backoff.reset();
-      this.#state = { kind: 'idle' };
+      this.#enterState({ kind: 'idle' });
       this.#logDeviceConnected();
       void this.#connect();
     }
@@ -796,7 +838,7 @@ export class PortSupervisor {
     // number in an error's context, in a log record and in a report is the same attempt.
     const attempt = this.#backoff.attempt;
     this.#nextAttemptAt = undefined;
-    this.#state = { kind: 'listing' };
+    this.#enterState({ kind: 'listing' });
     this.#setStatus(SerialBrokerStatus.Connecting);
 
     try {
@@ -894,7 +936,7 @@ export class PortSupervisor {
       // Not an error: the user has never granted this device, or has taken the permission
       // away. The application has to ask, from a gesture, and until then there is nothing to
       // retry.
-      this.#state = { kind: 'awaiting-permission' };
+      this.#enterState({ kind: 'awaiting-permission' });
       this.#setStatus(SerialBrokerStatus.AwaitingPermission);
     }
     return port;
@@ -933,7 +975,7 @@ export class PortSupervisor {
     this.#foundPort = port;
     this.#foundPortDetached = false;
     const opened = Promise.resolve(port.open(this.#openOptions()));
-    this.#state = { kind: 'opening', port, opened };
+    this.#enterState({ kind: 'opening', port, opened });
 
     try {
       // An open that outlives its deadline is closed by the loss handler, or by `stop()`, once it
@@ -1001,7 +1043,7 @@ export class PortSupervisor {
         this.#deliver(data, decoder);
       }),
     };
-    this.#state = state;
+    this.#enterState(state);
 
     // The stability window is a duration, so it is measured on the monotonic clock (ADR-0012);
     // `openedAt` is a moment an operator reads, so it is the wall clock.
@@ -1178,7 +1220,7 @@ export class PortSupervisor {
    */
   #giveUp(reason: string): void {
     this.#nextAttemptAt = undefined;
-    this.#state = { kind: 'failed' };
+    this.#enterState({ kind: 'failed' });
     this.logger.warn('connection attempt failed and will not be retried', {
       configName: this.configuration.name,
       event: 'supervisor.gave-up',
@@ -1206,7 +1248,7 @@ export class PortSupervisor {
 
     if (this.#backoff.hasExhausted(this.configuration.connection)) {
       this.#nextAttemptAt = undefined;
-      this.#state = { kind: 'failed' };
+      this.#enterState({ kind: 'failed' });
       this.#setStatus(SerialBrokerStatus.Failed);
       this.#report(
         new SerialBrokerError(
@@ -1246,7 +1288,7 @@ export class PortSupervisor {
     }, delayMs);
 
     this.#nextAttemptAt = this.environment.clock.now() + delayMs;
-    this.#state = { kind: 'reconnecting', timer };
+    this.#enterState({ kind: 'reconnecting', timer });
     this.#setStatus(SerialBrokerStatus.Reconnecting);
   }
 

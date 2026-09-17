@@ -138,7 +138,7 @@ describe.each(TRANSPORT_MODES)('diagnostics observer (%s)', (transport) => {
     expect(reportOf(snapshot, tab)).toMatchObject({
       status: SerialBrokerStatus.Reconnecting,
       // What the platform's NetworkError on open() maps to (owner/serial-errors.ts).
-      lastErrorCode: SerialBrokerErrorCode.DEVICE_DISCONNECTED,
+      lastErrorCode: SerialBrokerErrorCode.OPEN_FAILED,
       connection: { state: 'reconnecting', attempt: 2, nextAttemptAt: scheduledAt + 250 },
     });
   });
