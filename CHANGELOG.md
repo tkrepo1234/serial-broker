@@ -35,8 +35,8 @@ different protocol versions do not coordinate with each other. It is noted whene
   rules that matter - in about 3 000 tokens.
 
 - **An icon**, `docs/icon.svg`: one serial port with three in it, the tabs that share it.
-  One colour, no background. It is in the README, beside the name in the documentation, in the
-  browser tab and in the OpenUI5 terminal's title bar.
+  One colour, no background. It is beside the name in the documentation, in the browser tab and
+  in the OpenUI5 terminal's title bar.
 
 ### Changed
 

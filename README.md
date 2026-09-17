@@ -1,5 +1,3 @@
-<img src="./docs/icon.svg" alt="" width="72" height="72" align="right" />
-
 # serial-broker
 
 One serial port, every tab.
