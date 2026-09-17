@@ -6,8 +6,8 @@ Work that is agreed but not yet started. Ordered by when it becomes relevant, no
 
 ## Release readiness (Tim, 2026-09-15)
 
-**No tag until Tim says so.** The code base is brought into order first and the release is made
-ready; the version and the date go into the changelog when Tim decides.
+The code base was brought into order first and the release made ready; Tim gave the word on
+2026-09-17.
 
 - [x] The changelog describes the current state rather than a path to it: one unreleased version,
       every statement checked against `main`.
@@ -37,8 +37,9 @@ ready; the version and the date go into the changelog when Tim decides.
       error. The notes step, run on a copy whose changelog section was named, printed 77 lines
       without a relative link. The workflow's own dry run cannot pass before that section exists,
       by design; it is step 3 of CONTRIBUTING's "Releasing".
-- [ ] At release: move Unreleased into `## [x.y.z] - date`, set `package.json` to it, run
-      `npm run release:check`, then tag. Tim's call.
+- [x] Released as `0.1.0-alpha.1` on 2026-09-17, on Tim's word: the changelog's section named and
+      dated, `npm run release:check` passed, the tag pushed. Step 18 of the manual test plan, the one
+      step left by hand, was not run for it.
 
 ## Usability findings of the cold read (2026-09-15)
 

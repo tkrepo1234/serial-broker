@@ -10,6 +10,8 @@ different protocol versions do not coordinate with each other. It is noted whene
 
 ## [Unreleased]
 
+## [0.1.0-alpha.1] - 2026-09-17
+
 The first release. Nothing has been published under this name, so this section describes what the
 library is rather than what changed: **wire protocol version 1**, **storage version 1**.
 
