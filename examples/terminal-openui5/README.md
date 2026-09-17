@@ -4,8 +4,6 @@ A serial terminal as a SAP OpenUI5 application in the `sap_horizon` theme: open 
 the device says, type back. The controls and the look of a Fiori application - and a build that **runs from a folder opened as a file**, with no web
 server and no internet.
 
-![Connect with the settings of the last time, a device that answers in colour, text and hex, the dark theme, Disconnect.](./terminal.gif)
-
 Classic UI5 JavaScript: `sap.ui.define`, an XML view, a controller, fragments for the dialogs. No
 transpile step; the files under `webapp/` are the files the browser loads.
 
