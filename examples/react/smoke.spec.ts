@@ -30,6 +30,7 @@ const UI: ExampleUi = {
     JSON.parse(readFileSync(new URL('./example.json', import.meta.url), 'utf8')) as ExampleManifest,
   ),
   errorRemediation: '#error-remediation',
+  release: '#release',
   setUpAgain: '#restart',
 };
 

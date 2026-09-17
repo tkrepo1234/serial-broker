@@ -17,6 +17,7 @@ import { ExampleTab, installLoopback, USUAL_IDS, type ExampleUi } from '../smoke
 const UI: ExampleUi = {
   ...USUAL_IDS,
   url: 'http://localhost:8153/',
+  release: '#release',
   setUpAgain: '#setup',
 };
 

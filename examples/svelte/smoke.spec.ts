@@ -16,6 +16,7 @@ const UI: ExampleUi = {
   ...USUAL_IDS,
   url: 'http://localhost:8157/',
   errorRemediation: '#error-remediation',
+  release: '#release',
   setUpAgain: '#restart',
 };
 

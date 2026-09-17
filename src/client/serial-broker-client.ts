@@ -467,14 +467,6 @@ export class SerialBrokerClient {
   }
 
   /**
-   * Forgets a remembered configuration, unless another tab still runs it with `remember: true`.
-   *
-   * The entry is one per name for the whole origin. Forgetting it while another tab runs the
-   * configuration would cost that tab the configuration on its next reload (ADR-0033).
-   * Reached by `release(name, { forget: true })` and by setting the name up with `remember: false`;
-   * a name with nothing stored under it is left as it is rather than reported.
-   */
-  /**
    * Does what `forget` and `forgetDevice` ask for, for a name this context does not run.
    *
    * Both stores are the origin's, not this tab's: the entry under the name, and the browser's
@@ -495,6 +487,14 @@ export class SerialBrokerClient {
     }
   }
 
+  /**
+   * Forgets a remembered configuration, unless another tab still runs it with `remember: true`.
+   *
+   * The entry is one per name for the whole origin. Forgetting it while another tab runs the
+   * configuration would cost that tab the configuration on its next reload (ADR-0033).
+   * Reached by `release(name, { forget: true })` and by setting the name up with `remember: false`;
+   * a name with nothing stored under it is left as it is rather than reported.
+   */
   async #forgetUnlessRunElsewhere(name: string): Promise<void> {
     // Let go first: this tab's own hold would otherwise be the one found.
     await this.#letGoOfHold(name);

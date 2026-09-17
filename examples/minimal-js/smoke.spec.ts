@@ -17,9 +17,7 @@ const UI: ExampleUi = {
   url: 'http://localhost:8159/',
   // The page keeps to the usual ids. It offers neither releasing nor an error code of its own -
   // it is the smallest page that works, and the TypeScript sibling is where those are shown - so
-  // these two selectors are named for the shape of ExampleUi and never used.
-  release: '#release',
-  setUpAgain: '#restart',
+  // it names no release and no set-up-again button, and `ExampleUi` asks for neither.
 };
 
 test('connects from a click, echoes a line and stays quiet', async ({ context }) => {

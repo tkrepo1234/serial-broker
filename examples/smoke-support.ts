@@ -36,9 +36,16 @@ export interface ExampleUi {
   readonly errorCode: string;
   /** The remediation shown with an error, where the example shows one. */
   readonly errorRemediation?: string;
-  readonly release: string;
-  /** The button that sets a released configuration up again. */
-  readonly setUpAgain: string;
+  /**
+   * The button that releases the configuration, where the example has one.
+   *
+   * Optional, like the remediation above: three examples deliberately have no release button, and
+   * a required field made them name ids their pages have never carried. A selector that matches
+   * nothing reads like coverage and is not - it passes only for as long as no test clicks it.
+   */
+  readonly release?: string;
+  /** The button that sets a released configuration up again, where the example has one. */
+  readonly setUpAgain?: string;
   /** Whether a response of 400 or above counts as noise too. */
   readonly failedRequestsAreNoise?: boolean;
 }
@@ -53,7 +60,8 @@ export const USUAL_IDS = {
   received: '#received',
   error: '#error',
   errorCode: '#error-code',
-  release: '#release',
+  // No `release` here. Nine of the twelve examples have that button and name it themselves; a
+  // default handed it to the three that do not, where it matched nothing and looked deliberate.
 } as const;
 
 /** The manifest the root reads, so that an example's port lives in one place. */
@@ -185,12 +193,19 @@ export class ExampleTab {
    * @param whileReleased - What else the example shows while the configuration is released.
    */
   async releaseAndSetUpAgain(whileReleased?: () => Promise<void>): Promise<void> {
-    await this.locator(this.ui.release).click();
+    const { release, setUpAgain } = this.ui;
+    if (release === undefined || setUpAgain === undefined) {
+      throw new Error(
+        'releaseAndSetUpAgain needs both `release` and `setUpAgain` in the example UI; this ' +
+          'example declares no such buttons.',
+      );
+    }
+    await this.locator(release).click();
     await this.expectStatus('released');
     await expect(this.locator(this.ui.sendButton)).toBeDisabled();
     await whileReleased?.();
 
-    await this.locator(this.ui.setUpAgain).click();
+    await this.locator(setUpAgain).click();
     await this.expectStatus('open');
   }
 

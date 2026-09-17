@@ -26,6 +26,7 @@ const UI: ExampleUi = {
   statusIn: 'data-status',
   received: '#received li[data-kind="received"]',
   error: '#error-strip',
+  release: '#release',
   setUpAgain: '#setup-again',
   failedRequestsAreNoise: true,
 };

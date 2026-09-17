@@ -14,8 +14,9 @@ import { ExampleTab, installLoopback, USUAL_IDS, type ExampleUi } from '../smoke
 const UI: ExampleUi = {
   ...USUAL_IDS,
   url: 'http://localhost:8151/',
-  release: '#release',
-  setUpAgain: '#restart',
+  // No release and no "set up again": this page connects on load and stays. `USUAL_IDS` carries
+  // the defaults for the fields the shared helper needs; naming ids that the page has never had
+  // only looks like coverage, and passes because no test of this example reaches for them.
 };
 
 test('connects on load, echoes a line, and survives the device being unplugged', async ({

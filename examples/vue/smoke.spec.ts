@@ -33,6 +33,7 @@ const UI: ExampleUi = {
   // The write is listed as sent from this tab, and the loopback's echo as received from the device.
   received: '#received li[data-direction="received"]',
   errorRemediation: '#error-remediation',
+  release: '#release',
   setUpAgain: '#setup-again',
 };
 

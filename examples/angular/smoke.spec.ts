@@ -30,6 +30,7 @@ const UI: ExampleUi = {
   ),
   received: '#received li[data-direction="in"]',
   errorRemediation: '#error-remediation',
+  release: '#release',
   setUpAgain: '#restart',
   failedRequestsAreNoise: true,
 };

@@ -16,7 +16,8 @@ const UI: ExampleUi = {
   ...USUAL_IDS,
   url: `${ORIGIN}/`,
   sendButton: '#send',
-  setUpAgain: '#setup-again',
+  release: '#release',
+  setUpAgain: '#retry',
 };
 
 /**
