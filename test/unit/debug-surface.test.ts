@@ -27,7 +27,6 @@ import {
 } from '../../debug/src/library-settings.js';
 import {
   buildConfigurationViews,
-  DISCONNECT_ACTIONS,
   isWithdrawn,
   tabRole,
   thisPageState,
@@ -90,7 +89,10 @@ describe('debugging surface: configurations', () => {
 
     expect(view?.owner?.clientId).toBe('c-2');
     expect(view?.isSetUpHere).toBe(false);
-    expect([...(view?.actions ?? [])]).toEqual(['connect']);
+    // Connecting is what this page can do with it, and editing and disconnecting are offered for
+    // every configuration it shows: disconnecting is where forgetting is asked for, which is about
+    // what the browser keeps rather than about this page.
+    expect([...(view?.actions ?? [])].sort()).toEqual(['connect', 'disconnect', 'edit']);
     expect(view?.settings).toEqual(sampleReport().configurations[0]?.settings);
   });
 
@@ -200,7 +202,9 @@ describe('debugging surface: configurations', () => {
 
     expect(view).toMatchObject({ name: 'Scale', status: undefined, isRemembered: true, settings });
     expect(view?.tabs).toEqual([]);
-    expect([...(view?.actions ?? [])]).toEqual(['connect']);
+    // Nobody runs it, and it can still be edited and dropped: an entry the browser remembers must
+    // not have to be connected to before it can be forgotten.
+    expect([...(view?.actions ?? [])].sort()).toEqual(['connect', 'disconnect', 'edit']);
   });
 
   it('flags tabs that run the same configuration with different settings', () => {
@@ -792,41 +796,53 @@ describe('debugging surface: formatting', () => {
 });
 
 describe('debugging surface: stopping a configuration', () => {
-  it('offers three ways to stop, of which only two forget anything', () => {
-    // Disconnecting keeps the configuration listed, with Connect beside it: the page must not
-    // delete what the operator is about to reconnect to (ADR-0033).
-    expect(DISCONNECT_ACTIONS).toEqual({
-      menuDisconnect: {},
-      menuForgetConfiguration: { forget: true },
-      menuForgetEverything: { forget: true, forgetDevice: true },
-    });
-  });
-
-  it('has a menu item for each of them, and offers no other way to stop', async () => {
-    // The detail view wires one listener per entry above and fails loudly for a part the markup
-    // does not have. This is the other direction: a button the list does not know would call
-    // nothing, and silently do nothing when it was clicked.
+  it('offers connecting, editing and disconnecting as buttons, not hidden in a menu', async () => {
+    // What an operator does to a configuration must be visible while it is selected. Forgetting
+    // used to be reachable only through a ⋯ menu, and only for a configuration this page was
+    // connected to - so dropping a remembered entry meant connecting to it first.
     const html = await import('node:fs/promises').then(
       async (fs) => await fs.readFile('debug/public/index.html', 'utf8'),
     );
 
+    const actions = /<div class="detail-actions">([\s\S]*?)<div data-part="menu"/.exec(html)?.[1];
+    for (const part of ['connect', 'choose', 'edit', 'disconnect']) {
+      expect(actions).toContain(`data-part="${part}"`);
+    }
+
+    // What is left in the menu is the rare case, and nothing that stops or forgets.
     const menu = /<div data-part="menu"([\s\S]*?)<\/div>/.exec(html)?.[1] ?? '';
-    const parts = [...menu.matchAll(/data-part="([^"]*)"/g)].map((button) => button[1]);
-
-    expect(parts.filter((part) => part !== 'menuChooseAgain' && part !== 'menuEdit')).toEqual(
-      Object.keys(DISCONNECT_ACTIONS),
-    );
+    const inMenu = [...menu.matchAll(/data-part="([^"]*)"/g)].map((button) => button[1]);
+    expect(inMenu).toEqual(['menuChooseAgain']);
   });
 
-  it('no longer tells the operator that disconnecting also forgets the configuration', async () => {
+  it('asks what to forget in a dialog, with nothing ticked to begin with', async () => {
     const html = await import('node:fs/promises').then(
       async (fs) => await fs.readFile('debug/public/index.html', 'utf8'),
     );
 
-    const help = /<div id="help-actions"([\s\S]*?)<\/div>\s*<div id="help-send"/.exec(html)?.[1];
+    const dialog = /<dialog id="forgetDialog">([\s\S]*?)<\/dialog>/.exec(html)?.[1] ?? '';
 
-    expect(help).toContain('Disconnect and forget the configuration');
+    // Two decisions, each its own box, and `checked` on neither: the plain answer forgets nothing.
+    expect(dialog).toContain('data-part="forget"');
+    expect(dialog).toContain('data-part="forgetDevice"');
+    expect(dialog).not.toContain('checked');
+  });
+
+  it('tells the operator that disconnecting forgets nothing on its own', async () => {
+    const html = await import('node:fs/promises').then(
+      async (fs) => await fs.readFile('debug/public/index.html', 'utf8'),
+    );
+
+    // Read as the operator reads it: the formatter wraps this markup wherever the line fills up,
+    // and a sentence split across two lines is the same sentence on the screen.
+    const help = /<div id="help-actions"([\s\S]*?)<\/div>\s*<div id="help-send"/
+      .exec(html)?.[1]
+      ?.replace(/\s+/g, ' ');
+
+    expect(help).toContain('asks what else should go');
     expect(help).toContain('a disconnect is not a deletion');
+    expect(help).toContain('Forget the configuration');
+    expect(help).toContain('Forget the device');
   });
 });
 

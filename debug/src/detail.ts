@@ -21,7 +21,6 @@ import {
   tabLabel,
 } from './format.js';
 import {
-  DISCONNECT_ACTIONS,
   isWithdrawn,
   tabRole,
   thisPageState,
@@ -38,6 +37,15 @@ export interface DetailHost {
    * browser remembers (`forget`), its permission for the device (`forgetDevice`), both or neither.
    */
   disconnect(name: string, options: ReleaseOptions): void;
+  /**
+   * Asks what should be forgotten, and disconnects with the answer.
+   *
+   * Stopping here and letting go of what the browser keeps are two decisions, and the second one
+   * is the rarer and the less reversible, so it is asked rather than offered as a menu of
+   * combinations. A configuration this page is not connected to has nothing to disconnect from
+   * and is still worth asking about: forgetting is about the browser's stores, not this tab.
+   */
+  askToDisconnect(name: string): void;
   /**
    * Must call `requestAccess` synchronously: the browser only shows the picker in a click. With
    * `chooseAgain`, an auto-mode configuration lets the user choose a different device.
@@ -80,9 +88,10 @@ export class ConfigurationDetail {
     readonly message: HTMLElement;
     readonly connect: HTMLButtonElement;
     readonly choose: HTMLButtonElement;
+    readonly edit: HTMLButtonElement;
+    readonly disconnect: HTMLButtonElement;
     readonly menuButton: HTMLButtonElement;
     readonly menu: HTMLElement;
-    readonly menuEdit: HTMLButtonElement;
     readonly menuChooseAgain: HTMLButtonElement;
     readonly tabs: HTMLElement;
     readonly tabsTable: HTMLElement;
@@ -126,9 +135,10 @@ export class ConfigurationDetail {
       message: part('message'),
       connect: part('connect') as HTMLButtonElement,
       choose: part('choose') as HTMLButtonElement,
+      edit: part('edit') as HTMLButtonElement,
+      disconnect: part('disconnect') as HTMLButtonElement,
       menuButton: part('menuButton') as HTMLButtonElement,
       menu: part('menu'),
-      menuEdit: part('menuEdit') as HTMLButtonElement,
       menuChooseAgain: part('menuChooseAgain') as HTMLButtonElement,
       tabs: part('tabs'),
       tabsTable: part('tabsTable'),
@@ -224,26 +234,25 @@ export class ConfigurationDetail {
         host.edit(name, settings);
       }
     };
-    parts.menuEdit.addEventListener('click', fromMenu(edit));
     parts.menuChooseAgain.addEventListener(
       'click',
       fromMenu(() => {
         host.chooseDevice(name, true);
       }),
     );
-    // One listener per way of stopping, from the one list the markup is checked against.
-    for (const [partName, options] of Object.entries(DISCONNECT_ACTIONS)) {
-      part(partName).addEventListener(
-        'click',
-        fromMenu(() => {
-          host.disconnect(name, options);
-        }),
-      );
-    }
-    parts.editSettings.addEventListener('click', () => {
+    // Stopping and forgetting are two decisions, so the button asks the second one rather than
+    // offering a menu of combinations: the page opens a dialog, and what it answers is what
+    // `release()` is given.
+    parts.disconnect.addEventListener('click', () => {
       this.#clearMessage();
-      edit();
+      host.askToDisconnect(name);
     });
+    for (const button of [parts.edit, parts.editSettings]) {
+      button.addEventListener('click', () => {
+        this.#clearMessage();
+        edit();
+      });
+    }
 
     parts.send.addEventListener('submit', (event) => {
       event.preventDefault();
@@ -285,11 +294,15 @@ export class ConfigurationDetail {
     parts.status.textContent = statusLabel(view.status);
     parts.summary.textContent = summaryLine(view);
 
+    // Connect only where there is nothing to connect to yet; editing and disconnecting are
+    // offered for every configuration this page shows, connected or not - disconnecting because
+    // that is where forgetting is asked for, which has nothing to do with this tab.
     parts.connect.hidden = !actions.has('connect');
     parts.choose.hidden = !actions.has('choose-device');
-    parts.menuButton.hidden = !actions.has('disconnect');
-    parts.menuEdit.hidden = !actions.has('edit');
+    parts.edit.hidden = !actions.has('edit');
+    parts.disconnect.hidden = !actions.has('disconnect');
     parts.menuChooseAgain.hidden = !actions.has('choose-again');
+    parts.menuButton.hidden = !actions.has('choose-again');
     parts.editSettings.hidden = !actions.has('edit');
     if (parts.menuButton.hidden && parts.menu.matches(':popover-open')) {
       parts.menu.hidePopover();

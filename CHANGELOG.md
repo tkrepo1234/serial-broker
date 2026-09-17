@@ -112,6 +112,13 @@ Remembered configurations moved from **storage version 1 to 2** and are not migr
 - **Eleven example applications**, each with a README, a fixed port and a Playwright smoke test
   against a Web Serial stand-in: `minimal`, `multi-tab-dashboard`, `exclusive`, `no-bundler`,
   `openui5`, `react`, `vue`, `svelte` and `angular` (`npm run test:examples`, in CI).
+- **The debugging surface offers _Connect_, _Edit settings…_ and _Disconnect…_ as buttons**, for
+  whichever configuration is selected, instead of hiding editing and every way of stopping behind a
+  ⋯ menu. _Connect_ appears only where there is nothing connected yet. _Disconnect…_ then asks what
+  else should go - the remembered configuration, the browser's permission for the device, both or
+  neither - with nothing ticked, so the plain answer forgets nothing. It is offered for a
+  configuration this page is not using too: forgetting is about what the browser keeps, and used to
+  require connecting to an entry just to be allowed to drop it.
 - **`release(name, { forget: true })` now forgets a configuration this tab has not set up.** It
   used to return without doing anything, so a page listing what the browser remembers - the
   debugging surface does - could only drop an entry by connecting to it first, which is an odd

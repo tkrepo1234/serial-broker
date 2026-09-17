@@ -27,6 +27,7 @@ import { formValuesForChosenDevice } from './chosen-port.js';
 import { ConfigurationDetail, type DetailHost } from './detail.js';
 import { byId, element } from './dom.js';
 import { EventLog } from './event-log.js';
+import { ForgetDialog } from './forget-dialog.js';
 import {
   describeError,
   describeOwnershipLocks,
@@ -187,6 +188,10 @@ const host: DetailHost = {
       await requireClient().release(name, options);
     });
   },
+  askToDisconnect(name) {
+    chooseMessage.clear();
+    forgetDialog.open(name, requireClient().exists(name));
+  },
   chooseDevice(name, chooseAgain) {
     chooseMessage.clear();
     const detail = details.get(name)?.detail;
@@ -219,6 +224,14 @@ const host: DetailHost = {
     });
   },
 };
+
+// Asked by _Disconnect_, and answered by the same call the ⋯ menu's three entries used to make.
+const forgetDialog = new ForgetDialog(
+  byId('forgetDialog') as HTMLDialogElement,
+  (name, options) => {
+    host.disconnect(name, options);
+  },
+);
 
 const dialog = new SetupDialog(byId('setupDialog') as HTMLDialogElement, async (request) => {
   const page = requireClient();

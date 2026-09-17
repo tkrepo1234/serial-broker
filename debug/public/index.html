@@ -336,26 +336,28 @@
           Changes the settings this page uses: it disconnects and connects again with the new ones.
           Other tabs keep theirs.
         </dd>
-        <dt>Disconnect</dt>
+        <dt>Disconnect…</dt>
         <dd>
-          Stops using the configuration in this page, and nothing else. Other tabs carry on; if this
-          page held the port, another tab takes it over. The configuration stays in the list, with
-          <b>Connect</b> to start it here again, because this browser goes on remembering it and
-          keeps its permission for the device — a disconnect is not a deletion.
+          Stops using the configuration in this page, and asks what else should go. Other tabs carry
+          on; if this page held the port, another tab takes it over. On its own it forgets nothing:
+          the configuration stays in the list, with <b>Connect</b> to start it here again, because
+          this browser goes on remembering it and keeps its permission for the device — a disconnect
+          is not a deletion. It is offered for a configuration this page is not using too, because
+          what the dialog asks about is what the browser keeps, not what this page does.
         </dd>
-        <dt>Disconnect and forget the configuration</dt>
+        <dt>Forget the configuration</dt>
         <dd>
-          The same, and also removes the configuration this browser remembers under the name, so it
-          is gone after a reload and your application's <code>restore()</code> no longer brings it
-          back. It is one entry for the whole site, so it is removed only once no other page runs
+          Ticked in that dialog: removes the configuration this browser remembers under the name, so
+          it is gone after a reload and your application's <code>restore()</code> no longer brings
+          it back. It is one entry for the whole site, so it is removed only once no other page runs
           the configuration with <code>remember</code>, your application's included. The permission
           for the device is kept.
         </dd>
-        <dt>Disconnect, forget the configuration and the device</dt>
+        <dt>Forget the device</dt>
         <dd>
-          The same, and also revokes this browser's permission for the device, so the next
-          connection asks for the port again. Nothing about the configuration is left in this
-          browser.
+          Ticked in that dialog: revokes this browser's permission for the device, so the next
+          connection asks for the port again. With both ticked, nothing about the configuration is
+          left in this browser.
         </dd>
       </dl>
     </div>
@@ -409,6 +411,8 @@
           <div class="detail-actions">
             <button data-part="connect" type="button">Connect</button>
             <button data-part="choose" type="button">Choose device…</button>
+            <button data-part="edit" type="button" class="secondary">Edit settings…</button>
+            <button data-part="disconnect" type="button" class="secondary">Disconnect…</button>
             <button
               data-part="menuButton"
               type="button"
@@ -422,15 +426,6 @@
               <button data-part="menuChooseAgain" type="button" role="menuitem">
                 Choose a different device…
               </button>
-              <button data-part="menuEdit" type="button" role="menuitem">Edit settings…</button>
-              <button data-part="menuDisconnect" type="button" role="menuitem">Disconnect</button>
-              <button data-part="menuForgetConfiguration" type="button" role="menuitem">
-                Disconnect and forget the configuration
-              </button>
-              <button data-part="menuForgetEverything" type="button" role="menuitem" class="danger">
-                Disconnect, forget the configuration and the device
-              </button>
-              <hr />
               <button type="button" role="menuitem" popovertarget="help-actions">
                 What do these do?
               </button>
@@ -905,6 +900,37 @@
           port reports <code>CONFIGURATION_CONFLICT</code> and shows <b>Failed</b>.
         </p>
       </div>
+    </dialog>
+
+    <!--
+      Asked after Disconnect, because the two are different decisions: stopping here, and letting
+      go of what this browser keeps. Both boxes start clear, so the plain answer forgets nothing.
+    -->
+    <dialog id="forgetDialog">
+      <form autocomplete="off">
+        <h2>Disconnect <span data-part="name"></span></h2>
+        <p data-part="note" class="hint"></p>
+        <label class="check">
+          <input data-part="forget" type="checkbox" />
+          Forget the configuration this browser remembers under the name
+        </label>
+        <p class="hint">
+          Without this it stays listed, and connecting again needs no details and no prompt.
+        </p>
+        <label class="check">
+          <input data-part="forgetDevice" type="checkbox" />
+          Forget the device: revoke this browser's permission for it
+        </label>
+        <p class="hint">
+          Applies to every tab of this origin. The next connection opens the browser's port picker
+          again.
+        </p>
+        <p data-part="error" class="message error" role="alert" hidden></p>
+        <div class="actions">
+          <button data-action="cancel" type="button" class="secondary">Cancel</button>
+          <button data-part="submit" type="submit">Disconnect</button>
+        </div>
+      </form>
     </dialog>
 
     <script type="module" src="./debug.js"></script>
