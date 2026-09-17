@@ -97,9 +97,3 @@ the `onError` events and the log records to their limits - while a tab joining d
 still reaches `open`. `test/integration/multi-tab/write-backlog.test.ts` fills a port's queue;
 `test/integration/multi-tab/diagnostics-observer.test.ts` answers a collection under invented
 identities; `test/unit/bus-limits.test.ts` holds every size limit.
-
-## History
-
-- 2026-09-14: Accepted, with rates on the wall clock.
-- 2026-09-15: Logging once per key; the malformed-message and remote-error rates removed; rates
-  measured on the monotonic clock, as the code does.

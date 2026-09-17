@@ -5,6 +5,3 @@
 
 **Decision, as first recorded:** Tabs send a heartbeat every 15 seconds, the worker forgets a tab
 silent for three minutes, and a tab whose heartbeats go unanswered starts a new worker.
-
-**Trail:** Amended 2026-09-13 (tabs notice a worker that died) and 2026-09-15 (one liveness clock);
-superseded by ADR-0041, liveness through Web Locks, on 2026-09-15.

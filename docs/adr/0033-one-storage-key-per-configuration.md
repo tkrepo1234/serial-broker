@@ -148,17 +148,3 @@ that forgets nothing and the `restore()` that brings the configuration back, `fo
 another tab runs the configuration, the last release, a closed and a crashed tab,
 `releaseAll({ forget: true })`, `forgetDevice`, `forget` on a configuration with `remember: false`,
 and a setup racing a release.
-
-## History
-
-- 2026-09-12: Configurations remembered in one protocol-versioned key (ADR-0009).
-- 2026-09-13: A storage version of its own, migrating the old keys (ADR-0022).
-- 2026-09-14: Remembered while any tab runs it, by a shared lock (ADR-0027); one key per
-  configuration, version 2, older keys removed unread.
-- 2026-09-15: The option is `remember` (was `persist`); older keys are no longer removed. ADR-0022
-  and ADR-0027 folded in.
-- 2026-09-16: Releasing forgets nothing by default; `ReleaseOptions.forget` asks for it. A
-  disconnect is not a deletion - with one tab open, the old default deleted the configuration the
-  operator was about to reconnect to - and the application decides when something is forgotten. The
-  hold on a remembered entry is still let go by every release; only the `forget` path takes the
-  exclusive lock (ADR-0027).

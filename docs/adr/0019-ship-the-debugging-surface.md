@@ -113,11 +113,3 @@ auto mode by default, formatting, and the header controls against `SETUP_ACTION_
 was checked in Chromium against a build served from `dist/`: no `securitypolicyviolation` while the
 page is used, and an inline `<script>` added to the loaded page does not execute. The page itself is
 exercised by the manual test plan.
-
-## History
-
-- 2026-09-13: Accepted.
-- 2026-09-14: _Choose a device…_ derived a configuration from the chosen port, and the page gained
-  its own `Content-Security-Policy` (ADR-0034); the derivation moved into the library as auto mode
-  (ADR-0036).
-- 2026-09-15: The policy folded in from ADR-0034, whose derivation part is retired.

@@ -138,13 +138,3 @@ and nothing else.
 and `test/integration/multi-tab/hostile-bus.test.ts` (a forged claim diverts no write; a `hello` in a
 tab's name leaves it connected); the multi-context suite is parameterised over both transports, and
 `test/browser/transports.spec.ts` runs the fallback in a real browser.
-
-## History
-
-- 2026-09-12: Accepted - broker routing to `all`, `owner` or one participant; `BroadcastChannel`
-  fallback when `SharedWorker` is missing or throws (ADR-0007).
-- 2026-09-13: Fallback when the worker script fails to load, replaying what was sent (ADR-0007).
-- 2026-09-14: Identity on the worker bound to a secret (ADR-0028).
-- 2026-09-15: The broker routes to all participants and tracks no owner; the secret is removed
-  (ADR-0040). The fallback restates instead of replaying; `attach`, `detach`, `heartbeat` and
-  `goodbye` folded into `hello` (ADR-0041). ADR-0007 and ADR-0040 folded in.

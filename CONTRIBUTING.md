@@ -122,9 +122,10 @@ Every size has a `SERIAL_BROKER_EXTREME_*` variable; see
 5. Commit as [the git workflow](./docs/guidelines/git-workflow.md) describes: an imperative subject
    in plain words, no type prefix. The body explains _why_; the diff already shows _what_.
 6. Update `CHANGELOG.md` if the change is user-visible, and TSDoc on every touched export.
-7. Write an ADR if you made an architectural decision, or fold a changed decision into its
-   current ADR with a history line ([ADR-0001](./docs/adr/0001-record-architecture-decisions.md)),
-   and reference it from the code.
+7. Write an ADR if you made an architectural decision, or rewrite the current ADR to state the
+   decision as it now stands ([ADR-0001](./docs/adr/0001-record-architecture-decisions.md)), and
+   reference it from the code. A record says what holds today; what it used to say is in version
+   control, next to the change that moved it.
 
 ## Before a release
 

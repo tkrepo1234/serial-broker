@@ -113,10 +113,3 @@ to whoever waits. `navigator.locks` is exposed to workers in every browser that 
 and the harness conformance test that a terminated worker's lock is let go. In a real browser,
 `test/browser/failover.spec.ts` "the broker dies" terminates the `SharedWorker` and every tab is on a
 new one within the default wait, and the browser benchmark's `handover/crash`.
-
-## History
-
-- 2026-09-13: Heartbeats; forgetting silent tabs; tabs notice a dead worker (ADR-0021).
-- 2026-09-14: The worker found to end with the tab that started it (ADR-0037).
-- 2026-09-15: Accepted - liveness through Web Locks, superseding ADR-0021; `attach`, `detach`,
-  `heartbeat` and `goodbye` folded into `hello`. ADR-0021's context folded in.

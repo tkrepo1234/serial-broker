@@ -6,5 +6,3 @@
 **Decision, as first recorded:** The worker sends its `warn` and `error` records to the connected
 tabs as `worker-log`, and each tab logs them as the worker's events, within a budget of eight a
 minute.
-
-**Trail:** Amended 2026-09-15 (once per key, no budget); folded into ADR-0018 on 2026-09-15.

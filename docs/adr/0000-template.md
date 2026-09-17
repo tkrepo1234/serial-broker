@@ -32,8 +32,9 @@ rejected alternatives is a note, not a decision record.
 
 How we know this decision holds: which tests, which manual checks.
 
-## History
-
-One line per change to the decision, oldest first: `- YYYY-MM-DD: what changed (and the record it
-came from, if one was folded in).` A superseded record keeps only its title, status, date, the
-decision as first recorded in one sentence, and a one-line trail (ADR-0001).
+<!--
+A record states what holds today and nothing else: no history section, no amendments (ADR-0001).
+When the decision moves, rewrite the record; version control keeps what it used to say, next to
+the change that moved it. A superseded record keeps only its title, status, date and the decision
+as first recorded in one sentence.
+-->

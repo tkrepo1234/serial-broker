@@ -68,9 +68,3 @@ string matching on the message.
 Unit tests assert the mapping table, round-trip serialisation, cause chaining, and that every
 code has a non-empty remediation string. `test/integration/auto-reconnect.test.ts` asserts that
 `isRetryable` follows `connection.autoReconnect` in every tab.
-
-## History
-
-- 2026-09-12: Accepted.
-- 2026-09-15: `isRetryable` says whether the library recovers: a configuration with
-  `autoReconnect: false` reports lost connections and failed attempts with `false` (ADR-0010).

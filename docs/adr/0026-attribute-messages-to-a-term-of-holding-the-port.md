@@ -5,6 +5,3 @@
 
 **Decision, as first recorded:** Give every term of holding the port an identifier, address writes
 to a term, and end a succeeded term at its `owner-released` or after a one-second grace period.
-
-**Trail:** Amended by ADR-0030 on 2026-09-14 (a term is a Web Lock; the grace period is gone);
-folded into ADR-0030 on 2026-09-15.

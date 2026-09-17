@@ -219,20 +219,3 @@ before the deadline, and an issuer that closes or crashes before answering; `hos
 approvals forged on both transports; `test/integration/connection-regressions.test.ts`, "a device
 that stops taking writes"; and `test/browser/hardware/emulator.spec.ts`, which pins the measured
 browser behaviour so a Chromium that changes it fails.
-
-## History
-
-- 2026-09-12: Accepted - a new owner's claim decided the fate of in-flight writes.
-- 2026-09-14: Writes addressed to a term (ADR-0026); terms are Web Locks (ADR-0030); the waiting
-  writes bounded, `WRITE_QUEUE_FULL` (ADR-0031).
-- 2026-09-15: A write the device has not taken stays in flight, and a resolved `send()` means the
-  browser took the bytes (ADR-0038, folded in).
-- 2026-09-15: A write is never begun after its issuer's deadline - `write-request` carries
-  `remainingMs`, protocol version 14. A documentation review found writes rejected with
-  `started: false` written afterwards: from tabs with a shorter `writeTimeoutMs` than the holder's,
-  and, with equal settings, from writes held for a port or handed on after `NOT_CONNECTED`.
-- 2026-09-15: The tab that issued a write decides whether it begins - `write-ready` and
-  `write-approval` replace `write-started`, and `remainingMs` is gone; still protocol version 14,
-  which had not been released. Counted from receipt, the duration let a request that waited before
-  it was handled be begun after `started: false`; asking closes that, and the crash window of
-  at-most-once with it.

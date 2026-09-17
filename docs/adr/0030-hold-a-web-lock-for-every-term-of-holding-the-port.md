@@ -155,10 +155,3 @@ reproduces both handover defects with messages from the former owner held back, 
 `test/integration/multi-tab/hostile-bus.test.ts` posts forged claims, statuses, goodbyes, write
 results and device data as a script of the origin, including a goodbye with a request of the
 script's own queued on the real term's lock; `session-regressions.test.ts` covers a clean release.
-
-## History
-
-- 2026-09-14: Terms with identifiers and a one-second grace period (ADR-0026); the same day, terms
-  became Web Locks and the grace period was removed.
-- 2026-09-15: Term lock taken inside the election; one authorisation table, errors gated like data;
-  one flood bound; no `NOT_CONNECTED` round trip from a former holder. ADR-0026 folded in.

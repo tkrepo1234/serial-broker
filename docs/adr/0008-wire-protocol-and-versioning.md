@@ -102,11 +102,3 @@ modes; `test/unit/worker-script.test.ts` (a worker answers a `hello` in another 
 `test/unit/transports.test.ts`, `test/unit/fallback-transport.test.ts` and
 `test/unit/worker-transport-liveness.test.ts`; `test/integration/multi-tab/worker-script-fallback.test.ts`;
 and `test/browser/transports.spec.ts`, which serves a worker of another protocol version.
-
-## History
-
-- 2026-09-12: Accepted - versioned messages, lock and worker names; partition and report.
-- 2026-09-13: Version announced on an unversioned channel (ADR-0023); handshake frozen, with
-  fallback on a worker of another version (ADR-0024).
-- 2026-09-14: A tab that cannot fall back gives up on workers of another version (ADR-0024).
-- 2026-09-15: ADR-0023 and ADR-0024 folded in.

@@ -5,5 +5,3 @@
 
 **Decision, as first recorded:** `Clock` gains `monotonicNow()` for every duration; `now()` stays
 the wall clock for every moment that is shown or sent.
-
-**Trail:** Folded into ADR-0014 on 2026-09-15.

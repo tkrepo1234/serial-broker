@@ -60,9 +60,3 @@ compile time.
 
 Unit tests for the streaming decoder across chunk boundaries and across reconnects;
 scenario matrix row 15 for chunked writes.
-
-## History
-
-- 2026-09-12: Accepted.
-- 2026-09-15: A string is always encoded as UTF-8, and refused with another encoding configured
-  (was: encoded with the configured encoding).

@@ -128,14 +128,3 @@ random source and fake timers; `test/integration/reconnect.test.ts`, `auto-recon
 `non-retryable-failures.test.ts` and `connection-regressions.test.ts`;
 `test/integration/multi-tab/session-regressions.test.ts` for `setup()` retrying from any tab, in
 both transport modes.
-
-## History
-
-- 2026-09-12: Accepted.
-- 2026-09-13: Unplugged devices, device events, waiting for close and listing made precise.
-- 2026-09-14: Only retryable failures lead to another attempt.
-- 2026-09-15: `connection.autoReconnect`; `setup()` retries a failed configuration, from any tab.
-  Backoff formula stated as implemented (the first retry waits `initialDelayMs`); `listing`
-  reported as a state of its own.
-- 2026-09-15: With `autoReconnect: false`, a handover keeps a failed configuration `failed`, and the
-  errors of a lost connection or failed attempt carry `isRetryable: false`.

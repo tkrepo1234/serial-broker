@@ -62,8 +62,3 @@ Three things had to be settled first:
 
 `npm run docs` builds `docs/site/_build/html/` from a clean checkout with the environment created;
 the `docs` job in `.github/workflows/ci.yml` runs it on every push.
-
-## History
-
-- 2026-09-13: Accepted, with the site not yet built in CI.
-- 2026-09-15: CI builds the site (recorded; the job already existed).

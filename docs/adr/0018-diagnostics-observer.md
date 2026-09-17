@@ -127,11 +127,3 @@ application code.
 - `test/unit/worker-ports.test.ts` and `test/unit/transports.test.ts`: records go to every connected
   port, `debug` and `info` go nowhere, and a tab logs a forwarded record only from the broker.
 - `test/integration/encapsulation.test.ts`: the main entry point exports nothing diagnostic.
-
-## History
-
-- 2026-09-13: Accepted.
-- 2026-09-14: Answer rate and collection bounds (ADR-0031); the worker's warnings forwarded to the
-  tabs within a budget (ADR-0029).
-- 2026-09-15: A report is filed rather than validated in full; forwarding once per key, no budget.
-  ADR-0029 folded in.

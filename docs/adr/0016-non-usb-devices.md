@@ -5,6 +5,3 @@
 
 **Decision, as first recorded:** Make the device filter a union, adding `{ any: true }` for ports
 that report no USB identity.
-
-**Trail:** Amended by ADR-0036 (`nonUsb` and auto mode, 2026-09-14); folded into ADR-0036 on
-2026-09-15.

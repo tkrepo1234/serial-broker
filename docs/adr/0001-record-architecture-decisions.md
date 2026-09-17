@@ -22,20 +22,19 @@ We record every architectural decision as a numbered Architecture Decision Recor
 `docs/adr/`, using a MADR-derived [template](./0000-template.md). Code that exists because of a
 decision cites it (`// See ADR-0005.`). Numbers are never reused and never renumbered.
 
-**One current record per decision.** When a decision changes, the change is folded into its
-current record: the record is rewritten to state the decision as it now stands, with the rejected
-alternatives that still matter, and gains a one-line entry in its **History** section saying what
-changed and when. Amendments are not appended.
+**One current record per decision.** When a decision changes, the record is rewritten to state the
+decision as it now stands, with the rejected alternatives that still matter. Amendments are not
+appended, and a record carries no history of its own: only what holds today is written down, and
+what it used to say is in version control beside the change that moved it.
 
 **Superseded records are stubs.** When a record's decision is replaced by another record, merged
-into one, or retired, the old record keeps its number and its file and becomes a stub of about ten
-lines: `Status: Superseded by ADR-NNNN (date)`, the decision as first recorded in one sentence,
-and a one-line trail. Every citation of its number therefore still resolves, and leads forward to
-the current decision.
+into one, or retired, the old record keeps its number and its file and becomes a stub of a few
+lines: `Status: Superseded by ADR-NNNN (date)` and the decision as first recorded in one sentence.
+Every citation of its number therefore still resolves, and leads forward to the current decision.
 
-**The index shows what holds.** `docs/adr/README.md` lists the current records, and below them a
-short trail of the superseded ones and where each went. How the library works, rather than why,
-is described in the Internals chapter of the developer documentation.
+**The index shows what holds.** `docs/adr/README.md` lists the current records, and below them
+which number went where. How the library works, rather than why, is described in the Internals
+chapter of the developer documentation.
 
 ## Alternatives considered
 
@@ -46,8 +45,11 @@ is described in the Internals chapter of the developer documentation.
 - **A new record for every change, the old one superseded in full.** Clean for decisions that are
   replaced by a different mechanism, and still used for those. For a decision that is refined - a
   retry rule made precise, a limit adjusted - it scatters one decision across many numbers.
-- **Rewriting in place with no history.** Keeps the record current, but loses when and why the
-  decision moved, which is exactly what stops a reverted change from being made again.
+- **Keeping a history section in every record.** The rule this record first stated after
+  immutability was dropped. It records when and why a decision moved, which can stop a reverted
+  change from being made again - but it makes every record two documents, one of which nobody
+  maintains, and it invites a reader to weigh a superseded sentence against a current one. Only the
+  current state is guaranteed; version control holds the rest, with the change that caused it.
 - **Deleting superseded records.** Breaks every citation of their numbers in code and documentation.
 - **A single `ARCHITECTURE.md`.** Describes the current state and silently loses the rejected
   alternatives - the information that prevents someone re-litigating a decision.
@@ -67,16 +69,11 @@ is described in the Internals chapter of the developer documentation.
 - A stale record is worse than none, and a record that is rewritten can drift into half-truth.
   Mitigated by folding every change in the same pull request as the code, and by checking a
   record against `src/` whenever it is rewritten.
-- Rewriting loses the exact wording of an earlier state. The history line and the version control
-  history keep what changed.
+- Rewriting loses the exact wording of an earlier state, and with no history section the record
+  itself no longer says when it moved. Version control keeps both, next to the change that caused
+  them.
 
 ## Verification
 
 `docs/adr/README.md` lists every current record and every stub; the review checklist requires an
-ADR, or a history line in an existing one, for architectural changes.
-
-## History
-
-- 2026-09-12: Accepted, with records immutable once accepted.
-- 2026-09-15: Immutability replaced by the roll-up rule; amendments folded into current records,
-  superseded records reduced to stubs.
+ADR, or a rewritten one, for architectural changes.

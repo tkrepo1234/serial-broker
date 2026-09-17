@@ -92,8 +92,3 @@ decoder, so a character split across reads is decoded intact ([ADR-0015](./0015-
 a busy line is delivered at `maxWaitMs` ("delivers a line that never pauses at maxWaitMs, in every
 tab"); what was collected is
 delivered before a lost connection is reported.
-
-## History
-
-- 2026-09-12: Accepted - chunks delivered exactly as read, no buffering, no timing heuristics.
-- 2026-09-15: Received bytes collected until the line is quiet (was ADR-0039, folded in).

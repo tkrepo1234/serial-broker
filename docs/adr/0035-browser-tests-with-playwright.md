@@ -142,10 +142,3 @@ the broker is terminated), `transports.spec.ts`, `minified-entry.spec.ts` and
 under usbip-win2 0.9.8.0 on 2026-09-15; `emulator/test/` - descriptors, the wire format at the
 specification's byte offsets, unlink and hang, and the server over real TCP. Runs are recorded in
 [the manual test plan](../manual-test-plan.md).
-
-## History
-
-- 2026-09-13: USB/IP device emulator for testing without hardware (ADR-0017).
-- 2026-09-14: Accepted - browser suite and Arduino hardware tests.
-- 2026-09-15: The emulator as a second hardware target, verified under usbip-win2. ADR-0017 folded
-  in.

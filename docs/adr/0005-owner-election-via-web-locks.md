@@ -79,9 +79,3 @@ origin — the exact scope of the problem. The same property carries the tab lim
 
 Scenario matrix rows 5, 6, 7 and 16; `test/unit/election.test.ts`; the harness implements Web
 Locks FIFO semantics and abrupt context death, and has its own conformance tests.
-
-## History
-
-- 2026-09-12: Accepted.
-- 2026-09-15: The term lock is taken inside the election (ADR-0030); the lock name written with its
-  `v` prefix, as the code has it.

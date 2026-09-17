@@ -66,11 +66,3 @@ observedAt, lastErrorCode }` - the condition of the _connection_ and the device 
 `test/integration/encapsulation.test.ts` asserts the exact set of keys on every public return value
 and event payload, and that nothing diagnostic is exported from the main entry point, so an
 accidental leak fails the suite rather than shipping.
-
-## History
-
-- 2026-09-12: Accepted, with diagnostics only through the logger.
-- 2026-09-13: Operators see the mechanism through the diagnostics observer (ADR-0018); `queued`
-  added by the tab limit (ADR-0025).
-- 2026-09-14: `deviceKind` added to `getStatus()` (ADR-0036).
-- 2026-09-15: Key list and statuses brought up to date.

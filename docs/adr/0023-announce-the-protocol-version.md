@@ -6,5 +6,3 @@
 **Decision, as first recorded:** Every tab announces its protocol version on the frozen, unversioned
 channel `serial-broker/announcements`, so a mixed deployment is reported as
 `PROTOCOL_VERSION_MISMATCH`.
-
-**Trail:** Folded into ADR-0008 on 2026-09-15.

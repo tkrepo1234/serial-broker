@@ -5,5 +5,3 @@
 
 **Decision, as first recorded:** The broker tracks no owner and delivers what is meant for the tab
 holding the port to every participant; the identity secret of ADR-0028 is removed.
-
-**Trail:** Folded into ADR-0006 on 2026-09-15.

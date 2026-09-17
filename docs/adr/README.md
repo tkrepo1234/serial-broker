@@ -3,11 +3,12 @@
 Every architectural decision in this library is recorded here, using a
 [MADR](https://adr.github.io/madr/)-derived format ([template](./0000-template.md)).
 
-**One current record per decision** ([ADR-0001](./0001-record-architecture-decisions.md)). A decision
-that changes is folded into its current record, which gains a one-line history entry. A record whose
-decision was replaced, merged or retired keeps its number as a short stub pointing forward, so every
-citation in code (`// See ADR-0005.`) still resolves. How the library works, rather than why, is the
-Internals chapter of the developer documentation (`docs/site/internals.md`).
+**One current record per decision** ([ADR-0001](./0001-record-architecture-decisions.md)). A record
+states the decision as it stands today, with the alternatives that were rejected and why; a decision
+that changes is rewritten rather than amended, and what it used to say is left to version control. A
+record whose decision was replaced, merged or retired keeps its number as a short stub pointing
+forward, so every citation in code (`// See ADR-0005.`) still resolves. How the library works, rather
+than why, is the Internals chapter of the developer documentation (`docs/site/internals.md`).
 
 ## Current decisions
 

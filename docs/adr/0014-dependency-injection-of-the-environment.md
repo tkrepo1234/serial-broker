@@ -109,9 +109,3 @@ has its own conformance suite (`test/harness/harness-conformance.test.ts`, inclu
 `FakeClock.monotonicNow()` ignoring `jumpWallClock`). `test/integration/monotonic-time.test.ts`,
 `test/integration/multi-tab/browser-lifecycle.test.ts` and `test/unit/late-deadline.test.ts` hold
 durations to the monotonic clock. `scripts/check-dist.mjs` type-checks the published declarations.
-
-## History
-
-- 2026-09-12: Accepted.
-- 2026-09-14: Durations on a monotonic clock (ADR-0032); narrowed interfaces name no ambient type.
-- 2026-09-15: ADR-0032 folded in; environment listing brought up to date.

@@ -5,5 +5,3 @@
 
 **Decision, as first recorded:** The tab holding the port collects received chunks and delivers them
 once the line has been quiet for `receive.idleMs`, instead of chunk by chunk.
-
-**Trail:** Folded into ADR-0002 on 2026-09-15.

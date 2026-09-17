@@ -13,7 +13,7 @@ short sentences, no marketing language, no "simply"/"just"/"obviously".
 | **TSDoc in source**        | Developers via IDE and generated API docs       | Every exported symbol.                                                                                        |
 | **README.md**              | Someone deciding whether to use this            | Working example within the first screen.                                                                      |
 | **docs/site/internals.md** | Someone modifying the library                   | Explains the mechanism, not the API.                                                                          |
-| **docs/adr/**              | Future maintainers asking "why is it like this" | One current record per decision; a change is folded in with a History line (ADR-0001).                        |
+| **docs/adr/**              | Future maintainers asking "why is it like this" | One current record per decision, stating what holds today (ADR-0001).                                         |
 | **CHANGELOG.md**           | Upgraders                                       | Keep a Changelog format, every user-visible change.                                                           |
 | **docs/site/**             | Application developers                          | Chapters and examples, built by `npm run docs`, which fails on any warning; the example code is type-checked. |
 | **debug/**                 | Someone operating or testing a deployment       | Ships in `dist/debug/`; type-checked and linted.                                                              |
@@ -83,13 +83,12 @@ Format: MADR-derived, see [`0000-template.md`](../adr/0000-template.md).
 
 - One decision per record. Numbered sequentially, never renumbered.
 - **One current record per decision** ([ADR-0001](../adr/0001-record-architecture-decisions.md)).
-  A decision that changes is folded into its current record, which is rewritten to state the
-  decision as it now stands and gains a one-line entry under **History**. No amendments are
-  appended.
-- A record whose decision was replaced, merged into another or retired becomes a stub of about ten
-  lines - `Superseded by ADR-NNNN (date)`, the original decision in one sentence, a one-line trail -
-  and keeps its number and file, so citations still resolve.
-- `docs/adr/README.md` lists the current records and the superseded trail.
+  A decision that changes is rewritten to state the decision as it now stands. No amendments are
+  appended, and no record keeps a history of its own: what it used to say is in version control.
+- A record whose decision was replaced, merged into another or retired becomes a stub of a few
+  lines - `Superseded by ADR-NNNN (date)` and the original decision in one sentence - and keeps its
+  number and file, so citations still resolve.
+- `docs/adr/README.md` lists the current records and, below them, where each superseded number went.
 - Every ADR states what was **rejected** and why. An ADR without alternatives is a note, not
   a decision record.
 - Code that exists because of an ADR references it: `// See ADR-0005.`

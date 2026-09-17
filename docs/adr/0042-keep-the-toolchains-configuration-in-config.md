@@ -175,8 +175,3 @@ silent:
 `npm run docs` was not run: it needs the Python environment at `docs/.venv` (ADR-0020), which this
 working tree does not have. TypeDoc itself was run directly against `config/typedoc.json`, which is
 how its path resolution was established.
-
-## History
-
-- 2026-09-16: Accepted — eight of the root's nine tool configurations moved to `config/`;
-  `eslint.config.js`, the tsconfigs and `.editorconfig` stay where their tools search.

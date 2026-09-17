@@ -205,9 +205,3 @@ documented surface and is the only global the build defines; and a page that doe
 `npm run docs` was **not** run: it needs the Python environment at `docs/.venv` (ADR-0020), which
 this working tree does not have. This is why the source entry files were left where TypeDoc's
 configuration and the generated reference expect them.
-
-## History
-
-- 2026-09-16: Accepted — classic script builds of both entry points on one global each, the worker
-  still one file at one URL, `workerUrl` required there, and every published file named after the
-  package.

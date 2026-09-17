@@ -167,14 +167,3 @@ single granted port not taken); `test/integration/non-usb-devices.test.ts` and
 transport modes (resolution, adoption from the holder, remembered and restored resolutions, `setup()`
 on a later visit, conflict rules, two tabs choosing differently); `hostile-bus.test.ts` (a status
 naming a device for an invented term is not adopted); `test/unit/debug-surface.test.ts`.
-
-## History
-
-- 2026-09-12: USB vendor and product IDs, browser permission, `awaiting-permission` (ADR-0009).
-- 2026-09-12: `{ any: true }` for ports without USB identity (ADR-0016).
-- 2026-09-14: Accepted - `nonUsb`, auto mode, resolution shared through `status`.
-- 2026-09-15: `setup()` takes the remembered resolution; option renamed `remember`; the identity
-  secret no longer protects the holder's name (ADR-0006). ADR-0009 (identity and permission) and
-  ADR-0016 folded in.
-- 2026-09-15: `requestAccess(name, { chooseAgain: true })` chooses a different device in auto mode;
-  the tab holding the port switches to a different device it adopts, even while open.

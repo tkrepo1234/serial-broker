@@ -68,12 +68,3 @@ model is "one global environment per file" unless that environment is fully inje
 
 `npm run verify` runs format check, lint, type-check, tests with coverage gates, and build;
 `scripts/check-dist.mjs` checks the built entry points after every build.
-
-## History
-
-- 2026-09-12: Accepted, with two entry points and Playwright as a manual, future layer.
-- 2026-09-15: Brought up to date - three entry points with minified builds, declarations from
-  `tsc`, the browser suite in CI.
-- 2026-09-16: The worker script is minified too, with its source map published beside it: 48.9 KB
-  became 23.0 KB, and 13.4 KB became 8.0 KB gzipped, on every tab of every installation. The
-  classic script builds and the published file names are ADR-0043.

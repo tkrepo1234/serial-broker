@@ -87,10 +87,3 @@ is reached, and still nothing about which tab holds the port.
 a release and after a crash, the tab holding the port counted, writes while queued, a differing
 limit, validation, storage); `test/integration/multi-tab/hostile-bus.test.ts` posts a status with
 another limit.
-
-## History
-
-- 2026-09-13: Accepted.
-- 2026-09-14: The holder's limit is part of its term lock's name, and believed only from it
-  (ADR-0030).
-- 2026-09-15: The conflict is reported in the withdrawing tab only.

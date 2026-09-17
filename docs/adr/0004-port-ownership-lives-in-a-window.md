@@ -66,9 +66,3 @@ port in the term the write is addressed to performs the actual `writer.write()`
 ## Verification
 
 Scenario matrix rows 5, 6 and 7 in [testing.md](../guidelines/testing.md).
-
-## History
-
-- 2026-09-12: Accepted.
-- 2026-09-15: Writes from other tabs are no longer routed to the owner but performed by the holder
-  of the addressed term (ADR-0006, ADR-0030).
