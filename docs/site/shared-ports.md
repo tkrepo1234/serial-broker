@@ -215,10 +215,12 @@ Chromium freezes hidden tabs to save energy: a frozen tab runs nothing until it 
 It does not freeze a tab that uses Web Serial, or that holds a Web Lock another tab is waiting
 for — so neither the tab holding the port, nor a tab holding a place that another tab queues for
 under `maxTabs`, is frozen by that policy. Other tabs can be. A frozen tab hears nothing and sends
-nothing; its own writes wait. It still holds its Web Locks, so the worker keeps it. When it is shown
-again, its overdue timers
-and the messages that arrived meanwhile run in no defined order; as for a hidden tab, a deadline
-that is late handles the waiting messages first, so a write that succeeded meanwhile resolves.
+nothing. A write of its own that had begun goes on and its result waits for the tab; one that had not
+begun is not begun while the tab is frozen, and is rejected with `WRITE_TIMEOUT` and `started: false`
+once the `writeTimeoutMs` of the tab holding the port has passed. It still holds its Web Locks, so
+the worker keeps it. When it is shown again, its overdue timers and the messages that arrived
+meanwhile run in no defined order; as for a hidden tab, a deadline that is late handles the waiting
+messages first, so a write that succeeded meanwhile resolves.
 
 ### What serial-broker cannot know
 

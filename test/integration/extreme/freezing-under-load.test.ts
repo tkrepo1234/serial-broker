@@ -98,9 +98,15 @@ describe.skipIf(!IS_EXTREME).each(TRANSPORT_MODES)('tabs freezing under load (%s
           for (let second = 0; second < seconds; second += 1) {
             if (second === freezeAt) {
               for (const tab of freezing) {
-                // Issued, then frozen: the result arrives while the tab runs nothing.
+                // Let begin, then frozen: a frozen tab lets nothing begin (ADR-0013), so the
+                // device holds the write until the tab has said yes and runs nothing any more.
+                // The result then arrives while the tab is frozen.
+                device.pauseWrites();
                 frozenWrites.push(outcomeOf(tab.client.send('Reader', `from ${tab.id}`)));
+                await harness.settle();
                 tab.freeze();
+                device.resumeWrites();
+                await harness.settle();
               }
             }
             if (second === resumeAt) {
