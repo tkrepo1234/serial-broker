@@ -90,7 +90,7 @@ from a file, and the build takes each of them away:
 What the framework loads with a `<script>` or a `<link>` - a calendar, a lazily loaded part of a
 library, the theme - works from a file as it is. Those are six modules and the two themes' style
 sheets and fonts, found by opening every part of the built page with every request recorded; the
-other 2 600 files of OpenUI5 are never asked for and are not in `dist/`. The smoke test walks the
+rest of OpenUI5 is never asked for and is not in `dist/`. The smoke test walks the
 same path, so a framework update that needs one more module fails there and not on a station.
 
 One thing to know when several applications are opened from files on one machine: to the browser

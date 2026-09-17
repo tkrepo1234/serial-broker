@@ -1,11 +1,10 @@
 /**
  * Chromium's own serial port picker, answered the way a user answers it.
  *
- * The picker is browser UI: a page cannot see it, and the DevTools protocol has no command for it,
- * which is why steps 2 and 4a of the manual test plan stayed by hand. Windows UI Automation can
- * see it - it is what a screen reader uses - so `port-picker.ps1` finds the picker of the origin
- * under test in the browser started with the test's profile, and selects, connects or cancels.
- * Windows only, and only with a browser that shows a window.
+ * The picker is browser UI: a page cannot see it, and the DevTools protocol has no command for it.
+ * Windows UI Automation can see it - it is what a screen reader uses - so `port-picker.ps1` finds
+ * the picker of the origin under test in the browser started with the test's profile, and selects,
+ * connects or cancels. Windows only, and only with a browser that shows a window.
  */
 
 import { execFile } from 'node:child_process';

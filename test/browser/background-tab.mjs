@@ -2,11 +2,11 @@
  * A tab in the background, as an operator's station has them: hidden, with its timers throttled.
  *
  * `npm run test:background`. Step 7 of docs/manual-test-plan.md - "send from tab 3 while tab 1 is in
- * the background" - could not run in the Playwright suite: Playwright keeps every page it drives
+ * the background" - cannot run in the Playwright suite: Playwright keeps every page it drives
  * focused and visible, headed or not, so `document.visibilityState` stays `visible` and no timer is
- * throttled (measured 2026-09-17: 100 ticks of a 50 ms interval in 5 s, in every arrangement tried).
- * A browser driven over the DevTools protocol alone behaves as it does for a user: a tab another tab
- * covers is `hidden` and ticks once a second.
+ * throttled (100 ticks of a 50 ms interval in 5 s, in every arrangement). A browser driven over the
+ * DevTools protocol alone behaves as it does for a user: a tab another tab covers is `hidden` and
+ * ticks once a second.
  *
  * So this drives a headed browser over the protocol directly, against the same test server, harness
  * page and Web Serial stand-in as the browser suite. The tab holding the port goes to the
@@ -89,8 +89,8 @@ const browser = spawn(
     '--no-first-run',
     '--no-default-browser-check',
     // A fresh profile installs the machine's extensions a few seconds in, and Edge ends the origin's
-    // SharedWorker when one arrives (measured 2026-09-17): every tab then reports
-    // BROKER_UNAVAILABLE once and carries on with a new worker - step 29, not step 7.
+    // SharedWorker when one arrives: every tab then reports BROKER_UNAVAILABLE once and carries on
+    // with a new worker - step 28, not step 7.
     '--disable-extensions',
     'about:blank',
   ],

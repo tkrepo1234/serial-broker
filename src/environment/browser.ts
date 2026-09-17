@@ -60,7 +60,7 @@ export function isSupported(): boolean {
  * A page opened from a file is the exception. Its origin also serialises as `null`, but Chromium
  * gives the pages of `file:` one storage partition between them: Web Locks are granted and
  * contended across tabs, a `BroadcastChannel` reaches them, and `localStorage` is shared
- * (measured in Edge 153, 2026-09-17). Only a `SharedWorker` is refused there, and the
+ * (measured in Edge 153). Only a `SharedWorker` is refused there, and the
  * transport falls back from that by itself. So a folder on a station, opened with a double click,
  * is a supported place to run.
  */

@@ -354,5 +354,5 @@ real browser, with real or emulated hardware, and where every hardware run is re
 
 What the library costs is measured rather than tested: `bench/` runs the same scenarios - chunks
 from the device to ten tabs, writes from a tab, handovers, starts, an hour of traffic - on the
-harness and in a real browser, against expectations written down before the first measurement,
+harness and in a real browser, against expectations written down before anything is measured,
 and the [Performance](performance.md) chapter records the results [ADR-0037].

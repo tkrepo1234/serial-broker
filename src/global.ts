@@ -7,9 +7,8 @@
  * module - and it carries everything else the package exports as properties of itself:
  * `SerialBroker.SerialBrokerError`, `.SerialBrokerErrorCode`, `.SerialBrokerStatus`,
  * `.REMEDIATION`, `.isSerialBrokerError()`, `.hasCode()`, `.isSupported()`, `.PROTOCOL_VERSION`.
- * One name is
- * all a page has to know, and nothing else of this library is left on the page's globals. See
- * ADR-0043.
+ * One name is all a page has to know, and nothing else of this library is left on the page's
+ * globals. See ADR-0043.
  *
  * **This build cannot find its worker script.** A classic script has no `import.meta.url`
  * (scripts/import-meta-stand-in.mjs), so a page using it must call

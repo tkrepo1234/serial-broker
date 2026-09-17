@@ -1,15 +1,12 @@
 # ADR-0019: Ship the debugging surface in the package, as static content, under its own policy
 
 - **Status:** Accepted
-- **Date:** 2026-09-13
 
 ## Context
 
-The repository had a demo page in `examples/demo/`: a small form, a status line and a traffic log,
-built only for manual testing and never published. The requirement (2026-09-13) is different in
-kind: a debugging surface that ships **with the library**, exposes **every** setting and **every**
-piece of status, and is **content only** — whether and how it is reachable is the operator's
-decision.
+The people running a deployment need a debugging surface that ships **with the library**, exposes
+**every** setting and **every** piece of status, and is **content only** — whether and how it is
+reachable is the operator's decision.
 
 Four facts constrain it:
 
@@ -24,8 +21,8 @@ Four facts constrain it:
 
 ## Decision
 
-The demo is replaced by a debugging surface in `debug/`, built into **`dist/debug/`** by the normal
-build and therefore published with the package. It is **static content**: nothing in the library
+The debugging surface lives in `debug/` and is built into **`dist/debug/`** by the normal build, and
+therefore published with the package. It is **static content**: nothing in the library
 serves it, links to it or loads it, and the package's `exports` map `./debug/*` only so a bundler
 can resolve its files.
 
@@ -62,14 +59,13 @@ can resolve its files.
 
 ## Alternatives considered
 
-- **Keep it in the repository only.** Then the people it is for — operators of a deployment — do
-  not have it. Rejected; that is the requirement.
+- **Keep it in the repository only.** Then the people it is for — operators of a deployment — do not have it. Rejected.
 - **A separate package** (`serial-broker-debug`). Versioning it against the library adds a failure
   mode — a debug page on another protocol version than the application sees nobody — for no
   benefit, since the files are small and inert. Rejected.
 - **Serve it from the library**, for instance a route registered by a helper. The library runs in
-  the browser and serves nothing; and choosing a route for an operator is exactly the decision the
-  requirement leaves to them. Rejected.
+  the browser and serves nothing; and choosing a route for an operator is exactly the decision that
+  belongs to them. Rejected.
 - **Build it into the main bundle behind a call** (`SerialBroker.openDebugPage()`). Puts an
   operator tool one call away from application code and grows every application's bundle.
 - **Derive a configuration from the chosen port in the page itself.** Auto mode does it in the
@@ -112,6 +108,6 @@ can resolve its files.
 `test/unit/debug-surface.test.ts` pins the form's pass-through to the library's own validation,
 exact reproduction of a running configuration from its reported settings, settings precedence,
 auto mode by default, formatting, and the header controls against `SETUP_ACTION_IDS`. The policy
-was checked in Chromium against a build served from `dist/`: no `securitypolicyviolation` while the
-page is used, and an inline `<script>` added to the loaded page does not execute. The page itself is
+holds in Chromium against a build served from `dist/`, a manual check: no `securitypolicyviolation`
+while the page is used, and an inline `<script>` added to the loaded page does not execute. The page itself is
 exercised by `test/browser/debug-surface.spec.ts` and by the manual test plan.

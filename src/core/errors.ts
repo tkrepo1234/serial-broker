@@ -325,11 +325,11 @@ export interface ErrorWithCode<Code extends SerialBrokerErrorCode> extends Seria
 /**
  * The context fields documented for one code.
  *
- * `ContextFor<'WRITE_TIMEOUT'>` is the same interface as every other code's today: which fields an
+ * `ContextFor<'WRITE_TIMEOUT'>` is the same interface as every other code's: which fields an
  * error carries depends on where it arose rather than on its code alone, and pretending otherwise
  * in the types would promise something the library cannot keep. It exists so that code and
  * documentation can name the connection - `function explain(context: ContextFor<'WRITE_TIMEOUT'>)`
- * says what it takes - and so that narrowing them per code later is not a breaking change.
+ * says what it takes - and so that narrowing them per code is not a breaking change.
  */
 export type ContextFor<Code extends SerialBrokerErrorCode> = Code extends unknown
   ? SerialBrokerErrorContext
@@ -344,8 +344,8 @@ export type ContextFor<Code extends SerialBrokerErrorCode> = Code extends unknow
  * }
  * ```
  *
- * Reads no better than `error.code === …` today, and that is fine: it is the place narrowing will
- * live when a code's fields become certain enough to promise.
+ * Reads no better than `error.code === …`, and that is fine: it is the place narrowing lives
+ * for a code whose fields are certain enough to promise.
  */
 export function hasCode<Code extends SerialBrokerErrorCode>(
   error: SerialBrokerError,

@@ -7,8 +7,8 @@ import { DEFAULT_NAME, defaultFormValues, type SetupFormValues } from './setup-f
  *
  * This is the first thing someone trying serial-broker does, and it must work without knowing a
  * vendor ID, a product ID or a device type (ADR-0019). The library takes the device from the port
- * chosen in the picker and remembers it (ADR-0036), so nothing about the port has to be derived
- * here any more: only the name and the line settings are asked for, and the picker is opened by
+ * chosen in the picker and remembers it (ADR-0036), so nothing about the port is derived here:
+ * only the name and the line settings are asked for, and the picker is opened by
  * `requestAccess()` in the click that submits them. Pure, so it is unit-tested rather than clicked
  * through with a device on the desk.
  */

@@ -96,7 +96,7 @@ Every transfer is logged, so you can see exactly which bytes reached the device 
 | 21 (text across chunks)      | `chunk 1` first; every multi-byte character then arrives split.                                                                                  |
 | 22 (binary)                  | As written; `send \x02\xff\x03` covers the receiving direction.                                                                                  |
 | 24 (owner lost during write) | `hang`, write from tab B, kill tab A, then `resume`. The bytes must not repeat.                                                                  |
-| 26–29                        | Not the device's: 26 is withdrawn, and 27–29 concern the worker script and the worker.                                                           |
+| 26–28                        | Not the device's: they concern the worker script and the worker.                                                                                 |
 
 The run on real hardware is the Arduino suite's (`SERIAL_BROKER_HARDWARE=arduino`): an emulated
 device proves the software path, not the electrical one.
@@ -104,7 +104,7 @@ device proves the software path, not the electrical one.
 ## Limitations
 
 - **Windows only**, because that is the client usbip-win2 provides. On Linux, `usbip attach`
-  from the kernel's own tools works against the same server, but nobody has tried it.
+  from the kernel's own tools works against the same server; that is untested.
 - **Timing is not a real device's.** A USB/IP device answers at the speed of a loopback socket.
   Anything that depends on a device being _slow_ has to be produced with `hang` or `chunk`.
 - **One host at a time.** A second attach is refused while the first is active.

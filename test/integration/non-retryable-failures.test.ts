@@ -15,8 +15,8 @@ import { fieldsOfEvent, recordingLogger } from '../harness/recording-logger.js';
  *
  * docs/site/errors.md promises that only retryable codes lead to further attempts. A `SecurityError`
  * from `open()` - serial blocked by a permissions policy - is reported as `WEB_SERIAL_UNAVAILABLE`,
- * and every further attempt would meet it again, forever under the default `maxAttempts`. See the
- * ADR-0010 amendment.
+ * and every further attempt would meet it again, forever under the default `maxAttempts`. See
+ * ADR-0010.
  */
 
 function harnessWithBlockedDevice() {

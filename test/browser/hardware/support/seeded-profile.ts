@@ -1,10 +1,10 @@
 /**
  * A throwaway browser profile that already has permission for one serial port.
  *
- * A real browser shows the serial port picker only to a user, and a test may not click it: an
- * automated click on a native permission dialogue is exactly the thing this library must never
- * teach anyone to do. The permission is therefore written into the profile *before* the browser
- * starts, which is where the browser would keep it anyway.
+ * A real browser shows the serial port picker only to a user, and a test that needs a port rather
+ * than the picker does without it: the permission is written into the profile *before* the browser
+ * starts, which is where the browser would keep it anyway. The picker itself is the subject of
+ * `picker.spec.ts`, which drives it the way a user's assistive technology would.
  *
  * Chromium stores it as the content setting registered as `serial-chooser-data` in the profile's
  * `Preferences` file - under the preference name `serial_chooser_data`, because the preference

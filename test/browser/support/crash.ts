@@ -13,10 +13,10 @@ const ATTEMPTS = 3;
 /**
  * Kills the page's renderer: no unload handler runs, as in a crash or an out-of-memory kill.
  *
- * Does not rest on the `crash` event alone. On a loaded CI runner the event has failed to arrive
- * once (2026-09-17) and the test waited out its whole timeout for it, which says nothing about the
- * library. So an attempt that reports no crash asks the renderer whether it still answers: one that
- * does not is gone, which is what was asked for, and one that does is crashed again.
+ * Does not rest on the `crash` event alone. On a loaded CI runner the event can fail to arrive,
+ * and a test waiting out its whole timeout for it says nothing about the library. So an attempt
+ * that reports no crash asks the renderer whether it still answers: one that does not is gone,
+ * which is what was asked for, and one that does is crashed again.
  */
 export async function crashRenderer(page: Page): Promise<void> {
   for (let attempt = 1; attempt <= ATTEMPTS; attempt += 1) {

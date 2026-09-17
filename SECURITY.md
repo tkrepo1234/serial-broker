@@ -229,8 +229,8 @@ under two kinds of key:
   as `{ auto: true, resolved: … }` — line settings, reconnect and timeout settings, text encoding,
   receive settings, `remember` and `maxTabs`.
 
-A key written under an older storage version is neither read nor removed (ADR-0033): nothing is
-migrated, and what an earlier version left behind stays until the site data is cleared.
+A key written under another storage version is neither read nor removed (ADR-0033): nothing is
+migrated, and such a key stays until the site data is cleared.
 
 - **Any same-origin script can read it, change it and delete it**, and it survives until the site
   data is cleared — also across a user logging out of the application. It holds no payload data,

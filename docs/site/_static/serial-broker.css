@@ -21,8 +21,8 @@
 /*
  * A literal breaks only when it cannot fit a line of its own - never letter by letter.
  *
- * `anywhere` would let a column shrink to a single character, which is how a generated table came
- * to print `readonly` over three lines while its description column had room to spare.
+ * `anywhere` lets a column shrink to a single character: a generated table then prints `readonly`
+ * over three lines while its description column has room to spare.
  */
 .rst-content code.literal {
   overflow-wrap: break-word;
@@ -30,9 +30,9 @@
 
 /*
  * Only where a table says which interface a member came from: that column holds a dotted reference
- * such as `ObservedEventBase.timestamp`, two long words that claimed 221 pixels while the
- * description beside them was down to 132. Capped, the column wraps at the dot - never inside a
- * word - the description grows to 200 pixels, and the table loses a third of its height.
+ * such as `ObservedEventBase.timestamp`, two long words that would take the width the description
+ * beside them needs. Capped, the column wraps at the dot - never inside a word - and the
+ * description has the room.
  */
 .rst-content .inherits-table td:last-child {
   max-width: 150px;
@@ -41,8 +41,8 @@
 /*
  * The search box stays at the top of the navigation while the list under it scrolls.
  *
- * It is the way back to everything else - the chapters, the search - and scrolling the list used
- * to take it off screen entirely.
+ * It is the way back to everything else - the chapters, the search - and scrolling the list would
+ * otherwise take it off screen entirely.
  */
 /*
  * The icon sits left of the project's name, in one line with it.
@@ -114,7 +114,7 @@
 }
 
 /* `display: flex` above would win over the `hidden` attribute, and an arrow that is switched off
-   would stay on screen - which is what the first version of this did. */
+   would stay on screen. */
 .serial-broker-scroll[hidden] {
   display: none;
 }

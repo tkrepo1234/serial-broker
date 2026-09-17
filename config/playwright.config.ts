@@ -50,7 +50,7 @@ export default defineConfig({
 
   webServer: {
     // The same Node that runs the tests, whatever is on PATH. `cwd` is relative to this file, so
-    // the server is started from the repository root as it was before this file moved.
+    // the server is started from the repository root.
     command: `"${process.execPath}" test/browser/server.mjs`,
     cwd: '..',
     url: `${baseURL}/tab.html`,

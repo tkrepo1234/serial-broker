@@ -6,7 +6,7 @@ import {
   MAX_PORTS_PER_PARTICIPANT,
 } from '../../src/protocol/limits.js';
 import { BROKER_ID } from '../../src/protocol/messages.js';
-import { contextLockName, workerLockName } from '../../src/protocol/version.js';
+import { contextLockName, PROTOCOL_VERSION, workerLockName } from '../../src/protocol/version.js';
 import { WorkerPorts } from '../../src/worker/worker-ports.js';
 import { flushMicrotasks } from '../harness/fake-clock.js';
 import { FakeLockManager } from '../harness/fake-locks.js';
@@ -342,7 +342,7 @@ describe('WorkerPorts', () => {
     const mallory = connect();
 
     world.ports.receive(mallory, {
-      v: 1,
+      v: PROTOCOL_VERSION + 1,
       from: 'm'.repeat(MAX_IDENTIFIER_LENGTH + 1),
       to: 'all',
       type: 'hello',

@@ -1,7 +1,6 @@
 # ADR-0006: A SharedWorker broker routing to all participants, with a BroadcastChannel fallback
 
 - **Status:** Accepted
-- **Date:** 2026-09-12
 
 ## Context
 
@@ -83,10 +82,10 @@ and nothing else.
   configurations. It remains the fallback.
 - **`localStorage` events as the bus.** Serialises everything through strings, fires only in
   _other_ tabs, has no ordering guarantee, and is a well-known source of subtle bugs.
-- **A broker that routes to the owner.** What this record first decided: the broker kept the tab
-  that last sent `owner-claimed` and delivered what was meant for the owner to it alone. The broker
-  could not ask the Web Lock, so it believed the claim, and any script of the origin could claim a
-  configuration and receive every other tab's writes, which then timed out. Having the worker check
+- **A broker that routes to the owner**: it keeps the tab that last sent `owner-claimed` and
+  delivers what is meant for the owner to it alone. The broker cannot ask the Web Lock, so it would
+  believe the claim, and any script of the origin could claim a configuration and receive every
+  other tab's writes, which would then time out. Having the worker check
   the term's lock would cost it an asynchronous lock request per claim, and `BroadcastChannel`
   would still deliver to all.
 - **Bind each identity on the worker to a secret sent in `hello`.** It keeps a script from

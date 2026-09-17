@@ -1,25 +1,24 @@
 # ADR-0031: Bound and rate-limit what the bus can cost a tab
 
 - **Status:** Accepted
-- **Date:** 2026-09-14
 
 ## Context
 
 The limits of `protocol/limits.ts` bound what **one** message can cost: how long an identifier may
-be, how large a payload, how many values a report may hold (SECURITY.md). Nothing bounded **how
-many** messages there are, and every well-formed one was worked on:
+be, how large a payload, how many values a report may hold (SECURITY.md). **How many** messages
+there are needs bounds of its own, because every well-formed one is worked on:
 
-- the tab holding the port answered every `status-request` with a broadcast;
-- every tab answered every `diagnostics-request` with a report of up to a megabyte;
-- every malformed message produced a `warn` record, so a flood of nonsense became a flood in the
+- the tab holding the port answers a `status-request` with a broadcast;
+- every tab answers a `diagnostics-request` with a report of up to a megabyte;
+- a malformed message produces a `warn` record, so a flood of nonsense would become a flood in the
   application's log - the one place an operator looks for the real fault;
-- a diagnostics observer kept every `diagnostics-report` carrying its request id until its window
-  closed, and that request id is broadcast, so anything on the bus can answer it, under as many
+- a diagnostics observer keeps the `diagnostics-report`s carrying its request id until its window
+  closes, and that request id is broadcast, so anything on the bus can answer it, under as many
   invented client ids as it likes;
-- every `write-request` was queued at the port, of any number and of any total size.
+- a `write-request` is queued at the port.
 
-The writes are the sharpest of these: 16 MiB per payload (`MAX_PAYLOAD_BYTES`) and no bound on how
-many wait. A script of the origin could make the tab holding the port hold gigabytes, and an
+The writes are the sharpest of these: 16 MiB per payload (`MAX_PAYLOAD_BYTES`). Without a bound on
+how many wait, a script of the origin could make the tab holding the port hold gigabytes, and an
 application with a loop in it could do the same by accident.
 
 ## Decision
@@ -61,9 +60,9 @@ neither refills it at once nor freezes it.
 - **Count bytes only.** A flood of empty writes is free in bytes and not free in bookkeeping; a
   count alone lets 4096 payloads of 16 MiB in. Both bounds, or neither - which is why the reports a
   collection keeps are bounded in both as well.
-- **Rates for malformed-message records and for errors from other tabs.** What this record first
-  decided (`MALFORMED_MESSAGE_WARNING_RATE`, `REMOTE_ERROR_RATE`). Logging once per kind of fault,
-  and believing errors only from the tab holding the port, bound the same things with less code.
+- **Rates for malformed-message records and for errors from other tabs.** Logging once per kind of
+  fault, and believing errors only from the tab holding the port, bound the same things with less
+  code.
 - **Measure the rates on the wall clock.** A clock set forward would return a full allowance at
   once, and one set back none until it caught up.
 
@@ -77,7 +76,7 @@ neither refills it at once nor freezes it.
 
 ### Negative
 
-- A new public error code, `WRITE_QUEUE_FULL`, which applications may see.
+- One more public error code, `WRITE_QUEUE_FULL`, which applications may see.
 - A legitimate burst beyond a rate is dropped: a diagnostics page that asks nine times at once
   gets eight answers. The values are far above what the library and its debugging surface
   produce.

@@ -1,7 +1,6 @@
 # ADR-0012: One error type, stable codes, mandatory remediation
 
 - **Status:** Accepted
-- **Date:** 2026-09-12
 
 ## Context
 

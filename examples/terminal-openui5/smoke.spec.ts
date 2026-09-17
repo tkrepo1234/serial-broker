@@ -238,7 +238,7 @@ test('walks what was sent with the arrow keys, each entry in its mode, and keeps
   await expect(tab.locator('#received')).toContainText('AB');
 
   // Up: the hex entry, in hex. Up again: the text entry - and the mode follows it, while the field
-  // keeps the focus. The keys used to reach the toolbar, which moved the focus to the select.
+  // keeps the focus: the keys do not reach the toolbar, which would move the focus to the select.
   await input.click();
   await input.press('ArrowUp');
   await expect(input).toHaveValue('41 42');

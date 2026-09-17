@@ -1,7 +1,6 @@
 # ADR-0036: Device identity, permission and auto mode: the port the user chooses
 
 - **Status:** Accepted
-- **Date:** 2026-09-14
 
 ## Context
 
@@ -20,7 +19,7 @@ different places:
 
 Vendor and product IDs are also what a developer who has just plugged a device in does not have,
 and what an operator on a shop floor should never have to type. The browser shows the ports in its
-own picker, but only after a choice, which needs a user gesture. Tim asked for the IDs to be always
+own picker, but only after a choice, which needs a user gesture. The IDs therefore have to be
 optional, with a configuration set up without them taking its identity from the port the user
 chooses.
 
@@ -89,7 +88,7 @@ browser supports it.
 **Choosing again.** `requestAccess(name, { chooseAgain: true })`, in any tab taking part
 in an auto-mode configuration, opens the picker unfiltered although the configuration has resolved,
 and the chosen port's resolution replaces the one before: remembered, and sent with the request to try
-again exactly as a first choice is - the wire format is unchanged. The tab holding the port, having
+again exactly as a first choice is. The tab holding the port, having
 adopted a device that differs from its own, switches to it (`PortSupervisor.followDevice()`): a
 connection to a port that is not the device is closed once the writes handed to it are answered, and
 the new device is looked for at once with a fresh attempt counter, from any state, `open` included. A
@@ -117,11 +116,12 @@ application's decision, and it is set up with the other device instead.
 - **Turn a resolved auto-mode configuration into the explicit one it resolved to.** Tabs of one name
   would diverge once the holder is re-chosen elsewhere; keeping the mode makes every auto-mode tab
   follow the holder.
-- **Derive the configuration in the debugging surface.** What the page did before this decision
-  ([ADR-0019](./0019-ship-the-debugging-surface.md)); every application would have to write it again,
-  and the result was not shared between tabs.
+- **Derive the configuration in the page**, from the chosen port's `getInfo()`. Every application
+  would have to write it, the debugging surface
+  ([ADR-0019](./0019-ship-the-debugging-surface.md)) included, and the result is not shared between
+  tabs.
 - **Let only `restore()` read a remembered resolution.** The path the Quickstart teaches, `setup()`,
-  then asked the user on every visit and saved over the choice.
+  would then ask the user on every visit and save over the choice.
 
 ## Consequences
 

@@ -39,10 +39,9 @@ provides:
 - **The library as a dependency** with `"serial-broker": "file:../.."`, so an example exercises the
   working tree. The root has to be built first (`npm run build` at the repository root); the
   example's own `preinstall` or `prestart` script must not build the root.
-- **The worker script served from the application's own origin.** How each toolchain gets
-  `serial-broker.worker.js` there - copied, served from `node_modules`, resolved by the bundler
-  from `new URL(..., import.meta.url)` - is the example's decision, documented in its README, and
-  `SerialBroker.configure({ workerUrl })` names it where the bundler cannot.
+- **The worker script served from the application's own origin.** How each example gets
+  `serial-broker.worker.js` there - copied, or served from `node_modules` - is the example's
+  decision, documented in its README, and `SerialBroker.configure({ workerUrl })` names it.
 - **A `README.md`** that says what the example shows, how to start it, how to take its integration
   into an application of your own, and which design decisions it made and why.
 - **Stable element ids** for what a test drives, listed in the README: at least the status text, the

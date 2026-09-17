@@ -82,10 +82,10 @@ type ConnectionState =
  *
  * @remarks
  * This file is over the 400-line mark that docs/guidelines/coding-style.md flags. The
- * justification is that what remains is one state machine: connect, read, write, lose,
+ * justification is that it is one state machine: connect, read, write, lose,
  * reconnect, close. Splitting it would put transitions of the same automaton in different
  * files, and the question a reader arrives with - "what happens after this state" - would
- * then need two files to answer. What could be lifted out has been: device matching
+ * then need two files to answer. What is separable lives elsewhere: device matching
  * (`port-matcher.ts`), the platform error table (`serial-errors.ts`), write serialisation
  * (`write-queue.ts`), collecting what was read (`receive-buffer.ts`) and backoff
  * (`core/backoff.ts`).

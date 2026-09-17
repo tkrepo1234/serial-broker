@@ -63,7 +63,7 @@ release instead.
 
 Serve `serial-broker.worker.js` from the application's origin, and name its URL before the first
 `setup()`: `SerialBroker.configure({ workerUrl })`. **Requirements:** a Chromium-based desktop browser,
-a secure context (HTTPS or `localhost`), all tabs on one origin.
+a secure context (HTTPS, `localhost`, or a page opened from a file), all tabs on one origin.
 
 ## Documentation
 

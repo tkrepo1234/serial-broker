@@ -19,8 +19,8 @@ const common = {
  * Every published file is named after the package, not after the entry file it was built from:
  * `serial-broker.js`, `serial-broker.min.js`, `serial-broker.global.js`,
  * `serial-broker.worker.js`. Someone copying one of these onto a web server can see what it is,
- * which `index.min.js` did not say (ADR-0043). The entry *keys* below carry those names; the
- * source files keep the conventional `src/index.ts` and `src/diagnostics.ts`, and
+ * which a name like `index.min.js` does not say (ADR-0043). The entry *keys* below carry those
+ * names; the source files keep the conventional `src/index.ts` and `src/diagnostics.ts`, and
  * `scripts/entry-declarations.mjs` renames the two declarations `tsc` names after them.
  *
  * Four entry points, deliberately:

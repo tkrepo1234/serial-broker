@@ -70,9 +70,9 @@ interface WriteReport {
  * nothing above this class knows which happened.
  *
  * @remarks
- * Over the 400-line mark that docs/guidelines/coding-style.md flags. What remains is the
- * wiring itself - which of four collaborators handles what, and in which order - and that is
- * only legible in one place. The parts with rules of their own have been lifted out:
+ * Over the 400-line mark that docs/guidelines/coding-style.md flags. It is the wiring
+ * itself - which of four collaborators handles what, and in which order - and that is
+ * only legible in one place. The parts with rules of their own live elsewhere:
  * the delivery guarantee (`pending-writes.ts`, and `accepted-writes.ts` at the port), the tab
  * limit (`tab-slot.ts`), ownership (`../owner/election.ts`), the port lifecycle
  * (`../owner/port-supervisor.ts`) and event dispatch (`../core/emitter.ts`).

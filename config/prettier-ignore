@@ -4,7 +4,7 @@
 # These patterns follow .gitignore rules, so a pattern that CONTAINS A SLASH is anchored to the
 # directory holding this file - config/ - and not to the repository root. Every such pattern
 # therefore starts with `../`. A pattern without a slash, like package-lock.json below, matches at
-# any depth and is left unanchored, which is what it meant when this file lived in the root.
+# any depth and is left unanchored.
 
 package-lock.json
 

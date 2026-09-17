@@ -36,7 +36,7 @@ describe.each(TRANSPORT_MODES)(
       const only = harness.openTab();
       await only.setup('Reader', READER_OPTIONS);
 
-      // The case the old default got wrong: one tab, and nobody else to keep the entry alive.
+      // One tab, and nobody else to keep the entry alive.
       await only.client.release('Reader');
       await harness.settle();
 

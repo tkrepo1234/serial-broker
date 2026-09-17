@@ -196,7 +196,7 @@ code {
   color: var(--muted);
 }
 
-/* Status, as in the original demo: a dot and a word. */
+/* Status: a dot and a word. */
 .status {
   display: inline-flex;
   align-items: center;
@@ -472,7 +472,7 @@ ul.capabilities li {
   white-space: nowrap;
 }
 
-/* Traffic and log, as in the original demo. */
+/* Traffic and log. */
 .log {
   background: var(--panel);
   border: 1px solid var(--line);

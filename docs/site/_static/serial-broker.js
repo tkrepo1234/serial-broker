@@ -165,7 +165,7 @@
     // a link into the middle of a page takes the navigation somewhere the reader never asked to go.
     // The navigation is a map, not a second view of the page: it should stay where it was put.
     // Both are dropped. What survives is the highlighting done while the page loads, which is what
-    // says where the reader is - it just no longer moves the list to say it.
+    // says where the reader is - it just does not move the list to say it.
     window.addEventListener('load', () => {
       const jquery = window.jQuery;
       if (typeof jquery === 'function') {

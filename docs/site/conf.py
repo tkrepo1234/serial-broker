@@ -53,7 +53,7 @@ html_show_sourcelink = False
 # Keeps pages from scrolling sideways; see the stylesheet for what it changes and why.
 html_static_path = ["_static"]
 html_css_files = ["serial-broker.css"]
-# Adds the arrow back to the top of the navigation; see the file for what it does and why.
+# Adds the two arrows that scroll the navigation; see the file for what it does and why.
 html_js_files = ["serial-broker.js"]
 
 # Copied to the root of the built site. `serve.json` turns off the clean URLs of `npx serve`, which
@@ -64,8 +64,8 @@ html_extra_path = ["_extra"]
 
 # `npm run docs:links` checks that the links out of this documentation still lead somewhere. The
 # repository's own links are skipped: it is private, so an unauthenticated check is answered with
-# 404 for every one of them - fourteen findings that say nothing about the links and would bury a
-# real one. They are checked by the build instead, which fails on a path that does not exist.
+# 404 for every one of them - findings that say nothing about the links and would bury a real
+# one. They are checked by the build instead, which fails on a path that does not exist.
 linkcheck_ignore = [r"https://github\.com/tkrepo1234/serial-broker/.*"]
 # One at a time, and slowly: GitHub rate-limits an unauthenticated caller, and a check that is
 # throttled into failures reports the throttling rather than the links.

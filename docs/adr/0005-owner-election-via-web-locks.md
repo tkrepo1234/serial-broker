@@ -1,7 +1,6 @@
 # ADR-0005: Elect the port owner with the Web Locks API
 
 - **Status:** Accepted
-- **Date:** 2026-09-12
 
 ## Context
 
@@ -44,11 +43,10 @@ origin — the exact scope of the problem. The same property carries the tab lim
 
 ## Alternatives considered
 
-- **Heartbeats in the SharedWorker.** The first design. Rejected as the mechanism for ownership:
-  it depends on the worker being alive and on choosing a timeout, and it cannot prevent a
-  split-brain window between "worker thinks A is dead" and "A is actually still writing". A
-  browser-enforced exclusive lock has neither problem. Presence on the bus later moved to Web
-  Locks as well (ADR-0041).
+- **Heartbeats in the SharedWorker.** Rejected as the mechanism for ownership: it depends on the
+  worker being alive and on choosing a timeout, and it cannot prevent a split-brain window between
+  "worker thinks A is dead" and "A is actually still writing". A browser-enforced exclusive lock
+  has neither problem. Presence on the bus rests on Web Locks as well (ADR-0041).
 - **`localStorage` lease with expiry timestamps.** The classic pre-Web-Locks approach.
   Requires clock agreement between tabs, has a documented race on `storage` event delivery,
   and a stalled tab can renew a lease it should have lost. Rejected.

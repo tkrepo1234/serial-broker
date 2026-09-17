@@ -294,7 +294,7 @@ export class FakeBroadcastHub {
   /**
    * Posts a message as some context that is not part of this test's set of tabs.
    *
-   * Used to simulate traffic from an older build of the library, or from an unrelated script
+   * Used to simulate traffic from another build of the library, or from an unrelated script
    * on the same origin that happens to use the same channel name.
    */
   injectForeign(name: string, raw: unknown): void {
@@ -409,12 +409,10 @@ export class FakeBus {
   }
 
   /**
-   * Simulates a context vanishing without cleanup.
-   *
-   * @param _clientId - Its identity on the bus. Unused: the worker learns identities only from what
-   *   arrives on a port, so killing the context's ports is what silences it.
+   * Simulates a context vanishing without cleanup. The worker learns identities only from what
+   * arrives on a port, so killing the context's ports is what silences it.
    */
-  killContext(contextId: string, _clientId?: ClientId): void {
+  killContext(contextId: string): void {
     // A real worker is never told that a tab died: the port simply stops, in both directions, and
     // the worker learns of it only when the browser lets go of the tab's lock (ADR-0041).
     this.#killed.add(contextId);

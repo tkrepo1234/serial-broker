@@ -3,11 +3,7 @@ import { dirname } from 'node:path';
 import process from 'node:process';
 
 import type { SerialBrokerClient } from '../../../../src/client/serial-broker-client.js';
-import {
-  BrowserHarness,
-  type HarnessOptions,
-  type VirtualTab,
-} from '../../../harness/browser-harness.js';
+import { BrowserHarness, type VirtualTab } from '../../../harness/browser-harness.js';
 import type { FakeDevice } from '../../../harness/fake-serial.js';
 import { outcomeOf } from '../../../harness/outcomes.js';
 
@@ -158,10 +154,6 @@ export interface ScenarioResult {
  * another context.
  */
 export class MeteredHarness extends BrowserHarness {
-  constructor(options: HarnessOptions = {}) {
-    super(options);
-  }
-
   /** Messages contexts handed to the bus since the harness was built. */
   get messagesSent(): number {
     return this.bus.meter.sent;

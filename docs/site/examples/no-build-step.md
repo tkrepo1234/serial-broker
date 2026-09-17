@@ -3,8 +3,7 @@
 One HTML file: markup, an import map, and one inline module script. No bundler, no compiler, no
 `npm run build` - what you read here is what the browser runs. This is the whole of
 [examples/minimal-js](https://github.com/tkrepo1234/serial-broker/tree/main/examples/minimal-js),
-which is served by a short static server and covered by the same smoke test as every other
-example.
+which is served by a short static server and covered by a smoke test of its own.
 
 It needs two files next to each other on the web server: `serial-broker.min.js` (or the readable
 `serial-broker.js` from the package) and `serial-broker.worker.js`. Every release attaches them as

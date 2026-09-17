@@ -7,7 +7,7 @@ import type { LogFields } from '../core/types.js';
  * How much the bus may make a context hold, however hostile the sender.
  *
  * The `SharedWorker` port, the `BroadcastChannel`s and the diagnostics protocol are open to every
- * script of the origin: a bug in the application, a browser extension's content script, an older
+ * script of the origin: a bug in the application, a browser extension's content script, another
  * build, or noise. Validation (`decode.ts`) makes sure such a sender cannot make a context misread
  * a message. These limits make sure it cannot make one grow without bound either - hold, clone
  * again or hand on something of any size, or remember any number of names (SECURITY.md).

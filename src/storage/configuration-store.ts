@@ -11,7 +11,7 @@ import type { KeyValueStorage } from '../environment/environment.js';
  * Stored entries are the options `setup()` accepts and are validated again on every read, so a
  * change to the message protocol leaves them usable. This is incremented only for a change to what
  * is stored that the validation on read cannot absorb - a different shape, a different key layout
- * (ADR-0033). Nothing is migrated: entries under an older version are left where they are, unread.
+ * (ADR-0033). Entries under another version are left where they are, unread.
  */
 export const STORAGE_SCHEMA_VERSION = 1;
 
@@ -65,7 +65,7 @@ interface StoredIndex {
  * other's; the index is the only key they share, and a name missing from it is put back the next
  * time that tab saves - which it does as soon as its persistence hold is granted (ADR-0033).
  *
- * Stored data is treated as hostile. It may come from an older version, from a hand-edited
+ * Stored data is treated as hostile. It may come from another version, from a hand-edited
  * developer console, or be truncated by a browser that ran out of quota mid-write, so every
  * entry is re-validated through the same boundary the application's own input passes through.
  */

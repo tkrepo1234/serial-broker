@@ -1,7 +1,6 @@
 # ADR-0015: Deliver bytes, offer text as a configured convenience
 
 - **Status:** Accepted
-- **Date:** 2026-09-12
 
 ## Context
 
@@ -32,7 +31,7 @@ compile time.
 
 ## Alternatives considered
 
-- **Bytes only.** Purest, and it was the initial position. Rejected because every consumer
+- **Bytes only.** Purest. Rejected because every consumer
   would write the same stateful streaming decoder, and most would write it wrongly - the
   cross-chunk case is subtle and only fails on non-ASCII input, so it survives testing and
   breaks in production.

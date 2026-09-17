@@ -1,7 +1,6 @@
 # ADR-0008: Version the wire protocol; announce it; freeze the worker handshake
 
 - **Status:** Accepted
-- **Date:** 2026-09-12
 
 ## Context
 

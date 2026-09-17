@@ -3,9 +3,9 @@
  *
  * Every other suite gets its port without a prompt: the stand-in answers the picker itself, and
  * the hardware suites seed the permission into the profile. What a user meets first - the picker,
- * filtered or not, dismissed or answered - stayed by hand as steps 2 and 4a of the manual test
- * plan. Here the picker is answered through Windows UI Automation (`support/port-picker.ts`), in a
- * browser that shows a window, with a profile that has never been given the device.
+ * filtered or not, dismissed or answered - is steps 2 and 4a of the manual test plan. Here the
+ * picker is answered through Windows UI Automation (`support/port-picker.ts`), in a browser that
+ * shows a window, with a profile that has never been given the device.
  *
  * **Requires the Arduino echo board, Windows and a desktop**, so it runs only when
  * `SERIAL_BROKER_HARDWARE=picker` is set, and never in CI. See ADR-0035.

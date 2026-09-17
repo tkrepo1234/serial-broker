@@ -229,7 +229,7 @@ describe.each(TRANSPORT_MODES)(
           await issuer.client.dispose();
           harness.forgetTab('busy');
         } else {
-          harness.destroyTab('busy', issuer.client.clientId);
+          harness.destroyTab('busy');
         }
         await harness.settle();
 

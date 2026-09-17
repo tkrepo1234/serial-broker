@@ -382,9 +382,9 @@ export class Tab {
    * A frozen page runs nothing at all - no timer, no callback, no message handler - which is the
    * state the manual plan's "hidden for more than five minutes" describes, reached without
    * waiting five minutes. This is the harshest form of a background tab, and the only one this
-   * browser can be asked for: `Emulation.setPageVisibilityOverride` is gone from Chromium, and
+   * suite can ask the browser for: Chromium has no `Emulation.setPageVisibilityOverride`, and
    * `page.bringToFront()` leaves the other tabs `visible`, so a tab merely in the background
-   * stays a scenario for the manual plan.
+   * is staged by `test/browser/background-tab.mjs`, over the DevTools protocol alone.
    */
   async freeze(): Promise<void> {
     const session = await this.page.context().newCDPSession(this.page);
@@ -498,7 +498,7 @@ export async function sharedWorkersOf(tab: Tab): Promise<readonly SharedWorkerTa
 /**
  * Terminates every shared worker of this tab's context, and says which ones went.
  *
- * What step 29 of the manual test plan does from `chrome://inspect/#workers`: the broker is gone
+ * What step 28 of the manual test plan does from `chrome://inspect/#workers`: the broker is gone
  * with nothing of ours told about it, so the tabs have to notice by themselves (ADR-0041).
  * Killing it outright rather than crashing a renderer and hoping the worker lived there - which
  * Chromium is free to arrange either way.

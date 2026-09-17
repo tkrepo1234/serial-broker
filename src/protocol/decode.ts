@@ -44,7 +44,7 @@ import { isProtocolVersion, PROTOCOL_VERSION } from './version.js';
  * The message-boundary validation layer.
  *
  * Anything arriving through `postMessage` or a `BroadcastChannel` is `unknown`: it may come
- * from an older build of this library, from an unrelated script that happens to use the same
+ * from another build of this library, from an unrelated script that happens to use the same
  * channel name, or from a browser extension. Nothing is read from a message until it has
  * passed through here. See docs/guidelines/defensive-programming.md and ADR-0008.
  *
@@ -382,7 +382,7 @@ export function decodeMessage(raw: unknown): DecodeResult {
     }
     // The contract is absolute: a message must never be able to break the receive path, and
     // "reading a field cannot throw" is an assumption, not a fact. Structured cloning does not
-    // carry getters today, so this is unreachable through the supported transports - which is
+    // carry getters, so this is unreachable through the supported transports - which is
     // exactly why it is worth two lines rather than an argument.
     return fail({ reason: 'malformed', type: 'unreadable', field: describeUnknown(error) });
   }

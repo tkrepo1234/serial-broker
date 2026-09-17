@@ -1,10 +1,10 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { SerialBrokerErrorCode } from '../../../src/core/error-codes.js';
 import { ownerLockName } from '../../../src/protocol/version.js';
 import { persistenceLockName } from '../../../src/storage/persistence-hold.js';
-import { TRANSPORT_MODES, type VirtualTab } from '../../harness/browser-harness.js';
-import { READER_OPTIONS, readerHarness } from '../../harness/devices.js';
+import { BrowserHarness, TRANSPORT_MODES, type VirtualTab } from '../../harness/browser-harness.js';
+import { READER, READER_OPTIONS, readerHarness } from '../../harness/devices.js';
 import { outcomeOf } from '../../harness/outcomes.js';
 
 const SCALE_OPTIONS = {
@@ -144,3 +144,130 @@ describe.each(TRANSPORT_MODES)('a diagnostics watcher calling the observer (%s)'
     expect(heard).toEqual(['first']);
   });
 });
+
+describe.each(TRANSPORT_MODES)(
+  'setting a configuration up again while it is released (%s)',
+  (transport) => {
+    it('keeps the new session on the bus in a tab that does not hold the port', async () => {
+      const { harness, device } = readerHarness({ transport });
+      const owner = harness.openTab();
+      await owner.setup('Reader', READER_OPTIONS);
+      const tab = harness.openTab();
+      await tab.setup('Reader', READER_OPTIONS);
+
+      const releasing = tab.client.release('Reader');
+      await tab.setup('Reader', READER_OPTIONS);
+      await releasing;
+      device.emit('HELLO');
+      await harness.settle();
+
+      expect(tab.receivedText('Reader')).toBe('HELLO');
+    });
+
+    it('keeps taking writes from other tabs in a tab that holds the port alone', async () => {
+      const { harness, device } = readerHarness({ transport });
+      const tab = harness.openTab();
+      await tab.setup('Reader', READER_OPTIONS);
+
+      const releasing = tab.client.release('Reader');
+      await tab.setup('Reader', READER_OPTIONS);
+      await releasing;
+      await harness.settle();
+      const later = harness.openTab();
+      await later.setup('Reader', READER_OPTIONS);
+      await later.client.send('Reader', 'PING');
+
+      expect(later.client.getStatus('Reader').status).toBe('open');
+      expect(device.writtenText()).toBe('PING');
+    });
+  },
+);
+
+describe.each(TRANSPORT_MODES)('releasing and setting up in quick succession (%s)', (transport) => {
+  it('leaves the configuration released when release() follows a setup() that waits', async () => {
+    const { harness } = readerHarness({ transport });
+    const tab = harness.openTab();
+    await tab.setup('Reader', READER_OPTIONS);
+
+    const releasing = tab.client.release('Reader');
+    const settingUp = tab.client.setup('Reader', READER_OPTIONS);
+    const releasingAgain = tab.client.release('Reader');
+    await Promise.all([releasing, settingUp, releasingAgain]);
+    await harness.settle();
+
+    expect(tab.client.exists('Reader')).toBe(false);
+    expect(harness.locks.holderOf(ownerLockName('Reader'))).toBeUndefined();
+  });
+
+  it('keeps a listener registered on the new session when an earlier registration is removed', async () => {
+    const { harness, device } = readerHarness({ transport });
+    const tab = harness.openTab();
+    await tab.setup('Reader', READER_OPTIONS);
+    const listener = vi.fn();
+    const stopEarlier = tab.client.subscribe('Reader', 'onReceive', listener);
+    await tab.client.release('Reader');
+    await tab.setup('Reader', READER_OPTIONS);
+    tab.client.subscribe('Reader', 'onReceive', listener);
+
+    stopEarlier();
+    device.emit('HELLO');
+    await harness.settle();
+
+    expect(listener).toHaveBeenCalledTimes(1);
+  });
+
+  it('lets dispose() finish only once a release still in progress has closed the port', async () => {
+    const { harness, device } = readerHarness({ transport });
+    const tab = harness.openTab();
+    await tab.setup('Reader', READER_OPTIONS);
+
+    const releasing = tab.client.release('Reader');
+    await tab.client.dispose();
+
+    expect(device.isOpen).toBe(false);
+    expect(harness.locks.holderOf(ownerLockName('Reader'))).toBeUndefined();
+    await releasing;
+  });
+});
+
+describe.each(TRANSPORT_MODES)(
+  'a listener that releases on the status it hears (%s)',
+  (transport) => {
+    it('does not leave the other tabs with the status it superseded', async () => {
+      const harness = new BrowserHarness({ transport });
+      // Not granted yet: the port opens only when the user picks the device, after both tabs are set up.
+      const device = harness.serial.addDevice(READER.vendorId, READER.productId);
+      const owner = harness.openTab();
+      await owner.setup('Reader', READER_OPTIONS);
+      const others = [harness.openTab(), harness.openTab()];
+      for (const tab of others) {
+        await tab.setup('Reader', READER_OPTIONS);
+      }
+
+      // The tab holding the port gives it up as soon as it opens.
+      owner.client.subscribe('Reader', 'onStatusChange', (event) => {
+        if (event.status === 'open') {
+          void owner.client.release('Reader');
+        }
+      });
+      harness.serial.pickerQueue.push(device);
+      await owner.client.requestAccess('Reader');
+      await harness.advance(0);
+      await harness.advance(0);
+
+      // The tab that did not take the port over is the one that sees it with nobody: its
+      // successor goes from the old time of holding the port straight to its own (ADR-0030).
+      const watching = others.find(
+        (tab) => tab.client.diagnostics()?.configurations[0]?.role !== 'owner',
+      );
+      expect(watching).toBeDefined();
+
+      // Once told the port was given up, that tab must not hear the port is open from the tab
+      // that gave it up - only from the tab that opens it in turn.
+      const trail = watching?.statusTrail('Reader') ?? [];
+      const releasedAt = trail.lastIndexOf('reconnecting');
+      expect(releasedAt).toBeGreaterThanOrEqual(0);
+      expect(trail.slice(releasedAt + 1, releasedAt + 2)).not.toEqual(['open']);
+    });
+  },
+);

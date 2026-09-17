@@ -62,7 +62,8 @@ describe('reconnect supervision', () => {
       await harness.settle();
     }
 
-    // Before the fix this was [0, 0, 250, 500]: two immediate retries in a row.
+    // One immediate retry, not two in a row: [0, 0, 250, 500] would hammer a device that keeps
+    // failing.
     expect(delays).toEqual([0, 250, 500, 1000]);
   });
 

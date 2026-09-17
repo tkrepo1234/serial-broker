@@ -13,8 +13,8 @@ import {
 import { fieldsOfEvent, recordingLogger } from '../harness/recording-logger.js';
 
 /**
- * Matching granted ports against a device filter, for the kinds ADR-0036 added: a port without
- * USB identity, and auto mode before and after it has resolved.
+ * Matching granted ports against a device filter of every kind (ADR-0036): USB IDs, any port, a
+ * port without USB identity, and auto mode before and after it has resolved.
  */
 
 const serial = { baudRate: 9600 };

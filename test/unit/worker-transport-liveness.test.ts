@@ -280,7 +280,7 @@ describe('SharedWorkerTransport, when its worker never answers at all', () => {
       },
     });
 
-    // A fetch that hangs, or a script from before the frozen handshake (ADR-0008).
+    // A fetch that hangs, or a script that does not speak the frozen handshake (ADR-0008).
     await clock.advance(HANDSHAKE_DEADLINE_MS - 1);
     expect(reasons).toEqual([]);
     await clock.advance(1);

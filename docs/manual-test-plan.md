@@ -33,7 +33,7 @@ version instead of a device. The run on real hardware is the Arduino suite's.
    bridged is ideal: everything sent comes straight back, so send and receive are visible in
    one window.
 
-## What the browser suite now does for you
+## What the browser suite does for you
 
 `npm run test:browser` (ADR-0035) runs part of this plan on every CI run, and the hardware part of
 that suite runs another part of it against a device — on Windows, because the permission it seeds
@@ -47,8 +47,8 @@ SERIAL_BROKER_HARDWARE=arduino npm run test:browser -- test/browser/hardware
 $env:SERIAL_BROKER_HARDWARE='arduino'; npm run test:browser -- test/browser/hardware
 ```
 
-The 64 KiB round trip is no longer part of this suite: it took a quarter of an hour on the board,
-and `emulator.spec.ts` covers it (steps 20, 22).
+The Arduino suite sends no large payload: the board echoes at about 80 bytes a second, and
+`emulator.spec.ts` covers the 64 KiB round trip (steps 20, 22).
 
 The emulator's suite runs the same way with `SERIAL_BROKER_HARDWARE=emulator` and
 `test/browser/hardware/emulator.spec.ts`; it starts and drives the emulator itself.
@@ -78,10 +78,9 @@ What they cover of the checklist below, step by step:
 | 23 (no payload in the log)       | in-process (`test/integration/diagnostics.test.ts`)                                                |
 | 24                               | on the emulator: the holder crashed while the device holds the write                               |
 | 25                               | in a browser, repeating 5, 6, 9 and 13 over the fallback                                           |
-| 26                               | withdrawn: Chrome for Android is not a target (see [Known limits](./site/known-limits.md))         |
-| 27 (worker script answers 404)   | in-process (`test/integration/multi-tab/shared-worker.test.ts`)                                    |
-| 28                               | in a browser                                                                                       |
-| 29                               | in a browser: the worker terminated, each tab reporting once, and a tab frozen throughout it       |
+| 26 (worker script answers 404)   | in-process (`test/integration/multi-tab/shared-worker.test.ts`)                                    |
+| 27                               | in a browser                                                                                       |
+| 28                               | in a browser: the worker terminated, each tab reporting once, and a tab frozen throughout it       |
 
 So a release run by hand comes down to step 18: the browser's settings offer nothing a test can
 hold on to. Unplugging (13–16) is the emulator's. Two of the runs above need a desktop, because
@@ -172,20 +171,17 @@ The checklist exercises on real hardware what the scenario matrix in
 
 - [ ] **25.** Force it with `SerialBroker.configure({ transport: 'broadcastchannel' })` before
       `setup()`, then repeat steps 5, 6, 9 and 13. Behaviour must be indistinguishable.
-- **26.** Withdrawn on 2026-09-17. It asked for Chrome for Android, which is not a target: the
-  library is built for operator stations and tested on desktop Chromium and Edge. The number stays
-  so that the steps after it keep theirs.
-- [ ] **27.** Configure a `workerUrl` that answers 404, open two tabs and set the configuration up
+- [ ] **26.** Configure a `workerUrl` that answers 404, open two tabs and set the configuration up
       in both, then repeat steps 5 and 6. Both tabs must log `environment.transport-fallback` with
       `reason: 'worker-script-failed'` and behave as in step 25.
 
 ### The worker
 
-- [ ] **28.** Configure a `workerUrl` that serves a build of the worker with another
+- [ ] **27.** Configure a `workerUrl` that serves a build of the worker with another
       `PROTOCOL_VERSION`, open two tabs and set the configuration up in both. Both tabs must report
       `PROTOCOL_VERSION_MISMATCH`, log `environment.transport-fallback` with
       `reason: 'worker-other-protocol-version'`, and behave as in step 25.
-- [ ] **29.** With two tabs sharing the port, terminate the worker from `chrome://inspect/#workers`.
+- [ ] **28.** With two tabs sharing the port, terminate the worker from `chrome://inspect/#workers`.
       As soon as the worker is gone each tab reports `BROKER_UNAVAILABLE` once, a new worker appears
       there, and steps 5 and 6 work again without a reload. Repeat with one tab hidden for more than
       five minutes beforehand: it reconnects as quickly — the worker's Web Lock is freed, and no
@@ -221,12 +217,12 @@ system, devices, and the outcome of each suite and of step 18.
   next to a failed test.
 - **A fresh browser profile installs the machine's extensions a few seconds in, and Edge ends the
   origin's `SharedWorker` when it does.** Every tab reports `BROKER_UNAVAILABLE` once, logs
-  `transport.broker-lost`, and carries on with a new worker - step 29, met in the wild.
+  `transport.broker-lost`, and carries on with a new worker - step 28, met in the wild.
   `npm run test:background` starts its browser with `--disable-extensions` for that reason.
 - **Step 18 resists automation.** Edge's settings pages list the site's serial permission as text
   without a control a test can address, and the address bar's page-info bubble does not stay open
   when opened through UI Automation.
 - **Virtual COM port pairs do not work on current Windows.** com0com's driver is cross-signed, and
-  since the Windows update of April 2026 such kernel drivers are no longer trusted; loading it would
-  mean switching off Secure Boot or memory integrity, which is not a price for a test. The emulator
-  over usbip-win2, whose driver is attestation-signed, is what replaced it.
+  Windows does not trust such kernel drivers; loading it would mean switching off Secure Boot or
+  memory integrity, which is not a price for a test. The emulator over usbip-win2, whose driver is
+  attestation-signed, stands in their place.

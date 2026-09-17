@@ -77,8 +77,8 @@ describe('serial-broker.worker', () => {
     connect({ ports: [alice] });
     const bob = join('bob');
 
-    // A tab of another build that was served this worker script: a copied file left over from an
-    // earlier release, or a cached one (ADR-0008).
+    // A tab of another build that was served this worker script: a copied file that belongs to
+    // another release, or a cached one (ADR-0008).
     const otherVersion = { v: PROTOCOL_VERSION + 1, from: 'alice', to: 'all' };
     alice.deliver({ ...otherVersion, type: 'hello' });
     alice.deliver({ ...otherVersion, type: 'status-request', configName: 'Reader', retry: false });

@@ -1,12 +1,11 @@
 # ADR-0011: Expose nothing about the coordination mechanism
 
 - **Status:** Accepted
-- **Date:** 2026-09-12
 
 ## Context
 
-The stated requirement is explicit: users of the library must not need to know which context
-owns the port. Beyond ergonomics, there is a hard engineering reason. Anything observable
+Users of the library must not need to know which context owns the port. Beyond ergonomics, there
+is a hard engineering reason. Anything observable
 becomes load-bearing: if an application can ask "am I the owner?", some application will
 branch on it, and every future change to the election mechanism becomes a breaking change to
 that application. Worse, an application that believes it is the owner will be wrong
@@ -38,8 +37,8 @@ since, observedAt, lastErrorCode }` - the condition of the _connection_ and the 
 ## Alternatives considered
 
 - **Expose `isOwner` read-only.** Every reviewer asks for it. Rejected: it is stale the moment it
-  is read, it invites exactly the branching this decision prevents, and no legitimate application
-  need for it survived examination - the library already routes writes from any context, so there
+  is read, it invites exactly the branching this decision prevents, and there is no legitimate
+  application need for it - the library routes writes from any context, so there
   is nothing an owner can do that a participant cannot.
 - **Expose a participant count.** Useful for dashboards, but it leaks the topology and fluctuates
   during transfers. Operators get it from diagnostics.

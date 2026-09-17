@@ -113,8 +113,8 @@ export function defaultFormValues(): SetupFormValues {
  * The library's default for each field that may be left blank, as the text an input shows as
  * its placeholder.
  *
- * Read from the library's own defaults, so the dialog cannot promise a default the library no
- * longer applies.
+ * Read from the library's own defaults, so the dialog cannot promise a default other than the one
+ * the library applies.
  */
 export function defaultPlaceholders(): Readonly<Record<string, string>> {
   const placeholders: Record<string, string> = {};

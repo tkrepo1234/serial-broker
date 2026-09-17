@@ -5,9 +5,8 @@
  * does not behave, so what it offers has to be there in a real browser, not only in its markup.
  * Its unit tests read `debug/public/index.html` as text; these click it.
  *
- * The scenario is the one that used to be impossible: a configuration this page is not connected
- * to could not be forgotten, because every way of stopping was offered for connected
- * configurations only - so dropping a remembered entry meant connecting to it first. See ADR-0033
+ * The scenario is a configuration this page is not connected to: every way of stopping is offered
+ * for it as well, so dropping a remembered entry does not mean connecting to it first. See ADR-0033
  * for what releasing does and does not forget, and ADR-0035 for why this suite looks the way it
  * does.
  */
@@ -71,8 +70,8 @@ test.describe('the debugging surface', () => {
     await expect(page.locator('#configurationRows')).toContainText('Scale');
     await expect(detail.locator('[data-part="connect"]')).toBeVisible();
 
-    // Now the case that used to need a connection first: the page is not using it, and the entry
-    // is dropped all the same. The dialog says as much before it is confirmed.
+    // The case that needs no connection first: the page is not using it, and the entry is dropped
+    // all the same. The dialog says as much before it is confirmed.
     await detail.locator('[data-part="disconnect"]').click();
     await expect(page.locator('#forgetDialog')).toContainText('This page is not using it');
     await page.locator('#forgetDialog [data-part="forget"]').check();

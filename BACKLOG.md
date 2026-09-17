@@ -1,20 +1,21 @@
 # Backlog
 
-What is open. Finished work is in the [changelog](./CHANGELOG.md), decisions and their reasons are
-in the [ADRs](./docs/adr/README.md); neither is repeated here.
+What is open. What the library contains is in the [changelog](./CHANGELOG.md), decisions and their
+reasons are in the [ADRs](./docs/adr/README.md); neither is repeated here.
 
-## Standing decisions
+## Standing constraints
 
-Tim's, and not derivable from the code:
+Not derivable from the code:
 
 - **Audience: industry.** Production interfaces where simple, robust installation matters. Every
   design decision, example and documentation chapter is judged against that first.
 - **A page has to run from a folder opened as a file**, with no web server and no internet.
-- **A tag only on Tim's word.** Releasing is described in [CONTRIBUTING.md](./CONTRIBUTING.md).
-- **npm: not before 1.0.** At 1.0, bring the question back to Tim.
-- **The repository stays private** until Tim says otherwise. Two things wait for that day: GitHub's
-  private vulnerability reporting, which exists for public repositories only and is named in
-  `SECURITY.md` already, and hosting the documentation on GitHub Pages.
+- **A tag only on the owner's word.** Releasing is described in
+  [CONTRIBUTING.md](./CONTRIBUTING.md).
+- **npm: not before 1.0.** Whether to publish there is decided at 1.0.
+- **The repository is private.** Two things wait for the day it is public: GitHub's private
+  vulnerability reporting, which exists for public repositories only and is named in `SECURITY.md`,
+  and hosting the documentation on GitHub Pages.
 - **Two examples**, `examples/minimal-js` and `examples/terminal-openui5`. No framework integrations.
 - **Not targets:** Chrome for Android; unplugging a physical adapter by hand; large payloads on the
   Arduino board.
@@ -32,7 +33,7 @@ Tim's, and not derivable from the code:
 
 ## Candidates for the API
 
-From two cold reads of the documentation. None is scheduled.
+None is scheduled.
 
 - A request/answer helper, `request(name, data, { answer, timeoutMs })`, with cross-tab
   exclusivity, and a bounded line splitter as an export instead of example code.
@@ -55,8 +56,8 @@ Each is a documented limit or a test that does not exist; none is a defect waiti
 - A tab that connects after a worker `warn` record was written is never told about it: the worker
   keeps no buffer to replay. Its records are not in the diagnostics observer's `collect()` either.
 - The broker has no rate limit of its own. Rate limits are per context, not per sender, so a flood
-  can crowd legitimate answers out of the allowance (ADR-0031 says why per-sender rates were
-  rejected).
+  can crowd legitimate answers out of the allowance (ADR-0031 says why the rates are not
+  per sender).
 - What a dead worker swallowed is only partly asked for again: errors and traffic broadcast into it
   are not repeated, and a write handed on afterwards may reach the device after a later write of
   the same tab (Known limits, "Messages on their way when the bus changes are lost").
@@ -69,7 +70,7 @@ Each is a documented limit or a test that does not exist; none is a defect waiti
 - The index of remembered configurations is one key every tab writes: a name added by two tabs
   within the propagation window can be lost until that tab saves again, and entries left behind by
   an unreadable index are never cleaned up. Both would need key enumeration, which ADR-0033
-  rejected.
+  rules out.
 
 **The platform**
 

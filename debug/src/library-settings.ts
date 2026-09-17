@@ -94,8 +94,8 @@ export function linkWithSettings(pageUrl: string, settings: LibrarySettings): st
 }
 
 /**
- * Reads what was saved, treating it as hostile: it may be from an older page, hand-edited, or
- * truncated (docs/guidelines/defensive-programming.md).
+ * Reads what was saved, treating it as hostile: it may be written by another build of the page,
+ * hand-edited, or truncated (docs/guidelines/defensive-programming.md).
  */
 function parseSaved(saved: string | null, defaultWorkerUrl: string): Partial<LibrarySettings> {
   if (saved === null) {

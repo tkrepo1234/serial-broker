@@ -1,5 +1,5 @@
 /**
- * What every benchmark scenario is expected to measure - written down before anything was measured.
+ * What every benchmark scenario is expected to measure - written down before it is measured.
  *
  * The expectation is what a result is judged against, so it is data here rather than a number in
  * a report: a result more than ten times worse than its expectation has to become a fix or a
@@ -117,7 +117,7 @@ export const HARNESS_EXPECTATIONS: Expectations = {
 /**
  * A real Chromium with the Web Serial stand-in: `bench/browser/`.
  *
- * Every hop is now a real `postMessage` between processes, a few hundred microseconds each, and
+ * Every hop is a real `postMessage` between processes, a few hundred microseconds each, and
  * a handover after a crash waits for the browser to notice that a renderer is gone. The rates are
  * real time, so the write scenarios take as long as they say.
  */
@@ -149,13 +149,13 @@ export const BROWSER_EXPECTATIONS: Expectations = {
   // Chromium has to notice that the renderer is gone before it frees the lock.
   //
   // `wallP50`/`wallP95` time the first surviving page to report `open`, which is the page that
-  // takes the port over. The other metrics were added on 2026-09-14, after the first run, because
-  // that first page hides the rest of them: `everyTab` times the last surviving page to report
-  // `open`, and `library` the first one against a plain Web Lock the crashed page held, granted
-  // to a waiting page in the same crash - the platform's part taken out. Their values were not
-  // taken from a result: `everyTab` is the bound written above for the same handover, since a page
-  // that does not hold the port hears of the new holder one hop later; `library` is the bound
-  // written for a release below, which reasoned from the same steps from a free lock to `open`.
+  // takes the port over. That first page hides the rest of them, so `everyTab` times the last
+  // surviving page to report `open`, and `library` the first one against a plain Web Lock the
+  // crashed page held, granted to a waiting page in the same crash - the platform's part taken
+  // out. Neither bound is taken from a result: `everyTab` is the bound of `wall` for the same
+  // handover, since a page that does not hold the port hears of the new holder one hop later;
+  // `library` is the bound of a release below, which reasons from the same steps from a free
+  // lock to `open`.
   'handover/crash': {
     wallP50: lowerMs(250),
     wallP95: lowerMs(500),
@@ -174,6 +174,6 @@ export const BROWSER_EXPECTATIONS: Expectations = {
   'start/joining-tab': { wallP50: lowerMs(50), wallP95: lowerMs(100) },
   // An hour's worth of traffic, compressed into as many seconds as it takes, with the garbage
   // collected before and after through the DevTools protocol. A renderer's heap is coarser than
-  // Node's - the measurement is per page, and `performance.memory` counts what V8 has mapped.
+  // Node's - the measurement is per page, and `Runtime.getHeapUsage` counts what V8 has mapped.
   'steady-state/one-hour': { heapGrowth: lowerKb(2_048) },
 };

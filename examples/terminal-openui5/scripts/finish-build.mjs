@@ -77,10 +77,10 @@ await writeFile(
  * the lazy part of a library. It loads them with a script element, which a page opened from a file
  * may do, so they stay as files.
  *
- * Measured, not guessed: the built page was opened from a file and every dialog, menu, select,
- * theme and error path exercised, in both themes and at two widths, with every request recorded
- * (2026-09-17, OpenUI5 1.148.8). The smoke test's last case does the same walk and fails on the
- * first request the browser refuses - which is how a framework update that needs one more is found.
+ * Measured, not guessed, with OpenUI5 1.148.8: these are the requests the built page makes when it
+ * is opened from a file and every dialog, menu, select, theme and error path is exercised, in both
+ * themes and at two widths. The smoke test's last case does the same walk and fails on the first
+ * request the browser refuses - which is how a framework update that needs one more is found.
  */
 const KEPT_MODULES = new Set([
   'sap/ui/core/ComponentSupport.js',

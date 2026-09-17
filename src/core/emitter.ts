@@ -8,15 +8,14 @@ export type ListenerErrorReporter = (error: SerialBrokerError) => void;
 /**
  * Event dispatch for one configuration.
  *
- * Two properties are load-bearing and both exist because application listeners are hostile
- * code as far as this library is concerned (docs/guidelines/defensive-programming.md):
+ * Three properties are load-bearing, and all of them exist because application listeners are
+ * hostile code as far as this library is concerned (docs/guidelines/defensive-programming.md):
  *
  * - **Re-entrancy safe.** Dispatch iterates a snapshot of the listener set, so a listener that
  *   calls `subscribe()` or `unsubscribe()` - or `send()`, which can synchronously emit -
  *   cannot corrupt the iteration or receive an event it registered for during that dispatch.
  * - **Fault isolating.** A listener that throws is caught, reported once as `LISTENER_THREW` in
- *   its own tab,
- *   and the remaining listeners still receive the event.
+ *   its own tab, and the remaining listeners still receive the event.
  * - **Bytes are each listener's own.** A payload that carries `data` is handed to every listener
  *   with a copy of those bytes. The types promise a copy that is safe to keep or to change, and
  *   the same array also goes to the other tabs over the bus: a listener that wrote into it would

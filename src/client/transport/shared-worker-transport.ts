@@ -48,7 +48,7 @@ export type SharedWorkerFactory = (url: string | URL, name: string) => SharedWor
  * - `worker-other-protocol-version`: the script runs another protocol version, and said so in its
  *   answer to `hello` (ADR-0008).
  * - `worker-not-answering`: the worker said nothing within {@link HANDSHAKE_DEADLINE_MS} - a fetch
- *   that hangs, or a script from before the handshake was frozen (ADR-0008, ADR-0041).
+ *   that hangs, or a script that does not answer the handshake (ADR-0008, ADR-0041).
  */
 export type WorkerLoadFailure =
   'worker-script-failed' | 'worker-other-protocol-version' | 'worker-not-answering';
@@ -304,8 +304,8 @@ export class SharedWorkerTransport implements Transport {
       return;
     }
     if (this.#phase === 'starting' && this.#startup !== undefined) {
-      // No broker of this version ever answered: a fetch that hangs, or a script from before the
-      // handshake was frozen (ADR-0008). As when the script does not load, nothing sent reached
+      // No broker of this version ever answered: a fetch that hangs, or a script that does not
+      // answer the handshake (ADR-0008). As when the script does not load, nothing sent reached
       // anyone, so whoever created the transport can send it elsewhere.
       this.#startup.onLoadFailed(
         new Error(`The SharedWorker did not answer within ${String(HANDSHAKE_DEADLINE_MS)} ms`),

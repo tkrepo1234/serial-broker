@@ -1,7 +1,6 @@
 # ADR-0014: Inject the browser environment, with a monotonic and a wall clock
 
 - **Status:** Accepted
-- **Date:** 2026-09-12
 
 ## Context
 
@@ -15,9 +14,9 @@ the test could not run two independent tabs in one process.
 Time is part of the environment too, in two senses. `Date.now()` jumps whenever the user corrects
 the clock, a laptop crosses a time zone, or NTP steps it; a jump of an hour is ordinary on a machine
 that has just woken. A duration computed from two such readings is wrong by the size of the jump,
-while the browser's timers, which run on a monotonic clock, are not: a connection open for hours
-looked unstable after the clock was set back, and waiting writes expired the moment it was set
-forward.
+while the browser's timers, which run on a monotonic clock, are not: measured that way, a
+connection open for hours looks unstable once the clock is set back, and waiting writes expire the
+moment it is set forward.
 
 The platform's own Web Serial types are _ambient_, declared globally by `@types/w3c-web-serial`, a
 package this library cannot make an application install.
@@ -57,10 +56,10 @@ contexts.
 `SerialOptionsLike`, `SerialPortInfoLike`, `SerialPortRequestOptionsLike` and
 `SerialPortFilterLike`, and nothing in `src/` names an ambient Web Serial type. The platform's
 objects satisfy them structurally. `scripts/check-dist.mjs` type-checks every emitted `.d.ts` with
-`skipLibCheck: false` and no ambient types, so a Web Serial type creeping back fails the build.
+`skipLibCheck: false` and no ambient types, so an ambient Web Serial type in a declaration fails the build.
 
 The public facade builds the default environment lazily, so applications see none of this;
-`SerialBroker` is still a zero-argument singleton. Tests construct
+`SerialBroker` is a zero-argument singleton. Tests construct
 `new SerialBrokerClient(environment)` directly - which is also what lets one test process run
 a dozen independent simulated tabs.
 

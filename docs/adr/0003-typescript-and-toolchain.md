@@ -1,7 +1,6 @@
 # ADR-0003: TypeScript, Vitest, tsup, ESLint and Prettier
 
 - **Status:** Accepted
-- **Date:** 2026-09-12
 
 ## Context
 

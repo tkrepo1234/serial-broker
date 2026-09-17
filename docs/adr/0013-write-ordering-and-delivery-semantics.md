@@ -1,7 +1,6 @@
 # ADR-0013: Per-participant write ordering with at-most-once delivery
 
 - **Status:** Accepted
-- **Date:** 2026-09-12
 
 ## Context
 
@@ -18,8 +17,8 @@ tabs produce a byte stream that means nothing to the device. A silently retried 
 be executed twice - and for a device that dispenses, cuts, prints or moves something, twice
 is materially worse than zero times.
 
-The platform adds two facts, measured against the USB/IP emulator in Microsoft Edge 153 on Windows
-11 ([ADR-0035](./0035-browser-tests-with-playwright.md)). A write that fits the port's transmit
+The platform adds two facts, which the emulator suite pins in Chromium on Windows
+([ADR-0035](./0035-browser-tests-with-playwright.md)). A write that fits the port's transmit
 buffer (`serial.bufferSize`, 255 bytes by default) resolves at once, although the device took
 nothing. And a write the device does not take cannot be withdrawn: `writer.abort()` never settles
 while the operating system's write is pending, `port.close()` then never settles either, and
@@ -151,20 +150,19 @@ closing it works.
   `writeTimeoutMs` differs would be refused a configuration it may reasonably run differently, and
   it would not help: a write held for a port, or handed on after `NOT_CONNECTED`, reaches the holder
   part way through its time with equal settings too.
-- **Report `write-started` once the write has begun, and trust durations to keep the holder within
-  the issuer's deadline.** What an earlier design did: `write-request` carried `remainingMs`, what was
-  left of the issuer's deadline, and the holder did not begin a write once that long had passed since
-  it received the request. Counted from receipt, the limit fell later than the issuer's deadline by
-  however long the request waited before it was handled - a busy main thread, a machine asleep - and
-  a write begun just before the limit had its `write-started` cross the deadline. Reproduced in the
-  in-process harness with the holder's messages held for 4 s: the write was begun after its issuer
-  had reported `started: false`. No duration closes this: neither side can measure the wait. And the
-  crash window stayed, a `write-started` that a crash made arrive too late.
+- **Let the holder begin a write on its own, report that it has begun, and trust durations to keep
+  it within the issuer's deadline**: the request carries what is left of the issuer's deadline, and
+  the holder begins no write once that long has passed since it received the request. Counted from
+  receipt, the limit falls later than the issuer's deadline by however long the request waited
+  before it was handled - a busy main thread, a machine asleep - and a write begun just before the
+  limit has its report cross the deadline: the write is begun after its issuer has reported
+  `started: false`. No duration closes this: neither side can measure the wait. And the crash window
+  stays, a report that a crash makes arrive too late.
 - **Carry the issuer's deadline as a moment.** `monotonicNow()` readings of two contexts do not
   compare; `Date.now()` readings do, but a clock set forward would refuse writes still in time, which
   `browser-lifecycle.test.ts` pins against, and a clock set back would let lapsed ones through.
-- **Keep `remainingMs` beside the question, to drop a write its issuer has certainly given up without
-  asking.** It saves one round trip for a write that is lost anyway, and costs a second rule and a
+- **Carry what is left of the issuer's deadline beside the question, to drop a write its issuer has
+  certainly given up without asking.** It saves one round trip for a write that is lost anyway, and costs a second rule and a
   field that decides nothing; the answer `false` settles such a write as quickly as an approval, and
   the holder's own `writeTimeoutMs` bounds what it keeps.
 - **Say nothing instead of `false`.** A write the issuer gave up would hold the queue - every tab's
@@ -201,8 +199,8 @@ closing it works.
   says so; `WRITE_TIMEOUT` does.
 - Releasing a configuration while a chunk is stuck still cannot close the port; it stays held until
   the page goes. That is the platform's limit, reached only on release.
-- Measured with an emulated device under usbip-win2. Whether a physical adapter's driver ends a
-  pending write is unknown; a write that does end, ends the stall.
+- The stall is known from an emulated device under usbip-win2. Whether a physical adapter's driver
+  ends a pending write is unknown; a write that does end, ends the stall.
 
 ## Verification
 
@@ -216,6 +214,6 @@ a write that found the port closed and is written once it is open again;
 `write-deadlines.test.ts` for tabs with different `writeTimeoutMs`, writes that reach the port part
 way through their time, a request that waited 4 s before the holder handled it, an approval just
 before the deadline, and an issuer that closes or crashes before answering; `hostile-bus.test.ts` for
-approvals forged on both transports; `test/integration/connection-regressions.test.ts`, "a device
+approvals forged on both transports; `test/integration/connection-supervision.test.ts`, "a device
 that stops taking writes"; and `test/browser/hardware/emulator.spec.ts`, which pins the measured
 browser behaviour so a Chromium that changes it fails.

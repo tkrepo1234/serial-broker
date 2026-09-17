@@ -108,7 +108,8 @@ Copy the `<script type="module">` block out of `index.html`, and with it the imp
 3. **Name your device.** Replace `device: { any: true }` with its USB ids, and `baudRate` with the
    device's. Leaving `device` out instead takes the device from the port the user picks, and
    remembers it ([Configuration](../../docs/site/configuration.md#device)).
-4. **Call `requestAccess()` first thing in a click handler**, with nothing awaited before it.
+4. **Call `requestAccess()` in a click handler**, before anything slow: the browser counts a click
+   as a gesture for a few seconds only.
 5. **Show `error.code` and `error.remediation`**, and branch on `code` - never on `message`.
 
 With a bundler the two URLs go away: it resolves `serial-broker` and finds the worker script
@@ -137,12 +138,12 @@ and `index.html` still works, served by any web server that can reach the librar
 into `.typecheck/`, keeping its line numbers, and runs `tsc` with `allowJs` and `checkJs` over the
 copy: the JSDoc annotations in the script are checked against the library's published `.d.ts`
 files, so a misspelt option or event name fails the check the way it would in a TypeScript
-application, and CI runs it. The alternative - an example that is one HTML file and therefore
-checked by nothing - would have left the plainest integration the only unchecked one.
+application, and CI runs it. An example that is one HTML file and therefore checked by
+nothing would make the plainest integration the only unchecked one.
 
 **`el(id)` is typed as an `HTMLInputElement`.** One helper, deliberately over-specific, so that
 `value`, `disabled`, `hidden` and `textContent` all need no annotation at their call sites. Naming
-each element with its own type would have been seven lines of casts in a page whose point is that
+each element with its own type would be seven lines of casts in a page whose point is that
 there is nothing to wade through.
 
 **`device: { any: true }`.** The page cannot know the reader's device, and a first page should

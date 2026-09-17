@@ -77,7 +77,7 @@ retitle('docs/site/api/reference/index/index.md', 'Overview');
 retitle('docs/site/api/reference/diagnostics/index.md', 'serial-broker/diagnostics');
 // The interface an application actually calls, named for what it is rather than for its file.
 retitle('docs/site/api/reference/index/interfaces/SerialBrokerApi.md', 'Application API');
-// The interface page is 578 lines of detail with no way to see what it offers; the overview
+// The interface page is hundreds of lines of detail with no way to see what it offers; the overview
 // gives the reader one line per method before the detail starts.
 addMethodOverview('docs/site/api/reference/index/interfaces/SerialBrokerApi.md');
 // Each method a section of its own, so the navigation lists them under the page.
@@ -214,7 +214,7 @@ function addMethodOverview(path) {
  *
  * The theme shows three levels (`navigation_depth` in conf.py): the reference page, this page,
  * and this page's sections. TypeDoc writes each method as `###` under a `## Methods` heading,
- * which puts them a level deeper than that - so the navigation showed the page and nothing of
+ * which puts them a level deeper than that - so the navigation would show the page and nothing of
  * what is on it. Lifting everything below that heading by one makes every method a section the
  * sidebar lists, and leaves `#### Parameters` and `#### Returns` one level below it, out of the
  * navigation and in the page where they belong. Anchors are unchanged: they follow the heading's

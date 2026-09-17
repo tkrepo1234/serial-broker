@@ -275,3 +275,39 @@ describe('a write of another tab during a clean release', () => {
     expect(device.writtenText()).toContain('B');
   });
 });
+
+describe.each(TRANSPORT_MODES)('a write issued during an owner change (%s)', (transport) => {
+  it.each(['closes', 'crashes'] as const)(
+    'reaches the device once when the tab holding the port %s',
+    async (how) => {
+      const { harness, device } = readerHarness({ transport });
+      const first = harness.openTab();
+      await first.setup('Reader', READER_OPTIONS);
+      const second = harness.openTab();
+      await second.setup('Reader', READER_OPTIONS);
+
+      const busy = harness.openBusyTab();
+      await busy.client.setup('Reader', READER_OPTIONS);
+      await harness.settle();
+
+      busy.hold();
+      if (how === 'closes') {
+        await first.close();
+      } else {
+        await first.kill();
+      }
+      await harness.advance(0);
+
+      // The busy tab still believes the port is open with the first tab, and sends: the write
+      // reaches the second tab, which holds the port now. Then the busy tab catches up, and
+      // learns only afterwards that ownership moved.
+      const sending = busy.client.send('Reader', 'PING');
+      await harness.settle();
+      busy.deliverHeld();
+      await harness.settle();
+
+      await expect(sending).resolves.toBeUndefined();
+      expect(device.writtenText()).toBe('PING');
+    },
+  );
+});

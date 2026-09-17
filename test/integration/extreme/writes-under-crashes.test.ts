@@ -50,7 +50,7 @@ describe.skipIf(!IS_EXTREME).each(TRANSPORT_MODES)(
         }
         await harness.advance(1_000);
         const outcomes = new Map<number, Promise<unknown>>();
-        // Typed arrays rather than maps: what the scenario keeps about forty thousand writes must
+        // Typed arrays rather than maps: what the scenario keeps about ten thousand writes must
         // not be what the footprint measures.
         /** How each write ended, by its number: {@link RESOLVED}, {@link OWNER_LOST} or {@link OTHER}. */
         const settled = new Uint8Array(SIZES.writes);

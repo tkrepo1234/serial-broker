@@ -65,7 +65,7 @@ test.describe('a port shared across tabs', () => {
     // asleep: it then runs nothing at all - no timer, no callback, no message handler. A frozen
     // participant must not hold up the tabs still working, and must catch up when it is looked
     // at again rather than having to be reloaded. See step 7 of the manual test plan, whose
-    // milder case - a tab merely in the background - only a person can stage.
+    // milder case - a tab merely in the background - is `test/browser/background-tab.mjs`.
     await installStandIn(context, GRANTED_DEVICE);
     const tabs = [await Tab.open(context), await Tab.open(context), await Tab.open(context)];
     for (const tab of tabs) {

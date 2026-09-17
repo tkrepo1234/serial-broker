@@ -1,7 +1,6 @@
 # ADR-0004: The physical port is owned by a window, not by the worker
 
 - **Status:** Accepted
-- **Date:** 2026-09-12
 
 ## Context
 

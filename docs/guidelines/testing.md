@@ -150,8 +150,8 @@ version, device, result.
 
 ## The benchmarks
 
-`bench/` measures what the library costs, in two places, against expectations that were written
-down before the first measurement (`bench/expectations.ts`, ADR-0037). The results are the
+`bench/` measures what the library costs, in two places, against expectations written down
+before anything is measured (`bench/expectations.ts`, ADR-0037). The results are the
 [Performance chapter](../site/performance.md) of the documentation.
 
 ```sh

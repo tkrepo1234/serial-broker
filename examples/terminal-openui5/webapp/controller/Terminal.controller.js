@@ -613,7 +613,7 @@ sap.ui.define(
       _walkHistory: function (event, step) {
         // The keys are this field's alone. Left to travel on, they reach the toolbar the field sits
         // in, which moves the focus to its neighbour on an arrow key - and the neighbour is the
-        // Text/Hex select, so walking the history threw the user out of the field they type in.
+        // Text/Hex select, so walking the history would throw the user out of the input field.
         event.preventDefault();
         event.stopPropagation();
         /** @type {{ setMarked?: () => void }} */ (event).setMarked?.();

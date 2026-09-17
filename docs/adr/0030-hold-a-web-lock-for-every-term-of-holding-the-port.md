@@ -1,7 +1,6 @@
 # ADR-0030: Hold a Web Lock for every term of holding the port
 
 - **Status:** Accepted
-- **Date:** 2026-09-14
 
 ## Context
 
@@ -15,11 +14,11 @@ A new owner's `owner-claimed` proves less than it seems. The ownership lock cann
 it is held ([ADR-0005](./0005-owner-election-via-web-locks.md)), so a claim proves that the former
 owner let go of the lock - not that its last messages have arrived. They come from another sender,
 and nothing orders the messages of two senders: not the `BroadcastChannel`, and not a busy main
-thread. Two defects followed, both reproduced: a write that succeeded failed with
-`OWNER_LOST_DURING_WRITE`, and a write reached the device twice, handed to the new owner before the
-former owner's `write-started` arrived.
+thread. Taking the claim for the end of the former term has two defects: a write that succeeded fails with
+`OWNER_LOST_DURING_WRITE`, and a write reaches the device twice, handed to the new owner before the
+former owner's last word about it arrives.
 
-The bus is also open to every script of the origin (SECURITY.md). A message could invent a term,
+The bus is also open to every script of the origin (SECURITY.md). Believed on its word, a message could invent a term,
 end a live one, state another tab limit, resolve a write whose bytes were still queued, or deliver
 device data that never arrived. What is needed is a statement about a term that a message cannot
 make. The browser makes one about Web Locks: a lock is held or it is not, every context sees the
@@ -87,7 +86,7 @@ about the term: the tab forgets it, and the next message naming it is checked af
 
 ## Alternatives considered
 
-- **Keep the claim as the proof, and wait a fixed delay after it.** A clean handover then waits for
+- **Take the claim as the proof, and wait a fixed delay after it.** A clean handover then waits for
   nothing, and a late message cannot be attributed to the old owner or the new.
 - **Term identifiers without locks, a succeeded term ending after a grace period** of one second
   without a word. Too short and a slow message becomes a repeated command, too long and every
@@ -99,20 +98,19 @@ about the term: the tab forgets it, and the next message naming it is checked af
 - **Have the new owner ask the old one what it accepted.** The old one may have crashed, which is the
   case that matters.
 - **One lock per term, without the sender and the limit in its name.** The tab would take them from
-  the message, which is what a forged `status` with another `maxTabs` abused.
+  the message, which a forged `status` with another `maxTabs` would abuse.
 - **`locks.query()` for everything.** Stale the moment it is taken. Query is used for one thing only:
   seeing the goodbye request, a fact about a queue rather than a holder.
 - **End a term when its lock is free, in the clean case too.** The lock's release can reach another
-  tab before the holder's last messages do - the defect this record exists to fix.
+  tab before the holder's last messages do - the defect this record exists to prevent.
 - **Sign or authenticate messages.** There is no key a script of the origin could not read.
 
 ## Consequences
 
 ### Positive
 
-- A clean handover no longer fails a write that succeeded, and no longer writes one twice, on either
-  transport.
-- A forged message can no longer end a live term, invent a term, make a tab withdraw over a tab
+- A clean handover fails no write that succeeded, and writes none twice, on either transport.
+- A forged message cannot end a live term, invent a term, make a tab withdraw over a tab
   limit, resolve or strand a write, or deliver device data that never arrived.
 - The end of a crashed holder's term is exact, and no timer decides anything about a term, so a
   hidden or frozen tab is no slower to notice than any other.
@@ -146,7 +144,7 @@ about the term: the tab forgets it, and the next message naming it is checked af
 
 `test/unit/owner-terms.test.ts` covers the rules against a lock manager; `test/unit/pending-writes.test.ts`
 a write started or answered by another term. `test/integration/multi-tab/handover-races.test.ts`
-reproduces both handover defects with messages from the former owner held back, and
+stages both handover races with messages from the former owner held back, and
 `failover.test.ts` the exact end after a crash, in both transport modes.
 `test/integration/multi-tab/hostile-bus.test.ts` posts forged claims, statuses, goodbyes, write
 results and device data as a script of the origin, including a goodbye with a request of the

@@ -1,23 +1,22 @@
 # ADR-0020: Build the developer documentation with Sphinx, MyST and a TSDoc-generated reference
 
 - **Status:** Accepted
-- **Date:** 2026-09-13
 
 ## Context
 
-The README is a decision aid and the ADRs record reasoning; neither teaches use. The requirement
-(Tim, 2026-09-12) is product-grade developer documentation modelled on
+The README is a decision aid and the ADRs record reasoning; neither teaches use. The library
+needs product-grade developer documentation modelled on
 [open62541 1.3](https://www.open62541.org/doc/1.3/): Sphinx with the Read the Docs theme, an
 introduction, tutorials, chapters that explain behaviour, and every API function documented in
 full.
 
-Three things had to be settled first:
+Three things shape it:
 
 - **Sphinx is Python; this repository is Node.** Python 3 is available on development machines,
-  but nothing in the repository needed it so far.
+  and nothing else in the repository needs it.
 - **Where the API reference comes from.** open62541 extracts it from comments in its C headers.
-  This library's exports already carry TSDoc comments, written to a documented standard
-  (`docs/guidelines/documentation.md`), and typedoc already reads them.
+  This library's exports carry TSDoc comments, written to a documented standard
+  (`docs/guidelines/documentation.md`), and typedoc reads them.
 - **Markup.** open62541 writes reStructuredText. Everything else in this repository is Markdown.
 
 ## Decision
@@ -44,7 +43,7 @@ Three things had to be settled first:
   from the signatures with every change. Rejected; the chapters around the reference are where
   hand-written prose belongs.
 - **A Node documentation generator (VitePress, Docusaurus, typedoc's own HTML).** No Python, but
-  not Sphinx and not the Read the Docs theme, which are the requirement.
+  not Sphinx and not the Read the Docs theme, which are what the model is built with.
 
 ## Consequences
 

@@ -1,7 +1,6 @@
 # ADR-0033: Remembered configurations: one storage key each, kept while any tab runs them
 
 - **Status:** Accepted
-- **Date:** 2026-09-14
 
 ## Context
 
@@ -13,16 +12,16 @@ device, which serial settings - is ours to store, in `localStorage`.
 Three forces shape how:
 
 - **The protocol version changes often, the stored format rarely.** A stored entry is the options
-  `setup()` accepts, validated again on every read. Tying the key to the protocol version silently
-  lost every remembered configuration at each protocol change - four times before the first
-  release.
+  `setup()` accepts, validated again on every read. A key tied to the protocol version would silently
+  lose every remembered configuration at each protocol change.
 - **`localStorage` gives no atomicity.** Each tab works from its renderer's cached copy of the
   area, and a write reaches the other renderers a moment later; the specification's storage mutex
   is implemented by no engine. With all configurations in one key, two tabs remembering different
-  configurations in the same moment wrote each other's stale copy back - the classic lost update,
+  configurations in the same moment write each other's stale copy back - the classic lost update,
   costing a whole configuration.
-- **An entry belongs to the origin, `release()` to one tab.** A tab that released a configuration
-  while other tabs still ran it took it from all of them: their next reload restored nothing.
+- **An entry belongs to the origin, `release()` to one tab.** A tab that releases a configuration
+  while other tabs run it must not take it from all of them: their next reload would restore
+  nothing.
 
 ## Decision
 
@@ -73,12 +72,12 @@ the protocol version, because tabs on different protocol versions share the stor
 does nothing, rather than reporting anything: the option names what must not survive, and nothing
 does.
 
-**Nothing is migrated.** Keys of an earlier format are neither read nor removed. Before 1.0 nothing
-is promised about stored data (BACKLOG.md, standing decisions).
+**Nothing is migrated.** Keys of another storage version are neither read nor removed. Before 1.0
+nothing is promised about stored data (BACKLOG.md, standing constraints).
 
 ## Alternatives considered
 
-- **Keep the key tied to the protocol version.** Nothing wrong is ever restored, but the user's
+- **Tie the key to the protocol version.** Nothing wrong is ever restored, but the user's
   configurations are discarded for a reason that concerns them in no way.
 - **An unversioned key.** Leaves no way to tell an old format from a corrupt entry once it changes.
 - **One key, merged on write, or written from a Web Lock.** The merge happens on a copy that is
@@ -86,9 +85,8 @@ is promised about stored data (BACKLOG.md, standing decisions).
 - **No index, enumerating the keys.** Widens the narrow storage interface
   ([ADR-0014](./0014-dependency-injection-of-the-environment.md)) and makes a restore scan every key
   of the origin, including the application's.
-- **Migrate earlier formats, or remove their keys on restore.** Both were tried and dropped: they
-  serve development setups only, and they buy a tidy `localStorage` with code that has to keep
-  every format the library ever wrote readable. A stale key costs a few hundred bytes and holds
+- **Migrate other storage versions, or remove their keys on restore.** It buys a tidy
+  `localStorage` with code that has to keep every format the library ever wrote readable. A stale key costs a few hundred bytes and holds
   nothing sensitive.
 - **Put the entry back on the `storage` event.** Leaves a window in which the entry is absent, and
   nobody puts it back when the other tabs are frozen or the browser closes right after the release.
@@ -111,21 +109,21 @@ is promised about stored data (BACKLOG.md, standing decisions).
 
 ### Positive
 
-- A protocol change no longer costs anyone their remembered configurations.
-- Two tabs remembering different configurations can no longer lose each other's entry, and one
+- A protocol change costs nobody their remembered configurations.
+- Two tabs remembering different configurations cannot lose each other's entry, and one
   unreadable entry costs that configuration alone.
-- Releasing a configuration in one tab no longer costs the other tabs their configuration on
+- Releasing a configuration in one tab does not cost the other tabs their configuration on
   reload, and a crashed or closed tab never keeps an entry alive.
 - A tab that disconnects keeps its configuration for the next visit, whether or not any other tab
   runs it. Only a caller that asked to forget it loses it.
 
 ### Negative
 
-- A name can still be lost from the index when two tabs write it in the same moment. It costs a name,
+- A name can be lost from the index when two tabs write it in the same moment. It costs a name,
   not an entry, and the tab that saved it lists it again once its hold is granted.
 - An index that could not be read, or a removal racing a write, leaves unreferenced entries behind;
-  so do keys of earlier formats. They are a few hundred bytes of JSON, never read again, and hold
-  nothing sensitive.
+  so do keys of another storage version. They are a few hundred bytes of JSON, never read again,
+  and hold nothing sensitive.
 - One more held lock per remembered configuration per tab. The options remembered are those of the
   tab that saved last.
 - A configuration that disappears from storage for a reason nothing else notices is logged, not

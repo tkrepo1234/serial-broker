@@ -1,33 +1,32 @@
 # ADR-0018: Expose coordination internals to operators through a diagnostics observer
 
 - **Status:** Accepted
-- **Date:** 2026-09-13
 
 ## Context
 
 [ADR-0011](./0011-encapsulation-boundary.md) keeps every trace of the coordination mechanism
 out of the public API: no owner identity, no participant count, no lock state, no transport.
-Its reasoning still holds for **application code** — anything observable becomes load-bearing,
+Its reasoning holds for **application code** — anything observable becomes load-bearing,
 and code that branches on "am I the owner?" is a race.
 
-It left one audience unserved. An **operator** looking at a deployment — a support engineer, a
+It leaves one audience unserved. An **operator** looking at a deployment — a support engineer, a
 developer on a shop floor, the person who owns the machine — has questions ADR-0011 makes
 unanswerable: which tab holds the port, whether the owner is reconnecting and when it tries
 next, whether a tab is sitting on writes that never went out, whether every tab even runs the
 same settings. A logger has to be enabled in advance, in every tab, in the application's own code.
 
-The requirement (2026-09-13) is a debugging surface shipped with the library that shows every
-setting and every piece of status, for transparency towards the people running it.
+The people running a deployment need a debugging surface shipped with the library that shows every
+setting and every piece of status.
 
 Three facts shape how that can be built:
 
 - **The facade is a module-level singleton.** A second entry point that read its state would
   share nothing with it as soon as the two entry points were bundled separately.
-- **The message bus already reaches every context of the origin**, from any page, with no
+- **The message bus reaches every context of the origin**, from any page, with no
   cooperation from the application beyond using the library.
 - **The worker can reach no logger.** A `SharedWorker` is a context of its own, started by the
   browser, and the logger an application configured belongs to a tab. What the worker records -
-  a refused message, an exceeded limit, a tab of another build - was written to nowhere.
+  a refused message, an exceeded limit, a tab of another build - would be written to nowhere.
 
 ## Decision
 
@@ -63,7 +62,7 @@ up no configuration, requests no Web Lock, and never answers for a port.
   `info` records stay in the worker. A tab logs a `worker-log` only from the broker's identity;
   `clientId` in it stays the identity the record concerns, and `reportedBy` names the tab that wrote
   the copy.
-- **The main entry point does not change.** `getStatus()`, the events and every payload keep
+- **The main entry point carries none of it.** `getStatus()`, the events and every payload have
   exactly the keys ADR-0011 pins, and a test asserts that nothing diagnostic is exported from it.
 
 This is the one deliberate exception to ADR-0011, and it is an exception for operators, not for

@@ -392,7 +392,7 @@ describe.each(TRANSPORT_MODES)('a later visit in auto mode (%s)', (transport) =>
     });
   });
 
-  it('still lets restore() reconnect, after setup() and on the visit after that', async () => {
+  it('lets restore() reconnect as well, after setup() and on the visit after that', async () => {
     const harness = new BrowserHarness({ transport });
     const device = harness.serial.addDevice(READER.vendorId, READER.productId);
     await chooseOnFirstVisit(harness, device);

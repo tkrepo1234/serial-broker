@@ -1,8 +1,6 @@
 # ADR-0035: Test in a real browser, against an emulated device and against real hardware
 
 - **Status:** Accepted
-- **Date:** 2026-09-14
-- **Deciders:** maintainers
 
 ## Context
 
@@ -30,9 +28,9 @@ enterprise policy to get around that. And a real device is attached to one machi
 
 A device is also needed to exercise the cases hardware produces worst - a device unplugged
 mid-write, a device that stops answering while its port stays open - and a bench produces those by
-luck, not on command. A virtual COM port cannot be had cheaply on current Windows: since April 2026,
+luck, not on command. A virtual COM port cannot be had cheaply on current Windows:
 Windows 11 24H2 and later load only kernel drivers signed through the Windows Hardware Compatibility
-Program, so com0com's cross-signed builds no longer load (confirmed on the development machine), and
+Program, so com0com's cross-signed builds do not load, and
 a virtual COM port has no USB identity anyway. USB/IP sidesteps both: it is a TCP protocol for
 attaching a USB device to a host, [usbip-win2](https://github.com/vadimgrn/usbip-win2) is a Windows
 client whose drivers are attestation-signed, and a USB/IP server may answer the protocol itself.
@@ -86,7 +84,7 @@ desktop and are opt-in.
 
 ## Alternatives considered
 
-- **Keep checking all of this by hand.** It runs when someone remembers, takes half an hour, and its
+- **Check all of this by hand.** It runs when someone remembers, takes half an hour, and its
   result is a paragraph rather than a red build.
 - **WebDriver BiDi, or Selenium.** A script installed before the page's own scripts, a profile
   directory ours to write before launch, and killing a renderer on command are Playwright's;
@@ -98,7 +96,7 @@ desktop and are opt-in.
   against reality instead.
 - **Grant the permission with the enterprise policy `SerialAllowUsbDevicesForUrls`.** A machine-wide
   registry change made by a test run that outlives it. Refused.
-- **com0com, or a commercial virtual COM port driver.** No longer loads on Windows 11 24H2+ with
+- **com0com, or a commercial virtual COM port driver.** Does not load on Windows 11 24H2+ with
   default security, or is unverifiable without buying it, costs per developer, and injects no
   failures.
 - **A self-built UMDF virtual serial driver.** Plausible, and it would exercise ports without USB
@@ -116,7 +114,7 @@ desktop and are opt-in.
   checked against the platform - including a lock released by a dying renderer and a `SharedWorker`
   shared by tabs.
 - The whole real software path - Web Serial, Chromium's port enumeration, `usbser.sys`, the library -
-  runs against a device that can be unplugged or hung on cue. Its first run found what no simulation
+  runs against a device that can be unplugged or hung on cue. It shows what no simulation
   could: a write the device does not take cannot be withdrawn
   ([ADR-0013](./0013-write-ordering-and-delivery-semantics.md)).
 - The stand-in lets example applications run the library with no device attached.
@@ -148,6 +146,6 @@ desktop and are opt-in.
 the broker is terminated), `transports.spec.ts`, `entry-points.spec.ts` (the minified and the
 classic script build, each sharing a port with the readable one), `debug-surface.spec.ts` and
 `device-lifecycle.spec.ts`; `test/browser/hardware/arduino.spec.ts`, `picker.spec.ts` and
-`emulator.spec.ts` (first run under usbip-win2 0.9.8.0 on 2026-09-15); `emulator/test/` - descriptors, the wire format at the
+`emulator.spec.ts`; `emulator/test/` - descriptors, the wire format at the
 specification's byte offsets, unlink and hang, and the server over real TCP. Runs are recorded in
 [the manual test plan](../manual-test-plan.md).

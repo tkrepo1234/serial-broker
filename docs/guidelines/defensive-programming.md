@@ -12,7 +12,7 @@ There are exactly four, and each has a mandatory discipline:
 | --- | ------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------- |
 | 1   | **Application → library** (public API calls)                 | Validate every argument eagerly and throw a typed error with a remediation hint. Never coerce silently.                                  |
 | 2   | **Other contexts → library** (`postMessage` from worker/tab) | Parse with a validating decoder. Unknown or malformed messages are dropped and reported, never partially applied.                        |
-| 3   | **Persistence → library** (`localStorage`)                   | Treat stored JSON as hostile: it may be from an older version, hand-edited, or truncated. Validate, then discard: nothing is migrated.   |
+| 3   | **Persistence → library** (`localStorage`)                   | Treat stored JSON as hostile: it may be from another version, hand-edited, or truncated. Validate, then discard: nothing is migrated.    |
 | 4   | **Web Serial / hardware → library**                          | Assume every call can reject, hang forever, or resolve after the object is already stale. Everything gets a timeout and a disposal path. |
 
 ## Rules
@@ -35,7 +35,7 @@ function open(configuration: NormalizedConfiguration): Promise<void>;
 that needs an open connection should take the open state as a parameter, not take the
 connection and assert about it — the compiler then proves at every call site what an assertion
 could only discover at runtime. This is why the library has no general `assert(condition)`
-helper: every place one would have gone, a discriminated union or a narrower parameter said it
+helper: wherever one would go, a discriminated union or a narrower parameter says it
 better. The one helper in `core/assert.ts` is `assertNever`, below.
 
 Where the compiler genuinely cannot help - a union member arriving from outside the type
@@ -44,8 +44,8 @@ compile error, and a runtime `INTERNAL_INVARIANT` for values that were never typ
 
 ### Every await can hang — bound it
 
-Web Serial calls (`open`, `close`, `writer.write`, `reader.read`) have been observed to never
-settle when a device is yanked mid-transfer. **Every external promise that ends an operation is
+Web Serial calls (`open`, `close`, `writer.write`, `reader.read`) can stay pending forever
+when a device is yanked mid-transfer. **Every external promise that ends an operation is
 wrapped in a deadline** (`core/deadline.ts`). A timeout is a normal, reported outcome, not an
 exception to the design. A pending `read()` is the one exception: waiting for data is its job, so it
 is ended by cancelling its reader, and the cancel is what is bounded.

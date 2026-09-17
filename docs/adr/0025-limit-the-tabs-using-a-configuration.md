@@ -1,7 +1,6 @@
 # ADR-0025: Limit how many tabs use a configuration at once
 
 - **Status:** Accepted
-- **Date:** 2026-09-13
 
 ## Context
 
@@ -42,8 +41,8 @@ different limit that way withdraws: it leaves the election, the bus and its plac
 configuration and sets it up with the same limit.
 
 [ADR-0011](./0011-encapsulation-boundary.md) withholds everything about coordination from the
-application. `queued` is an exception by request: it says that the limit the application itself set
-is reached, and still nothing about which tab holds the port.
+application. `queued` is a deliberate exception: it says that the limit the application itself set
+is reached, and nothing about which tab holds the port.
 
 ## Alternatives considered
 
@@ -51,10 +50,10 @@ is reached, and still nothing about which tab holds the port.
   fallback has no broker, and a restarted worker knows nobody until the tabs say `hello` again.
 - **Poll the places with `ifAvailable`.** No queue order, and a timer in every waiting tab.
 - **Reject a tab beyond the limit.** Simpler, but every application would have to retry, and the
-  tab that should take over after a crash would have to notice it. Tim chose waiting.
+  tab that should take over after a crash would have to notice it.
 - **Leave differing limits to documentation**, as for the other options. Two tabs with different
   limits would jointly exceed both, which defeats a limit meant to guarantee exclusive use.
-- **Believe the limit a `status` message states.** A forged status with another `maxTabs` made every
+- **Believe the limit a `status` message states.** A forged status with another `maxTabs` would make every
   tab with a different limit withdraw for good. The term lock's name cannot be forged by a message.
 - **Report the conflict to every tab.** An `error` is believed only from a context speaking for a
   term, so the withdrawing tab's report would not reach the holder anyway; it reports to its own

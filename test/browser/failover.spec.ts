@@ -10,7 +10,7 @@
  * crash: Chromium is free to host a `SharedWorker` in the renderer of one of its clients or in a
  * process of its own, so a killed renderer takes the worker with it only sometimes, and a test
  * built on that would fail two minutes later for a reason that is not the library's. The worker
- * is therefore terminated outright, as step 29 of the manual test plan does from
+ * is therefore terminated outright, as step 28 of the manual test plan does from
  * `chrome://inspect/#workers`; what the tabs then do is ADR-0041. See ADR-0035.
  */
 
@@ -76,7 +76,7 @@ test.describe('the broker dies', () => {
   test('a tab that was frozen while the broker died catches up when it is looked at', async ({
     context,
   }) => {
-    // The second half of step 29: the same loss, but one tab had been in the background long
+    // The second half of step 28: the same loss, but one tab had been in the background long
     // enough for Chromium to freeze it - it ran nothing while the worker died and while the
     // others got a new one. Nothing of ours can have noticed on its behalf, so what it does on
     // waking is the test: it must catch up as quickly as a tab that was watching, because the

@@ -76,8 +76,7 @@ Use these words and only these words, in code, comments and prose:
 
 Banned: "master/slave" in code and documentation — the role is **owner**, the others are
 **participants**. ([ADR-0005](../adr/0005-owner-election-via-web-locks.md) explains the
-mechanism; the user-facing request used the word "master", and the implementation uses "owner"
-consistently. Application-facing documentation says "the tab that holds the port".)
+mechanism. Application-facing documentation says "the tab that holds the port".)
 
 ## ADRs
 

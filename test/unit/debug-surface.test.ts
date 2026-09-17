@@ -805,7 +805,7 @@ describe('debugging surface: formatting', () => {
 
   it('lists who holds each port from the ownership locks alone, whatever the name holds', () => {
     const lock = (name: string) => ({ name, mode: 'exclusive' as const, browserClientId: 'b' });
-    const olderOwnerLock = ownerLockName('Scale').replace(
+    const otherVersionOwnerLock = ownerLockName('Scale').replace(
       `/v${String(PROTOCOL_VERSION)}/`,
       `/v${String(PROTOCOL_VERSION + 1)}/`,
     );
@@ -817,7 +817,7 @@ describe('debugging surface: formatting', () => {
             lock(ownerLockName('Scale')),
             lock(tabSlotLockName('Scale', 2, 0)),
             lock(ownerLockName('Rack/COM 1')),
-            lock(olderOwnerLock),
+            lock(otherVersionOwnerLock),
           ],
           pending: [lock(ownerLockName('Scale')), lock(ownerLockName('Scale')), lock('other')],
         },
@@ -850,9 +850,8 @@ describe('debugging surface: formatting', () => {
 
 describe('debugging surface: stopping a configuration', () => {
   it('offers connecting, editing and disconnecting as buttons, not hidden in a menu', async () => {
-    // What an operator does to a configuration must be visible while it is selected. Forgetting
-    // used to be reachable only through a ⋯ menu, and only for a configuration this page was
-    // connected to - so dropping a remembered entry meant connecting to it first.
+    // What an operator does to a configuration is visible while it is selected, whether or not
+    // this page is connected to it: dropping a remembered entry does not take connecting to it first.
     const html = await import('node:fs/promises').then(
       async (fs) => await fs.readFile('debug/public/index.html', 'utf8'),
     );

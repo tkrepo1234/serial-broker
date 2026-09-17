@@ -1,27 +1,26 @@
 # ADR-0041: Tell who is still there through Web Locks, not heartbeats
 
 - **Status:** Accepted
-- **Date:** 2026-09-15
 
 ## Context
 
 A `MessagePort` reports nothing when the context at its other end goes away, in either direction.
 The broker never learns that a tab crashed, was killed or had its renderer discarded; posting to its
 port does not even throw. And a `SharedWorker` can end while its tabs live: it can crash, be ended by
-the browser to reclaim memory, or be terminated from `chrome://inspect`. The browser benchmark
-([ADR-0037](./0037-measure-performance-against-expectations-written-first.md)) found that in
-Microsoft Edge the worker ends with the renderer of the page that started it - usually the first tab
-to hold the port.
+the browser to reclaim memory, or be terminated from `chrome://inspect`. In Microsoft Edge the worker
+ends with the renderer of the page that started it - usually the first tab to hold the port - which
+the browser benchmark's `handover/crash` exercises
+([ADR-0037](./0037-measure-performance-against-expectations-written-first.md)).
 
-Heartbeats answer both directions: a message from every tab every 15 seconds, answered by the
-worker, a sweep forgetting tabs silent for three minutes, and a new worker after three unanswered
-heartbeats. They cost traffic while nothing happens, and they are slow where it matters. Measured
-with them: after the worker ended, every tab but the new holder stayed `reconnecting` for 60
-seconds - four minutes in a hidden tab - and a write sent meanwhile ended in `WRITE_TIMEOUT`, 240
-times the expectation. A timeout short enough to matter would fire for every hidden tab, whose
-timers the browser throttles.
+Heartbeats would answer both directions: a message from every tab every few seconds, answered by
+the worker, a sweep forgetting tabs that stay silent, and a new worker after some unanswered
+heartbeats. They cost traffic while nothing happens, and they are slow where it matters: after the
+worker ends, every tab but the new holder stays `reconnecting` until its heartbeats have gone
+unanswered - several times longer in a hidden tab, whose timers the browser throttles - and a write
+sent meanwhile ends in `WRITE_TIMEOUT`. A timeout short enough to matter would fire for every hidden
+tab.
 
-What the whole library already rests on answers it exactly ([ADR-0005](./0005-owner-election-via-web-locks.md)):
+What the whole library rests on answers it exactly ([ADR-0005](./0005-owner-election-via-web-locks.md)):
 the browser lets go of a context's locks when the context goes, however it goes, and grants the lock
 to whoever waits. `navigator.locks` is exposed to workers in every browser that has Web Serial.
 
@@ -47,7 +46,7 @@ to whoever waits. `navigator.locks` is exposed to workers in every browser that 
    logs `transport.worker-restarted`, starts a new `SharedWorker` and says `hello` there, which
    restores everything it takes part in. The client restates what the other tabs need to know - the
    holder its status, every other tab a request for it.
-5. **One timer is left: the handshake deadline.** A worker whose script fetch hangs, or that cannot
+5. **There is one timer: the handshake deadline.** A worker whose script fetch hangs, or that cannot
    take its lock, holds no lock to free. A tab that has no `welcome` 45 seconds
    (`HANDSHAKE_DEADLINE_MS`) after starting a worker gives up on it: before any `welcome`, it moves to
    `BroadcastChannel` ([ADR-0006](./0006-sharedworker-as-message-broker.md)); after a lost worker, it
@@ -62,15 +61,15 @@ to whoever waits. `navigator.locks` is exposed to workers in every browser that 
 
 - **Heartbeats with a sweep in the worker and a count of unanswered heartbeats in the tabs.**
   Rejected for the cost and the delay above.
-- **Keep the heartbeats and shorten the timeouts.** A timeout short enough to matter fires for every
+- **Heartbeats with short timeouts.** A timeout short enough to matter fires for every
   throttled tab, and every hidden tab is throttled.
 - **Close the port of a silent participant.** A tab that was only throttled would lose its connection
   to the worker for good.
 - **Fall back to `BroadcastChannel` instead of starting a new worker when the worker ends.** Tabs
   opened later start a new worker and would not hear the ones that moved: the partition made
   permanent.
-- **Only the worker's lock, keeping the heartbeats for tabs.** Fixes the stall but keeps the sweep,
-  the heartbeat message and minutes of dead tabs in the worker's tables.
+- **A lock for the worker only, with heartbeats for the tabs.** Tabs learn of the worker's end at
+  once, but the sweep, the heartbeat message and minutes of dead tabs in the worker's tables remain.
 - **A lock name without a worker identity.** Every worker of a protocol version would hold the same
   lock, so a worker started from a second script URL would wait behind the first forever.
 - **Welcome at once and wait for the worker's lock afterwards.** The worker's request and a tab's
@@ -81,8 +80,8 @@ to whoever waits. `navigator.locks` is exposed to workers in every browser that 
 
 ### Positive
 
-- A tab learns that the worker ended as soon as the browser frees the worker's lock; the 60-second
-  stall is gone (`docs/site/performance.md`).
+- A tab learns that the worker ended as soon as the browser frees the worker's lock
+  (`docs/site/performance.md`).
 - The worker forgets a tab the moment it has gone.
 - Nothing crosses the bus while nothing happens: an idle week costs no message.
 - A throttled, frozen or sleeping tab is never forgotten and taken back: its lock is held.

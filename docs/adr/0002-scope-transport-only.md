@@ -1,7 +1,6 @@
 # ADR-0002: Wrap the transport only; collect received bytes until the line is quiet
 
 - **Status:** Accepted
-- **Date:** 2026-09-12
 
 ## Context
 
@@ -13,8 +12,8 @@ second product.
 
 Reading from a serial port yields arbitrary chunks: one logical message can arrive in five
 `read()` results, and five messages can arrive in one. On a real device a read often returns a
-single byte: writing `1234\r\n` to the Arduino echo port used by the hardware tests produced six
-reads, where an application - and the person watching the debugging surface - expects one answer.
+single byte: an Arduino echoing `1234\r\n` at 9600 baud delivers it in six reads, where an
+application - and the person watching the debugging surface - expects one answer.
 
 ## Decision
 
@@ -56,9 +55,9 @@ decoder, so a character split across reads is decoded intact ([ADR-0015](./0015-
   can stall the port. The same composition is achievable outside the library with less coupling.
 - **Optional "line mode".** The 80% case, but it splits the delivery semantics in two and doubles
   the test matrix for every failover scenario; a ten-line helper on top of `onReceive` does it.
-- **Deliver every chunk exactly as read.** What this record first decided. Every application had to
-  write the same timer, the debugging surface showed one line per byte, and every tab received one
-  bus message per byte. The complaint came from using the library, not from a theory about it.
+- **Deliver every chunk exactly as read.** Every application would write the same timer, a terminal
+  would show one line per byte, and every tab would receive one bus message per byte. An
+  application that wants it sets `idleMs: 0`.
 - **Collect in each receiving tab.** The bus would still carry one message per byte, and tabs could
   disagree about where one delivery ends. Collecting once, where the bytes are read, gives every
   tab the same deliveries.

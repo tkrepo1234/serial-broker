@@ -270,8 +270,7 @@ const isSerializedError = (value: unknown): boolean => {
 /** What each field of an accepted message must be, whichever message it is in. */
 const FIELD_ORACLE: Record<string, (value: unknown, message: Record<string, unknown>) => boolean> =
   {
-    configName: (value, message) =>
-      (message['type'] === 'error' && value === undefined) || isName(value),
+    configName: isName,
     configNames: isNameList,
     requestId: isIdentifier,
     originClientId: isIdentifier,

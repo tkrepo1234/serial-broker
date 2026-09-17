@@ -221,12 +221,12 @@ describe('tabs whose worker script fails to load', () => {
 });
 
 /**
- * A worker script of another protocol version: a copied worker file left over from an earlier
- * release, or one served from a cache (ADR-0008).
+ * A worker script of another protocol version: a copied worker file that was not replaced with the
+ * library, or one served from a cache (ADR-0008).
  *
- * Such a worker drops everything the tabs say, so they used to stay cut off from each other with
- * nothing reported. It still answers `hello` with a welcome in its own version, which tells a tab
- * that nothing it sent arrived anywhere - as when the script does not load at all.
+ * Such a worker drops everything the tabs say. It answers `hello` with a welcome in its own
+ * version, which tells a tab that nothing it sent arrived anywhere - as when the script does not
+ * load at all.
  */
 describe('tabs whose worker script is of another protocol version', () => {
   it('report the mismatch and share the port over BroadcastChannel', async () => {

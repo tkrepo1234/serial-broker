@@ -47,8 +47,7 @@ const probe = (from: ClientId, to: ProtocolMessage['to'], configName = 'Reader')
  * The broker in isolation.
  *
  * It resolves two delivery targets from what each participant's latest `hello` says. That is
- * deliberately all it does - everything requiring judgement lives in the participants (ADR-0006,
- * ADR-0006) - so these tests are about routing and nothing else.
+ * deliberately all it does - everything requiring judgement lives in the participants (ADR-0006) - so these tests are about routing and nothing else.
  */
 describe('Broker', () => {
   it('delivers a broadcast to every participant except the sender', () => {

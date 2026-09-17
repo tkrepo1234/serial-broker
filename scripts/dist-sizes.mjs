@@ -3,7 +3,7 @@
  *
  * Used by `check-dist.mjs`, which prints the sizes after every build - so CI reports them on every
  * run - and by the benchmark, which puts them in the Performance chapter. There is no size budget
- * (BACKLOG.md, standing decisions): the sizes are reported, not enforced.
+ * (BACKLOG.md, standing constraints): the sizes are reported, not enforced.
  */
 
 import { readFileSync, statSync } from 'node:fs';

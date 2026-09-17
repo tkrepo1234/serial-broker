@@ -40,7 +40,7 @@ for (const [emitted, published] of RENAMES) {
     continue;
   }
   if (existsSync(to)) {
-    // A source file now emits the published name itself. Renaming over it would delete a
+    // A source file emits the published name itself. Renaming over it would delete a
     // declaration the package needs, silently.
     problems.push(`dist/${published} already exists; dist/${emitted} cannot be renamed onto it`);
     continue;

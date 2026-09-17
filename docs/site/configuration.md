@@ -246,8 +246,8 @@ switch. `1` disables it.
 : Attempts before the status becomes `failed` and `RECONNECT_EXHAUSTED` is reported. A failed
 configuration still tries again when the device is plugged in again, and when `setup()` is called
 for it again. `1` gives up after the first failure; there is no `0`, because not reconnecting at
-all is what `autoReconnect: false` says, and saying it twice - once as a switch, once as a number
-that still revives on replug - was rejected (ADR-0010). **Set a limit** when a device that stays
+all is what `autoReconnect: false` says, and a number saying it a second time would still revive on
+replug (ADR-0010). **Set a limit** when a device that stays
 away should be shown as a problem rather than as endlessly reconnecting.
 
 `stableAfterMs`
@@ -350,8 +350,8 @@ fails with `INVALID_ARGUMENT`, and the application has to encode the bytes itsel
   tab that saved last decides the remembered options.
 - **Where it is kept:** one `localStorage` key per configuration,
   `serial-broker/configurations/v1/entry/<name>`, listed in `serial-broker/configurations/v1/index`.
-  An entry that cannot be read — hand-edited, truncated, written by a version whose options no longer
-  validate — is discarded on its own, with `STORAGE_CORRUPT` reported, and the other configurations
+  An entry that cannot be read — hand-edited, truncated, holding options that do not validate — is
+  discarded on its own, with `STORAGE_CORRUPT` reported, and the other configurations
   are restored as usual. Where `localStorage` cannot be used, nothing is remembered beyond the page.
 
 The browser remembers the device permission independently of this option.

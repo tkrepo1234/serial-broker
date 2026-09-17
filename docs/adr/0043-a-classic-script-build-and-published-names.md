@@ -1,14 +1,13 @@
 # ADR-0043: Ship a classic script build on one global; name published files after the package
 
 - **Status:** Accepted
-- **Date:** 2026-09-16
 
 ## Context
 
 This library is for industrial production interfaces, and a large part of that audience runs a
 page on a station: served by whatever web server the site already has, maintained by people who
 own no JavaScript toolchain, and often written against a browser policy that was settled years
-ago. The library could be loaded without a bundler already — but only as an ES module: a
+ago. Without a bundler, an ES module build is loaded through a
 `<script type="module">`, an import map, and a bare specifier. That is three mechanisms a page has
 to get right before it can call `setup()`, and an inline import map additionally needs its own
 hash in `script-src` under a strict content security policy.
@@ -17,20 +16,19 @@ A page that writes `<script src="…"></script>` and then calls a global needs n
 also what a great deal of existing plant software is written as, and what a technician adding a
 device readout to an existing page will write.
 
-Two things stood in the way of simply publishing such a build.
+Two things shape such a build.
 
 **The worker script.** A `SharedWorker` is identified by its script URL
 ([ADR-0006](./0006-sharedworker-as-message-broker.md)). Every build of this library has to look
 for the same `serial-broker.worker.js`, or its tabs coordinate with nobody. The library finds it
 with `new URL('./serial-broker.worker.js', import.meta.url)`, and **a classic script has no
 `import.meta`** — exactly the CommonJS build's problem, for which
-`scripts/import-meta-stand-in.mjs` already refuses to guess.
+`scripts/import-meta-stand-in.mjs` refuses to guess.
 
-**The names.** The published files were named after the entry files they were built from:
-`index.js`, `index.min.js`, `index.cjs`, `index.d.ts`, `diagnostics.min.js`. Someone copying
-`index.min.js` onto a web server, next to their own `index.html`, cannot tell what it is — and
-`index` is not the name of anything a reader of this project knows. The worker script was the one
-file that already said what it was.
+**The names.** A bundler names its output after the entry file it is built from: `index.js`,
+`index.min.js`, `index.cjs`, `index.d.ts`, `diagnostics.min.js`. Someone copying `index.min.js` onto
+a web server, next to their own `index.html`, cannot tell what it is — and `index` is not the name
+of anything a reader of this project knows.
 
 ## Decision
 
@@ -57,11 +55,11 @@ and can say what it took from this library.
 point has three exports and no facade to be, and `SerialBrokerDiagnostics(...)` would say less
 than the call it stands for.
 
-**The diagnostics entry point gets a classic build too.** It would have been less work to leave it
-out. It is in because the audience is the same one: a support page on a station, opened by a
-technician, served next to the application by the same web server that could not be given a
-toolchain. Leaving it out would have made `SerialBroker` the only surface such a deployment can
-reach, so a support page would have needed exactly the toolchain the deployment does not have.
+**The diagnostics entry point has a classic build too.** The audience is the same one: a support
+page on a station, opened by a technician, served next to the application by the same web server
+that cannot be given a toolchain. Without it `SerialBroker` would be the only surface such a
+deployment can reach, so a support page would need exactly the toolchain the deployment does not
+have.
 It costs one more entry in the same bundler configuration and one more row in the parity check.
 
 **`src/global.ts` takes its surface from `src/index.ts`**, which is the one place in the library
@@ -89,42 +87,36 @@ back to a `BroadcastChannel` and logs `environment.transport-fallback` with a re
 **Every published file is named after the package**, not after the entry file it was built from.
 The bundler is told these names through its entry keys; `tsc` names declarations after their
 source files, so `scripts/entry-declarations.mjs` renames the two entry declarations after it
-runs. The source files keep their conventional names, so TypeDoc's entry points, the guidelines
-and the documentation are untouched — except that `src/serial-broker.ts`, the facade, became
-`src/facade.ts` to leave the published name free. It is the name the codebase already used for it
-(`test/unit/facade.test.ts`).
+runs. The source files have their conventional names, which TypeDoc's entry points, the guidelines
+and the documentation use; the facade is `src/facade.ts`, which leaves the published name free.
 
-| Was                            | Now                                        |
-| ------------------------------ | ------------------------------------------ |
-| `dist/index.js`                | `dist/serial-broker.js`                    |
-| `dist/index.cjs`               | `dist/serial-broker.cjs`                   |
-| `dist/index.min.js`            | `dist/serial-broker.min.js`                |
-| `dist/index.d.ts`              | `dist/serial-broker.d.ts`                  |
-| `dist/diagnostics.*`           | `dist/serial-broker.diagnostics.*`         |
-| —                              | `dist/serial-broker.global.js`             |
-| —                              | `dist/serial-broker.diagnostics.global.js` |
-| `dist/serial-broker.worker.js` | unchanged                                  |
+| Built from                           | Published as                                                    |
+| ------------------------------------ | --------------------------------------------------------------- |
+| `src/index.ts`                       | `dist/serial-broker.js`, `.cjs`, `.min.js`, `.d.ts`             |
+| `src/diagnostics.ts`                 | `dist/serial-broker.diagnostics.js`, `.cjs`, `.min.js`, `.d.ts` |
+| `src/global.ts`                      | `dist/serial-broker.global.js`                                  |
+| `src/global-diagnostics.ts`          | `dist/serial-broker.diagnostics.global.js`                      |
+| `src/worker/serial-broker.worker.ts` | `dist/serial-broker.worker.js`                                  |
 
-The package's subpaths do not change: `serial-broker`, `serial-broker/min`,
-`serial-broker/diagnostics`, `serial-broker/diagnostics/min`, `serial-broker/worker`, plus the new
-`serial-broker/global` and `serial-broker/diagnostics/global`. Only the file names behind them
-change, so an application that imports by package name notices nothing. What breaks is a path
-hard-coded to a file inside the package — a deployment's copy step, an import map, a server's
-existence check.
+The package's subpaths are `serial-broker`, `serial-broker/min`, `serial-broker/diagnostics`,
+`serial-broker/diagnostics/min`, `serial-broker/worker`, `serial-broker/global` and
+`serial-broker/diagnostics/global`. An application that imports by package name never sees a file
+name; a path written to a file inside the package — a deployment's copy step, an import map, a
+server's existence check — names a file that says what it is.
 
 The worker script's minification belongs to the build outputs and is recorded in
 [ADR-0003](./0003-typescript-and-toolchain.md).
 
 ## Alternatives considered
 
-- **No classic build; tell people to use an import map.** What the library did, and it works.
-  Rejected because the import map is a fourth thing to get right for an audience whose whole
+- **No classic build; tell people to use an import map.** It works.
+  Rejected because the import map is one more thing to get right for an audience whose whole
   problem is that they own no toolchain, and because it is the part of such a page that most often
   needs a content security policy changed — an inline import map
   needs its hash in `script-src`, which a static server cannot generate and a formatter can
   invalidate.
 - **A UMD build.** One file that works as CommonJS, AMD and a global. Rejected: the CommonJS build
-  already exists and is loaded by `require`, AMD has no audience here, and the detection preamble
+  is what `require` loads, AMD has no audience here, and the detection preamble
   is exactly the kind of thing that picks the wrong branch inside someone's legacy loader. An IIFE
   does one thing.
 - **`globalName` in the bundler, giving the module namespace as the global.** The natural IIFE
@@ -144,12 +136,12 @@ The worker script's minification belongs to the build outputs and is recorded in
 - **A second worker file for the classic build**, resolved relative to something it can see.
   Rejected outright: it is the same decision as a `Blob` URL, and ADR-0006 rules it out.
 - **Leave the diagnostics entry point without a classic build.** See Decision.
-- **Keep `index.*` as the published names.** Conventional for a bundle, and it changes nothing for
+- **`index.*` as the published names.** Conventional for a bundle, and it changes nothing for
   an application that imports by package name. Rejected because the audience that copies these
   files by hand is the audience this library is for, and for them `index.min.js` in a folder of
   their own files is an unlabelled box.
 - **Rename the source entry files instead of the emitted declarations**, so `tsc` produces the
-  published names directly. It would have removed `scripts/entry-declarations.mjs`. Rejected because
+  published names directly. It would make `scripts/entry-declarations.mjs` unnecessary. Rejected because
   `src/index.ts` is the name the guidelines, TypeDoc's entry points, the documentation site and its
   generated reference directories all use: a checked twenty-line script costs less than a change to
   all of them.
@@ -158,8 +150,8 @@ The worker script's minification belongs to the build outputs and is recorded in
 
 ### Positive
 
-- A page can use the library with one `<script src>` and one name, and no import map — which also
-  removes the one inline script a strict `script-src` had to be given a hash for.
+- A page can use the library with one `<script src>` and one name, and no import map — and so
+  without the one inline script a strict `script-src` has to be given a hash for.
 - Every published file says what it is when it is sitting in a folder on a web server.
 - The classic and module builds cannot drift: `check-dist` runs the classic build in a context
   with no browser in it and compares the global it leaves behind with the ES module's exports.
@@ -171,14 +163,12 @@ The worker script's minification belongs to the build outputs and is recorded in
   documentation.
 - The classic build is `sideEffects`-flagged in `package.json` so a bundler cannot drop it. It is
   not meant for a bundler, and a bundled application should use `serial-broker`.
-- The rename breaks any deployment step that copies a file out of the package by name. It is a
-  one-line change in each, and the changelog says so.
 - `scripts/entry-declarations.mjs` is a build step that renames two generated files. It fails the
   build if either is missing, or if its target name is already taken.
 
 ### Risks and mitigations
 
-- A future export added to `src/index.ts` and forgotten in `src/global.ts`. `src/global.ts`
+- An export added to `src/index.ts` and forgotten in `src/global.ts`. `src/global.ts`
   imports through `src/index.ts`, so the surface is one list, and `check-dist` compares the built
   files after every build regardless.
 - Someone adds a build that resolves its own worker URL. `check-dist` requires every published

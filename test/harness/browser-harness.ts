@@ -153,7 +153,7 @@ export class VirtualTab {
       return;
     }
     this.#isAlive = false;
-    this.harness.destroyTab(this.id, this.client.clientId);
+    this.harness.destroyTab(this.id);
     await this.harness.settle();
   }
 }
@@ -456,7 +456,7 @@ export class BrowserHarness {
   }
 
   /** @internal Used by {@link VirtualTab.kill}. */
-  destroyTab(id: string, clientId: string): void {
+  destroyTab(id: string): void {
     this.#killedContexts.add(id);
     // A frozen tab that is discarded never runs what it held.
     this.#frozenContexts.delete(id);
@@ -464,7 +464,7 @@ export class BrowserHarness {
     this.#tabs.delete(id);
     this.serial.removeContext(id);
     this.locks.killContext(id);
-    this.bus.killContext(id, clientId as never);
+    this.bus.killContext(id);
   }
 
   /**
@@ -584,7 +584,7 @@ export class FakeStorage implements KeyValueStorage {
     this.#entries.delete(key);
   }
 
-  /** Replaces the stored value directly, to simulate corruption or an older version. */
+  /** Replaces the stored value directly, to seed what a visit left behind or to simulate corruption. */
   poison(key: string, value: string): void {
     this.#entries.set(key, value);
   }

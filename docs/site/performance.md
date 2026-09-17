@@ -71,9 +71,9 @@ expectation stays what it was.
 For the harness, the expectations follow from what a hop costs: a structured clone of a few
 hundred bytes and a validation, tens of microseconds each. A chunk to one tab is two clones and a
 validation, so 0.1 ms at the median and 2 MB/s in a burst; every further tab adds one clone and
-one validation. A write from a tab that does not hold the port made four hops when these were
-written - the request, `write-started`, the result and `data-sent`; since the tab holding the port
-asks the issuing tab before it begins, it makes five. Handovers and
+one validation. The expectation for a write from a tab that does not hold the port reasons from
+four hops; the write makes five, because the tab holding the port asks the issuing tab before it
+begins. Handovers and
 starts wait on no timer, so they should take no simulated time and a couple of milliseconds of
 wall clock. After an hour, the heap should be within half a megabyte of where it started, with
 the same timers scheduled.
@@ -84,10 +84,9 @@ Chromium to notice that the renderer is gone, so a quarter of a second; and the 
 echoed back by the stand-in in 255-byte pieces, four thousand of them, which was expected to be
 the expensive part of that scenario.
 
-The browser's `everyTab` and `library` metrics were added after the first run, which timed only
-the first tab to report `open` and so could not see the limit below. Their expectations were not
-taken from a result: `everyTab` has the bound already written for the same handover, and `library`
-the bound written for a release, which reasoned from the same steps between a free lock and `open`.
+The browser's `everyTab` and `library` metrics take their expectations from bounds written for the
+same steps, not from a result: `everyTab` has the bound of the same handover's `wall`, and `library`
+the bound written for a release, which reasons from the same steps between a free lock and `open`.
 
 ## The simulated browser
 
@@ -114,7 +113,7 @@ A handover after a crash is timed from the moment the test runner orders the cra
 
 What an application installs, as built and gzipped, from `scripts/check-dist.mjs`, which prints
 these after every build so that CI reports them on every run. There is no size budget: the sizes
-are reported, not enforced (decided 2026-09-14). The worker script is served next to the
+are reported, not enforced. The worker script is served next to the
 application whatever the entry point, so it is part of every installation.
 
 ```{include} _generated/build-sizes.md
@@ -132,24 +131,21 @@ after a crash is over its expectation, by less than ten times.
 so `device-to-tabs` times the library and the bus, not the collection of received bytes (ADR-0002).
 With the defaults, a delivery also waits until the line has been quiet for `receive.idleMs` (50 ms),
 and on a line that never goes quiet for up to `receive.maxWaitMs` (500 ms); see
-[Configuration](configuration.md). A run with the defaults measured about 240 ms at the median for
-a stream that never paused, which is that wait and nothing else.
+[Configuration](configuration.md). With the defaults, a stream that never pauses measures about
+240 ms at the median, which is that wait and nothing else.
 
-**Fixed: after a crash of the tab that started the `SharedWorker`, the other tabs waited about a
-minute.** In Microsoft Edge 153 the `SharedWorker` ends when the renderer of the page that started
-it crashes - usually the first tab, which is also the first to hold the port. The run of 2026-09-14
-measured `handover/crash` `everyTab` on the `SharedWorker` transport at 60 seconds at the median:
-every tab but the one taking the port over learned that the worker was gone only when three
-heartbeats had gone unanswered. Since ADR-0041 the worker holds a Web Lock for its lifetime, which
-every tab waits on; the run of 2026-09-15 measured `everyTab` at 413.5 ms at the median and 768.9 ms at the 95th percentile, as close to `wall` as on the `BroadcastChannel` transport.
+**The `SharedWorker` can end with the tab that crashes.** In Microsoft Edge 153 the `SharedWorker`
+ends when the renderer of the page that started it crashes - usually the first tab, which is also
+the first to hold the port. The worker holds a Web Lock for its lifetime, which every tab waits on
+(ADR-0041), so every tab learns of it at once and no timer is involved: `everyTab` is as close to
+`wall` on the `SharedWorker` transport as on the `BroadcastChannel` transport.
 
 ### Over the expectation, by less than ten times
 
-- **A handover after a crash** (`wall` and `everyTab`), in the run of 2026-09-17: 382.3 ms at the
+- **A handover after a crash** (`wall` and `everyTab`): 382.3 ms at the
   median on the `SharedWorker` transport and 349.7 ms on `BroadcastChannel`, against 250 ms, with a
   95th percentile of 714.6 ms and 645.7 ms. Almost none of it is the library's: `library` - the same moment against a plain Web Lock the crashed page held, freed by the browser in the same crash - is 8.600 ms and 6.300 ms at the median. The rest is Chromium noticing that the renderer is gone, plus the
-  DevTools round trip that orders the crash. In a
-  separate check, the first crash after the browser started took about twice as long as the ones
+  DevTools round trip that orders the crash. The first crash after the browser starts takes about twice as long as the ones
   after it. The expectation stays at 250 ms, so that the next run is judged against the same line.
 
 ### What else the numbers say
@@ -161,8 +157,7 @@ every tab waits on; the run of 2026-09-15 measured `everyTab` at 413.5 ms at the
   themselves. What the `device-to-tabs` rows say with confidence is that a chunk reaches ten tabs
   in under a millisecond; which fraction of a millisecond, they do not.
 - **The harness's heap reading is coarser than its expectation.** With no change to the library,
-  the growth after the hour read anywhere from -800 KB to +220 KB in the runs made for this
-  chapter: what the garbage collector leaves behind varies by more than the 512 KB expected. The
+  the growth after the hour reads anywhere from -800 KB to +220 KB from run to run: what the garbage collector leaves behind varies by more than the 512 KB expected. The
   reading can still tell a leak: one chunk kept per tab per second would add about 2.6 MB over the
   hour. The timer count is exact.
 - **The megabyte write is not dominated by the echo**: the write's promise settles in about 20 ms,
@@ -177,8 +172,7 @@ every tab waits on; the run of 2026-09-15 measured `everyTab` at 413.5 ms at the
 - **The harness cannot show a worker that ends with a crashed tab.** Its worker is a fake that
   outlives every tab, and its handover has two tabs, the second of which takes the port over.
 
-Anything that changes this section - a result that crosses the line, a fix, a limit - is recorded
-here with the run that found it.
+A result that crosses the line becomes a fix in the library or a limit stated in this section.
 
 ## What the numbers do not say
 

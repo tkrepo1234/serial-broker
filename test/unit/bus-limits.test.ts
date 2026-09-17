@@ -548,7 +548,7 @@ describe('Broker within MAX_CONFIGURATIONS', () => {
 
 describe('the announcement message', () => {
   it('keeps the shape every version has to understand', () => {
-    // Frozen (ADR-0008): changing this loses the ability to detect every earlier version.
+    // Frozen (ADR-0008): a build that changed it could not be detected by any other version.
     expect(versionAnnouncement(7, false)).toEqual({
       type: 'serial-broker/protocol-version',
       protocolVersion: 7,
