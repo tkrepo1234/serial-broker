@@ -12,6 +12,10 @@ import type { SerialBrokerError } from './errors.js';
  * handle an unrecognised status gracefully - typically by falling through to a neutral state
  * rather than throwing.
  *
+ * Declared as a constant object with a string-union type of the same name, not as a TypeScript
+ * `enum`: `status === SerialBrokerStatus.Open` and `status === 'open'` are both valid, and a
+ * `switch` over the union is exhaustive either way.
+ *
  * @enum
  */
 export const SerialBrokerStatus = {

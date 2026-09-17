@@ -277,6 +277,10 @@ export interface SerialBrokerApi {
    *
    * @throws A `SerialBrokerError` with code `INVALID_ARGUMENT` if the name is not a valid one.
    */
+  /**
+   * `false` again once the name is released in this tab, and for a name only another tab has set
+   * up: this asks about this tab, not about the origin.
+   */
   exists(name: string): boolean;
 
   /** Every configuration name set up in this tab, in registration order. */
@@ -339,6 +343,11 @@ export interface SerialBrokerApi {
    * the user has configured. Configurations already set up in this tab are skipped, and an
    * entry that no longer validates is discarded rather than failing the whole restore.
    *
+   * A page that names its own devices does not need this: calling `setup()` with the same options
+   * reconnects just as silently, and a device named explicitly is taken from those options rather
+   * than from what was remembered. This is for configurations the page does not know in advance -
+   * ones a user created, or a device chosen through the picker in auto mode.
+   *
    * @returns The names that were restored.
    * @example
    * ```ts
@@ -354,7 +363,8 @@ export interface SerialBrokerApi {
    * Must be called **before any other method**: the settings are read when the internal client
    * is built, by the first call that needs one. Called afterwards, it logs a warning
    * (`facade.late-configure`), and its settings apply only after {@link SerialBrokerApi.dispose}.
-   * `exists`, `names`, `unsubscribe`, `release` and `releaseAll` build no client while nothing is
+   * `exists`, `names`, `unsubscribe`, `release`, `releaseAll` and `isSupported` build no client
+   * while nothing is
    * set up.
    *
    * @param options - Merged into the current settings; omitted fields are left alone. Each field is

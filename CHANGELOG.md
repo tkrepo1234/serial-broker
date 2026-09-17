@@ -199,6 +199,15 @@ Remembered configurations moved from **storage version 1 to 2** and are not migr
 
 ### Fixed
 
+- **The documentation said `isRetryable` was both `true` and `false`** with
+  `connection.autoReconnect: false`. The code carries `false` - nothing retries them - and the
+  reference said so; the full-featured example said the opposite, in its prose and in its code
+  comment. Since the documentation recommends `autoReconnect: false` for a production line, and
+  recommends skipping retryable errors, a reader following both would have shown the operator
+  nothing when the device was unplugged.
+- **The classic-script example raced.** It subscribed on the line after `setup()`, which resolves a
+  moment later when it waits for an earlier release of the same name, and dropped the promise, so a
+  wrong option became an invisible unhandled rejection. It chains and catches now.
 - **Both OpenUI5 examples failed to load.** `ui5-tooling-modules` cuts a resolved path without a
   query string to the empty string, so bundling any package with a `new URL(…, import.meta.url)` -
   serial-broker has one, for the worker - fails and the component never resolves. Each example now

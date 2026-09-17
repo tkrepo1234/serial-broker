@@ -128,8 +128,9 @@ export class ScalePanel {
         this.#appendLog(`> ${new TextDecoder().decode(event.data).trim()} (${who})`);
       }),
       SerialBroker.subscribe(NAME, 'onError', (event) => {
-        // Right only with `connection.autoReconnect` on, the default: with it off these errors
-        // still carry `isRetryable: true`, but nothing recovers, and they must be shown.
+        // Sound either way: with `connection.autoReconnect` on, the default, a retryable error is
+        // one the library is already recovering from and the status line says so; with it off
+        // nothing retries, so these same errors carry `isRetryable: false` and are shown here.
         if (!event.error.isRetryable) {
           this.#showError(event.error);
         }

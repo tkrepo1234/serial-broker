@@ -85,6 +85,12 @@ the file by its URL: `import { SerialBroker } from '/assets/serial-broker/serial
 [Deploying to a web server](deploying.md) lists the files, the headers a strict policy needs for the
 import map, and what to check afterwards.
 
+**Not from a CDN.** A `SharedWorker` script has to be same-origin, so `serial-broker.worker.js` must
+be a file the application's own server answers for - and it is the worker that makes the tabs share
+one port. Loading the library itself from a CDN while the worker comes from the origin only splits
+what has to be deployed together. Copy both files instead; every release attaches them as
+`serial-broker-<version>-browser.zip`.
+
 ### Classic script build
 
 For a page that writes no modules at all — no `type="module"`, no import map, no bare specifier.
@@ -97,10 +103,19 @@ with a plain `<script src>`:
   // Required, and before the first setup(): see below.
   SerialBroker.configure({ workerUrl: '/assets/serial-broker/serial-broker.worker.js' });
 
-  SerialBroker.setup('Scale', { serial: { baudRate: 19200 }, encoding: { decodeText: true } });
-  SerialBroker.subscribe('Scale', 'onReceive', (event) => {
-    document.querySelector('#weight').textContent = event.text;
-  });
+  // subscribe() after setup() resolves: a name is only known once it is set up, and a setup that
+  // waits for an earlier release of the same name resolves a moment later than it is called.
+  SerialBroker.setup('Scale', { serial: { baudRate: 19200 }, encoding: { decodeText: true } })
+    .then(() => {
+      SerialBroker.subscribe('Scale', 'onReceive', (event) => {
+        document.querySelector('#weight').textContent = event.text;
+      });
+    })
+    .catch((error) => {
+      // A page with no build step has no other place for this: an unhandled rejection here is
+      // invisible, and setup() is where a wrong option or a missing worker shows up.
+      document.querySelector('#weight').textContent = error.message;
+    });
 </script>
 ```
 

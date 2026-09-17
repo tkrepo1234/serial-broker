@@ -55,6 +55,18 @@ writes fail with `WRITE_TIMEOUT`. See
 **What to do:** keep long work out of the tab's main thread, and do not leave a debugger paused on a
 production screen.
 
+## No tab can close the port for all the others
+
+`release()`, `releaseAll()` and `dispose()` all act on the tab that calls them. If another tab still
+has the configuration set up, the port stays open and ownership moves there - which is the point of
+the library, and it means "the operator is finished, close the device" has no single call. A tab
+cannot make the decision for tabs it is not allowed to see (ADR-0011).
+
+**What to do:** have the application say so on its own bus - a `BroadcastChannel` message that every
+tab answers by calling `release()` - or give the operator a screen where the last tab is closed.
+`release(name, { forgetDevice: true })` does reach the whole origin, but it revokes the browser's
+permission with it: the next `setup()` anywhere needs the picker again.
+
 ## A device that stops taking data keeps the port busy
 
 A device switched off behind its powered USB adapter, or one holding back data with flow control,

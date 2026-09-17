@@ -15,8 +15,9 @@ ready; the version and the date go into the changelog when Tim decides.
       pre-releases, and has a dry run (`workflow_dispatch`) that uploads notes and package; the dry
       run passed on 2026-09-15.
 - [x] Every step of `docs/manual-test-plan.md` names the suite that runs it; steps 4, 11, 12, 16
-      and 19 were added to the emulator suite. What stays by hand: 1, 2, 4a, 7, 18, 22's display,
-      26, 29's hidden tab, and unplugging a physical adapter once.
+      and 19 were added to the emulator suite, and on 2026-09-17 a frozen tab - step 7's harsher
+      case and the second half of step 29 - joined the browser suite. What stays by hand: 1, 2, 4a,
+      7's background tab, 18, 22's display, 26, and unplugging a physical adapter once.
 - [x] A second pass over every test file (1 410 → 1 345 tests).
 - [x] A documentation drift check against the code, and a cold-read usability test of ten industrial
       use cases built from the documentation alone (below).
@@ -65,6 +66,48 @@ Not now, each a candidate for after the release:
 - An exclusive-control mode in the library (one window sends, every window receives).
 
 ---
+
+## Second cold read of the documentation (2026-09-17)
+
+A reviewer built six use cases - a no-build page, a classic-script page, a remembered scale, closing
+without forgetting, error handling, and a two-tab dashboard - from the rendered site alone, with the
+source, the examples and the changelog withheld. Fixed in the same round:
+
+- **`isRetryable` was documented in both directions.** Four reference passages said an error carries
+  `false` with `connection.autoReconnect: false`, which is what the code does; the full-featured
+  example said `true`, in prose and in its embedded comment. Under the example's reading, the
+  configuration the documentation recommends for a production line plus its recommended error
+  handler would have swallowed every disconnect. The example now says what the code does.
+- **The classic-script example raced.** It called `subscribe()` on the line after `setup()`, which
+  resolves a moment later when it waits for an earlier release of the name, and it dropped the
+  promise, so a wrong option was an invisible unhandled rejection on the kind of page least able to
+  notice. It chains now, with a `catch`.
+- **Neither enumeration said how it is declared**, so a reader could not tell whether
+  `status === 'open'` compiles. Both now say: a constant object with a string-union type.
+- `restore()` did not say that a page naming its own devices does not need it; `exists()` did not
+  say it answers for this tab and turns `false` again after `release()`; `configure()`'s list of
+  calls that build no client was missing `isSupported`; `shared-ports.md` promised every tab the
+  same deliveries without the caveat that a tab joining late does not get what it missed; and
+  nothing said that the library may not be loaded from a CDN, because the worker script has to be
+  same-origin.
+- **`known-limits.md` gained "No tab can close the port for all the others".** `release()`,
+  `releaseAll()` and `dispose()` are all per-tab, and the chapter that exists to list such things
+  did not list it.
+
+Open, and deliberately not done in this round - both change the public API, not the documentation:
+
+- [ ] **Type `SerialBrokerError.context` per code.** It is `Readonly<Record<string, unknown>>`, while
+      `errors.md` documents the fields exhaustively for every code, so every read is an unchecked
+      cast (`error.context['started'] === true`) - in the library's own examples too. A discriminated
+      union keyed by `code` would generate from the table that already exists.
+- [ ] **Put `maxTabs` in `SerialBrokerStatusSnapshot`.** A status component handed a name cannot tell
+      whether `queued` is even reachable, or which `writeTimeoutMs` its message should cite;
+      `EffectiveSettings` has it, but that is the diagnostics entry point, which application code is
+      told it does not need.
+- [ ] **A complete page with no build step, on the documentation site.** `examples/no-bundler` and
+      `examples/minimal-js` are exactly that, and the site names them without showing them, so the
+      audience least likely to clone a repository is sent to one. Related: assembling lines has no
+      answer for a page without a compiler - the only one shown is a 60-line TypeScript class.
 
 ## Decided on 2026-09-14
 

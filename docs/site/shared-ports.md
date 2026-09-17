@@ -48,7 +48,9 @@ sends, receives and reports the same status. For people operating a deployment,
 
 Every tab that has set up a configuration receives:
 
-- **`onReceive`** for every delivery of data from the device, with the same bytes in every tab; see
+- **`onReceive`** for every delivery of data from the device, with the same bytes in every tab -
+  from the moment the tab knows which tab holds the port. What arrived before that is not repeated
+  for it, so a tab that joins late has a shorter log, not a different one; see
   [Receiving](guarantees.md#receiving).
 - **`onSend`** for every write the browser took for the port, including writes from other tabs.
   `event.origin` is `'local'` for writes this tab issued and `'remote'` for the others.

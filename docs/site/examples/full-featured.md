@@ -53,8 +53,9 @@ may or may not have received the command and the user has to check.
 **Failures serial-broker is recovering from are not shown as problems.** An unplugged scale
 produces an error with `isRetryable: true`; the status line already says _Reconnecting…_, which is
 all the user needs to know. That holds because the panel keeps `connection.autoReconnect` on, the
-default. With it off, the same errors still carry `isRetryable: true` — the flag belongs to the
-code — but nothing recovers, the status becomes `failed`, and a page has to show them.
+default. With it off, the same errors carry `isRetryable: false` — nothing retries them — the
+status becomes `failed`, and a page has to show them. See
+[`isRetryable`](../errors.md#what-an-error-carries).
 
 **Disconnecting one window leaves the others working.** `release()` affects only the window that
 calls it. If that window held the port, another window takes it over.
