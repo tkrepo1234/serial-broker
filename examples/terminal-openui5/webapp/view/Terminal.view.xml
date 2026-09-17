@@ -23,26 +23,15 @@
           inverted="true"
         />
         <ToolbarSpacer />
-        <!-- Offered exactly while the library waits for the browser's port picker. -->
+        <!--
+          The whole connection handling. Connect shows the connection settings and then asks for
+          the port; Disconnect forgets everything, so the next Connect starts from nothing.
+        -->
         <Button
           id="connect"
-          text="{i18n>connect}"
-          type="Emphasized"
-          visible="{ui>/canConnect}"
-          press=".onConnect"
-        />
-        <Button id="settings" text="{i18n>connectionSettings}" press=".onOpenSettings" />
-        <!-- Another port while one is chosen already: the picker again, and every tab follows. -->
-        <Button
-          id="changePort"
-          text="{i18n>changePort}"
-          enabled="{ui>/canDisconnect}"
-          press=".onChangePort"
-        />
-        <Button
-          id="release"
-          text="{= ${ui>/canDisconnect} ? ${i18n>disconnect} : ${i18n>connectAgain} }"
-          press=".onRelease"
+          text="{= ${ui>/isConnected} ? ${i18n>disconnect} : ${i18n>connect} }"
+          type="{= ${ui>/isConnected} ? 'Default' : 'Emphasized' }"
+          press=".onConnectOrDisconnect"
         />
         <Button
           id="display"

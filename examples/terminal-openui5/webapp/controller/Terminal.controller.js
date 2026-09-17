@@ -6,8 +6,13 @@
  * after an unplugged adapter, and errors with a remediation sentence. The controller subscribes and
  * renders; it never asks which tab holds the port, because it cannot and need not.
  *
- * The whole integration is four calls - `configure()` in Component.js, and `setup()`,
- * `subscribe()` and `send()` here. The rest is the terminal.
+ * The whole integration is a handful of calls - `configure()` in Component.js, and `setup()`,
+ * `requestAccess()`, `subscribe()`, `send()` and `release()` here. The rest is the terminal.
+ *
+ * Connecting is one button with two states. *Connect* always shows the connection settings, filled
+ * with the last ones, and then sets up and asks for the port in the same click. *Disconnect* always
+ * forgets everything - the port and what was remembered - so the next *Connect* starts from
+ * nothing, which is also how the port is changed. There is nothing else to learn.
  *
  * State the view shows lives in the JSON model `ui`; the log is plain DOM (lib/Log.js).
  */
@@ -33,6 +38,9 @@ sap.ui.define(
 
     /** The configuration every tab of this terminal shares. The name is what they have in common. */
     const NAME = 'Terminal';
+
+    /** What the badge says while nothing is set up: this page's word, not one of the library's. */
+    const DISCONNECTED = 'disconnected';
 
     /** How the header's status badge is coloured for each status the library reports. */
     const STATE_OF = /** @type {Record<string, string>} */ ({
@@ -89,11 +97,10 @@ sap.ui.define(
         this._pending = /** @type {[string, 'in' | 'out' | 'note'][]} */ ([]);
 
         this._ui = new JSONModel({
-          status: 'idle',
+          status: DISCONNECTED,
           statusState: 'None',
-          canConnect: false,
           canSend: false,
-          canDisconnect: false,
+          isConnected: false,
           summary: '',
           sendText: '',
           preferences: this._preferences,
@@ -139,7 +146,7 @@ sap.ui.define(
           );
           return;
         }
-        await this._connect();
+        this._renderStatus(DISCONNECTED);
       },
 
       _installStandIn: function () {
@@ -163,14 +170,86 @@ sap.ui.define(
         });
       },
 
-      // --- Connecting ---------------------------------------------------------------------------
+      // --- Connecting and disconnecting ---------------------------------------------------------
+
+      /** The one button: *Connect* while nothing is set up, *Disconnect* while something is. */
+      onConnectOrDisconnect: function () {
+        this._clearError();
+        if (this._isSetUp) {
+          void this._disconnect();
+          return;
+        }
+        const serial = this._preferences.serial;
+        // The last settings, as strings: the dialog's fields are text and keys, and nothing is
+        // applied until *Connect* in the dialog.
+        this.getView()?.setModel(
+          new JSONModel({
+            baudRate: String(serial.baudRate),
+            dataBits: String(serial.dataBits),
+            stopBits: String(serial.stopBits),
+            parity: serial.parity,
+            flowControl: serial.flowControl,
+            message: '',
+            busy: false,
+          }),
+          'settings',
+        );
+        void this._fragment('Settings').then((dialog) => {
+          /** @type {import('sap/m/Dialog').default} */ (dialog).open();
+        });
+      },
+
+      onCloseSettings: function () {
+        void this._fragment('Settings').then((dialog) => {
+          /** @type {import('sap/m/Dialog').default} */ (dialog).close();
+        });
+      },
+
+      /** *Connect* in the dialog: the settings are kept, and the connection is made with them. */
+      onConfirmConnect: function () {
+        const settings = /** @type {import('sap/ui/model/json/JSONModel').default} */ (
+          this.getView()?.getModel('settings')
+        );
+        const chosen = settings.getData();
+        const baudRate = Number(chosen.baudRate);
+        if (!Number.isInteger(baudRate) || baudRate <= 0) {
+          settings.setProperty('/message', 'The baud rate has to be a whole number above zero.');
+          return;
+        }
+        this._ui.setProperty('/preferences/serial', {
+          baudRate,
+          dataBits: Number(chosen.dataBits),
+          stopBits: Number(chosen.stopBits),
+          parity: chosen.parity,
+          flowControl: chosen.flowControl,
+        });
+        this._savePreferences();
+
+        // The dialog stays until there is a connection. Dismissing the browser's picker is not a
+        // reason to take the settings away: they are still what the user wants, and *Connect* is
+        // right there to ask again.
+        settings.setProperty('/message', '');
+        settings.setProperty('/busy', true);
+        void this._connect().then(() => {
+          settings.setProperty('/busy', false);
+          if (this._isSetUp) {
+            this.onCloseSettings();
+          } else {
+            settings.setProperty(
+              '/message',
+              this._ui.getProperty('/error/visible') === true
+                ? `${String(this._ui.getProperty('/error/code'))}: ${String(this._ui.getProperty('/error/message'))}`
+                : 'No port was chosen. Connect asks for one again.',
+            );
+          }
+        });
+      },
 
       /**
-       * Sets the configuration up with the remembered settings, and subscribes to it.
+       * Sets the configuration up, subscribes to it, and asks for the port if one is needed.
        *
-       * Every subscription is kept so it can be undone: connecting again without releasing would
-       * otherwise leave the old ones in place, and every line would appear in the log as many times
-       * as the page had connected.
+       * All of it from the one click on *Connect*: the browser shows its picker only for a click,
+       * and counts a click as one for a few seconds - a `setup()` takes a fraction of one.
        */
       _connect: async function () {
         if (this._connecting !== undefined) {
@@ -187,33 +266,77 @@ sap.ui.define(
 
       _connectOnce: async function () {
         const library = /** @type {SerialBrokerGlobal} */ (this._library);
-        this._clearError();
+        const { AwaitingPermission, Connecting, Failed, Open, Reconnecting } =
+          library.SerialBrokerStatus;
         this._unsubscribeAll();
+        this._renderStatus(Connecting);
         try {
           await library.setup(NAME, {
-            // No device named: the configuration takes its device from the port the user picks,
-            // and remembers it (auto mode). That is what lets *Change Port…* pick another one
-            // later. An application that knows its device names it, with `{ vendorId, productId }`.
+            // No device named: the configuration takes its device from the port the user picks
+            // (auto mode). An application that knows its device names it, with
+            // `{ vendorId, productId }`, and shows no picker once the browser has granted it.
             serial: this._preferences.serial,
             encoding: { decodeText: true },
           });
         } catch (error) {
           this._showError(error);
-          // `failed` here is this page's word for "the setup did not happen", not the library's
-          // status: nothing is registered under the name. `_isSetUp` goes first, because
-          // `_renderStatus` reads it to decide whether the button offers the way back.
-          this._isSetUp = false;
-          this._renderStatus('failed');
+          this._renderStatus(DISCONNECTED);
           return;
         }
         this._isSetUp = true;
-        this._renderStatus(library.getStatus(NAME).status);
+
+        // How this attempt ends, decided by what the library reports - not by waiting a while and
+        // looking: a real browser takes longer to say that a permission is missing than a test does.
+        /** @type {(outcome: 'connected' | 'no-port') => void} */
+        let settle = () => undefined;
+        const outcome = new Promise((resolve) => {
+          settle = resolve;
+        });
+        let asked = false;
+        let connected = false;
 
         this._subscriptions.push(
+          // A new listener is told the current status at once, and every change after it.
           library.subscribe(NAME, 'onStatusChange', (event) => {
+            if (event.status === AwaitingPermission) {
+              if (connected) {
+                // Asked for a port outside a click: another tab disconnected and gave the
+                // permission back. This tab cannot ask on its own, so it is disconnected as well.
+                this._append('The port was forgotten in another tab; disconnected.', 'note');
+                void this._disconnect(false);
+                return;
+              }
+              if (asked) {
+                return;
+              }
+              asked = true;
+              // Still the click on *Connect*: the browser counts a click as one for a few seconds,
+              // and a `setup()` takes a fraction of one.
+              library.requestAccess(NAME).then(
+                (granted) => {
+                  if (!granted) {
+                    settle('no-port');
+                  }
+                },
+                (error) => {
+                  this._showError(error);
+                  settle('no-port');
+                },
+              );
+              return;
+            }
             this._renderStatus(event.status);
-            if (event.status === library.SerialBrokerStatus.Open) {
+            if (event.status === Open) {
+              connected = true;
               this._clearError();
+              settle('connected');
+            } else if (event.status === Reconnecting) {
+              // A port is chosen and its device is away: set up, and the library keeps trying. The
+              // badge says so; the dialog has nothing left to ask.
+              connected = true;
+              settle('connected');
+            } else if (event.status === Failed) {
+              settle('no-port');
             }
           }),
 
@@ -239,91 +362,42 @@ sap.ui.define(
             this._showError(event.error);
           }),
         );
+
+        if ((await outcome) === 'no-port') {
+          // No port, no connection: nothing stays set up, and the dialog - still open - says so.
+          await this._disconnect(false);
+        }
+      },
+
+      /**
+       * Stops using the device in this tab and forgets everything: the browser's permission for the
+       * port, in every tab, and what serial-broker remembers under the name. The next *Connect*
+       * starts from nothing and asks for a port again - which is how the port is changed.
+       *
+       * @param {boolean} [say] - Whether the log gets a line about it; not when one was written already.
+       */
+      _disconnect: async function (say = true) {
+        const library = /** @type {SerialBrokerGlobal} */ (this._library);
+        this._unsubscribeAll();
+        try {
+          await library.release(NAME, { forget: true, forgetDevice: true });
+          if (say) {
+            this._append(
+              'Disconnected. The port and the remembered connection are forgotten.',
+              'note',
+            );
+          }
+        } catch (error) {
+          this._showError(error);
+        }
+        this._isSetUp = false;
+        this._renderStatus(DISCONNECTED);
       },
 
       _unsubscribeAll: function () {
         for (const unsubscribe of this._subscriptions.splice(0)) {
           unsubscribe();
         }
-      },
-
-      onConnect: function () {
-        const library = /** @type {SerialBrokerGlobal} */ (this._library);
-        this._clearError();
-        // Early in the handler: the browser counts a click as one for a few seconds only, and
-        // without a click it shows no picker.
-        library.requestAccess(NAME).then(
-          (granted) => {
-            if (!granted) {
-              this._append('The picker was dismissed; nothing was chosen.', 'note');
-            }
-          },
-          (error) => this._showError(error),
-        );
-      },
-
-      onRelease: function () {
-        this._clearError();
-        // `_isSetUp`, not the status: a setup that threw shows `failed` with nothing registered.
-        if (!this._isSetUp) {
-          void this._connect();
-          return;
-        }
-        // Everything ticked, every time: what was unticked last time is not a preference.
-        this.getView()?.setModel(new JSONModel({ forgetDevice: true, forget: true }), 'disconnect');
-        void this._fragment('Disconnect').then((dialog) => {
-          /** @type {import('sap/m/Dialog').default} */ (dialog).open();
-        });
-      },
-
-      onCloseDisconnect: function () {
-        void this._fragment('Disconnect').then((dialog) => {
-          /** @type {import('sap/m/Dialog').default} */ (dialog).close();
-        });
-      },
-
-      onConfirmDisconnect: function () {
-        const library = /** @type {SerialBrokerGlobal} */ (this._library);
-        const chosen = /** @type {{ forget: boolean, forgetDevice: boolean }} */ (
-          /** @type {import('sap/ui/model/json/JSONModel').default} */ (
-            this.getView()?.getModel('disconnect')
-          ).getData()
-        );
-        this.onCloseDisconnect();
-        // `release()` forgets nothing by itself; each option names one store. The browser keeps the
-        // permission, serial-broker keeps the configuration.
-        library.release(NAME, { forget: chosen.forget, forgetDevice: chosen.forgetDevice }).then(
-          () => {
-            this._isSetUp = false;
-            this._renderStatus(library.SerialBrokerStatus.Released);
-            const forgotten = [
-              chosen.forgetDevice ? 'the port' : undefined,
-              chosen.forget ? 'the remembered connection' : undefined,
-            ].filter((entry) => entry !== undefined);
-            this._append(
-              `Disconnected in this tab.${forgotten.length > 0 ? ` Forgotten: ${forgotten.join(' and ')}.` : ' Nothing was forgotten.'}`,
-              'note',
-            );
-          },
-          (error) => this._showError(error),
-        );
-      },
-
-      onChangePort: function () {
-        const library = /** @type {SerialBrokerGlobal} */ (this._library);
-        this._clearError();
-        // The picker again, although a port is chosen already. The port picked replaces the device
-        // in every tab and in what is remembered; the tab holding the old one closes it and opens
-        // the new one. Dismissing the picker changes nothing.
-        library.requestAccess(NAME, { chooseAgain: true }).then(
-          (granted) => {
-            this._append(
-              granted ? 'Port changed.' : 'The picker was dismissed; the port stays as it was.',
-              'note',
-            );
-          },
-          (error) => this._showError(error),
-        );
       },
 
       // --- Status and errors --------------------------------------------------------------------
@@ -334,20 +408,8 @@ sap.ui.define(
         this._status = status;
         this._ui.setProperty('/status', status);
         this._ui.setProperty('/statusState', STATE_OF[status] ?? 'None');
-        // The picker opens during a click and at no other time, so Connect is offered exactly while
-        // the library waits for one.
-        this._ui.setProperty(
-          '/canConnect',
-          status === library?.SerialBrokerStatus.AwaitingPermission,
-        );
         this._ui.setProperty('/canSend', status === library?.SerialBrokerStatus.Open);
-        // One place decides this. A setup that threw leaves `_isSetUp` false with the status
-        // `failed`, and offering *Disconnect* for a configuration that was never registered would
-        // report a disconnection that never happened.
-        this._ui.setProperty(
-          '/canDisconnect',
-          this._isSetUp && status !== library?.SerialBrokerStatus.Released,
-        );
+        this._ui.setProperty('/isConnected', this._isSetUp);
         this._renderSummary();
       },
 
@@ -536,63 +598,6 @@ sap.ui.define(
         this._ui.setProperty('/sendText', this._history[this._historyAt] ?? '');
       },
 
-      // --- Connection settings ------------------------------------------------------------------
-
-      onOpenSettings: function () {
-        const serial = this._preferences.serial;
-        // A copy, as strings: the dialog's fields are text and keys, and nothing is applied until
-        // *Apply and connect*.
-        this.getView()?.setModel(
-          new JSONModel({
-            baudRate: String(serial.baudRate),
-            dataBits: String(serial.dataBits),
-            stopBits: String(serial.stopBits),
-            parity: serial.parity,
-            flowControl: serial.flowControl,
-            invalid: false,
-          }),
-          'settings',
-        );
-        void this._fragment('Settings').then((dialog) => {
-          /** @type {import('sap/m/Dialog').default} */ (dialog).open();
-        });
-      },
-
-      onCloseSettings: function () {
-        void this._fragment('Settings').then((dialog) => {
-          /** @type {import('sap/m/Dialog').default} */ (dialog).close();
-        });
-      },
-
-      onApplySettings: function () {
-        const library = /** @type {SerialBrokerGlobal} */ (this._library);
-        const settings = /** @type {import('sap/ui/model/json/JSONModel').default} */ (
-          this.getView()?.getModel('settings')
-        );
-        const chosen = settings.getData();
-        const baudRate = Number(chosen.baudRate);
-        if (!Number.isInteger(baudRate) || baudRate <= 0) {
-          settings.setProperty('/invalid', true);
-          return;
-        }
-        this._ui.setProperty('/preferences/serial', {
-          baudRate,
-          dataBits: Number(chosen.dataBits),
-          stopBits: Number(chosen.stopBits),
-          parity: chosen.parity,
-          flowControl: chosen.flowControl,
-        });
-        this._savePreferences();
-        this.onCloseSettings();
-        // Line settings only change by connecting again: this tab disconnects and connects with the
-        // new ones. Other tabs keep theirs, and the tab holding the port opens it with its own.
-        this._append(`Settings applied: ${String(baudRate)} baud. Connecting again…`, 'note');
-        library.release(NAME).then(
-          () => this._connect(),
-          (error) => this._showError(error),
-        );
-      },
-
       // --- Experimental file transfer -----------------------------------------------------------
 
       onOpenFile: function () {
@@ -676,7 +681,7 @@ sap.ui.define(
       /**
        * A fragment of this view, loaded once and kept.
        *
-       * @param {string} name - `Settings`, `Display`, `Disconnect` or `SendFile`.
+       * @param {string} name - `Settings`, `Display` or `SendFile`.
        * @returns {Promise<import('sap/ui/core/Control').default>}
        */
       _fragment: function (name) {

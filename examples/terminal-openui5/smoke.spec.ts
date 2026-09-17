@@ -9,6 +9,10 @@
  * The page fixes its own language to English (index.html), so the texts asserted here do not depend
  * on the machine the browser runs on.
  *
+ * The terminal's connection handling is one button. *Connect* shows the connection settings and
+ * then asks for the port; *Disconnect* forgets everything. The stand-in's device is therefore never
+ * granted beforehand: every connection here goes through the picker, as it does for a user.
+ *
  * The last test is the reason this example exists: it builds the application and opens the built
  * folder from a file, with no server behind it.
  */
@@ -18,8 +22,9 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
-import { expect, test } from '@playwright/test';
+import { expect, test, type BrowserContext } from '@playwright/test';
 
+import type { WebSerialStandInControl } from '../../test/browser/stand-in/web-serial-stand-in.js';
 import {
   ExampleTab,
   installLoopback,
@@ -30,9 +35,7 @@ import {
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const manifest = JSON.parse(
   readFileSync(path.join(HERE, 'example.json'), 'utf8'),
-) as ExampleManifest & {
-  readonly readyPath: string;
-};
+) as ExampleManifest;
 
 /** The DOM ids README.md documents: `<container id>-<component id>---<view id>--<control id>`. */
 const ID = '#container-terminal---app--';
@@ -50,52 +53,154 @@ const UI: ExampleUi = {
   error: `${ID}error`,
   errorCode: `${ID}errorCode`,
   errorRemediation: `${ID}errorRemediation`,
-  // Disconnect and Connect again are the same button: releasing is what a terminal calls
-  // disconnecting, and the page then offers to connect again in its place.
-  release: `${ID}release`,
-  setUpAgain: `${ID}release`,
 };
 
-test('opens the port chosen once without asking again, on the next visit', async ({ context }) => {
-  // No device is named (auto mode), so the first visit always asks: a port the browser happens to
-  // have granted is not opened until the user has picked it. From then on it is remembered.
+/** Opens the terminal, which connects to nothing until it is told to. */
+async function open(context: BrowserContext, ui: ExampleUi = UI): Promise<ExampleTab> {
   await installLoopback(context, false);
-  const tab = await ExampleTab.open(context, UI);
-  await tab.connectByClick();
+  const tab = await ExampleTab.open(context, ui);
+  await tab.expectStatus('disconnected');
+  await expect(tab.locator(ui.connect)).toHaveText('Connect');
+  await expect(tab.locator(ui.sendButton)).toBeDisabled();
+  return tab;
+}
 
-  await tab.page.reload();
-  await tab.expectOpenWithoutClick();
+/** *Connect*, the settings as they are, *Connect*: the port is asked for and opened. */
+async function connect(tab: ExampleTab): Promise<void> {
+  await tab.locator(UI.connect).click();
+  await tab.locator(`${ID}connectConfirm`).click();
+  await tab.expectStatus('open');
+  await expect(tab.locator(UI.connect)).toHaveText('Disconnect');
+}
+
+function isGranted(tab: ExampleTab): Promise<boolean> {
+  return tab.page.evaluate(() =>
+    (
+      window as unknown as { webSerialStandIn: WebSerialStandInControl }
+    ).webSerialStandIn.isGranted(),
+  );
+}
+
+test('connects through the settings dialog, sends a line and sees it echoed', async ({
+  context,
+}) => {
+  const tab = await open(context);
+
+  await tab.locator(UI.connect).click();
+  // The dialog is what Connect always shows, with the settings of the last time.
+  await expect(tab.locator(`${ID}baudRate-inner`)).toHaveValue('9600');
+  await tab.locator(`${ID}connectConfirm`).click();
+  await tab.expectStatus('open');
   await expect(tab.locator(UI.error)).toBeHidden();
 
   // The loopback echoes what is written, so the line comes back into the log; the terminal also
   // shows what this tab sent, marked as outgoing.
-  await tab.sendLine('HELLO FROM THE TERMINAL');
-  await expect(tab.locator('#received')).toContainText('» HELLO FROM THE TERMINAL');
-});
-
-test('asks for a device with a click when none was granted', async ({ context }) => {
-  await installLoopback(context, false);
-  const tab = await ExampleTab.open(context, UI);
-
-  await tab.connectByClick();
-  await tab.sendLine('AFTER THE PICKER');
+  await tab.sendLine('HELLO FROM OPENUI5');
+  await expect(tab.locator('#received')).toContainText('» HELLO FROM OPENUI5');
 
   tab.expectQuiet();
 });
 
+test('offers the usual baud rates, takes any other, and shows the last settings next time', async ({
+  context,
+}) => {
+  const tab = await open(context);
+
+  await tab.locator(UI.connect).click();
+  // A combo box: the usual rates are offered whatever the field holds, and any other can be typed.
+  await tab.locator(`${ID}baudRate-arrow`).click();
+  await expect(tab.page.getByRole('option')).toHaveCount(12);
+  await tab.page.keyboard.press('Escape');
+  await tab.locator(`${ID}baudRate-inner`).fill('250000');
+  await tab.locator(`${ID}connectConfirm`).click();
+  await tab.expectStatus('open');
+  await expect(tab.locator(`${ID}displaySummary`)).toContainText('250000 baud');
+  await tab.sendLine('AT THE NEW RATE');
+
+  // Disconnected, and after a reload as well, the dialog shows what was used last; cancelling it
+  // connects nothing.
+  await tab.locator(UI.connect).click();
+  await tab.expectStatus('disconnected');
+  await tab.page.reload();
+  await tab.locator(UI.connect).click();
+  await expect(tab.locator(`${ID}baudRate-inner`)).toHaveValue('250000');
+  await tab.locator(`${ID}settingsCancel`).click();
+  await tab.expectStatus('disconnected');
+});
+
+test('forgets everything on Disconnect, so the next Connect asks for the port again', async ({
+  context,
+}) => {
+  const tab = await open(context);
+  await connect(tab);
+  expect(await isGranted(tab)).toBe(true);
+
+  await tab.locator(UI.connect).click();
+  await tab.expectStatus('disconnected');
+  await expect(tab.locator(UI.connect)).toHaveText('Connect');
+  await expect(tab.locator(UI.sendButton)).toBeDisabled();
+  await expect(tab.locator('#received')).toContainText(
+    'The port and the remembered connection are forgotten.',
+  );
+  // The browser's permission went back, and serial-broker remembers nothing under the name.
+  expect(await isGranted(tab)).toBe(false);
+  // (Its index of names stays, and no longer lists this one.)
+  expect(
+    await tab.page.evaluate(() =>
+      Object.entries(window.localStorage)
+        .filter(([key]) => key.startsWith('serial-broker/'))
+        .map(([key, value]) => (key.endsWith('/index') ? String(value) : key))
+        .filter((entry) => entry.includes('Terminal')),
+    ),
+  ).toEqual([]);
+
+  // Which is also how the port is changed: connect again, and the picker is asked again.
+  await connect(tab);
+  expect(await isGranted(tab)).toBe(true);
+  await tab.sendLine('ON THE PORT CHOSEN AGAIN');
+});
+
+test('keeps the dialog open when no port is chosen, and connects from it once one is', async ({
+  context,
+}) => {
+  const tab = await open(context);
+  // Nothing to choose from: the picker has no port to offer, as when the user dismisses it.
+  await tab.page.evaluate(() => {
+    (window as unknown as { webSerialStandIn: WebSerialStandInControl }).webSerialStandIn.unplug();
+  });
+
+  await tab.locator(UI.connect).click();
+  await tab.locator(`${ID}baudRate-inner`).fill('19200');
+  await tab.locator(`${ID}connectConfirm`).click();
+
+  // The dialog does not go away with the picker: the settings are still there, it says why there
+  // is no connection, and nothing is set up behind it.
+  await expect(tab.locator(`${ID}connectMessage`)).toContainText('No port was chosen');
+  await expect(tab.locator(`${ID}settingsDialog`)).toBeVisible();
+  await expect(tab.locator(`${ID}baudRate-inner`)).toHaveValue('19200');
+  await tab.expectStatus('disconnected');
+
+  // Asked again from the same dialog, with a port to choose this time.
+  await tab.page.evaluate(() => {
+    (window as unknown as { webSerialStandIn: WebSerialStandInControl }).webSerialStandIn.plug();
+  });
+  await tab.locator(`${ID}connectConfirm`).click();
+  await tab.expectStatus('open');
+  await expect(tab.locator(`${ID}settingsDialog`)).toBeHidden();
+  await expect(tab.locator(`${ID}displaySummary`)).toContainText('19200 baud');
+});
+
 test('lives through an unplugged adapter', async ({ context }) => {
-  await installLoopback(context, false);
-  const tab = await ExampleTab.open(context, UI);
-  await tab.connectByClick();
+  const tab = await open(context);
+  await connect(tab);
 
   await tab.recoverFromUnplug();
   await tab.sendLine('AFTER THE ADAPTER CAME BACK');
 });
 
 test('reads and writes hex, and keeps the display options between visits', async ({ context }) => {
-  await installLoopback(context, false);
-  const tab = await ExampleTab.open(context, UI);
-  await tab.connectByClick();
+  const tab = await open(context);
+  await connect(tab);
 
   // Hex in, hex out: the input is read as bytes and the log shows a dump of what comes back.
   await tab.locator(`${ID}display`).click();
@@ -118,79 +223,15 @@ test('reads and writes hex, and keeps the display options between visits', async
   await expect(tab.locator(`${ID}displaySummary`)).toContainText('hex');
 });
 
-test('disconnects forgetting the port and the remembered connection, which is what is ticked', async ({
-  context,
-}) => {
-  await installLoopback(context, false);
-  const tab = await ExampleTab.open(context, UI);
-  await tab.connectByClick();
-
-  await tab.locator(`${ID}release`).click();
-  // A terminal is pointed at one device today and another tomorrow: everything is ticked.
-  await expect(tab.locator(`${ID}forgetPort`)).toHaveAttribute('aria-checked', 'true');
-  await expect(tab.locator(`${ID}forgetConfiguration`)).toHaveAttribute('aria-checked', 'true');
-  await tab.locator(`${ID}disconnectConfirm`).click();
-  await tab.expectStatus('released');
-  await expect(tab.locator('#received')).toContainText(
-    'Forgotten: the port and the remembered connection.',
-  );
-
-  // The permission went back to the browser, so connecting again has to ask for a port.
-  await tab.locator(`${ID}release`).click();
-  await tab.expectStatus('awaiting-permission');
-  await tab.locator(UI.connect).click();
-  await tab.expectStatus('open');
-  await tab.sendLine('AFTER CHOOSING AGAIN');
-});
-
-test('disconnects forgetting nothing when nothing is ticked, and connects again without asking', async ({
-  context,
-}) => {
-  await installLoopback(context, false);
-  const tab = await ExampleTab.open(context, UI);
-  await tab.connectByClick();
-
-  await tab.locator(`${ID}release`).click();
-  await tab.locator(`${ID}forgetPort`).click();
-  await tab.locator(`${ID}forgetConfiguration`).click();
-  await tab.locator(`${ID}disconnectConfirm`).click();
-  await tab.expectStatus('released');
-  await expect(tab.locator('#received')).toContainText('Nothing was forgotten.');
-  await expect(tab.locator(`${ID}release`)).toHaveText('Connect again');
-
-  await tab.locator(`${ID}release`).click();
-  await tab.expectStatus('open');
-  await expect(tab.locator(UI.connect)).toBeHidden();
-  await tab.sendLine('AFTER CONNECTING AGAIN');
-
-  // And cancelling the dialog disconnects nothing.
-  await tab.locator(`${ID}release`).click();
-  await tab.locator(`${ID}disconnectCancel`).click();
-  await tab.expectStatus('open');
-});
-
-test('changes the port while one is open, from the picker', async ({ context }) => {
-  await installLoopback(context, false);
-  const tab = await ExampleTab.open(context, UI);
-  // Nothing to change before anything is set up... and the button says so by being there, enabled,
-  // as soon as the configuration is: the first port can be chosen with it just as well.
-  await tab.connectByClick();
-
-  await expect(tab.locator(`${ID}changePort`)).toBeEnabled();
-  await tab.locator(`${ID}changePort`).click();
-  await expect(tab.locator('#received')).toContainText('Port changed.');
-  await tab.expectStatus('open');
-  await tab.sendLine('ON THE PORT CHOSEN AGAIN');
-});
-
 test('keeps the log the size it is, however much arrives and however long a line is', async ({
   context,
 }) => {
-  await installLoopback(context, false);
-  const tab = await ExampleTab.open(context, UI);
-  await tab.connectByClick();
+  const tab = await open(context);
+  await connect(tab);
 
   const log = tab.locator('#received');
+  // Measured once the page has settled: the first line is in, and the header has its final height.
+  await tab.sendLine('the first line');
   const before = await log.boundingBox();
 
   // Many lines, a line too long to fit, and a word too long to break at a space.
@@ -214,24 +255,23 @@ test('keeps the log the size it is, however much arrives and however long a line
   await expect(tab.locator(UI.sendInput)).toBeInViewport();
 });
 
-test('changes the baud rate in the settings dialog and connects again with it', async ({
+test('shares the port between two tabs, and a Disconnect in one disconnects the other', async ({
   context,
 }) => {
-  await installLoopback(context, false);
-  const tab = await ExampleTab.open(context, UI);
-  await tab.connectByClick();
+  const first = await open(context);
+  await connect(first);
+  const second = await ExampleTab.open(context, UI);
+  await connect(second);
 
-  await tab.locator(`${ID}settings`).click();
-  // A combo box: the usual rates are offered whatever the field holds, and any other can be typed.
-  await tab.locator(`${ID}baudRate-arrow`).click();
-  await expect(tab.page.getByRole('option')).toHaveCount(12);
-  await tab.page.keyboard.press('Escape');
-  await tab.locator(`${ID}baudRate-inner`).fill('250000');
-  await tab.locator(`${ID}settingsApply`).click();
+  await second.sendLine('FROM THE SECOND TAB');
+  await expect(first.locator('#received')).toContainText('FROM THE SECOND TAB   (another tab)');
 
-  await tab.expectStatus('open');
-  await expect(tab.locator(`${ID}displaySummary`)).toContainText('250000 baud');
-  await tab.sendLine('AT THE NEW RATE');
+  // Disconnect forgets the port for every tab: the browser's permission is the origin's. The other
+  // tab cannot ask for a port on its own, so it says what happened and is disconnected too.
+  await first.locator(UI.connect).click();
+  await first.expectStatus('disconnected');
+  await second.expectStatus('disconnected');
+  await expect(second.locator('#received')).toContainText('The port was forgotten in another tab');
 });
 
 test('the built folder runs when opened as a file, with no web server, and shares the port', async ({
@@ -242,19 +282,17 @@ test('the built folder runs when opened as a file, with no web server, and share
   test.setTimeout(420_000);
   execFileSync('npm', ['run', 'build'], { cwd: HERE, stdio: 'ignore', shell: true });
   const url = pathToFileURL(path.join(HERE, 'dist', 'index.html')).href;
+  const fromFile = { ...UI, url };
 
-  await installLoopback(context, false);
-  const first = await ExampleTab.open(context, { ...UI, url });
-  await first.connectByClick();
-  // The second tab names no device either, and adopts the one the first tab chose: no click.
-  const second = await ExampleTab.open(context, { ...UI, url });
-  await second.expectOpenWithoutClick();
-  const tabs = [first, second];
+  const first = await open(context, fromFile);
+  await connect(first);
+  const second = await ExampleTab.open(context, fromFile);
+  await connect(second);
 
   // A page opened from a file may start no SharedWorker; the library coordinates the tabs over a
   // BroadcastChannel instead. What the operator sees is the same: one port, both tabs.
-  await tabs[1]?.sendLine('HELLO FROM A FILE');
-  for (const tab of tabs) {
+  await second.sendLine('HELLO FROM A FILE');
+  for (const tab of [first, second]) {
     await expect(tab.locator('#received')).toContainText('HELLO FROM A FILE');
     await expect(tab.locator(UI.error)).toBeHidden();
     // Nothing the framework asked for was refused: no text bundle, no locale data, no module.

@@ -22,12 +22,13 @@ different protocol versions do not coordinate with each other. It is noted whene
   against the Arduino through the browser's own picker.
 
 - **A terminal in SAP OpenUI5**, `examples/terminal-openui5`, in `sap_horizon` and
-  `sap_horizon_dark`: connection settings with a baud rate combo box, text and hex, ANSI colours,
-  timestamps, a saved log, _Change Port…_ (`requestAccess(name, { chooseAgain: true })` in auto
-  mode) and a disconnect dialog for `release()`'s two options. Its build runs from a folder opened
-  as a file, with no server and no internet: a self-contained bundle with the text bundles and
-  locale data OpenUI5 would otherwise fetch embedded into it. Checked against two real ports, the
-  Arduino and the USB/IP emulator, through the browser's own picker.
+  `sap_horizon_dark`. Its connection handling is one button: _Connect_ shows the connection settings
+  of the last time, sets up and asks for the port in the same click, and stays open until there is a
+  connection; _Disconnect_ forgets the port and the remembered connection, which is also how the
+  port is changed. Text and hex, ANSI colours, timestamps, a saved log. Its build runs from a folder
+  opened as a file, with no server and no internet: a self-contained bundle with the text bundles
+  and locale data OpenUI5 would otherwise fetch embedded into it. Checked against the Arduino through
+  the browser's own picker.
 
 ### Changed
 

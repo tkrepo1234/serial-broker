@@ -9,20 +9,16 @@ transpile step; the files under `webapp/` are the files the browser loads.
 
 ## What it does
 
-- **Connect, disconnect, reconnect.** The status badge shows the library's own word - `open`,
-  `reconnecting`, `awaiting-permission`, `queued`, `failed` - and _Select Port_ appears exactly while the
-  browser's port picker is what is needed.
-- **Change the port.** _Change Port…_ opens the browser's picker again although a port is chosen
-  already; the port picked replaces the device in every tab, and the tab holding the old one closes
-  it and opens the new one. The terminal names no device (auto mode), so the configuration takes
-  its device from the port picked - and the first visit always asks, even where the browser has
-  a permission already.
-- **Disconnect, and say what to forget.** A dialog offers the port (the browser's permission, for
-  every tab) and the remembered connection (what serial-broker keeps under the name). Both are
-  ticked: a terminal is pointed at one device today and another tomorrow. Untick them, and
-  _Connect again_ reopens the same port without asking.
-- **Connection settings** in a dialog: baud rate (a combo box - the usual rates, or any you type),
-  data bits, stop bits, parity, flow control. Applying them connects again with the new ones.
+- **Connect and Disconnect, and nothing else to learn.** One button with two states.
+  _Connect_ always shows the connection settings - baud rate (a combo box: the usual rates, or any
+  you type), data bits, stop bits, parity, flow control - filled with the ones used last, then sets
+  the connection up and asks for the port in the same click. The dialog stays until there is a
+  connection: leave the browser's picker without choosing, and the settings are still there, with a
+  line saying that no port was chosen. _Disconnect_ always forgets everything - the browser's
+  permission for the port and what serial-broker remembers - so the next _Connect_ starts from
+  nothing. That is also how the port, or a setting, is changed.
+- **The status badge** shows the library's own word - `connecting`, `open`, `reconnecting`,
+  `queued`, `failed` - and `disconnected` while nothing is set up.
 - **Send text or hex**, with the line ending you choose. `↑` and `↓` walk through what you sent
   earlier.
 - **Display options**: hex view with an offset column and the printable characters beside it, ANSI
@@ -99,7 +95,7 @@ they all belong to the same place, so they share configuration names. This termi
 
 ## Taking it into an application of your own
 
-The integration is four calls:
+The integration is a handful of calls:
 
 ```js
 // Component.js - once, before the first setup()
@@ -109,8 +105,10 @@ SerialBroker.configure({
 
 // controller/Terminal.controller.js
 await SerialBroker.setup('Terminal', { serial: { baudRate: 9600 } }); // no device named: auto mode
+await SerialBroker.requestAccess('Terminal'); // the picker, still within the click on Connect
 SerialBroker.subscribe('Terminal', 'onReceive', (event) => show(event.text));
 await SerialBroker.send('Terminal', new TextEncoder().encode('PING\r\n'));
+await SerialBroker.release('Terminal', { forget: true, forgetDevice: true }); // Disconnect
 ```
 
 The terminal talks to the library directly, because its log is not a binding (below). An
@@ -138,12 +136,13 @@ application that binds controls to a device - a status in an `ObjectStatus`, rec
 
 Control ids are stable because the component and the root view have fixed ids
 (`index.html`, `manifest.json`): `container-terminal---app--<id>`. The smoke test uses `status`
-(its text is `status-text`), `connect`, `changePort`, `release`, `forgetPort`, `forgetConfiguration`, `disconnectConfirm`,
-`disconnectCancel`, `settings`, `display`, `sendMode`, `sendInput`
-(the element that takes text is `sendInput-inner`), `sendEnding`, `sendButton`, `error`,
-`errorCode`, `errorRemediation`, `displaySummary`, `optHex`, `baudRate`, `settingsApply` - and
-`#received`, the log, which is plain DOM with an id of its own.
+(its text is `status-text`), `connect` (the one button), `settingsDialog`, `baudRate`,
+`connectConfirm`, `settingsCancel`, `connectMessage`, `display`, `optHex`, `sendMode`,
+`sendInput` (the element that takes text is `sendInput-inner`), `sendEnding`, `sendButton`,
+`error`, `errorCode`, `errorRemediation`, `displaySummary` - and `#received`, the log, which is
+plain DOM with an id of its own.
 
-`smoke.spec.ts` connects to a granted device, asks for one with a click, lives through an unplugged
-adapter, disconnects and connects again, checks that hex survives a reload, changes the baud rate -
+`smoke.spec.ts` connects through the dialog, checks the baud rates and that the last settings come
+back, that _Disconnect_ forgets everything, that the dialog stays when no port is chosen, an
+unplugged adapter, hex across a reload, the size of the log, two tabs sharing the port -
 and builds the application and opens `dist/index.html` from a file in two tabs.

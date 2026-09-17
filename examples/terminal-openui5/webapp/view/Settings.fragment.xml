@@ -1,6 +1,6 @@
 <core:FragmentDefinition xmlns="sap.m" xmlns:core="sap.ui.core">
-  <!-- Connection settings. Applying them connects again with the new ones. -->
-  <Dialog id="settingsDialog" title="{i18n>settingsTitle}" contentWidth="30rem" draggable="true">
+  <!-- What Connect shows every time: the connection settings, filled with the last ones. -->
+  <Dialog id="settingsDialog" title="{i18n>connect}" contentWidth="30rem" draggable="true">
     <content>
       <VBox class="sapUiSmallMargin" renderType="Bare">
         <Text class="sapUiSmallMarginBottom" text="{i18n>settingsNote}" />
@@ -41,18 +41,25 @@
           <core:Item key="none" text="{i18n>flowNone}" />
           <core:Item key="hardware" text="{i18n>flowHardware}" />
         </Select>
+        <!-- Why there is no connection yet: a baud rate that is none, or a picker left without a port. -->
         <MessageStrip
-          id="settingsError"
+          id="connectMessage"
           class="sapUiSmallMarginTop"
-          type="Error"
+          type="Warning"
           showIcon="true"
-          text="{i18n>baudRateInvalid}"
-          visible="{settings>/invalid}"
+          text="{settings>/message}"
+          visible="{= ${settings>/message} !== '' }"
         />
       </VBox>
     </content>
     <beginButton>
-      <Button id="settingsApply" text="{i18n>applyAndConnect}" type="Emphasized" press=".onApplySettings" />
+      <Button
+        id="connectConfirm"
+        text="{i18n>connect}"
+        type="Emphasized"
+        enabled="{= !${settings>/busy} }"
+        press=".onConfirmConnect"
+      />
     </beginButton>
     <endButton>
       <Button id="settingsCancel" text="{i18n>cancel}" press=".onCloseSettings" />
