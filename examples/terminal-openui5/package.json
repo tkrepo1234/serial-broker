@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "The Serial-Broker-Terminal in SAP OpenUI5 with the sap_horizon theme; its build runs from a folder opened as a file.",
+  "description": "The Serial-Terminal in SAP OpenUI5 with the sap_horizon theme; its build runs from a folder opened as a file.",
   "license": "MIT",
   "engines": {
     "node": ">=22.13"

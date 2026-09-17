@@ -3,5 +3,5 @@
   "port": 8162,
   "start": "npm start",
   "readyPath": "/index.html",
-  "summary": "The Serial-Broker-Terminal in SAP OpenUI5 with the sap_horizon theme. Its build runs from a folder opened as a file: no web server, no internet."
+  "summary": "The Serial-Terminal in SAP OpenUI5 with the sap_horizon theme. Its build runs from a folder opened as a file: no web server, no internet."
 }

@@ -1,4 +1,4 @@
-# Serial-Broker-Terminal in OpenUI5
+# Serial-Terminal in OpenUI5
 
 A serial terminal as a SAP OpenUI5 application in the `sap_horizon` theme: open a port, watch what
 the device says, type back. The controls and the look of a Fiori application - and a build that **runs from a folder opened as a file**, with no web

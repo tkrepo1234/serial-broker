@@ -1,5 +1,5 @@
 /**
- * The application component of the Serial-Broker-Terminal in OpenUI5.
+ * The application component of the Serial-Terminal in OpenUI5.
  *
  * It does the two things that belong to the application rather than to a screen: it tells the
  * library where its broker script is, once and before the first `setup()`, and it chooses the
