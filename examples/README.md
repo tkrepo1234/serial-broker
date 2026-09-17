@@ -6,6 +6,7 @@ entry points only, never through `src/`. Each one lives in its own directory wit
 
 | Directory              | Shows                                                                                     |
 | ---------------------- | ----------------------------------------------------------------------------------------- |
+| `terminal/`            | The terminal: settings, hex, ANSI, timestamps, saved logs, a file transfer. Start here.   |
 | `minimal/`             | One page: connect, print what arrives, send text.                                         |
 | `minimal-js/`          | The same page in plain JavaScript, as one HTML file: no modules, no build step.           |
 | `multi-tab-dashboard/` | Several tabs on one device: every status, errors, permission, remembering, diagnostics.   |

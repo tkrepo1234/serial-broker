@@ -1,0 +1,217 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Serial-Broker-Terminal</title>
+    <!-- No icon file: without this the browser asks for /favicon.ico and logs a 404. -->
+    <link rel="icon" href="data:," />
+    <link rel="stylesheet" href="./terminal.css" />
+
+    <!--
+      The only "build": the bare specifier the script imports is mapped to the library file this
+      origin serves. serve.mjs maps /serial-broker/ to node_modules/serial-broker/dist/, so the
+      worker script sits next to the library there.
+    -->
+    <script type="importmap">
+      {
+        "imports": {
+          "serial-broker": "/serial-broker/serial-broker.min.js"
+        }
+      }
+    </script>
+  </head>
+
+  <body>
+    <div class="app">
+      <header class="bar">
+        <h1>Serial-Broker-Terminal</h1>
+
+        <!-- The status the library reports, in the words the library uses. -->
+        <span id="status" class="status" data-status="idle">idle</span>
+
+        <div class="bar-actions">
+          <button id="settings" type="button" class="secondary">Connection settings…</button>
+          <!-- Shown only while the library waits for a port: the picker needs a real click. -->
+          <button id="connect" type="button" hidden>Connect</button>
+          <button id="release" type="button" class="secondary">Disconnect</button>
+
+          <button
+            id="more"
+            type="button"
+            class="secondary icon"
+            aria-haspopup="menu"
+            aria-expanded="false"
+            aria-label="More options"
+          >
+            ⋯
+          </button>
+          <div id="more-menu" class="menu" popover role="menu">
+            <button id="save-log" type="button" role="menuitem">Save log…</button>
+            <button id="clear" type="button" role="menuitem">Clear terminal</button>
+            <hr />
+            <p class="menu-heading">Display</p>
+            <label class="check"
+              ><input id="opt-hex" type="checkbox" /> Hex view <kbd>Ctrl+H</kbd></label
+            >
+            <label class="check"
+              ><input id="opt-ansi" type="checkbox" checked /> ANSI colours</label
+            >
+            <label class="check"
+              ><input id="opt-timestamps" type="checkbox" /> Timestamps <kbd>Ctrl+T</kbd></label
+            >
+            <label class="check"
+              ><input id="opt-autoscroll" type="checkbox" checked /> Auto-scroll</label
+            >
+            <label class="check"
+              ><input id="opt-echo" type="checkbox" checked /> Echo what I send</label
+            >
+            <hr />
+            <p class="menu-heading">Advanced</p>
+            <button id="file-transfer" type="button" role="menuitem">
+              Send file… <span class="tag">experimental</span>
+            </button>
+          </div>
+
+          <button id="theme" type="button" class="secondary icon" aria-label="Toggle theme">
+            ◐
+          </button>
+        </div>
+      </header>
+
+      <!-- Failures the library reports. A failure it is recovering from reads as a note. -->
+      <section id="error" class="error" hidden>
+        <div>
+          <code id="error-code"></code>
+          <span id="error-message"></span>
+          <p id="error-remediation" class="remediation"></p>
+        </div>
+        <button id="error-dismiss" type="button" class="secondary">Dismiss</button>
+      </section>
+
+      <main class="terminal">
+        <div class="terminal-head">
+          <h2>Terminal</h2>
+          <!-- What the display options add up to, so the window says how it is reading. -->
+          <span id="display-summary" class="summary"></span>
+        </div>
+
+        <pre id="received" class="log" tabindex="0" aria-label="Received data"></pre>
+
+        <form id="send-form" class="composer" autocomplete="off">
+          <select id="send-mode" aria-label="How the input is read">
+            <option value="text">Text</option>
+            <option value="hex">Hex</option>
+          </select>
+          <input
+            id="send-input"
+            type="text"
+            placeholder="Line to send — ↑ and ↓ for earlier ones"
+            aria-label="Line to send"
+          />
+          <select id="send-ending" aria-label="What to append">
+            <option value="\r\n">CR LF</option>
+            <option value="\n">LF</option>
+            <option value="\r">CR</option>
+            <option value="">nothing</option>
+          </select>
+          <button id="send-button" type="submit" disabled>Send</button>
+        </form>
+      </main>
+    </div>
+
+    <!-- Connection settings. Applying them connects again with the new ones. -->
+    <dialog id="settings-dialog">
+      <form method="dialog" autocomplete="off">
+        <h2>Connection settings</h2>
+        <p class="hint">
+          Applied in this tab. Other tabs of this origin keep theirs, and the tab holding the port
+          opens it with its own.
+        </p>
+
+        <div class="grid">
+          <label>Baud rate<input id="baud-rate" name="baudRate" list="baud-rates" /></label>
+          <datalist id="baud-rates">
+            <option value="9600"></option>
+            <option value="19200"></option>
+            <option value="38400"></option>
+            <option value="57600"></option>
+            <option value="115200"></option>
+          </datalist>
+
+          <label
+            >Data bits
+            <select id="data-bits" name="dataBits">
+              <option value="8">8</option>
+              <option value="7">7</option>
+            </select>
+          </label>
+
+          <label
+            >Stop bits
+            <select id="stop-bits" name="stopBits">
+              <option value="1">1</option>
+              <option value="2">2</option>
+            </select>
+          </label>
+
+          <label
+            >Parity
+            <select id="parity" name="parity">
+              <option value="none">none</option>
+              <option value="even">even</option>
+              <option value="odd">odd</option>
+            </select>
+          </label>
+
+          <label
+            >Flow control
+            <select id="flow-control" name="flowControl">
+              <option value="none">none</option>
+              <option value="hardware">hardware</option>
+            </select>
+          </label>
+        </div>
+
+        <p id="settings-error" class="settings-error" hidden></p>
+
+        <div class="actions">
+          <button value="cancel" type="submit" class="secondary">Cancel</button>
+          <button id="settings-apply" value="apply" type="submit">Apply and connect</button>
+        </div>
+      </form>
+    </dialog>
+
+    <!-- Experimental: sends a file as bytes, in chunks, with a pause between them. -->
+    <dialog id="file-dialog">
+      <form method="dialog" autocomplete="off">
+        <h2>Send file <span class="tag">experimental</span></h2>
+        <p class="hint">
+          Sends the file's bytes as they are. There is no protocol here - no XMODEM, no
+          acknowledgement, no retry - so the device has to be ready to take a stream at this speed.
+          Chunk size and pause are what a slow device needs to keep up.
+        </p>
+
+        <label class="file-field">File<input id="file-input" type="file" /></label>
+
+        <div class="grid">
+          <label
+            >Chunk size (bytes)<input id="chunk-size" type="number" min="1" value="256"
+          /></label>
+          <label
+            >Pause between chunks (ms)<input id="chunk-pause" type="number" min="0" value="20"
+          /></label>
+        </div>
+
+        <p id="file-progress" class="hint" role="status"></p>
+
+        <div class="actions">
+          <button value="cancel" type="submit" class="secondary">Close</button>
+          <button id="file-send" value="send" type="submit">Send</button>
+        </div>
+      </form>
+    </dialog>
+
+    <script type="module" src="./terminal.js"></script>
+  </body>
+</html>

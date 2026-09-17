@@ -63,7 +63,12 @@ usbip-win2 - in Microsoft Edge on Windows. Before 1.0 a minor version may break 
   shipped as static content in `dist/debug/` under its own content security policy (ADR-0018,
   ADR-0019). It lists every configuration of the origin, connects, edits and disconnects, and asks
   what should be forgotten.
-- **Eleven example applications**, each with a README, a fixed port and a Playwright smoke test:
+- **A terminal application**, `examples/terminal`: the first application built on this library and
+  the one to read first. Connection settings, text and hex in both directions, ANSI colours,
+  timestamps, auto-scroll, saved logs, a dark theme, a send history, and an experimental file
+  transfer that sends raw bytes in chunks. Static HTML with an import map, no build step, no
+  dependencies at run time; open it in two tabs to watch one port serve both.
+- **Twelve example applications**, each with a README, a fixed port and a Playwright smoke test:
   `minimal`, `minimal-js`, `multi-tab-dashboard`, `exclusive`, `no-bundler`, `openui5`,
   `openui5-js`, `react`, `vue`, `svelte` and `angular`.
 - **Documentation** built with Sphinx from the chapters and the source comments (ADR-0020):
