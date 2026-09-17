@@ -9,15 +9,14 @@
     using one device, the tab holding the port closing or crashing, the device being unplugged, and a tab limit that
     gives one tab exclusive use.</desc>
   <!--
-    Maintained by hand. Shown in README.md and in the documentation's Introduction.
+    Maintained by hand. Shown in README.md; not part of the documentation site.
     Colours and type are the documentation's Read the Docs theme, so the picture and a page read as
     one: #2980b9 header and accents; #6ab0de/#e7f2fa the message bus; #f0b37e/#ffedcc the tab that
     holds the port, and Web Locks; #f29f97/#fdf3f2 Web Serial alone; #1abc9c/#dbfaf4 with
     serial-broker; #9b59b6/#f4ecf7 diagnostics; #e74c3c the cross on a route that does not exist;
     #404040/#555555 text; #e1e4e5/#f3f6f6 borders and quiet fills; #fcfcfc the page. Lato for prose,
     Roboto Slab for headings, a monospace stack for code; no font is loaded, so the layout leaves
-    room for the wider fallbacks (Arial, Georgia). No external resources, no scripts. 760 units wide,
-    so it stays legible in the documentation's 800 px column.
+    room for the wider fallbacks (Arial, Georgia). No external resources, no scripts.
   -->
 
   <style>
