@@ -6,7 +6,7 @@ sap.ui.define([], function () {
   'use strict';
 
   /** A key that says whose it is: pages opened from files share one `localStorage`. */
-  const STORAGE_KEY = 'serial-broker-terminal-openui5/preferences/v1';
+  const STORAGE_KEY = 'serial-terminal-openui5/preferences/v1';
 
   /** @returns {TerminalPreferences} */
   function defaults() {

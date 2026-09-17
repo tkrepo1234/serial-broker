@@ -137,7 +137,7 @@ application that binds controls to a device - a status in an `ObjectStatus`, rec
 - **English only.** The page fixes OpenUI5's language, because a page opened from a file can fetch
   no text bundle and the build embeds exactly one. An application served over http can drop
   `data-sap-ui-language` and translate `i18n.properties` as usual.
-- **Its own storage key.** Preferences live under `serial-broker-terminal-openui5/preferences/v1`:
+- **Its own storage key.** Preferences live under `serial-terminal-openui5/preferences/v1`:
   pages opened from files share one `localStorage`, so a key says whose it is.
 
 ## Element ids the smoke test drives

@@ -57,7 +57,7 @@ for (const name of embedded) {
 const bundle = await readFile(BUNDLE, 'utf8');
 
 // The application's own texts, unless the bundler has put them in already.
-const APP_TEXTS = 'serialbroker/terminal/i18n/i18n.properties';
+const APP_TEXTS = 'serialterminal/i18n/i18n.properties';
 if (!bundle.includes(`"${APP_TEXTS}"`)) {
   preload[APP_TEXTS] = await readFile(path.join(DIST, 'i18n', 'i18n.properties'), 'utf8');
 }
@@ -68,7 +68,7 @@ if (at === -1) {
 }
 await writeFile(
   BUNDLE,
-  `${bundle.slice(0, at)}sap.ui.require.preload(${JSON.stringify(preload)}, "serialbroker/terminal/run-from-a-file");\n${bundle.slice(at)}`,
+  `${bundle.slice(0, at)}sap.ui.require.preload(${JSON.stringify(preload)}, "serialterminal/run-from-a-file");\n${bundle.slice(at)}`,
 );
 
 /**

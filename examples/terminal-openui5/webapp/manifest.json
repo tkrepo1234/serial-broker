@@ -1,7 +1,7 @@
 {
   "_version": "1.60.0",
   "sap.app": {
-    "id": "serialbroker.terminal",
+    "id": "serialterminal",
     "type": "application",
     "i18n": {
       "bundleUrl": "i18n/i18n.properties",
@@ -36,7 +36,7 @@
       "cozy": true
     },
     "rootView": {
-      "viewName": "serialbroker.terminal.view.Terminal",
+      "viewName": "serialterminal.view.Terminal",
       "type": "XML",
       "id": "app",
       "async": true
@@ -45,7 +45,7 @@
       "i18n": {
         "type": "sap.ui.model.resource.ResourceModel",
         "settings": {
-          "bundleName": "serialbroker.terminal.i18n.i18n",
+          "bundleName": "serialterminal.i18n.i18n",
           "async": true,
           "supportedLocales": [""],
           "fallbackLocale": ""

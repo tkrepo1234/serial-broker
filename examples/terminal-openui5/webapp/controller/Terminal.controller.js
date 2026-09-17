@@ -22,8 +22,8 @@ sap.ui.define(
     'sap/ui/core/Fragment',
     'sap/ui/core/Theming',
     'sap/ui/model/json/JSONModel',
-    'serialbroker/terminal/lib/Log',
-    'serialbroker/terminal/lib/Preferences',
+    'serialterminal/lib/Log',
+    'serialterminal/lib/Preferences',
   ],
   /**
    * @param {typeof import('sap/ui/core/mvc/Controller').default} Controller
@@ -51,7 +51,7 @@ sap.ui.define(
       failed: 'Error',
     });
 
-    return Controller.extend('serialbroker.terminal.controller.Terminal', {
+    return Controller.extend('serialterminal.controller.Terminal', {
       // What an instance keeps. Declared here because the class info is what `@openui5/types` takes
       // the type of `this` from; `onInit` gives every instance values of its own.
       _library: /** @type {SerialBrokerGlobal | undefined} */ (undefined),
@@ -727,7 +727,7 @@ sap.ui.define(
         const fragments = this._fragments;
         fragments[name] ??= Fragment.load({
           id: this.getView()?.getId() ?? '',
-          name: `serialbroker.terminal.view.${name}`,
+          name: `serialterminal.view.${name}`,
           controller: this,
         }).then((control) => {
           const loaded = /** @type {import('sap/ui/core/Control').default} */ (control);

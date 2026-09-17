@@ -1,5 +1,5 @@
 <mvc:View
-  controllerName="serialbroker.terminal.controller.Terminal"
+  controllerName="serialterminal.controller.Terminal"
   displayBlock="true"
   height="100%"
   xmlns="sap.m"

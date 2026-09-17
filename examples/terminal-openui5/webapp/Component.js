@@ -9,7 +9,7 @@
  * Classic UI5: `UIComponent.extend()` with an object literal, loaded by the loader as it is.
  */
 sap.ui.define(
-  ['sap/ui/core/UIComponent', 'sap/ui/core/Theming', 'serialbroker/terminal/lib/Preferences'],
+  ['sap/ui/core/UIComponent', 'sap/ui/core/Theming', 'serialterminal/lib/Preferences'],
   /**
    * @param {typeof import('sap/ui/core/UIComponent').default} UIComponent
    * @param {typeof import('sap/ui/core/Theming').default} Theming
@@ -18,7 +18,7 @@ sap.ui.define(
   function (UIComponent, Theming, Preferences) {
     'use strict';
 
-    return UIComponent.extend('serialbroker.terminal.Component', {
+    return UIComponent.extend('serialterminal.Component', {
       metadata: {
         manifest: 'json',
         interfaces: ['sap.ui.core.IAsyncContentCreation'],
