@@ -92,4 +92,39 @@ test.describe('the broker dies', () => {
     expect(workersNow).toHaveLength(1);
     expect(workersNow[0]?.targetId).not.toBe(worker?.targetId);
   });
+
+  test('a tab that was frozen while the broker died catches up when it is looked at', async ({
+    context,
+  }) => {
+    // The second half of step 29: the same loss, but one tab had been in the background long
+    // enough for Chromium to freeze it - it ran nothing while the worker died and while the
+    // others got a new one. Nothing of ours can have noticed on its behalf, so what it does on
+    // waking is the test: it must catch up as quickly as a tab that was watching, because the
+    // worker's Web Lock is what tells it, and no timer of ours is waiting (ADR-0041).
+    await installStandIn(context, GRANTED_DEVICE);
+    const tabs = await openConnectedTabs(context, 3);
+    const holder = await tabHoldingThePort(tabs);
+    const sleeper = tabs[(holder + 1) % tabs.length];
+    const awake = tabs.filter((tab) => tab !== sleeper);
+
+    await sleeper?.freeze();
+    await terminateSharedWorkers(tabs[0]);
+    for (const tab of awake) {
+      await tab.waitForLogEvent('transport.broker-restored');
+    }
+
+    await sleeper?.resume();
+
+    // Back on screen: it reports the loss once, like every other tab, and is part of the bus
+    // again - it hears a send from another tab, with no reload anywhere.
+    await sleeper?.waitForLogEvent('transport.broker-restored');
+    expect(
+      (await sleeper?.errorCodes())?.filter((code) => code === 'BROKER_UNAVAILABLE'),
+      'the tab that slept through it reports the loss exactly once',
+    ).toEqual(['BROKER_UNAVAILABLE']);
+    await awake[0]?.send('Echo', 'AFTER-THE-SLEEP');
+    for (const tab of tabs) {
+      await tab.waitForReceivedText('Echo', 'AFTER-THE-SLEEP');
+    }
+  });
 });

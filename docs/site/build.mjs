@@ -46,6 +46,8 @@ retitle('docs/site/api/reference/index/interfaces/SerialBrokerApi.md', 'Applicat
 // The interface page is 578 lines of detail with no way to see what it offers; the overview
 // gives the reader one line per method before the detail starts.
 addMethodOverview('docs/site/api/reference/index/interfaces/SerialBrokerApi.md');
+// Each method a section of its own, so the navigation lists them under the page.
+liftMethods('docs/site/api/reference/index/interfaces/SerialBrokerApi.md');
 tidyReference(join(root, 'docs', 'site', 'api', 'reference'));
 run(python, [
   '-m',
@@ -166,6 +168,39 @@ function addMethodOverview(path) {
 
   lines.splice(start, 0, ...overview);
   writeFileSync(file, lines.join('\n'));
+}
+
+/**
+ * Lifts every method to a section of its own, and drops the `Methods` heading that grouped them.
+ *
+ * The theme shows three levels (`navigation_depth` in conf.py): the reference page, this page,
+ * and this page's sections. TypeDoc writes each method as `###` under a `## Methods` heading,
+ * which puts them a level deeper than that - so the navigation showed the page and nothing of
+ * what is on it. Lifting everything below that heading by one makes every method a section the
+ * sidebar lists, and leaves `#### Parameters` and `#### Returns` one level below it, out of the
+ * navigation and in the page where they belong. Anchors are unchanged: they follow the heading's
+ * text, not its level, so every link to `#setup` still lands.
+ */
+function liftMethods(path) {
+  const file = join(root, path);
+  const lines = readFileSync(file, 'utf8').split('\n');
+  const start = lines.indexOf('## Methods');
+  if (start === -1) {
+    return;
+  }
+  // The blank line that followed the heading goes with it; the one before it separates the
+  // overview table from the first method.
+  const from = lines[start + 1] === '' ? start + 2 : start + 1;
+  let fenced = false;
+  const lifted = lines.slice(from).map((line) => {
+    if (line.startsWith('```')) {
+      fenced = !fenced;
+      return line;
+    }
+    // Only inside prose: a fenced example may well start a line with hashes of its own.
+    return !fenced && /^####? /.test(line) ? line.slice(1) : line;
+  });
+  writeFileSync(file, [...lines.slice(0, start), ...lifted].join('\n'));
 }
 
 /** The first sentence of the prose that follows a member's heading and its signature. */

@@ -374,6 +374,27 @@ export class Tab {
     });
   }
 
+  /**
+   * Freezes this tab, as Chromium does to one left in the background for minutes.
+   *
+   * A frozen page runs nothing at all - no timer, no callback, no message handler - which is the
+   * state the manual plan's "hidden for more than five minutes" describes, reached without
+   * waiting five minutes. This is the harshest form of a background tab, and the only one this
+   * browser can be asked for: `Emulation.setPageVisibilityOverride` is gone from Chromium, and
+   * `page.bringToFront()` leaves the other tabs `visible`, so a tab merely in the background
+   * stays a scenario for the manual plan.
+   */
+  async freeze(): Promise<void> {
+    const session = await this.page.context().newCDPSession(this.page);
+    await session.send('Page.setWebLifecycleState', { state: 'frozen' });
+  }
+
+  /** Thaws a frozen tab, as returning to it does. */
+  async resume(): Promise<void> {
+    const session = await this.page.context().newCDPSession(this.page);
+    await session.send('Page.setWebLifecycleState', { state: 'active' });
+  }
+
   /** Kills this tab's renderer: no unload handler runs, as in a crash or an out-of-memory kill. */
   async crash(): Promise<void> {
     const session = await this.page.context().newCDPSession(this.page);

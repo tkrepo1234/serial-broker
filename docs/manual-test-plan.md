@@ -145,7 +145,7 @@ What they cover of the checklist below, step by step:
 | 2 (the port picker)              | a real click in a browser against the stand-in; Chromium's own picker **by hand**                  |
 | 3, 5, 6                          | in a browser against the stand-in, on the Arduino and on the emulator                              |
 | 4 (reload, no prompt)            | on the emulator: the reloaded page restores the configuration and opens the port                   |
-| 7 (a tab in the background)      | **by hand**                                                                                        |
+| 7 (a tab in the background)      | a frozen tab - the harsher case - in a browser; a tab merely in the background **by hand**         |
 | 8 (one `SharedWorker`)           | in a browser, counted in Chromium's target list                                                    |
 | 9                                | in a browser against the stand-in, on the Arduino and on the emulator                              |
 | 10 (a killed tab)                | in a browser, the renderer killed over CDP - the same path as the task manager's _End process_     |
@@ -164,10 +164,10 @@ What they cover of the checklist below, step by step:
 | 26 (Chrome for Android)          | **by hand**, with a device and an OTG adapter                                                      |
 | 27 (worker script answers 404)   | in-process (`test/integration/multi-tab/worker-script-fallback.test.ts`)                           |
 | 28                               | in a browser                                                                                       |
-| 29                               | in a browser: the worker terminated, each tab reporting once; the hidden-tab repeat **by hand**    |
+| 29                               | in a browser: the worker terminated, each tab reporting once, and a tab frozen throughout it       |
 
-So a release run by hand comes down to steps 1, 2, 4a, 7, 18, 22's display, 26 and 29's hidden
-tab, plus unplugging a physical adapter (13–16) once, since the emulator proves the software path
+So a release run by hand comes down to steps 1, 2, 4a, 7's background tab, 18, 22's display and
+26, plus unplugging a physical adapter (13–16) once, since the emulator proves the software path
 and not the electrical one.
 
 ## Checklist

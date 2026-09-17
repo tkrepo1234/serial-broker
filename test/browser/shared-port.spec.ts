@@ -60,6 +60,42 @@ test.describe('a port shared across tabs', () => {
     expect(workers[0]?.url).toBe(new URL('/dist/serial-broker.worker.js', baseURL).href);
   });
 
+  test('carries on while a tab that is not holding the port is frozen', async ({ context }) => {
+    // An operator's station leaves tabs open for days, and Chromium freezes one it considers
+    // asleep: it then runs nothing at all - no timer, no callback, no message handler. A frozen
+    // participant must not hold up the tabs still working, and must catch up when it is looked
+    // at again rather than having to be reloaded. See step 7 of the manual test plan, whose
+    // milder case - a tab merely in the background - only a person can stage.
+    await installStandIn(context, GRANTED_DEVICE);
+    const tabs = [await Tab.open(context), await Tab.open(context), await Tab.open(context)];
+    for (const tab of tabs) {
+      await tab.setup('Echo', echoConfiguration());
+    }
+    for (const tab of tabs) {
+      await tab.waitForStatus('Echo', 'open');
+    }
+    const holder = tabs[await waitForPortHolder(tabs)];
+    const sleeper = tabs.find((tab) => tab !== holder);
+    const awake = tabs.filter((tab) => tab !== sleeper);
+
+    await sleeper?.freeze();
+    await awake[0]?.send('Echo', 'WHILE-ONE-SLEEPS');
+    for (const tab of awake) {
+      await tab.waitForReceivedText('Echo', 'WHILE-ONE-SLEEPS');
+    }
+    expect(await holder?.holdsPort(), 'the port stayed where it was').toBe(true);
+
+    // Thawed: the line it slept through is there, and the next one arrives as it does anywhere
+    // else - no reload, nothing to set up again.
+    await sleeper?.resume();
+    await sleeper?.waitForReceivedText('Echo', 'WHILE-ONE-SLEEPS');
+    await awake[0]?.send('Echo', 'AFTER-WAKING');
+    for (const tab of tabs) {
+      await tab.waitForReceivedText('Echo', 'AFTER-WAKING');
+      expect(tab.pageErrors).toEqual([]);
+    }
+  });
+
   test('carries bytes from every tab to the device exactly once', async ({ context }) => {
     await installStandIn(context, GRANTED_DEVICE);
     const first = await Tab.open(context);
