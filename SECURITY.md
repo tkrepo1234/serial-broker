@@ -7,8 +7,8 @@ vulnerability reporting: on the repository's **Security** tab, choose **Report a
 the maintainers see the report, and a fix can be prepared with you before anything is published.
 Include what an attacker can do, not only what is wrong.
 
-GitHub offers private reporting for public repositories only. While the repository is private,
-everyone who can read it can reach the maintainers directly; report to them instead.
+Where that choice is not offered, everyone who can read the repository can reach the maintainers
+directly; report to them instead.
 
 ## What this library assumes
 

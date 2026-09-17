@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" role="img" aria-labelledby="sbi-title">
+  <title id="sbi-title">serial-broker</title>
+  <!--
+    One serial port, and three in it: the tabs that share it. Two kinds of shape and nothing fine,
+    because it has to read at sixteen pixels. One colour, no background: it sits on any surface.
+  -->
+  <path fill="none" stroke="#2980b9" stroke-width="2.4" stroke-linejoin="round" d="M3.4 5.5h17.2a1.6 1.6 0 0 1 1.55 2l-2.3 8.9a2.8 2.8 0 0 1-2.7 2.1H6.85a2.8 2.8 0 0 1-2.7-2.1l-2.3-8.9a1.6 1.6 0 0 1 1.55-2z"/>
+  <path fill="#2980b9" d="M5.1 12a1.9 1.9 0 1 0 3.8 0a1.9 1.9 0 1 0 -3.8 0zM10.1 12a1.9 1.9 0 1 0 3.8 0a1.9 1.9 0 1 0 -3.8 0zM15.1 12a1.9 1.9 0 1 0 3.8 0a1.9 1.9 0 1 0 -3.8 0z"/>
+</svg>
