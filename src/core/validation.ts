@@ -516,7 +516,10 @@ export function normalizeConfiguration(name: unknown, options: unknown): Normali
       factor: requireFiniteNumber(...connectionOption('factor'), 1, 100),
       maxDelayMs: requireInteger(...connectionOption('maxDelayMs'), 0, MAX_DELAY_MS),
       jitter: requireFiniteNumber(...connectionOption('jitter'), 0, 1),
-      maxAttempts: requireIntegerOrInfinity(...connectionOption('maxAttempts'), 0, MAX_ATTEMPTS),
+      // From one, not from zero: an attempt is always made. `maxAttempts: 0` reads as "do not
+      // reconnect" and was rejected as a way to say that (ADR-0010) - `autoReconnect` says it -
+      // yet it still made one attempt and then reported giving up "after 1 attempts".
+      maxAttempts: requireIntegerOrInfinity(...connectionOption('maxAttempts'), 1, MAX_ATTEMPTS),
       stableAfterMs: requireInteger(...connectionOption('stableAfterMs'), 0, MAX_DELAY_MS),
       openTimeoutMs: requireInteger(...connectionOption('openTimeoutMs'), 1, MAX_TIMEOUT_MS),
       writeTimeoutMs: requireInteger(...connectionOption('writeTimeoutMs'), 1, MAX_TIMEOUT_MS),

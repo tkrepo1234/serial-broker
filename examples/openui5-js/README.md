@@ -65,7 +65,7 @@ It also corrects one line in `ui5-tooling-modules`, in this example's own `node_
 import-meta plugin cuts a path without a query string to the empty string, so bundling any package
 with a `new URL(…, import.meta.url)` - serial-broker has one, for the worker - fails and the
 application never loads. `scripts/fix-ui5-tooling-modules.mjs` says what it did on every start, and
-will report that there is nothing to do once the package ships the fix ([ADR-0044](../../docs/adr/0044-correct-the-ui5-import-meta-plugin-in-the-examples.md)).
+will report that there is nothing to do once the package ships the fix.
 
 | Command             | What it does                                                          |
 | ------------------- | --------------------------------------------------------------------- |

@@ -189,7 +189,7 @@ these settings feed are in [Reconnecting](guarantees.md#reconnecting).
 | `factor`             | number, 1 – 100                       | `2`        |
 | `maxDelayMs`         | integer, 0 – 3,600,000                | `30000`    |
 | `jitter`             | number, 0 – 1                         | `0.5`      |
-| `maxAttempts`        | integer, 0 – 1,000,000, or `Infinity` | `Infinity` |
+| `maxAttempts`        | integer, 1 – 1,000,000, or `Infinity` | `Infinity` |
 | `stableAfterMs`      | integer, 0 – 3,600,000                | `5000`     |
 | `openTimeoutMs`      | integer, 1 – 600,000                  | `10000`    |
 | `writeTimeoutMs`     | integer, 1 – 600,000                  | `5000`     |
@@ -245,9 +245,10 @@ switch. `1` disables it.
 `maxAttempts`
 : Attempts before the status becomes `failed` and `RECONNECT_EXHAUSTED` is reported. A failed
 configuration still tries again when the device is plugged in again, and when `setup()` is called
-for it again. `0` gives up at the first failure but, unlike `autoReconnect: false`, still revives on
-replug. **Set a limit** when a device that stays away should be shown as a problem rather than as
-endlessly reconnecting.
+for it again. `1` gives up after the first failure; there is no `0`, because not reconnecting at
+all is what `autoReconnect: false` says, and saying it twice - once as a switch, once as a number
+that still revives on replug - was rejected (ADR-0010). **Set a limit** when a device that stays
+away should be shown as a problem rather than as endlessly reconnecting.
 
 `stableAfterMs`
 : How long a connection has to hold before the attempt counter starts again from the beginning.

@@ -277,11 +277,10 @@ export interface SerialBrokerApi {
    * Says nothing about other tabs: a configuration another tab is using is not visible here
    * until this tab sets it up too.
    *
-   * @throws A `SerialBrokerError` with code `INVALID_ARGUMENT` if the name is not a valid one.
-   */
-  /**
    * `false` again once the name is released in this tab, and for a name only another tab has set
    * up: this asks about this tab, not about the origin.
+   *
+   * @throws A `SerialBrokerError` with code `INVALID_ARGUMENT` if the name is not a valid one.
    */
   exists(name: string): boolean;
 
@@ -487,14 +486,20 @@ export const SerialBroker: SerialBrokerApi = {
   /** {@inheritDoc SerialBrokerApi.release} */
   async release(name, options) {
     if (instance === undefined) {
-      // Nothing is set up, so there is nothing to release - and no reason to build a client,
-      // which would throw in a browser without Web Serial. A disposal under way may still be
-      // closing the port, though.
-      checked(() => {
+      // Nothing is set up here, so there is nothing to disconnect from. Forgetting is not about
+      // this tab, though - it is about what the browser stores, and it is promised either way
+      // (ADR-0033) - so a client is built when, and only when, something is asked to be
+      // forgotten. Without that there is no reason to build one, and building one throws in a
+      // browser without Web Serial. A disposal under way may still be closing the port.
+      const asked = checked(() => {
         validateName(name);
-        normalizeReleaseOptions(options);
+        return normalizeReleaseOptions(options);
       });
       await disposing;
+      if (!asked.forget && !asked.forgetDevice) {
+        return;
+      }
+      await client().release(name, asked);
       return;
     }
     // Checked, and read once, before anything is released: an invalid value must leave the
@@ -541,7 +546,11 @@ export const SerialBroker: SerialBrokerApi = {
   /** {@inheritDoc SerialBrokerApi.exists} */
   exists(name) {
     if (instance === undefined) {
-      validateName(name);
+      // Checked like every other facade validation, so that the error it throws carries the time
+      // it arose rather than core code's missing clock (see `withTimestamp`).
+      checked(() => {
+        validateName(name);
+      });
       return false;
     }
     return instance.exists(name);

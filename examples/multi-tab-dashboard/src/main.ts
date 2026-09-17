@@ -11,7 +11,10 @@ import './styles.css';
 import { byId } from './dom.js';
 
 async function main(): Promise<void> {
-  if (new URLSearchParams(window.location.search).has('stand-in')) {
+  // `import.meta.env.DEV` is false in `vite build`, which leaves the stand-in out of the bundle.
+  // Without this guard a production build honours `?stand-in`, and an operator can drive a page
+  // that is talking to a loopback rather than to the device. Leave it out of your own application.
+  if (import.meta.env.DEV && new URLSearchParams(window.location.search).has('stand-in')) {
     const { installLoopbackDevice } = await import('./stand-in.js');
     await installLoopbackDevice();
   }

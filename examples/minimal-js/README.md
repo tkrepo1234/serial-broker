@@ -7,7 +7,7 @@ bottom and you have seen everything the page does.
 
 The same page written in TypeScript is [`examples/minimal`](../minimal/README.md). It is the
 richer one: every status with a sentence explaining it, an error box with code, message and
-remediation, and a release button. This one is deliberately smaller - the way in for a developer
+remediation. This one is deliberately smaller - the way in for a developer
 who writes plain JavaScript and wants to see the library work before reading anything else.
 
 Everything the page does, in the order the file does it:
@@ -150,7 +150,7 @@ lines of casts in a page whose point is that there is nothing to wade through.
 **`device: { any: true }`.** The page cannot know the reader's device, and a first page should
 connect to whatever the user picks. It also means the smoke test's loopback device needs no ids.
 
-**No release button, no status table, no error box.** The page shows the status word, one error
+**No status table, no error box.** The page shows the status word, one error
 line, the data and a send box. [`examples/minimal`](../minimal/README.md) shows the rest; two
 pages that both explain everything would only be one page read twice.
 

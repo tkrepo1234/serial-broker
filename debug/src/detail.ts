@@ -488,7 +488,12 @@ function hintFor(view: ConfigurationView, now: number): string {
       : `Connection lost; next try ${formatRelative(next, now)}.`;
   }
   if (view.status === 'failed') {
-    return 'Reconnecting gave up. It starts again when the device is plugged back in.';
+    // A device coming back revives a failed configuration only where the library reconnects by
+    // itself; with `autoReconnect: false` replugging changes nothing, and saying otherwise sends
+    // the operator to the cable for no reason (`PortSupervisor.handleDeviceConnected`).
+    return view.settings?.connection.autoReconnect === false
+      ? 'Reconnecting is off for this configuration. Set it up again to connect.'
+      : 'Reconnecting gave up. It starts again when the device is plugged back in.';
   }
   if (!view.isSetUpHere) {
     return `Running in ${plural(view.tabs.length, 'other tab')}. Connect to use it from this page too.`;

@@ -10,7 +10,13 @@
  * The line is corrected in place, in this example's own `node_modules`, every time the example
  * starts or builds (as `prestart` / `prebuild`). Nothing outside this directory is touched, the
  * correction is what the plugin's own comment says it wants, and once the package ships the fix
- * this script finds nothing to do and says so. See ADR-0044.
+ * this script finds nothing to do and says so.
+ *
+ * Two other ways out were weighed and rejected. Loading the library through an import map would
+ * avoid the plugin entirely, but an import map is precisely what a UI5 project does not write,
+ * and `examples/no-bundler` already shows that path - the example would stop being
+ * representative. Marking both examples known-red would be honest, and would leave a broken
+ * example to whoever finds the repository for as long as the package stays broken.
  */
 
 import { createRequire } from 'node:module';
