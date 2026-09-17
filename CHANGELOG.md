@@ -122,6 +122,11 @@ Remembered configurations moved from **storage version 1 to 2** and are not migr
 - **Eleven example applications**, each with a README, a fixed port and a Playwright smoke test
   against a Web Serial stand-in: `minimal`, `multi-tab-dashboard`, `exclusive`, `no-bundler`,
   `openui5`, `react`, `vue`, `svelte` and `angular` (`npm run test:examples`, in CI).
+- **The debugging surface is driven in a real browser by the test suite.** It is shipped in the
+  package and is what someone reaches for when a device misbehaves, and until now only its markup
+  was checked, as text. Two tests click it: what is offered for the selected configuration, and the
+  case that used to be impossible - forgetting an entry this page is not connected to, proved by a
+  reload rather than by the list alone.
 - **The debugging surface offers _Connect_, _Edit settings…_ and _Disconnect…_ as buttons**, for
   whichever configuration is selected, instead of hiding editing and every way of stopping behind a
   ⋯ menu. _Connect_ appears only where there is nothing connected yet. _Disconnect…_ then asks what

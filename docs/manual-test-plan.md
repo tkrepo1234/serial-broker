@@ -141,7 +141,8 @@ What they cover of the checklist below, step by step:
 
 | Step                             | Where it runs                                                                                      |
 | -------------------------------- | -------------------------------------------------------------------------------------------------- |
-| 1, 4a (the debugging surface)    | **by hand**                                                                                        |
+| 1 (the debugging surface)        | in a browser (`debug-surface.spec.ts`): the page creates a configuration and shows its detail      |
+| 4a (choosing a device)           | **by hand**: Chromium's own picker                                                                 |
 | 2 (the port picker)              | a real click in a browser against the stand-in; Chromium's own picker **by hand**                  |
 | 3, 5, 6                          | in a browser against the stand-in, on the Arduino and on the emulator                              |
 | 4 (reload, no prompt)            | on the emulator: the reloaded page restores the configuration and opens the port                   |
@@ -166,7 +167,7 @@ What they cover of the checklist below, step by step:
 | 28                               | in a browser                                                                                       |
 | 29                               | in a browser: the worker terminated, each tab reporting once, and a tab frozen throughout it       |
 
-So a release run by hand comes down to steps 1, 2, 4a, 7's background tab, 18, 22's display and
+So a release run by hand comes down to steps 2, 4a, 7's background tab, 18, 22's display and
 26, plus unplugging a physical adapter (13–16) once, since the emulator proves the software path
 and not the electrical one.
 
