@@ -17,7 +17,7 @@ import { MAX_WAITING_WRITE_BYTES, MAX_WAITING_WRITES } from '../protocol/limits.
 
 import { findGrantedPort, matchesDevice } from './port-matcher.js';
 import { ReceiveBuffer } from './receive-buffer.js';
-import { mapOpenError } from './serial-errors.js';
+import { mapOpenError, mapReadError } from './serial-errors.js';
 import { WriteQueue } from './write-queue.js';
 
 /** What the supervisor reports to the context that owns it, and what it asks of it. */
@@ -1126,17 +1126,16 @@ export class PortSupervisor {
       if (this.#isStale(generation)) {
         return;
       }
+      const failure = mapReadError(error, {
+        configName: this.configuration.name,
+        timestamp: this.environment.clock.now(),
+      });
+      // A device that is gone is a disconnect, whichever way the browser said so: the read
+      // rejecting can reach this tab before the `disconnect` event does, and an operator told to
+      // check the cable and the line settings for a device they have just unplugged is told wrong.
       this.#handleConnectionLoss(
-        'read-failed',
-        new SerialBrokerError(
-          SerialBrokerErrorCode.READ_FAILED,
-          `Reading from the device failed: ${describeUnknown(error)}`,
-          {
-            configName: this.configuration.name,
-            timestamp: this.environment.clock.now(),
-            cause: error,
-          },
-        ),
+        failure.code === SerialBrokerErrorCode.DEVICE_DISCONNECTED ? 'device-lost' : 'read-failed',
+        failure,
       );
     }
   }

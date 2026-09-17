@@ -9,7 +9,7 @@ import {
   SerialBrokerError,
   type SerializedSerialBrokerError,
 } from '../../src/core/errors.js';
-import { mapOpenError, mapRequestPortError } from '../../src/owner/serial-errors.js';
+import { mapOpenError, mapReadError, mapRequestPortError } from '../../src/owner/serial-errors.js';
 import { domException } from '../harness/fake-serial.js';
 
 describe('SerialBrokerError', () => {
@@ -295,6 +295,18 @@ describe('mapping platform failures', () => {
     ['NotFoundError', SerialBrokerErrorCode.PERMISSION_DENIED],
   ])('maps a %s from requestPort() to %s', (name, expected) => {
     expect(mapRequestPortError(domException(name, 'x'), context).code).toBe(expected);
+  });
+
+  // A read rejects the same way whatever went wrong, so the name is the only thing that tells a
+  // device that is gone from a line that is misbehaving - and they deserve opposite advice.
+  it.each([
+    ['NetworkError', SerialBrokerErrorCode.DEVICE_DISCONNECTED],
+    ['ParityError', SerialBrokerErrorCode.READ_FAILED],
+    ['FramingError', SerialBrokerErrorCode.READ_FAILED],
+    ['BreakError', SerialBrokerErrorCode.READ_FAILED],
+    ['BufferOverrunError', SerialBrokerErrorCode.READ_FAILED],
+  ])('maps a %s from the read stream to %s', (name, expected) => {
+    expect(mapReadError(domException(name, 'x'), context).code).toBe(expected);
   });
 
   it('falls back without losing the name, so an unmapped case is reportable', () => {

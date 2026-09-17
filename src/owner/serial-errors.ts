@@ -37,6 +37,17 @@ const OPEN_FAILURES: Readonly<Record<string, SerialBrokerErrorCode>> = {
   NotSupportedError: SerialBrokerErrorCode.OPEN_FAILED,
 };
 
+/**
+ * What a rejection of the read stream means.
+ *
+ * Everything the line itself can do wrong - a framing error, a parity error, a break, an overrun -
+ * has a name of its own, so the one name left over says the device is gone. Measured in Edge 153
+ * against a USB serial device detached while open: `NetworkError: The device has been lost.`
+ */
+const READ_FAILURES: Readonly<Record<string, SerialBrokerErrorCode>> = {
+  NetworkError: SerialBrokerErrorCode.DEVICE_DISCONNECTED,
+};
+
 /** What `requestPort()` rejections mean. */
 const REQUEST_PORT_FAILURES: Readonly<Record<string, SerialBrokerErrorCode>> = {
   /**
@@ -74,6 +85,27 @@ export function mapOpenError(error: unknown, context: MappingContext): SerialBro
     SerialBrokerErrorCode.OPEN_FAILED,
     context,
     (detail) => `Could not open the port: ${detail}`,
+  );
+}
+
+/**
+ * Maps a failure of the read stream.
+ *
+ * A device unplugged, powered off or otherwise lost is the commonest of these by a wide margin,
+ * and the remediation for it is "nothing, the library is already reconnecting" - not the advice
+ * about cables and line settings that a genuine read failure deserves.
+ */
+export function mapReadError(error: unknown, context: MappingContext): SerialBrokerError {
+  if (error instanceof SerialBrokerError) {
+    return error;
+  }
+
+  return build(
+    error,
+    READ_FAILURES,
+    SerialBrokerErrorCode.READ_FAILED,
+    context,
+    (detail) => `Reading from the device failed: ${detail}`,
   );
 }
 

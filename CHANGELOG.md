@@ -17,6 +17,10 @@ different protocol versions do not coordinate with each other. It is noted whene
   a terminal program or driver tool holding the port; the operator now reads "Another application
   may hold the device" instead of "No action required". A device that is really away never reaches
   `open()` and is unaffected.
+- **An unplugged device is reported as `DEVICE_DISCONNECTED`**, not as `READ_FAILED`. The browser
+  rejects the read of the open port before it says the device is gone, so the tab holding the port
+  learned of the loss from the read and showed the advice for a line that is misbehaving - check
+  the cable, check the line settings - for a device someone had just unplugged.
 - **Writes are taken again after a connection is lost while one was stalled.** A chunk the device
   never took holds the write queue, as it must while that connection lasts; it no longer holds it
   across the reconnect, where every later write timed out against a connection that was open and

@@ -180,6 +180,12 @@ test.describe('the USB/IP emulator, attached by usbip-win2', () => {
     for (const tab of tabs) {
       await tab.waitForStatus(CONFIGURATION, 'reconnecting');
     }
+    // What every tab is told about it. The browser rejects the read of the open port before it
+    // fires `disconnect`, so the tab holding the port learns of the loss from the read - and a
+    // device that has been unplugged must not be reported as a line that is misbehaving.
+    for (const tab of tabs) {
+      expect(await tab.errorCodes()).toEqual(['DEVICE_DISCONNECTED']);
+    }
     await emulator.plug();
 
     for (const tab of tabs) {
