@@ -66,7 +66,8 @@
   display: none;
 }
 
-.wy-side-nav-search > a img.logo {
+/* As specific as the theme's own rule, which puts a margin above a logo that follows a name. */
+.wy-side-nav-search > a.icon-home img.logo {
   width: 2rem;
   height: 2rem;
   margin: 0;
