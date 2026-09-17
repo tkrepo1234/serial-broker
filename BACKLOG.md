@@ -28,6 +28,15 @@ ready; the version and the date go into the changelog when Tim decides.
       (Tim): it sat 270 commits behind `main` while `package.json` carried its version, and the
       rename had pushed it again, which started the Release workflow twice on code that no longer
       lints. No tag and no GitHub release exist now; `0.1.0-alpha.1` is free for the first release.
+- [x] What a release attaches was tried as a user meets it, on 2026-09-17. The packed
+      `serial-broker-0.1.0-alpha.1.tgz` (133 files) installed into an empty project: ES module,
+      CommonJS build, minified entry and worker path resolve, and a strict TypeScript program
+      compiles under `node16` and `bundler` resolution. The browser bundle, assembled as the
+      workflow assembles it (13 files, all present), served from a bare web server: both snippets of
+      its `README.txt` - import map and classic script - shared one port between two tabs with no
+      error. The notes step, run on a copy whose changelog section was named, printed 77 lines
+      without a relative link. The workflow's own dry run cannot pass before that section exists,
+      by design; it is step 3 of CONTRIBUTING's "Releasing".
 - [ ] At release: move Unreleased into `## [x.y.z] - date`, set `package.json` to it, run
       `npm run release:check`, then tag. Tim's call.
 
