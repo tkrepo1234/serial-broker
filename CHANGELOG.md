@@ -34,6 +34,11 @@ different protocol versions do not coordinate with each other. It is noted whene
 - **Both terminals: the button that opens the browser's port picker says _Select Port_**, which is
   what it does, rather than _Connect_; and the plain terminal's baud rate is a combo box that lists
   the usual rates whatever the field holds - its `<datalist>` offered only the one in it.
+- **Both terminals change the port and ask what to forget.** _Change Port…_ is
+  `requestAccess(name, { chooseAgain: true })`, for which the terminals now name no device (auto
+  mode) - so a first visit always asks, and a later one reopens the port chosen. _Disconnect_ opens
+  a dialog for `release()`'s two options, the port and the remembered connection, both ticked.
+  Checked against two real ports, the Arduino and the USB/IP emulator, through the browser's picker.
 - **The plain terminal's log keeps its size.** It grew with every line and pushed the input out of the
   window; it is a box of the window's height now, and what does not fit scrolls inside it.
 - **The terminal example needs no web server.** It loads the classic script build by relative

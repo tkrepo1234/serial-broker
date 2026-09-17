@@ -309,6 +309,9 @@
     // and offering *Disconnect* for a configuration that was never registered is how T6 read.
     const canDisconnect = isSetUp && next !== SerialBrokerStatus.Released;
     el('release').textContent = canDisconnect ? 'Disconnect' : 'Connect again';
+    // Another port can be chosen whenever the configuration is set up - open, reconnecting, or
+    // still waiting for the first one.
+    el('change-port').disabled = !canDisconnect;
     el('send-button').disabled = next !== SerialBrokerStatus.Open;
     renderSummary();
   }
@@ -448,9 +451,9 @@
     unsubscribeAll();
     try {
       await SerialBroker.setup(NAME, {
-        // Any port the user grants. An application that knows its device names it instead, with
-        // `{ vendorId, productId }`, and never shows a picker again.
-        device: { any: true },
+        // No device named: the configuration takes its device from the port the user picks, and
+        // remembers it (auto mode). That is what lets *Change Port…* pick another one later. An
+        // application that knows its device names it instead, with `{ vendorId, productId }`.
         serial: preferences.serial,
         encoding: { decodeText: true },
       });
@@ -528,6 +531,23 @@
       }, showError);
     });
 
+    el('change-port').addEventListener('click', () => {
+      clearError();
+      // The picker again, although a port is chosen already. The port picked replaces the device in
+      // every tab and in what is remembered; the tab holding the old one closes it and opens the
+      // new one. Dismissing the picker changes nothing.
+      SerialBroker.requestAccess(NAME, { chooseAgain: true }).then((granted) => {
+        append(
+          granted ? 'Port changed.' : 'The picker was dismissed; the port stays as it was.',
+          'note',
+        );
+      }, showError);
+    });
+
+    const disconnectDialog = /** @type {HTMLDialogElement} */ (
+      /** @type {unknown} */ (document.getElementById('disconnect-dialog'))
+    );
+
     el('release').addEventListener('click', () => {
       clearError();
       // `isSetUp`, not the status: a setup that threw shows `failed` with nothing registered, and
@@ -536,10 +556,30 @@
         void connect();
         return;
       }
-      // Releasing forgets nothing: the configuration stays, and connecting again needs no prompt.
-      SerialBroker.release(NAME).then(() => {
+      // Everything ticked, every time: what was unticked last time is not a preference.
+      el('forget-port').checked = true;
+      el('forget-configuration').checked = true;
+      disconnectDialog.showModal();
+    });
+
+    disconnectDialog.addEventListener('close', () => {
+      if (disconnectDialog.returnValue !== 'disconnect') {
+        return;
+      }
+      const forgetDevice = el('forget-port').checked;
+      const forget = el('forget-configuration').checked;
+      // `release()` forgets nothing by itself; each option names one store. The browser keeps the
+      // permission, serial-broker keeps the configuration.
+      SerialBroker.release(NAME, { forget, forgetDevice }).then(() => {
         isSetUp = false;
-        append('Disconnected in this tab. Other tabs keep the device.', 'note');
+        const forgotten = [
+          forgetDevice ? 'the port' : undefined,
+          forget ? 'the remembered connection' : undefined,
+        ].filter((entry) => entry !== undefined);
+        append(
+          `Disconnected in this tab.${forgotten.length > 0 ? ` Forgotten: ${forgotten.join(' and ')}.` : ' Nothing was forgotten.'}`,
+          'note',
+        );
       }, showError);
     });
 

@@ -15,6 +15,15 @@ framework, no dependencies at run time - and **no web server**: the folder runs 
 - **Connect, disconnect, reconnect.** The status is the library's own word for it — `open`,
   `reconnecting`, `awaiting-permission`, `queued`, `failed` — and _Select Port_ appears exactly while
   the browser's port picker is what is needed.
+- **Change the port.** _Change Port…_ opens the browser's picker again although a port is chosen
+  already; the port picked replaces the device in every tab, and the tab holding the old one closes
+  it and opens the new one. The terminal names no device (auto mode), so the configuration takes
+  its device from the port picked — and the first visit always asks, even where the browser has
+  a permission already.
+- **Disconnect, and say what to forget.** A dialog offers the port (the browser's permission, for
+  every tab) and the remembered connection (what serial-broker keeps under the name). Both are
+  ticked: a terminal is pointed at one device today and another tomorrow. Untick them, and
+  _Connect again_ reopens the same port without asking.
 - **Connection settings**: baud rate, data bits, stop bits, parity, flow control. Applying them
   connects again with the new ones, in this tab; other tabs keep theirs.
 - **Send text or hex**, with the line ending you choose (CR LF, LF, CR or nothing). `↑` and `↓`
@@ -109,7 +118,7 @@ they all belong to the same place, so they share configuration names. This termi
 
 ```js
 SerialBroker.configure({ workerUrl: WORKER_URL }); // serial-broker/serial-broker.worker.js, beside the page
-await SerialBroker.setup('Terminal', { device: { any: true }, serial: { baudRate: 9600 } });
+await SerialBroker.setup('Terminal', { serial: { baudRate: 9600 } }); // no device named: auto mode
 SerialBroker.subscribe('Terminal', 'onReceive', (event) => show(event.text));
 await SerialBroker.send('Terminal', new TextEncoder().encode('PING\r\n'));
 ```
@@ -145,7 +154,8 @@ Two decisions worth copying:
 
 ## Element ids the smoke test drives
 
-`#status`, `#connect`, `#release`, `#send-input`, `#send-button`, `#send-mode`, `#received`,
+`#status`, `#connect`, `#change-port`, `#release`, `#disconnect-dialog` (`#forget-port`,
+`#forget-configuration`, `#disconnect-confirm`), `#send-input`, `#send-button`, `#send-mode`, `#received`,
 `#error`, `#error-code`, `#error-remediation`, `#more`, `#opt-hex`, `#display-summary`.
 
 `smoke.spec.ts` connects to a granted device, asks for one with a click, lives through an unplugged

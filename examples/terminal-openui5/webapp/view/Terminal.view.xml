@@ -32,6 +32,13 @@
           press=".onConnect"
         />
         <Button id="settings" text="{i18n>connectionSettings}" press=".onOpenSettings" />
+        <!-- Another port while one is chosen already: the picker again, and every tab follows. -->
+        <Button
+          id="changePort"
+          text="{i18n>changePort}"
+          enabled="{ui>/canDisconnect}"
+          press=".onChangePort"
+        />
         <Button
           id="release"
           text="{= ${ui>/canDisconnect} ? ${i18n>disconnect} : ${i18n>connectAgain} }"

@@ -13,6 +13,15 @@ transpile step; the files under `webapp/` are the files the browser loads.
 - **Connect, disconnect, reconnect.** The status badge shows the library's own word - `open`,
   `reconnecting`, `awaiting-permission`, `queued`, `failed` - and _Select Port_ appears exactly while the
   browser's port picker is what is needed.
+- **Change the port.** _Change Port…_ opens the browser's picker again although a port is chosen
+  already; the port picked replaces the device in every tab, and the tab holding the old one closes
+  it and opens the new one. The terminal names no device (auto mode), so the configuration takes
+  its device from the port picked - and the first visit always asks, even where the browser has
+  a permission already.
+- **Disconnect, and say what to forget.** A dialog offers the port (the browser's permission, for
+  every tab) and the remembered connection (what serial-broker keeps under the name). Both are
+  ticked: a terminal is pointed at one device today and another tomorrow. Untick them, and
+  _Connect again_ reopens the same port without asking.
 - **Connection settings** in a dialog: baud rate (a combo box - the usual rates, or any you type),
   data bits, stop bits, parity, flow control. Applying them connects again with the new ones.
 - **Send text or hex**, with the line ending you choose. `↑` and `↓` walk through what you sent
@@ -101,7 +110,7 @@ SerialBroker.configure({
 });
 
 // controller/Terminal.controller.js
-await SerialBroker.setup('Terminal', { device: { any: true }, serial: { baudRate: 9600 } });
+await SerialBroker.setup('Terminal', { serial: { baudRate: 9600 } }); // no device named: auto mode
 SerialBroker.subscribe('Terminal', 'onReceive', (event) => show(event.text));
 await SerialBroker.send('Terminal', new TextEncoder().encode('PING\r\n'));
 ```
@@ -132,7 +141,8 @@ because its log is not a binding (below).
 
 Control ids are stable because the component and the root view have fixed ids
 (`index.html`, `manifest.json`): `container-terminal---app--<id>`. The smoke test uses `status`
-(its text is `status-text`), `connect`, `release`, `settings`, `display`, `sendMode`, `sendInput`
+(its text is `status-text`), `connect`, `changePort`, `release`, `forgetPort`, `forgetConfiguration`, `disconnectConfirm`,
+`disconnectCancel`, `settings`, `display`, `sendMode`, `sendInput`
 (the element that takes text is `sendInput-inner`), `sendEnding`, `sendButton`, `error`,
 `errorCode`, `errorRemediation`, `displaySummary`, `optHex`, `baudRate`, `settingsApply` - and
 `#received`, the log, which is plain DOM with an id of its own.

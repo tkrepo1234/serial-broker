@@ -27,6 +27,8 @@
 
         <div class="bar-actions">
           <button id="settings" type="button" class="secondary">Connection settings…</button>
+          <!-- Another port while one is chosen already: the picker again, and every tab follows. -->
+          <button id="change-port" type="button" class="secondary" disabled>Change Port…</button>
           <!-- Shown only while the library waits for a port: the picker needs a real click. -->
           <button id="connect" type="button" hidden>Select Port</button>
           <button id="release" type="button" class="secondary">Disconnect</button>
@@ -212,6 +214,38 @@
         <div class="actions">
           <button value="cancel" type="submit" class="secondary">Cancel</button>
           <button id="settings-apply" value="apply" type="submit">Apply and connect</button>
+        </div>
+      </form>
+    </dialog>
+
+    <!--
+      Disconnecting asks what is to be forgotten with it. A terminal is pointed at one device today
+      and another tomorrow, so everything is ticked to begin with; an application that comes back
+      to the same scale every morning would tick nothing.
+    -->
+    <dialog id="disconnect-dialog">
+      <form method="dialog" autocomplete="off">
+        <h2>Disconnect</h2>
+        <p class="hint">
+          This tab stops using the device; other tabs keep it. What is to be forgotten as well?
+        </p>
+        <label class="check">
+          <input id="forget-port" type="checkbox" checked />
+          <span
+            >The port: the browser's permission for it is given back, in every tab, and the next
+            connection asks which port to use.</span
+          >
+        </label>
+        <label class="check">
+          <input id="forget-configuration" type="checkbox" checked />
+          <span
+            >The remembered connection: what serial-broker keeps under this name for the next visit
+            - the device chosen and its line settings.</span
+          >
+        </label>
+        <div class="actions">
+          <button value="cancel" type="submit" class="secondary">Cancel</button>
+          <button id="disconnect-confirm" value="disconnect" type="submit">Disconnect</button>
         </div>
       </form>
     </dialog>

@@ -229,6 +229,20 @@ label.check {
   border-radius: 6px;
 }
 
+/* In a dialog the text runs over lines, and the box stays at the first of them. */
+dialog label.check {
+  align-items: flex-start;
+  padding: 0.35rem 0;
+}
+
+dialog label.check input {
+  margin-top: 0.25rem;
+}
+
+dialog label.check:hover {
+  background: none;
+}
+
 label.check:hover {
   background: var(--bg);
 }

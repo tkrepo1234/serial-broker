@@ -1,0 +1,32 @@
+<core:FragmentDefinition xmlns="sap.m" xmlns:core="sap.ui.core">
+  <!--
+    Disconnecting asks what is to be forgotten with it. A terminal is pointed at one device today
+    and another tomorrow, so everything is ticked to begin with; an application that comes back to
+    the same scale every morning would tick nothing.
+  -->
+  <Dialog id="disconnectDialog" title="{i18n>disconnectTitle}" contentWidth="30rem" draggable="true">
+    <content>
+      <VBox class="sapUiSmallMargin" renderType="Bare">
+        <Text class="sapUiTinyMarginBottom" text="{i18n>disconnectNote}" />
+        <CheckBox
+          id="forgetPort"
+          text="{i18n>forgetPort}"
+          wrapping="true"
+          selected="{disconnect>/forgetDevice}"
+        />
+        <CheckBox
+          id="forgetConfiguration"
+          text="{i18n>forgetConfiguration}"
+          wrapping="true"
+          selected="{disconnect>/forget}"
+        />
+      </VBox>
+    </content>
+    <beginButton>
+      <Button id="disconnectConfirm" text="{i18n>disconnect}" type="Emphasized" press=".onConfirmDisconnect" />
+    </beginButton>
+    <endButton>
+      <Button id="disconnectCancel" text="{i18n>cancel}" press=".onCloseDisconnect" />
+    </endButton>
+  </Dialog>
+</core:FragmentDefinition>

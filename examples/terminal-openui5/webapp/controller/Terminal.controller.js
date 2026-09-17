@@ -191,9 +191,9 @@ sap.ui.define(
         this._unsubscribeAll();
         try {
           await library.setup(NAME, {
-            // Any port the user grants. An application that knows its device names it instead, with
-            // `{ vendorId, productId }`, and never shows a picker again.
-            device: { any: true },
+            // No device named: the configuration takes its device from the port the user picks,
+            // and remembers it (auto mode). That is what lets *Change Port…* pick another one
+            // later. An application that knows its device names it, with `{ vendorId, productId }`.
             serial: this._preferences.serial,
             encoding: { decodeText: true },
           });
@@ -263,19 +263,64 @@ sap.ui.define(
       },
 
       onRelease: function () {
-        const library = /** @type {SerialBrokerGlobal} */ (this._library);
         this._clearError();
         // `_isSetUp`, not the status: a setup that threw shows `failed` with nothing registered.
         if (!this._isSetUp) {
           void this._connect();
           return;
         }
-        // Releasing forgets nothing: the configuration stays, and connecting again needs no prompt.
-        library.release(NAME).then(
+        // Everything ticked, every time: what was unticked last time is not a preference.
+        this.getView()?.setModel(new JSONModel({ forgetDevice: true, forget: true }), 'disconnect');
+        void this._fragment('Disconnect').then((dialog) => {
+          /** @type {import('sap/m/Dialog').default} */ (dialog).open();
+        });
+      },
+
+      onCloseDisconnect: function () {
+        void this._fragment('Disconnect').then((dialog) => {
+          /** @type {import('sap/m/Dialog').default} */ (dialog).close();
+        });
+      },
+
+      onConfirmDisconnect: function () {
+        const library = /** @type {SerialBrokerGlobal} */ (this._library);
+        const chosen = /** @type {{ forget: boolean, forgetDevice: boolean }} */ (
+          /** @type {import('sap/ui/model/json/JSONModel').default} */ (
+            this.getView()?.getModel('disconnect')
+          ).getData()
+        );
+        this.onCloseDisconnect();
+        // `release()` forgets nothing by itself; each option names one store. The browser keeps the
+        // permission, serial-broker keeps the configuration.
+        library.release(NAME, { forget: chosen.forget, forgetDevice: chosen.forgetDevice }).then(
           () => {
             this._isSetUp = false;
             this._renderStatus(library.SerialBrokerStatus.Released);
-            this._append('Disconnected in this tab. Other tabs keep the device.', 'note');
+            const forgotten = [
+              chosen.forgetDevice ? 'the port' : undefined,
+              chosen.forget ? 'the remembered connection' : undefined,
+            ].filter((entry) => entry !== undefined);
+            this._append(
+              `Disconnected in this tab.${forgotten.length > 0 ? ` Forgotten: ${forgotten.join(' and ')}.` : ' Nothing was forgotten.'}`,
+              'note',
+            );
+          },
+          (error) => this._showError(error),
+        );
+      },
+
+      onChangePort: function () {
+        const library = /** @type {SerialBrokerGlobal} */ (this._library);
+        this._clearError();
+        // The picker again, although a port is chosen already. The port picked replaces the device
+        // in every tab and in what is remembered; the tab holding the old one closes it and opens
+        // the new one. Dismissing the picker changes nothing.
+        library.requestAccess(NAME, { chooseAgain: true }).then(
+          (granted) => {
+            this._append(
+              granted ? 'Port changed.' : 'The picker was dismissed; the port stays as it was.',
+              'note',
+            );
           },
           (error) => this._showError(error),
         );
@@ -631,7 +676,7 @@ sap.ui.define(
       /**
        * A fragment of this view, loaded once and kept.
        *
-       * @param {string} name - `Settings`, `Display` or `SendFile`.
+       * @param {string} name - `Settings`, `Display`, `Disconnect` or `SendFile`.
        * @returns {Promise<import('sap/ui/core/Control').default>}
        */
       _fragment: function (name) {
