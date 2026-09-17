@@ -411,6 +411,7 @@ export class ConfigurationSession {
       vendorId: device.vendorId,
       productId: device.productId,
       serialOptions: this.#configuration.serial,
+      maxTabs: this.#configuration.maxTabs,
       since: this.#statusSince,
       observedAt: this.environment.clock.now(),
       lastErrorCode: this.#lastErrorCode,

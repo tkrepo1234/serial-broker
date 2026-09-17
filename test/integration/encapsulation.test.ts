@@ -38,6 +38,9 @@ describe('encapsulation', () => {
     expect(Object.keys(ownerView).sort()).toEqual([
       'deviceKind',
       'lastErrorCode',
+      // This tab's own limit, not a count of tabs: it says whether `queued` is reachable at all,
+      // and two tabs cannot run one configuration with different limits (CONFIGURATION_CONFLICT).
+      'maxTabs',
       'name',
       'observedAt',
       'productId',

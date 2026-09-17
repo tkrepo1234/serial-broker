@@ -353,6 +353,15 @@ export interface SerialBrokerStatusSnapshot {
   readonly productId: number | undefined;
   /** The effective serial settings, with defaults applied. */
   readonly serialOptions: Required<SerialSettings>;
+  /**
+   * How many tabs may use the configuration at once, or `Number.POSITIVE_INFINITY` for no limit
+   * (ADR-0025).
+   *
+   * A status component handed only a name can tell from this whether `queued` is reachable at all,
+   * and say what a tab is waiting for, without being passed the options the configuration was set
+   * up with.
+   */
+  readonly maxTabs: number;
   /** Epoch milliseconds at which the current status was entered. */
   readonly since: number;
   /** Epoch milliseconds at which this snapshot was produced. */

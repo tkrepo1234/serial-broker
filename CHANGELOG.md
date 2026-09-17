@@ -101,9 +101,16 @@ Remembered configurations moved from **storage version 1 to 2** and are not migr
   picker in the same click, and the page carries a strict `Content-Security-Policy` (ADR-0019).
   _Choose device…_ is offered in every tab using a configuration that waits for permission, not only
   in the tab holding the port.
+- **A documentation page showing a complete page with no build step**, "No build step" under
+  Examples: the whole of `examples/minimal-js` - one HTML file, an import map, one inline module
+  script - embedded from the example itself rather than described, with the line assembly a page
+  without a compiler needs written in plain JavaScript beside it.
 - **Eleven example applications**, each with a README, a fixed port and a Playwright smoke test
   against a Web Serial stand-in: `minimal`, `multi-tab-dashboard`, `exclusive`, `no-bundler`,
   `openui5`, `react`, `vue`, `svelte` and `angular` (`npm run test:examples`, in CI).
+- **`getStatus()` reports `maxTabs`.** A status component handed only a configuration name can now
+  tell whether `queued` is reachable at all, and say what a tab is waiting for, without being passed
+  the options the configuration was set up with. `Number.POSITIVE_INFINITY` when there is no limit.
 - **`ReleaseOptions.forget`** (default `false`): removes the configuration remembered under the
   name, so `restore()` no longer brings it back. Independent of `forgetDevice`; together they leave
   no trace of the configuration in this browser. A no-op for a configuration set up with

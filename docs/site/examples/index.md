@@ -9,6 +9,7 @@ simple
 all-features
 full-featured
 advanced
+no-build-step
 ```
 
 | Tier                              | What it shows                                                                               |
@@ -17,6 +18,7 @@ advanced
 | [All features](all-features.md)   | Every capability on its own: permission, status, text and binary, errors, release, restore. |
 | [Full-featured](full-featured.md) | A realistic application that uses them together.                                            |
 | [Advanced](advanced.md)           | The hard cases: failover-safe commands, a protocol layer on top, several devices at once.   |
+| [No build step](no-build-step.md) | The complete page for a site with no toolchain: one HTML file, in plain JavaScript.         |
 
 ## Runnable applications
 
