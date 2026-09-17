@@ -21,6 +21,13 @@ ready; the version and the date go into the changelog when Tim decides.
 - [x] A second pass over every test file (1 410 → 1 345 tests).
 - [x] A documentation drift check against the code, and a cold-read usability test of ten industrial
       use cases built from the documentation alone (below).
+- [ ] **Decide what becomes of the tag `v0.1.0-alpha.1`.** It has sat on `8deb133` since 2026-09-14,
+      270 commits behind `main` on 2026-09-17, while `package.json` still carries that version: the
+      release needs either the next version (`0.1.0-alpha.2`, say) or that tag moved, and moving a
+      pushed tag is Tim's call. The rename pushed the tag again, which started the Release workflow
+      twice on 2026-09-17; both runs failed at lint on the code of that day, and the draft release
+      they would have replaced was deleted on Tim's word the same day. Until the changelog has its
+      version section, the workflow's dry run stops at the notes step, as designed.
 - [ ] At release: move Unreleased into `## [x.y.z] - date`, bump `package.json`, run the manual steps
       that stay by hand against a physical adapter, then tag. Tim's call.
 

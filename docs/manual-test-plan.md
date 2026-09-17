@@ -471,3 +471,23 @@ a property of the test.
 library, and read the tab histories the suites write next to a failed test. A release needs this test
 against a board that keeps up - a power cycle, a sketch that reads while it writes, or flow control.
 The 64 KiB round trip on the emulator (steps 20, 22) covers large payloads in the meantime.
+
+### 2026-09-17 — Edge 153.0.4234.32 (headless), Windows 11 Home 26200: every suite again, after the rename
+
+All suites run on `109eb1f`, the first complete pass since the product took the name serial-broker
+and the wire protocol and storage versions went back to 1:
+
+| Suite                                | Result                |
+| ------------------------------------ | --------------------- |
+| `npm run verify`                     | passed                |
+| `npm run test:browser` (stand-in)    | 17 passed             |
+| `npm run test:examples`              | 29 passed             |
+| Emulator, usbip-win2 0.9.8.0 on COM4 | **15 of 15 passed**   |
+| Arduino echo board on COM3           | **5 of 6 passed**     |
+| `npm run docs`, `npm run docs:links` | built, no broken link |
+
+The Arduino test that failed is the one of 2026-09-16, `echoes a payload larger than the write
+chunk`, and it failed the same way: the echo never completed within 180 seconds, no error, status
+`open`. The board is unchanged since then, so this is still the board dropping payloads from about
+255 bytes on, not the library; the emulator's 64 KiB round trip passed in the same session. It stays
+on the list for the release: repeat it against a board that keeps up.
