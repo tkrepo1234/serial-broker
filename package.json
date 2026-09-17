@@ -124,7 +124,7 @@
     "@playwright/test": "1.63.0",
     "@types/node": "^22.20.2",
     "@types/w3c-web-serial": "^1.0.8",
-    "@vitest/coverage-v8": "^5.0.0",
+    "@vitest/coverage-v8": "^5.0.1",
     "esbuild": "^0.28.2",
     "eslint": "^10.10.0",
     "eslint-config-prettier": "^10.1.8",
@@ -135,7 +135,7 @@
     "typedoc-plugin-markdown": "^4.13.0",
     "typescript": "^6.0.3",
     "typescript-eslint": "^8.70.0",
-    "vitest": "^5.0.0"
+    "vitest": "^5.0.1"
   },
   "allowScripts": {
     "esbuild@0.28.2": true,
