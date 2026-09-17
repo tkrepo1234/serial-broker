@@ -218,6 +218,10 @@ sap.ui.define(
           settings.setProperty('/message', 'The baud rate has to be a whole number above zero.');
           return;
         }
+        // The attempt is made with what was typed, and the terminal keeps it only if the library
+        // accepts it: a rate it refuses must neither describe the connection in the summary nor
+        // come back on the next visit and fail the same way.
+        const previous = this._preferences.serial;
         this._ui.setProperty('/preferences/serial', {
           baudRate,
           dataBits: Number(chosen.dataBits),
@@ -225,7 +229,6 @@ sap.ui.define(
           parity: chosen.parity,
           flowControl: chosen.flowControl,
         });
-        this._savePreferences();
 
         // The dialog stays until there is a connection. Dismissing the browser's picker is not a
         // reason to take the settings away: they are still what the user wants, and *Connect* is
@@ -242,8 +245,11 @@ sap.ui.define(
         void attempt.then(() => {
           settings.setProperty('/busy', false);
           if (this._isSetUp) {
+            this._savePreferences();
             this.onCloseSettings();
           } else {
+            this._ui.setProperty('/preferences/serial', previous);
+            this._renderSummary();
             settings.setProperty(
               '/message',
               this._ui.getProperty('/error/visible') === true
@@ -355,10 +361,12 @@ sap.ui.define(
           }),
 
           library.subscribe(NAME, 'onReceive', (event) => {
-            this._append(
-              this._preferences.hex ? Log.hexDump(event.data) : (event.text ?? ''),
-              'in',
-            );
+            // The line ending the device sent is the end of this line, not a line of its own: the
+            // log puts every block on one, so keeping it would leave a blank line after each.
+            const text = this._preferences.hex
+              ? Log.hexDump(event.data)
+              : (event.text ?? '').replace(/\r?\n$/, '');
+            this._append(text, 'in');
           }),
 
           // Every tab's writes, this one's included: a second tab's command belongs in this log too.
@@ -449,6 +457,17 @@ sap.ui.define(
           code: failure instanceof Error ? failure.name : typeof failure,
           message: failure instanceof Error ? failure.message : String(failure),
           remediation: 'Not a serial-broker error; check the input, or the page script.',
+        });
+      },
+
+      /** What the user typed cannot be sent. Their line to correct, not a fault of the page. */
+      _showWrongInput: function (/** @type {unknown} */ error) {
+        this._ui.setProperty('/error', {
+          visible: true,
+          retryable: 'true',
+          code: 'Invalid input',
+          message: error instanceof Error ? error.message : String(error),
+          remediation: 'Correct the line and send it again.',
         });
       },
 
@@ -596,7 +615,7 @@ sap.ui.define(
         try {
           bytes = Log.bytesToSend(text, this._preferences.sendMode, this._preferences.sendEnding);
         } catch (error) {
-          this._showError(error);
+          this._showWrongInput(error);
           return;
         }
         this._history.push({ text, mode: this._preferences.sendMode });
@@ -634,6 +653,11 @@ sap.ui.define(
 
       onOpenFile: function () {
         this._file = undefined;
+        // The control keeps the file from last time, and choosing that same file again fires no
+        // change event - so without this, Send stays disabled on the second visit.
+        /** @type {import('sap/ui/unified/FileUploader').default | undefined} */ (
+          this.byId('fileInput')
+        )?.clear();
         this.getView()?.setModel(
           new JSONModel({ chunkSize: 256, pause: 20, progress: '', chosen: false, sending: false }),
           'file',

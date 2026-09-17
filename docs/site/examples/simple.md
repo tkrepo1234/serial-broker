@@ -34,8 +34,23 @@ them holds the port, and every tab receives the data and can send.
 
 ## Running it
 
-Build `main.ts` with any bundler — or with `tsc` or `esbuild` and an import map pointing
-`serial-broker` at the package's `dist/serial-broker.min.js`, as [Deploying](../deploying.md)
-shows — and
-serve the directory over `localhost`. Web Serial needs a
+Build `main.ts` with any bundler and serve the directory over `localhost`: Web Serial needs a
 secure context, which `localhost` counts as.
+
+**The worker script goes with it.** Every tab loads `serial-broker.worker.js` from one URL of the
+application's own origin, and no bundler finds it by itself unless it is told to:
+
+```ts
+// Vite, and bundlers that understand its syntax:
+import workerUrl from 'serial-broker/worker?url';
+SerialBroker.configure({ workerUrl });
+```
+
+Elsewhere, copy `serial-broker.worker.js` from the package next to the page and name it:
+`SerialBroker.configure({ workerUrl: '/serial-broker/serial-broker.worker.js' })`, before the first
+`setup()`. Without it the tabs fall back to a `BroadcastChannel` and say so only in the log
+([Logging](../diagnostics.md#logging)).
+
+Without a bundler, `tsc` or `esbuild` compiles `main.ts`, an import map in the page's `<head>`
+points `serial-broker` at the package's `dist/serial-broker.min.js`, and the worker script is
+copied and named as above. [Deploying](../deploying.md) shows the whole arrangement.

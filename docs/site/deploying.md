@@ -8,11 +8,13 @@ copied as described in [The worker script](installing.md#the-worker-script).
 
 ## Which files to copy
 
-On a machine with npm, `npm install serial-broker` and take the files from
-`node_modules/serial-broker/dist/`. Without npm anywhere, every release attaches
-`serial-broker-<version>-browser.zip`: the minified and the classic builds, the worker script, their
-source maps and the type declarations, under `serial-broker/`, with a short `README.txt`. The
-readable build and the debugging surface are in the package only. The files are these:
+On a machine with npm, install the package and take the files from
+`node_modules/serial-broker/dist/`. It is not on the npm registry before 1.0, so that is
+`npm install ./serial-broker-<version>.tgz` from the release; see [Installing](installing.md).
+Without npm anywhere, every release attaches `serial-broker-<version>-browser.zip`: the minified
+and the classic builds, the worker script and their source maps, under `serial-broker/`, with a
+short `README.txt` beside it. The readable build, the type definitions and the debugging surface
+are in the package only. The files are these:
 
 | File                                          | Needed                                                                                                         |
 | --------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
@@ -118,11 +120,15 @@ A policy that allows only what such a page needs:
 
 ```text
 Content-Security-Policy: default-src 'none'; script-src 'self' 'sha256-…'; worker-src 'self';
-  style-src 'self'; img-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'
+  style-src 'self'; img-src 'self' data:; base-uri 'none'; form-action 'self'; frame-ancestors 'none'
 ```
 
 `script-src 'self'`
 : The page's scripts and `serial-broker.min.js` (or `serial-broker.global.js`).
+
+`img-src 'self' data:`
+: The page's own images. `data:` is there for the empty icon a page can declare to keep the
+browser from asking for `/favicon.ico`; leave it out if the page declares a real one.
 
 `'sha256-…'` in `script-src`
 : The inline import map. Under `script-src` an import map is an inline script, and browsers do not
@@ -132,8 +138,11 @@ spaces and line breaks included, so hash the file as the server delivers it — 
 has run. Compute it wherever the page is built, and again whenever the map changes:
 
 ```sh
-node -e "const html = require('fs').readFileSync('index.html', 'utf8'); const map = /<script type=\"importmap\">([\s\S]*?)<\/script>/.exec(html)[1]; console.log(\"'sha256-\" + require('crypto').createHash('sha256').update(map, 'utf8').digest('base64') + \"'\")"
+node scripts/importmap-hash.mjs index.html
 ```
+
+The script is in the repository and is twenty lines; a page built elsewhere can copy it. It takes
+the path of the page and prints the `'sha256-…'` to paste into the policy.
 
 A blocked import map is reported on the console, and the report names the hash it expected. A page
 that imports the library by its URL instead —

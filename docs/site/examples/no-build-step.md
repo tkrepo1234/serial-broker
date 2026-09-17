@@ -5,8 +5,10 @@ One HTML file: markup, an import map, and one inline module script. No bundler, 
 [examples/minimal-js](https://github.com/tkrepo1234/serial-broker/tree/main/examples/minimal-js),
 which is served by a short static server and covered by a smoke test of its own.
 
-It needs two files next to each other on the web server: `serial-broker.min.js` (or the readable
-`serial-broker.js` from the package) and `serial-broker.worker.js`. Every release attaches them as
+It needs two files served by the application's own origin, at the path the page names - the page
+below says `/serial-broker/` in both its import map and its `workerUrl`, so either put them there
+or change both strings together: `serial-broker.min.js` (or the readable `serial-broker.js` from
+the package) and `serial-broker.worker.js`. Every release attaches them as
 `serial-broker-<version>-browser.zip`, which holds the minified build: with it, the import map below
 points at `serial-broker.min.js`. [Installing](../installing.md) says which file is which, and
 [Deploying to a web server](../deploying.md) covers the headers and what to check afterwards.

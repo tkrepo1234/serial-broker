@@ -31,6 +31,12 @@ open, because that may need the user — see step 3.
 Call `setup()` on every page load. Calling it again with the same options does nothing to a working
 configuration, so there is no need to check first.
 
+One thing goes with it, once per application: every tab has to load the broker script from the same
+URL, and a bundler has to be told where it is - `SerialBroker.configure({ workerUrl })`. See
+[The worker script](installing.md#the-worker-script).
+
+<!-- marker -->
+
 ## 2. Watch the status and what the device sends
 
 ```ts
