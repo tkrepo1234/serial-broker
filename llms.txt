@@ -59,7 +59,12 @@ await SerialBroker.setup('Scale', {
 });
 
 // 3. Listen. subscribe() returns a function that unsubscribes.
-SerialBroker.subscribe('Scale', 'onReceive', (event) => console.log(event.text, event.data));
+let buffer = ''; // one event is not one message: keep the rest until its line end arrives
+SerialBroker.subscribe('Scale', 'onReceive', (event) => {
+  const lines = (buffer + (event.text ?? '')).split('\n');
+  buffer = lines.pop() ?? '';
+  lines.forEach(handleLine);
+});
 SerialBroker.subscribe('Scale', 'onStatusChange', (event) => render(event.status));
 SerialBroker.subscribe('Scale', 'onError', (event) => show(event.error.code, event.error.remediation));
 
@@ -69,9 +74,13 @@ connectButton.addEventListener('click', () => {
 });
 
 // 5. Send: string (encoded as UTF-8 by default) or bytes. Nothing is appended.
-await SerialBroker.send('Scale', 'T\r\n');
 await SerialBroker.send('Scale', new Uint8Array([0x02, 0xff, 0x03]));
+await SerialBroker.send('Scale', 'T\r\n').catch(showError);
 ```
+
+`setup()`, `requestAccess()` and `send()` reject with a `SerialBrokerError`: show every one of them
+ON THE PAGE like `onError` (`showError` above), not only in the console - `setup()` rejects in a
+browser without Web Serial. On `failed`, offer a button that calls `setup()` again.
 
 Show the connect button exactly while the status is `awaiting-permission`. On a later visit the
 port opens without a prompt: the browser remembers the permission, the library the configuration.
