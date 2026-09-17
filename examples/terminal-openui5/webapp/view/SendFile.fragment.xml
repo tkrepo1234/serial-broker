@@ -1,0 +1,35 @@
+<core:FragmentDefinition xmlns="sap.m" xmlns:core="sap.ui.core" xmlns:u="sap.ui.unified">
+  <!-- Experimental: a file's bytes, in chunks, with a pause between them. Not a protocol. -->
+  <Dialog id="fileDialog" title="{i18n>fileTitle}" contentWidth="30rem" draggable="true">
+    <content>
+      <VBox class="sapUiSmallMargin" renderType="Bare">
+        <Text class="sapUiSmallMarginBottom" text="{i18n>fileNote}" />
+        <u:FileUploader
+          id="fileInput"
+          width="100%"
+          buttonText="{i18n>fileChoose}"
+          uploadOnChange="false"
+          sendXHR="false"
+          change=".onFileChosen"
+        />
+        <Label class="sapUiSmallMarginTop" text="{i18n>chunkSize}" labelFor="chunkSize" />
+        <StepInput id="chunkSize" value="{file>/chunkSize}" min="1" max="65536" step="64" width="100%" />
+        <Label class="sapUiSmallMarginTop" text="{i18n>chunkPause}" labelFor="chunkPause" />
+        <StepInput id="chunkPause" value="{file>/pause}" min="0" max="10000" step="10" width="100%" />
+        <Text id="fileProgress" class="sapUiSmallMarginTop" text="{file>/progress}" />
+      </VBox>
+    </content>
+    <beginButton>
+      <Button
+        id="fileSend"
+        text="{i18n>sendTheFile}"
+        type="Emphasized"
+        enabled="{= ${file>/chosen} &amp;&amp; ${ui>/canSend} &amp;&amp; !${file>/sending} }"
+        press=".onSendFile"
+      />
+    </beginButton>
+    <endButton>
+      <Button id="fileClose" text="{i18n>close}" press=".onCloseFile" />
+    </endButton>
+  </Dialog>
+</core:FragmentDefinition>

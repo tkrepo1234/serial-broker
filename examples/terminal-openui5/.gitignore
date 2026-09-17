@@ -1,0 +1,3 @@
+# The serial-broker runtime files copied out of node_modules before the app is served (see
+# scripts/copy-serial-broker-assets.mjs). They are build output of the library, not sources.
+webapp/serial-broker/

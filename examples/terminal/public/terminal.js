@@ -194,7 +194,7 @@
   }
 
   /** The escape sequences a device writes, as one regular expression: CSI ... final byte. */
-  const ANSI = /\[[0-9;]*[A-Za-z]/g;
+  const ANSI = /\x1b\[[0-9;]*[A-Za-z]/g;
 
   /**
    * The same text with the escape sequences taken out.

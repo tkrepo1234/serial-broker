@@ -23,6 +23,10 @@ different protocol versions do not coordinate with each other. It is noted whene
 
 ### Changed
 
+- **The terminal in SAP OpenUI5**, `examples/terminal-openui5`, in `sap_horizon` and
+  `sap_horizon_dark`. Its build runs from a folder opened as a file, with no server and no internet:
+  a self-contained bundle with the text bundles and locale data OpenUI5 would otherwise fetch
+  embedded into it.
 - **The terminal example needs no web server.** It loads the classic script build by relative
   paths, so `examples/terminal/dist/` runs from wherever it lies, opened as a file or served.
 

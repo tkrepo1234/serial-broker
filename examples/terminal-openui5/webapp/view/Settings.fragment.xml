@@ -1,0 +1,60 @@
+<core:FragmentDefinition xmlns="sap.m" xmlns:core="sap.ui.core">
+  <!-- Connection settings. Applying them connects again with the new ones. -->
+  <Dialog id="settingsDialog" title="{i18n>settingsTitle}" contentWidth="30rem" draggable="true">
+    <content>
+      <VBox class="sapUiSmallMargin" renderType="Bare">
+        <Text class="sapUiSmallMarginBottom" text="{i18n>settingsNote}" />
+        <Label text="{i18n>baudRate}" labelFor="baudRate" />
+        <!-- A combo box, not a select: the usual rates are offered, and any other can be typed. -->
+        <ComboBox id="baudRate" value="{settings>/baudRate}" width="100%">
+          <core:Item key="1200" text="1200" />
+          <core:Item key="2400" text="2400" />
+          <core:Item key="4800" text="4800" />
+          <core:Item key="9600" text="9600" />
+          <core:Item key="19200" text="19200" />
+          <core:Item key="38400" text="38400" />
+          <core:Item key="57600" text="57600" />
+          <core:Item key="115200" text="115200" />
+          <core:Item key="230400" text="230400" />
+          <core:Item key="460800" text="460800" />
+          <core:Item key="921600" text="921600" />
+        </ComboBox>
+        <Label class="sapUiSmallMarginTop" text="{i18n>dataBits}" labelFor="dataBits" />
+        <Select id="dataBits" selectedKey="{settings>/dataBits}" width="100%">
+          <core:Item key="8" text="8" />
+          <core:Item key="7" text="7" />
+        </Select>
+        <Label class="sapUiSmallMarginTop" text="{i18n>stopBits}" labelFor="stopBits" />
+        <Select id="stopBits" selectedKey="{settings>/stopBits}" width="100%">
+          <core:Item key="1" text="1" />
+          <core:Item key="2" text="2" />
+        </Select>
+        <Label class="sapUiSmallMarginTop" text="{i18n>parity}" labelFor="parity" />
+        <Select id="parity" selectedKey="{settings>/parity}" width="100%">
+          <core:Item key="none" text="{i18n>parityNone}" />
+          <core:Item key="even" text="{i18n>parityEven}" />
+          <core:Item key="odd" text="{i18n>parityOdd}" />
+        </Select>
+        <Label class="sapUiSmallMarginTop" text="{i18n>flowControl}" labelFor="flowControl" />
+        <Select id="flowControl" selectedKey="{settings>/flowControl}" width="100%">
+          <core:Item key="none" text="{i18n>flowNone}" />
+          <core:Item key="hardware" text="{i18n>flowHardware}" />
+        </Select>
+        <MessageStrip
+          id="settingsError"
+          class="sapUiSmallMarginTop"
+          type="Error"
+          showIcon="true"
+          text="{i18n>baudRateInvalid}"
+          visible="{settings>/invalid}"
+        />
+      </VBox>
+    </content>
+    <beginButton>
+      <Button id="settingsApply" text="{i18n>applyAndConnect}" type="Emphasized" press=".onApplySettings" />
+    </beginButton>
+    <endButton>
+      <Button id="settingsCancel" text="{i18n>cancel}" press=".onCloseSettings" />
+    </endButton>
+  </Dialog>
+</core:FragmentDefinition>

@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Serial-Broker-Terminal</title>
+    <!-- No icon file: without this the browser asks for /favicon.ico and logs a 404. -->
+    <link rel="icon" href="data:," />
+    <!-- The page fills the window: the log takes what the header and the input line leave. -->
+    <style>
+      html,
+      body {
+        height: 100%;
+        margin: 0;
+      }
+    </style>
+
+    <!--
+      serial-broker as a classic script: one global, `SerialBroker`. Not a module, because the built
+      page is meant to run from a folder opened as a file, and such a page may load no ES module.
+      scripts/copy-serial-broker-assets.mjs puts the file here before the server starts.
+    -->
+    <script src="serial-broker/serial-broker.global.js"></script>
+
+    <!--
+      OpenUI5 comes from this folder (UI5 Tooling, see ui5.yaml), never from a CDN: a station may
+      have no internet. The language is fixed to English, like the page's own texts - and because a
+      page opened from a file can fetch no text bundle, so the build embeds exactly one
+      (scripts/finish-build.mjs).
+
+      The component id is set explicitly, so the DOM ids of the controls are stable and a test can
+      find them: <containerId>-<componentId>---<rootViewId>--<controlId>, e.g.
+      container-terminal---app--connect.
+    -->
+    <script
+      id="sap-ui-bootstrap"
+      src="resources/sap-ui-core.js"
+      data-sap-ui-theme="sap_horizon"
+      data-sap-ui-language="en"
+      data-sap-ui-async="true"
+      data-sap-ui-compat-version="edge"
+      data-sap-ui-on-init="module:sap/ui/core/ComponentSupport"
+      data-sap-ui-resource-roots='{"serialbroker.terminal": "./"}'
+    ></script>
+  </head>
+
+  <body class="sapUiBody" id="content">
+    <div
+      data-sap-ui-component
+      data-name="serialbroker.terminal"
+      data-id="container"
+      data-settings='{"id": "terminal"}'
+      data-height="100%"
+      style="height: 100%"
+    ></div>
+  </body>
+</html>

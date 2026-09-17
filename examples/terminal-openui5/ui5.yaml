@@ -1,0 +1,15 @@
+specVersion: '4.0'
+metadata:
+  name: serial-broker.terminal
+type: application
+
+# OpenUI5 comes from npm through UI5 Tooling rather than from a CDN: a station may have no
+# internet, and the build has to run from a folder. No SAP system is involved. See README.md.
+framework:
+  name: OpenUI5
+  version: '1.148.8'
+  libraries:
+    - name: sap.m
+    - name: sap.ui.core
+    - name: sap.ui.unified
+    - name: themelib_sap_horizon

@@ -1,0 +1,26 @@
+{
+  "name": "serial-broker-terminal-openui5-example",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "The Serial-Broker-Terminal in SAP OpenUI5 with the sap_horizon theme; its build runs from a folder opened as a file.",
+  "license": "MIT",
+  "engines": {
+    "node": ">=22.13"
+  },
+  "scripts": {
+    "prestart": "node scripts/copy-serial-broker-assets.mjs",
+    "start": "ui5 serve --port 8162",
+    "typecheck": "tsc --noEmit",
+    "prebuild": "node scripts/copy-serial-broker-assets.mjs",
+    "build": "ui5 build self-contained --all --clean-dest && node scripts/finish-build.mjs"
+  },
+  "dependencies": {
+    "serial-broker": "file:../.."
+  },
+  "devDependencies": {
+    "@openui5/types": "1.148.8",
+    "@ui5/cli": "^4.0.67",
+    "typescript": "^6.0.3"
+  }
+}

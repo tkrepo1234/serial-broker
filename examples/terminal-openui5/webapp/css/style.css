@@ -1,0 +1,172 @@
+/*
+ * The terminal's own styles. Every colour is one of the theme's CSS variables, so sap_horizon and
+ * sap_horizon_dark both work without a second set of rules - and so would any other theme.
+ */
+
+/* Width-capped and centred: on an ultra-wide screen a terminal that fills the display puts the
+   input a metre away from the log it belongs to. */
+.terminalPage.sapMPage {
+  max-width: 68rem;
+  left: 0;
+  right: 0;
+  margin: 0 auto;
+}
+
+.terminalBody {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  box-sizing: border-box;
+  padding: 0.5rem 1rem 0.75rem;
+  gap: 0.5rem;
+}
+
+.terminalSummary .sapMText {
+  color: var(--sapContent_LabelColor);
+}
+
+/* --- The log ---------------------------------------------------------------------------------- */
+
+/* The box's item that holds the log (its layout data names it) passes its height on. */
+.terminalLogItem {
+  display: flex;
+  min-height: 0;
+}
+
+.terminalLogHost {
+  flex: 1 1 auto;
+  min-height: 0;
+  min-width: 0;
+  display: flex;
+}
+
+.terminalLog {
+  flex: 1 1 auto;
+  overflow: auto;
+  box-sizing: border-box;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--sapField_BorderColor);
+  border-radius: var(--sapElement_BorderCornerRadius, 0.5rem);
+  background: var(--sapList_Background);
+  color: var(--sapTextColor);
+  font-family: var(--sapFontFamilyMonospace, 'Cascadia Mono', Consolas, 'Courier New', monospace);
+  font-size: 0.8125rem;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.terminalLog:focus-visible {
+  outline: 2px solid var(--sapContent_FocusColor);
+  outline-offset: 1px;
+}
+
+.terminalLog:empty::before {
+  content: attr(data-empty);
+  color: var(--sapContent_LabelColor);
+}
+
+.terminalLine {
+  white-space: pre-wrap;
+}
+
+.terminalOut {
+  color: var(--sapInformativeTextColor, var(--sapLinkColor));
+}
+
+.terminalNote {
+  color: var(--sapContent_LabelColor);
+  font-style: italic;
+}
+
+.terminalAt {
+  color: var(--sapContent_LabelColor);
+}
+
+.terminalBold {
+  font-weight: bold;
+}
+
+/* The eight ANSI colours and their bright forms, from the theme's palette where it has one. */
+.terminalAnsi30 {
+  color: var(--sapContent_LabelColor);
+}
+.terminalAnsi31 {
+  color: var(--sapNegativeTextColor);
+}
+.terminalAnsi32 {
+  color: var(--sapPositiveTextColor);
+}
+.terminalAnsi33 {
+  color: var(--sapCriticalTextColor);
+}
+.terminalAnsi34 {
+  color: var(--sapInformativeTextColor);
+}
+.terminalAnsi35 {
+  color: var(--sapIndicationColor_6, #a100c2);
+}
+.terminalAnsi36 {
+  color: var(--sapIndicationColor_7, #1b90ff);
+}
+.terminalAnsi37 {
+  color: var(--sapTextColor);
+}
+.terminalAnsi90 {
+  color: var(--sapContent_LabelColor);
+}
+.terminalAnsi91 {
+  color: var(--sapNegativeElementColor);
+}
+.terminalAnsi92 {
+  color: var(--sapPositiveElementColor);
+}
+.terminalAnsi93 {
+  color: var(--sapCriticalElementColor);
+}
+.terminalAnsi94 {
+  color: var(--sapInformativeElementColor);
+}
+.terminalAnsi95 {
+  color: var(--sapIndicationColor_6, #a100c2);
+}
+.terminalAnsi96 {
+  color: var(--sapIndicationColor_7, #1b90ff);
+}
+.terminalAnsi97 {
+  color: var(--sapTextColor);
+  font-weight: bold;
+}
+
+/* --- The error -------------------------------------------------------------------------------- */
+
+.terminalError {
+  flex: 0 0 auto;
+  box-sizing: border-box;
+  padding: 0.5rem 0.5rem 0.75rem 1rem;
+  border: 1px solid var(--sapErrorBorderColor);
+  border-radius: var(--sapElement_BorderCornerRadius, 0.5rem);
+  background: var(--sapErrorBackground);
+  color: var(--sapTextColor);
+}
+
+/* A failure the library is recovering from by itself is a note, not an alarm. */
+.terminalError[data-retryable='true'] {
+  border-color: var(--sapWarningBorderColor);
+  background: var(--sapWarningBackground);
+}
+
+.terminalError .terminalRemediation {
+  margin-top: 0.25rem;
+  color: var(--sapContent_LabelColor);
+}
+
+/* --- The composer ----------------------------------------------------------------------------- */
+
+.terminalComposer .terminalInput {
+  flex: 1 1 auto;
+}
+
+.terminalComposer .terminalInput .sapMInputBaseInner {
+  font-family: var(--sapFontFamilyMonospace, 'Cascadia Mono', Consolas, 'Courier New', monospace);
+}

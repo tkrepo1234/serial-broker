@@ -1,0 +1,30 @@
+<core:FragmentDefinition xmlns="sap.m" xmlns:core="sap.ui.core">
+  <!-- How the log is read. Remembered between visits; nothing here touches the connection. -->
+  <Popover id="displayPopover" title="{i18n>displayOptions}" placement="Bottom" contentWidth="16rem">
+    <content>
+      <VBox class="sapUiTinyMargin" renderType="Bare">
+        <CheckBox id="optHex" text="{i18n>optHex}" selected="{ui>/preferences/hex}" select=".onDisplayChange" />
+        <CheckBox
+          id="optAnsi"
+          text="{i18n>optAnsi}"
+          selected="{ui>/preferences/ansi}"
+          enabled="{= !${ui>/preferences/hex} }"
+          select=".onDisplayChange"
+        />
+        <CheckBox
+          id="optTimestamps"
+          text="{i18n>optTimestamps}"
+          selected="{ui>/preferences/timestamps}"
+          select=".onDisplayChange"
+        />
+        <CheckBox
+          id="optAutoscroll"
+          text="{i18n>optAutoscroll}"
+          selected="{ui>/preferences/autoscroll}"
+          select=".onDisplayChange"
+        />
+        <CheckBox id="optEcho" text="{i18n>optEcho}" selected="{ui>/preferences/echo}" select=".onDisplayChange" />
+      </VBox>
+    </content>
+  </Popover>
+</core:FragmentDefinition>

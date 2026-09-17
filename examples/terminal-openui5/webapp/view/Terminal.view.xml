@@ -1,0 +1,166 @@
+<mvc:View
+  controllerName="serialbroker.terminal.controller.Terminal"
+  displayBlock="true"
+  height="100%"
+  xmlns="sap.m"
+  xmlns:core="sap.ui.core"
+  xmlns:mvc="sap.ui.core.mvc"
+>
+  <!--
+    One page: a header with the connection, the log, and the line to send. Every control a test or
+    a reader of README.md looks for has a fixed id.
+  -->
+  <Page id="page" class="terminalPage" enableScrolling="false" showFooter="true">
+    <customHeader>
+      <OverflowToolbar id="header">
+        <Title id="title" text="{i18n>appTitle}" level="H1" />
+        <!-- The status the library reports, in the words the library uses. -->
+        <ObjectStatus
+          id="status"
+          class="sapUiTinyMarginBegin"
+          text="{ui>/status}"
+          state="{ui>/statusState}"
+          inverted="true"
+        />
+        <ToolbarSpacer />
+        <!-- Offered exactly while the library waits for the browser's port picker. -->
+        <Button
+          id="connect"
+          text="{i18n>connect}"
+          type="Emphasized"
+          visible="{ui>/canConnect}"
+          press=".onConnect"
+        />
+        <Button id="settings" text="{i18n>connectionSettings}" press=".onOpenSettings" />
+        <Button
+          id="release"
+          text="{= ${ui>/canDisconnect} ? ${i18n>disconnect} : ${i18n>connectAgain} }"
+          press=".onRelease"
+        />
+        <Button
+          id="display"
+          icon="sap-icon://show"
+          text="{i18n>displayOptions}"
+          press=".onOpenDisplay"
+        />
+        <MenuButton id="more" icon="sap-icon://overflow" tooltip="{i18n>more}" type="Transparent">
+          <menu>
+            <Menu>
+              <MenuItem id="saveLog" text="{i18n>saveLog}" icon="sap-icon://save" press=".onSaveLog" />
+              <MenuItem id="clear" text="{i18n>clearLog}" icon="sap-icon://clear-all" press=".onClear" />
+              <MenuItem
+                id="fileTransfer"
+                text="{i18n>sendFile}"
+                icon="sap-icon://upload"
+                press=".onOpenFile"
+              />
+            </Menu>
+          </menu>
+        </MenuButton>
+        <Button
+          id="theme"
+          icon="{= ${ui>/preferences/theme} === 'dark' ? 'sap-icon://light-mode' : 'sap-icon://dark-mode' }"
+          tooltip="{i18n>toggleTheme}"
+          type="Transparent"
+          press=".onToggleTheme"
+        />
+      </OverflowToolbar>
+    </customHeader>
+
+    <subHeader>
+      <Toolbar id="summaryBar" design="Info" class="terminalSummary">
+        <Text id="displaySummary" text="{ui>/summary}" />
+      </Toolbar>
+    </subHeader>
+
+    <content>
+      <VBox id="body" class="terminalBody" height="100%">
+        <!--
+          An error with its code, its message and what to do about it. A failure the library is
+          recovering from by itself is a note: `data-retryable` says which, for the style sheet and
+          for the smoke test alike.
+        -->
+        <VBox id="error" class="terminalError" visible="{ui>/error/visible}" renderType="Bare">
+          <customData>
+            <core:CustomData key="retryable" value="{ui>/error/retryable}" writeToDom="true" />
+          </customData>
+          <HBox alignItems="Center" justifyContent="SpaceBetween" renderType="Bare">
+            <Title id="errorCode" text="{ui>/error/code}" level="H2" titleStyle="H6" />
+            <Button
+              id="errorDismiss"
+              icon="sap-icon://decline"
+              tooltip="{i18n>dismiss}"
+              type="Transparent"
+              press=".onDismissError"
+            />
+          </HBox>
+          <Text id="errorMessage" text="{ui>/error/message}" />
+          <Text id="errorRemediation" class="terminalRemediation" text="{ui>/error/remediation}" />
+        </VBox>
+
+        <!-- The log is plain DOM the controller appends to: 2 000 lines are not 2 000 controls. -->
+        <core:HTML
+          id="logHost"
+          preferDOM="true"
+          content="&lt;div class=&quot;terminalLogHost&quot;&gt;&lt;div id=&quot;received&quot; class=&quot;terminalLog&quot; role=&quot;log&quot; aria-live=&quot;off&quot; tabindex=&quot;0&quot; data-empty=&quot;Nothing received yet.&quot;&gt;&lt;/div&gt;&lt;/div&gt;"
+          afterRendering=".onLogRendered"
+        >
+          <core:layoutData>
+            <!-- The log takes the height the error above it leaves. -->
+            <FlexItemData growFactor="1" minHeight="0" styleClass="terminalLogItem" />
+          </core:layoutData>
+        </core:HTML>
+      </VBox>
+    </content>
+
+    <footer>
+      <OverflowToolbar id="composer" class="terminalComposer">
+        <Select
+          id="sendMode"
+          selectedKey="{ui>/preferences/sendMode}"
+          change=".onComposerChange"
+          width="6rem"
+        >
+          <core:Item key="text" text="{i18n>modeText}" />
+          <core:Item key="hex" text="{i18n>modeHex}" />
+        </Select>
+        <Input
+          id="sendInput"
+          class="terminalInput"
+          value="{ui>/sendText}"
+          valueLiveUpdate="true"
+          placeholder="{i18n>sendPlaceholder}"
+          submit=".onSend"
+        >
+          <layoutData>
+            <OverflowToolbarLayoutData priority="NeverOverflow" shrinkable="true" minWidth="12rem" />
+          </layoutData>
+        </Input>
+        <Select
+          id="sendEnding"
+          selectedKey="{ui>/preferences/sendEnding}"
+          enabled="{= ${ui>/preferences/sendMode} !== 'hex' }"
+          tooltip="{= ${ui>/preferences/sendMode} === 'hex' ? ${i18n>hexAppendsNothing} : '' }"
+          change=".onComposerChange"
+          width="7rem"
+        >
+          <core:Item key="\r\n" text="{i18n>endingCrLf}" />
+          <core:Item key="\n" text="{i18n>endingLf}" />
+          <core:Item key="\r" text="{i18n>endingCr}" />
+          <core:Item key="" text="{i18n>endingNone}" />
+        </Select>
+        <Button
+          id="sendButton"
+          text="{i18n>send}"
+          type="Emphasized"
+          enabled="{ui>/canSend}"
+          press=".onSend"
+        >
+          <layoutData>
+            <OverflowToolbarLayoutData priority="NeverOverflow" />
+          </layoutData>
+        </Button>
+      </OverflowToolbar>
+    </footer>
+  </Page>
+</mvc:View>
