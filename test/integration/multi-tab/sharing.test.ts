@@ -44,6 +44,40 @@ describe.each(TRANSPORT_MODES)('sharing one port across tabs (%s)', (transport) 
     expect(late.receivedText('CardReader')).toBe('CARD:1234');
   });
 
+  it('hands every listener bytes of its own, so one that writes into them changes no other', async () => {
+    const { harness, device } = await withGrantedDevice();
+    const holder = harness.openTab();
+    await holder.setup('CardReader', READER_OPTIONS);
+    const other = harness.openTab();
+    await other.setup('CardReader', READER_OPTIONS);
+
+    // A listener in the tab holding the port that treats the event's bytes as scratch space - which
+    // the types allow: "a copy; safe to keep or mutate".
+    const seenAfterwards: string[] = [];
+    for (const event of ['onReceive', 'onSend'] as const) {
+      holder.client.subscribe('CardReader', event, (received) => {
+        received.data.fill(0x58);
+      });
+      holder.client.subscribe('CardReader', event, (received) => {
+        seenAfterwards.push(new TextDecoder().decode(received.data));
+      });
+    }
+
+    device.emit('CARD:1234');
+    await harness.settle();
+    await holder.client.send('CardReader', 'STATUS?');
+    await harness.settle();
+
+    // Neither the next listener in the same tab nor the other tab sees what the first one wrote.
+    expect(seenAfterwards).toEqual(['CARD:1234', 'STATUS?']);
+    expect(
+      other.recordFor('CardReader').received.map((event) => new TextDecoder().decode(event.data)),
+    ).toEqual(['CARD:1234']);
+    expect(
+      other.recordFor('CardReader').sent.map((event) => new TextDecoder().decode(event.data)),
+    ).toEqual(['STATUS?']);
+  });
+
   it('writes from a tab that does not own the port exactly once, and tells every tab who issued it', async () => {
     const { harness, device } = await withGrantedDevice();
     const owner = harness.openTab();

@@ -24,7 +24,8 @@ export interface WorkerPort {
 export interface WorkerPortsHost {
   /**
    * Where the worker's own records go in the worker itself: nowhere in a browser, the test's logger
-   * in the suite. Its warnings are forwarded to the connected tabs as well (ADR-0018).
+   * in the suite. What it records at `warn` and above is forwarded to the connected tabs as well
+   * (ADR-0018).
    */
   readonly logger: Logger;
   /** `navigator.locks` of the worker: the locks that say who is still there (ADR-0041). */
@@ -72,8 +73,9 @@ const REFUSAL_MESSAGES: Readonly<Record<Refusal, string>> = {
  * worker script so that the harness routes through exactly this code (ADR-0014).
  *
  * What the worker records would be seen by nobody - a `SharedWorker` cannot reach an application's
- * logger - so its warnings go to the connected contexts (ADR-0018). Every warning is written once per
- * key, so what is forwarded is bounded without a budget of its own.
+ * logger - so what it records at `warn` and above goes to the connected contexts (ADR-0018). Every
+ * such record is written once per key, or once in the worker's life, so what is forwarded is
+ * bounded without a budget of its own.
  */
 export class WorkerPorts<Port extends WorkerPort> {
   /**
@@ -123,7 +125,7 @@ export class WorkerPorts<Port extends WorkerPort> {
           await new Promise<never>(() => undefined);
         })
         .catch((error: unknown) => {
-          this.#logger.error('could not take the worker lock; no tab is welcomed', {
+          this.#logger.warn('could not take the worker lock; no tab is welcomed', {
             event: 'worker.lock-failed',
             reason: describeUnknown(error),
           });
@@ -221,7 +223,7 @@ export class WorkerPorts<Port extends WorkerPort> {
     let ports = this.#ports.get(clientId);
     if (ports === undefined) {
       if (this.#ports.size >= MAX_PARTICIPANTS) {
-        warnLimitExceeded(this.#once, 'worker.limit-exceeded', 'MAX_PARTICIPANTS');
+        warnLimitExceeded(this.#once, 'worker.limit-exceeded', 'MAX_PARTICIPANTS', { clientId });
         return false;
       }
       const registered = new Set<Port>();

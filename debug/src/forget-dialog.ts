@@ -5,9 +5,8 @@ import type { ReleaseOptions } from '../../src/index.js';
  *
  * Releasing forgets nothing on its own (ADR-0033), so the page has to say which of the browser's
  * two stores is meant to go: the configuration remembered under the name, and the permission for
- * the device. Those used to be three entries in a hidden menu - disconnect, disconnect and forget,
- * disconnect and forget everything - which made the rarest and least reversible choice look like
- * just another item, and hid all three behind a ⋯ button.
+ * the device. It asks with two boxes rather than offering a menu of combinations, which would make
+ * the rarest and least reversible choice look like just another item.
  *
  * Both boxes start clear on every opening, so the plain answer is the harmless one: stop here, keep
  * everything. A configuration this page is not connected to has nothing to disconnect from, and the

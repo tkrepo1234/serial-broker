@@ -10,8 +10,11 @@
 
 export const USB_CLASS_COMMUNICATIONS = 0x02;
 export const CDC_SUBCLASS_ABSTRACT_CONTROL_MODEL = 0x02;
-export const CDC_PROTOCOL_AT_COMMANDS = 0x01;
-export const USB_CLASS_CDC_DATA = 0x0a;
+const CDC_PROTOCOL_AT_COMMANDS = 0x01;
+const USB_CLASS_CDC_DATA = 0x0a;
+
+/** The device's release number, 1.00, as the binary-coded decimal USB writes it. */
+export const BCD_DEVICE = 0x0100;
 
 export const DESCRIPTOR_TYPE_DEVICE = 0x01;
 export const DESCRIPTOR_TYPE_CONFIGURATION = 0x02;
@@ -80,9 +83,7 @@ export function deviceDescriptor(identity: DeviceIdentity): Uint8Array {
     CONTROL_MAX_PACKET_BYTES,
     ...littleEndian16(identity.vendorId),
     ...littleEndian16(identity.productId),
-    // bcdDevice 1.00
-    0x00,
-    0x01,
+    ...littleEndian16(BCD_DEVICE),
     STRING_INDEX_MANUFACTURER,
     STRING_INDEX_PRODUCT,
     STRING_INDEX_SERIAL_NUMBER,

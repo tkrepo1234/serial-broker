@@ -9,8 +9,8 @@ import { defineConfig } from '@playwright/test';
  *
  * Opt-in only: `SERIAL_BROKER_BENCH_BROWSER=1 npm run bench:browser`. It never runs in CI, where a
  * shared runner's timings would say nothing; its numbers are recorded once, with the machine, in
- * the Performance chapter. One browser at a time, on a port of its own, so that it can run next
- * to the browser suite.
+ * the Performance chapter. One browser at a time, on a port the browser suite does not use, so that
+ * it can run next to it. The background-tab check uses the same port, so those two take turns.
  */
 
 const port = Number(process.env['SERIAL_BROKER_BROWSER_TEST_PORT'] ?? '8147');
@@ -23,8 +23,8 @@ export default defineConfig({
   fullyParallel: false,
   retries: 0,
   reporter: [['list']],
-  // Each transport's run is one test, and the write scenarios are paced in real time; on the
-  // SharedWorker transport, each handover after a crash waits about a minute for the last page.
+  // Each transport's run is one test, with every scenario and its repeats in it, and the write
+  // scenarios are paced in real time.
   timeout: 30 * 60_000,
   expect: { timeout: 30_000 },
 

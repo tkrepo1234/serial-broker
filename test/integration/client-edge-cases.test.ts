@@ -1,9 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import { SerialBrokerClient } from '../../src/client/serial-broker-client.js';
+import { DEFAULT_CONNECTION_SETTINGS } from '../../src/core/defaults.js';
 import { SerialBrokerErrorCode } from '../../src/core/error-codes.js';
 import { BrowserHarness } from '../harness/browser-harness.js';
 import { READER, READER_OPTIONS } from '../harness/devices.js';
+import { fieldsOfEvent, recordingLogger } from '../harness/recording-logger.js';
 
 describe('unusable environments', () => {
   it('refuses to set up a configuration without Web Serial', async () => {
@@ -136,6 +138,50 @@ describe('a device that cannot be forgotten', () => {
     await expect(tab.client.release('Reader', { forgetDevice: true })).resolves.toBeUndefined();
     expect(forget).toHaveBeenCalledOnce();
     expect(tab.client.exists('Reader')).toBe(false);
+  });
+
+  it('still releases it where the browser has no forget() at all', async () => {
+    const { logger, records } = recordingLogger();
+    const harness = new BrowserHarness({ logger });
+    harness.serial.grant(harness.serial.addDevice(READER.vendorId, READER.productId));
+    const tab = harness.openTab();
+    await tab.setup('Reader', READER_OPTIONS);
+    for (const port of await harness.serial.forContext(tab.id).getPorts()) {
+      Object.assign(port, { forget: undefined });
+    }
+
+    await expect(tab.client.release('Reader', { forgetDevice: true })).resolves.toBeUndefined();
+
+    // Said as what it is, not as a call that failed.
+    expect(fieldsOfEvent(records, 'client.forget-unsupported')).toHaveLength(1);
+    expect(fieldsOfEvent(records, 'client.forget-failed')).toEqual([]);
+  });
+
+  it('still releases it where forget() never answers', async () => {
+    const { logger, records } = recordingLogger();
+    const harness = new BrowserHarness({ logger });
+    harness.serial.grant(harness.serial.addDevice(READER.vendorId, READER.productId));
+    const tab = harness.openTab();
+    await tab.setup('Reader', READER_OPTIONS);
+    for (const port of await harness.serial.forContext(tab.id).getPorts()) {
+      Object.assign(port, { forget: () => new Promise<never>(() => undefined) });
+    }
+
+    let isReleased = false;
+    const released = tab.client.release('Reader', { forgetDevice: true }).then(() => {
+      isReleased = true;
+    });
+    await harness.settle();
+    expect(isReleased).toBe(false);
+
+    // Bounded like every call into Web Serial: a release that waited for ever would keep every
+    // later `setup()` of the name waiting with it.
+    await harness.clock.advance(DEFAULT_CONNECTION_SETTINGS.openTimeoutMs);
+    await released;
+
+    expect(fieldsOfEvent(records, 'client.forget-failed')).toEqual([
+      expect.objectContaining({ reason: expect.stringContaining('Timed out') as unknown }),
+    ]);
   });
 });
 

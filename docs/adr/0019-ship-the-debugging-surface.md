@@ -49,7 +49,9 @@ can resolve its files.
   img-src 'self'; font-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'
   ```
 
-  Its styles live in `dist/debug/serial-broker-debug.css`, and no element carries a `style` attribute.
+  Its styles live in `dist/debug/serial-broker-debug.css`, and the markup carries no `style`
+  attribute. The script places the ⋯ menu under its button through `element.style`, which the
+  policy allows: it restricts style in markup, not what a script of the page sets on an element.
   `frame-ancestors` stays a header the operator sends; `debug/README.md` gives the complete policy,
   and the page refuses to start in a frame of another origin.
 

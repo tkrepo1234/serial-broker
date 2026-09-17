@@ -1,7 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
 import { ChooseMessage } from '../../debug/src/choose-message.js';
-import { formValuesForChosenDevice, suggestDeviceName } from '../../debug/src/chosen-port.js';
+import {
+  chooseDeviceOrUndo,
+  formValuesForChosenDevice,
+  suggestDeviceName,
+  type DeviceChooser,
+} from '../../debug/src/chosen-port.js';
 import {
   describeError,
   describeOwnershipLocks,
@@ -498,6 +503,54 @@ describe('debugging surface: a device chosen in the picker', () => {
     expect(suggestDeviceName(['Device'])).toBe('Device 2');
     expect(suggestDeviceName(['Device', 'Device 2'])).toBe('Device 3');
     expect(formValuesForChosenDevice(['Device']).name).toBe('Device 2');
+  });
+
+  /** A client that answers the picker as told, and records what was released and how. */
+  function chooserAnswering(answer: boolean | Error): DeviceChooser & { released: unknown[][] } {
+    const released: unknown[][] = [];
+    return {
+      released,
+      requestAccess: () =>
+        answer instanceof Error ? Promise.reject(answer) : Promise.resolve(answer),
+      release: (name, options) => {
+        released.push([name, options]);
+        return Promise.resolve();
+      },
+    };
+  }
+
+  it('keeps the configuration when a port was chosen', async () => {
+    const page = chooserAnswering(true);
+
+    expect(await chooseDeviceOrUndo(page, 'Device')).toBe(true);
+    expect(page.released).toEqual([]);
+  });
+
+  it('takes the configuration back, remembered entry included, when the picker is dismissed', async () => {
+    const page = chooserAnswering(false);
+
+    // setup() remembered the configuration at once, and a plain release keeps what is remembered
+    // (ADR-0033): without `forget` the name stays in the list, and the next try is "Device 2".
+    expect(await chooseDeviceOrUndo(page, 'Device')).toBe(false);
+    expect(page.released).toEqual([['Device', { forget: true }]]);
+  });
+
+  it('takes it back as well when the picker fails, and reports that failure', async () => {
+    const failure = new Error('no user gesture');
+    const page = chooserAnswering(failure);
+
+    await expect(chooseDeviceOrUndo(page, 'Device')).rejects.toBe(failure);
+    expect(page.released).toEqual([['Device', { forget: true }]]);
+  });
+
+  it('reports the failure of the picker, not that of the release after it', async () => {
+    const failure = new Error('no user gesture');
+    const page: DeviceChooser = {
+      requestAccess: () => Promise.reject(failure),
+      release: () => Promise.reject(new Error('already released')),
+    };
+
+    await expect(chooseDeviceOrUndo(page, 'Device')).rejects.toBe(failure);
   });
 });
 

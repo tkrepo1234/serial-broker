@@ -10,6 +10,13 @@ type SerialBrokerLibrary = typeof import('serial-broker');
 type SerialBrokerGlobal = SerialBrokerLibrary['SerialBroker'] &
   Pick<SerialBrokerLibrary, 'isSerialBrokerError' | 'isSupported' | 'SerialBrokerStatus'>;
 
+/**
+ * The repository's Web Serial stand-in, which `?stand-in` loads as a classic script; absent until
+ * then, and always outside the repository.
+ */
+declare var installWebSerialStandIn:
+  ((options: { devices: { id: string; granted: boolean }[] }) => void) | undefined;
+
 interface TerminalSerialSettings {
   baudRate: number;
   dataBits: 7 | 8;
@@ -36,7 +43,6 @@ interface TerminalPreferencesModule {
 }
 
 interface TerminalLogModule {
-  readonly MAX_LINES: number;
   append(
     log: HTMLElement,
     text: string,

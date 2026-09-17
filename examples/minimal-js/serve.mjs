@@ -6,11 +6,11 @@
  * when every tab loads it under the same URL. This server maps `/serial-broker/` to
  * `node_modules/serial-broker/dist/`, so both are there without anything being copied.
  *
- * Plain Node, no dependencies: one fewer package to audit, and short enough to read. The
- * no-bundler example's `serve.mjs` is the same server with a `public/` folder and a build step;
- * here there is one file to serve, and the page is the example.
+ * Plain Node, no dependencies: one fewer package to audit, and short enough to read. There is one
+ * file to serve, and the page is the example.
  */
 
+import { readFileSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { createServer } from 'node:http';
 import path from 'node:path';
@@ -18,8 +18,10 @@ import process from 'node:process';
 import { fileURLToPath } from 'node:url';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
-/** The same port as example.json names; `PORT` overrides it. */
-const PORT = Number(process.env['PORT'] ?? '8159');
+/** The port example.json names, which is where the smoke test looks; `PORT` overrides it. */
+const PORT = Number(
+  process.env['PORT'] ?? JSON.parse(readFileSync(path.join(HERE, 'example.json'), 'utf8')).port,
+);
 
 /** The published library files, as `npm install` put them there. */
 const LIBRARY_DIRECTORY = path.join(HERE, 'node_modules', 'serial-broker', 'dist');

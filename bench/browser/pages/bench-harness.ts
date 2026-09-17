@@ -37,7 +37,6 @@ export interface BenchPage {
    * @returns Milliseconds from the `setup()` call to the status `open`.
    */
   setup(name: string, options: SerialBrokerOptions): Promise<number>;
-  status(name: string): string;
   /** When this page last saw the status become `open`, on the shared clock. */
   openedAt(name: string): number | undefined;
   /** Forgets the last `open` moment, so that the next one is the one measured. */
@@ -200,7 +199,6 @@ export function installBenchHarness(api: SerialBrokerApi, standIn?: WebSerialSta
       }
       return await openWait;
     },
-    status: (name) => api.getStatus(name).status,
     openedAt: (name) => collect(name).openedAt,
     resetOpenedAt: (name) => {
       collect(name).openedAt = undefined;

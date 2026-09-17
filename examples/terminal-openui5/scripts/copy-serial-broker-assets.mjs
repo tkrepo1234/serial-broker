@@ -35,26 +35,17 @@ if (option === '--remove') {
   process.exit(0);
 }
 
-/** What the browser fetches at run time. The source maps are optional but make debugging sane. */
-const FILES = [
-  'serial-broker.global.js',
-  'serial-broker.global.js.map',
-  'serial-broker.worker.js',
-  'serial-broker.worker.js.map',
-];
+/** What the browser fetches at run time: without either of these the page does not work. */
+const FILES = ['serial-broker.global.js', 'serial-broker.worker.js'];
 
-let packageRoot;
-try {
-  packageRoot = dirname(require.resolve('serial-broker/package.json'));
-} catch {
-  fail('serial-broker is not installed. Run `npm install` in examples/terminal-openui5 first.');
-}
+const packageRoot = rootOfTheLibrary();
 
 const distribution = join(packageRoot, 'dist');
-if (!existsSync(join(distribution, 'serial-broker.global.js'))) {
+const missing = FILES.map((file) => join(distribution, file)).filter((file) => !existsSync(file));
+if (missing.length > 0) {
   fail(
     [
-      `${join(distribution, 'serial-broker.global.js')} does not exist.`,
+      ...missing.map((file) => `${file} does not exist.`),
       'This example uses the library from the repository it lives in, so build it once:',
       '',
       '  cd ../..  &&  npm ci  &&  npm run build',
@@ -65,9 +56,10 @@ if (!existsSync(join(distribution, 'serial-broker.global.js'))) {
 
 mkdirSync(target, { recursive: true });
 for (const file of FILES) {
-  const from = join(distribution, file);
-  if (existsSync(from)) {
-    copyFileSync(from, join(target, file));
+  copyFileSync(join(distribution, file), join(target, file));
+  // The source maps are optional, but make debugging sane.
+  if (existsSync(join(distribution, `${file}.map`))) {
+    copyFileSync(join(distribution, `${file}.map`), join(target, `${file}.map`));
   }
 }
 
@@ -76,8 +68,8 @@ for (const file of FILES) {
 const standIn = join(packageRoot, 'test', 'browser', 'stand-in', 'web-serial-stand-in.ts');
 if (option === '--with-stand-in' && existsSync(standIn)) {
   const script = stripTypeScriptTypes(readFileSync(standIn, 'utf8'), { mode: 'strip' }).replace(
-    /^export (async )?function /gm,
-    '$1function ',
+    /^export function /gm,
+    'function ',
   );
   writeFileSync(
     join(target, 'stand-in.js'),
@@ -87,6 +79,21 @@ if (option === '--with-stand-in' && existsSync(standIn)) {
 
 process.stdout.write(`Copied the serial-broker files to ${target}\n`);
 
+/** @returns {string} */
+function rootOfTheLibrary() {
+  try {
+    return dirname(require.resolve('serial-broker/package.json'));
+  } catch {
+    return fail(
+      'serial-broker is not installed. Run `npm install` in examples/terminal-openui5 first.',
+    );
+  }
+}
+
+/**
+ * @param {string} message
+ * @returns {never}
+ */
 function fail(message) {
   process.stderr.write(`${message}\n`);
   process.exit(1);

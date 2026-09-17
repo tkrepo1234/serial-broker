@@ -382,6 +382,12 @@ async function handover(
     // The first page opened holds the port, and on the SharedWorker transport it is also the page
     // that started the worker - as in an application whose first tab is the one opened first.
     const holderIndex = await holderOf(tabs);
+    if (holderIndex !== 0) {
+      // What is published describes the first page; a run that measured another one must not be.
+      throw new Error(
+        `Expected the first page to hold the port, found page ${String(holderIndex)}`,
+      );
+    }
     const holder = tabs[holderIndex];
     const survivors = tabs.filter((_, index) => index !== holderIndex);
     const reference = survivors[survivors.length - 1];

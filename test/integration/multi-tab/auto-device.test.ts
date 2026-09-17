@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { SerialBrokerClient } from '../../../src/client/serial-broker-client.js';
 import { SerialBrokerErrorCode } from '../../../src/core/error-codes.js';
 import { SerialBrokerStatus } from '../../../src/core/types.js';
 import { BrowserHarness, TRANSPORT_MODES } from '../../harness/browser-harness.js';
@@ -32,6 +33,46 @@ describe('a configuration in auto mode', () => {
     expect(status.status).toBe(SerialBrokerStatus.AwaitingPermission);
     expect(status.deviceKind).toBe('auto');
     expect(status.vendorId).toBeUndefined();
+    expect(device.isOpen).toBe(false);
+  });
+
+  it('takes no device from a picker that was still open when the tab released the configuration', async () => {
+    const { logger, records } = recordingLogger();
+    const harness = new BrowserHarness({ logger });
+    const device = harness.serial.addDevice(READER.vendorId, READER.productId);
+    harness.serial.pickerQueue.push(device);
+    // A picker that stays open until the test has the user choose.
+    let choose = (): void => undefined;
+    const open = new Promise<void>((resolve) => (choose = resolve));
+    const environment = harness.createEnvironment('picking');
+    const client = new SerialBrokerClient({
+      ...environment,
+      serial: {
+        ...environment.serial,
+        requestPort: async (options) => {
+          await open;
+          return await environment.serial.requestPort(options);
+        },
+      },
+    });
+    const other = harness.openTab();
+    await client.setup('Reader', AUTO);
+    await other.setup('Reader', AUTO);
+
+    const asked = client.requestAccess('Reader');
+    await client.release('Reader');
+    choose();
+
+    await expect(asked).rejects.toMatchObject({
+      code: SerialBrokerErrorCode.CONFIGURATION_RELEASED,
+    });
+    await harness.settle();
+
+    // A tab that has left gives the configuration nothing: the others would be sent to a device
+    // by somebody who is no longer part of it.
+    expect(fieldsOfEvent(records, 'session.device-resolved')).toEqual([]);
+    expect(other.client.getStatus('Reader')).toMatchObject({ deviceKind: 'auto' });
+    expect(other.client.getStatus('Reader').vendorId).toBeUndefined();
     expect(device.isOpen).toBe(false);
   });
 

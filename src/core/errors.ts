@@ -248,7 +248,10 @@ export class SerialBrokerError extends Error {
   /** `true` when the library is already retrying and the application need not act. */
   readonly isRetryable: boolean;
 
-  /** Epoch milliseconds at which the error was created. */
+  /**
+   * Epoch milliseconds at which the error was created. `0` for an error built without a
+   * `timestamp`; every error the library reports carries one.
+   */
   readonly timestamp: number;
 
   constructor(

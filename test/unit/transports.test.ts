@@ -27,7 +27,7 @@ const SELF = 'self' as ClientId;
 const PEER = 'peer' as ClientId;
 
 /** What the addressing tests send. Which message it is does not matter, only where it goes. */
-const STATUS_REQUEST = { type: 'status-request', configName: 'Reader' };
+const STATUS_REQUEST = { type: 'status-request', configName: 'Reader', retry: false };
 
 describe('SharedWorkerTransport', () => {
   function create(logger?: Logger): TransportRequestRecorder & {

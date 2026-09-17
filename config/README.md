@@ -14,6 +14,7 @@ toolchain ([ADR-0042](../docs/adr/0042-keep-the-toolchains-configuration-in-conf
 | `playwright.config.ts`          | the browser suite                          | `npm run test:browser`                                      |
 | `playwright.examples.config.ts` | the examples' smoke tests                  | `npm run test:examples`                                     |
 | `typedoc.json`                  | the generated interface pages              | `npm run docs`                                              |
+| `tsconfig.build.json`           | tsc: the type declarations                 | `npm run build`                                             |
 | `serve.json`                    | the static server of the debugging surface | `npm run debug`                                             |
 
 Every one of these is reached through an npm script that names it with a path flag; none of these
@@ -37,8 +38,8 @@ after changing that file, run `npm run format` and check that `git status` is cl
 ## What stays in the repository root, and why
 
 - **`package.json`, `package-lock.json`** — npm looks for them there and nowhere else.
-- **`tsconfig.json`, `tsconfig.build.json`** — editors and language servers find a project by
-  walking up from the file being edited, `tsc -p` is given them by name, and `bench/`,
+- **`tsconfig.json`** — editors and language servers find a project by
+  walking up from the file being edited, and `bench/`,
   `emulator/` and `docs/site/examples/code/` extend `tsconfig.json` by relative path.
 - **`eslint.config.js`** — ESLint 10 searches for `eslint.config.*` from the working directory
   upwards and has no flag that would make it look here.

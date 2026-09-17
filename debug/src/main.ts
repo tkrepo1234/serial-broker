@@ -23,7 +23,7 @@ import { PROTOCOL_VERSION } from '../../src/protocol/version.js';
 import { ConfigurationStore } from '../../src/storage/configuration-store.js';
 
 import { ChooseMessage } from './choose-message.js';
-import { formValuesForChosenDevice } from './chosen-port.js';
+import { chooseDeviceOrUndo, formValuesForChosenDevice } from './chosen-port.js';
 import { ConfigurationDetail, type DetailHost } from './detail.js';
 import { byId, element } from './dom.js';
 import { EventLog } from './event-log.js';
@@ -183,11 +183,6 @@ const host: DetailHost = {
       await requireClient().setup(name, connectWith);
     });
   },
-  disconnect(name, options) {
-    act(name, `disconnect from "${name}"`, async () => {
-      await requireClient().release(name, options);
-    });
-  },
   askToDisconnect(name) {
     chooseMessage.clear();
     forgetDialog.open(name, requireClient().exists(name));
@@ -225,11 +220,15 @@ const host: DetailHost = {
   },
 };
 
-// Asked by _Disconnect_, and answered by the same call the ⋯ menu's three entries used to make.
+// Asked by _Disconnect_; what it answers is what `release()` is given.
 const forgetDialog = new ForgetDialog(
   byId('forgetDialog') as HTMLDialogElement,
   (name, options) => {
-    host.disconnect(name, options);
+    // The options say what should also go: the configuration this browser remembers (`forget`),
+    // its permission for the device (`forgetDevice`), both or neither.
+    act(name, `disconnect from "${name}"`, async () => {
+      await requireClient().release(name, options);
+    });
   },
 );
 
@@ -266,22 +265,18 @@ const dialog = new SetupDialog(byId('setupDialog') as HTMLDialogElement, async (
  * Opens the browser's port picker for a configuration just set up in auto mode, in the click that
  * set it up (ADR-0036).
  *
- * The configuration takes its device from the port chosen, and the library remembers it. A
- * dismissed picker is an answer, not a failure: the configuration is released again, so nothing
- * waits for a device nobody chose, and nothing is remembered.
+ * The configuration takes its device from the port chosen, and the library remembers it. Without a
+ * port the configuration is taken back, remembered entry included (`chooseDeviceOrUndo`).
  */
 async function chooseDeviceFor(name: string): Promise<void> {
-  const page = requireClient();
-  let granted: boolean;
+  let isGranted: boolean;
   try {
-    granted = await page.requestAccess(name);
+    isGranted = await chooseDeviceOrUndo(requireClient(), name);
   } catch (error) {
     logFailure(`choose a device for "${name}"`, error);
-    await page.release(name);
     throw error;
   }
-  if (!granted) {
-    await page.release(name);
+  if (!isGranted) {
     chooseMessage.show('The picker was dismissed; nothing was set up.');
   }
 }
@@ -629,7 +624,7 @@ async function renderFacts(): Promise<void> {
     ['Port locks', describeOwnershipLocks(snapshot?.locks, PROTOCOL_VERSION)],
     ['Granted ports', await describePorts()],
   ];
-  // Rebuilt only when something changed: the panel is redrawn every two seconds, and replacing its
+  // Rebuilt only when something changed: the panel is redrawn on every refresh, and replacing its
   // "?" buttons each time would take keyboard focus away from them.
   const shown = JSON.stringify(
     facts.map(([term, value]) => [term, typeof value === 'string' ? value : value.textContent]),

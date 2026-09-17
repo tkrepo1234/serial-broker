@@ -8,8 +8,7 @@
  * Contexts running different protocol versions do not federate: the version is part of the
  * lock name and the broker channel name, so they partition into independent groups rather than
  * corrupting each other (ADR-0008). They still learn of each other through the version
- * announcement, whose channel carries no version, and report `PROTOCOL_VERSION_MISMATCH`
- * (ADR-0008).
+ * announcement, whose channel carries no version, and report `PROTOCOL_VERSION_MISMATCH`.
  */
 export const PROTOCOL_VERSION = 1;
 
@@ -25,7 +24,7 @@ export function isProtocolVersion(value: unknown): value is number {
 }
 
 /** Prefix for every name this library claims in a shared namespace. */
-const NAMESPACE = 'serial-broker';
+export const NAMESPACE = 'serial-broker';
 
 /**
  * Name of the Web Lock that represents ownership of a configuration's port.

@@ -4,7 +4,7 @@ import { MAX_TERM_FLOOD, OwnerTerms, type TermClaim } from '../../src/client/own
 import { ScopedLogger } from '../../src/core/logger.js';
 import type { ClientId, ProtocolMessage, RequestId, TermId } from '../../src/protocol/messages.js';
 import { PROTOCOL_VERSION, termLockName } from '../../src/protocol/version.js';
-import { flushMicrotasks } from '../harness/fake-clock.js';
+import { FakeClock, flushMicrotasks } from '../harness/fake-clock.js';
 import { FakeLockManager } from '../harness/fake-locks.js';
 import { fieldsOfEvent, recordingLogger } from '../harness/recording-logger.js';
 
@@ -36,6 +36,8 @@ function createTerms(): {
   const { logger, records } = recordingLogger();
   const terms = new OwnerTerms({
     locks: locks.forContext('watcher'),
+    clock: new FakeClock(),
+    lockQueryTimeoutMs: 1000,
     configName: CONFIG,
     logger: new ScopedLogger(logger, {}),
     onEnded: (term, wasCurrent) => ended.push({ term, wasCurrent }),
@@ -386,6 +388,8 @@ describe('OwnerTerms', () => {
     const terms = new OwnerTerms({
       // A browser without `locks.query()` cannot tell a clean end from a crash.
       locks: { request: withoutQuery.request.bind(withoutQuery) },
+      clock: new FakeClock(),
+      lockQueryTimeoutMs: 1000,
       configName: CONFIG,
       logger: new ScopedLogger(logger, {}),
       onEnded: (term) => ended.push(term),
@@ -419,6 +423,39 @@ describe('OwnerTerms', () => {
     expect(fieldsOfEvent(records, 'session.term-flood')).toHaveLength(1);
   });
 
+  it('ends a term at the free lock where the browser never answers with its locks', async () => {
+    const locks = new FakeLockManager();
+    const clock = new FakeClock();
+    const ended: TermId[] = [];
+    const { logger } = recordingLogger();
+    const watcher = locks.forContext('watcher');
+    const terms = new OwnerTerms({
+      locks: {
+        request: watcher.request.bind(watcher),
+        query: () => new Promise<never>(() => undefined),
+      },
+      clock,
+      lockQueryTimeoutMs: 1000,
+      configName: CONFIG,
+      logger: new ScopedLogger(logger, {}),
+      onEnded: (term) => ended.push(term),
+    });
+    const holder = await holdTerm(locks, 'owner', FIRST);
+    observe(terms, FIRST, () => undefined);
+    await flushMicrotasks();
+
+    holder.letGo();
+    await flushMicrotasks();
+    // The question is asked while a grant on the term's lock is held, so an unanswered one would
+    // keep both the term and that grant for ever.
+    expect(ended).toEqual([]);
+
+    await clock.advance(1000);
+    await flushMicrotasks();
+
+    expect(ended).toEqual(['t1']);
+  });
+
   it('checks a term again after a lock request the browser would not answer', async () => {
     const locks = new FakeLockManager();
     const ended: TermId[] = [];
@@ -435,6 +472,8 @@ describe('OwnerTerms', () => {
           return await answering.request(name, options, callback);
         },
       },
+      clock: new FakeClock(),
+      lockQueryTimeoutMs: 1000,
       configName: CONFIG,
       logger: new ScopedLogger(logger, {}),
       onEnded: (term) => ended.push(term),

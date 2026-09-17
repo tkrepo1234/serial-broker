@@ -5,7 +5,7 @@ import type { Clock } from './clock.js';
  *
  * Validation and the limits of `protocol/limits.ts` bound what one message can cost. They do not
  * bound how many messages there are: any script of the origin can post as fast as it likes, and
- * every well-formed message was answered, reported or logged. A rate limit bounds the rest.
+ * a well-formed message is answered, reported or logged. A rate limit bounds the rest.
  */
 export interface RateLimit {
   /** How many are allowed at once, before the allowance has to come back. */

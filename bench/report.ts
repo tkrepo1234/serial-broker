@@ -67,7 +67,7 @@ export function percentile(values: readonly number[], p: number): number {
 }
 
 /** Judges one measurement against its expectation. */
-export function judge(key: string, measured: number, expectation: Expectation): MetricResult {
+function judge(key: string, measured: number, expectation: Expectation): MetricResult {
   const ratio =
     expectation.better === 'lower'
       ? expectation.value === 0
@@ -143,7 +143,7 @@ export function farWorse(run: BenchRun): readonly (MetricResult & { scenario: Sc
 }
 
 /** A number with the precision its unit deserves. */
-export function formatValue(value: number, unit: string): string {
+function formatValue(value: number, unit: string): string {
   if (!Number.isFinite(value)) {
     return String(value);
   }
@@ -166,7 +166,7 @@ export function formatValue(value: number, unit: string): string {
 }
 
 /** How a ratio reads in a table. */
-export function formatRatio(ratio: number): string {
+function formatRatio(ratio: number): string {
   if (!Number.isFinite(ratio)) {
     return 'far worse';
   }
@@ -203,13 +203,14 @@ const HEADER = ['Scenario', 'Transport', 'Metric', 'Measured', 'Expected', 'Verd
 
 /** The results as a plain-text table for the terminal. */
 export function formatTable(run: BenchRun): string {
-  const table = [HEADER, ...rows(run)];
+  const body = rows(run);
+  const table = [HEADER, ...body];
   const widths = HEADER.map((_, column) =>
     Math.max(...table.map((row) => (row[column] ?? '').length)),
   );
   const line = (row: readonly string[]): string =>
     row.map((cell, column) => cell.padEnd(widths[column] ?? 0)).join('  ');
-  return [line(HEADER), widths.map((width) => '-'.repeat(width)).join('  '), ...rows(run).map(line)]
+  return [line(HEADER), widths.map((width) => '-'.repeat(width)).join('  '), ...body.map(line)]
     .join('\n')
     .concat('\n');
 }

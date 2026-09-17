@@ -41,7 +41,7 @@ const hello = (from: ClientId, ...configNames: string[]): ProtocolMessage =>
 
 /** A routable message with no side effects, used to observe where the broker sends things. */
 const probe = (from: ClientId, to: ProtocolMessage['to'], configName = 'Reader'): ProtocolMessage =>
-  message(from, to, { type: 'status-request', configName } as never);
+  message(from, to, { type: 'status-request', configName, retry: false } as never);
 
 /**
  * The broker in isolation.

@@ -284,7 +284,7 @@ describe('toHex', () => {
   });
 
   it('truncates a long payload and says how long it was', () => {
-    const hex = toHex(new Uint8Array(100), 4);
+    const hex = toHex(new Uint8Array(100));
 
     expect(hex).toContain('...');
     expect(hex).toContain('100 bytes');

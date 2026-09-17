@@ -11,9 +11,9 @@
  * and reads as a verb, so `SerialBrokerDiagnostics(...)` would say less than the call it stands
  * for. The main entry point is the other way round because there the facade *is* the surface.
  *
- * The observer must be given the application's worker URL in any case
- * ([`DiagnosticsOptions.workerUrl`]), so this build's missing `import.meta.url` costs it nothing
- * it did not already have to be told.
+ * On the `SharedWorker` transport the observer has to be given the application's worker URL in any
+ * case (`DiagnosticsOptions.workerUrl`), so this build's missing `import.meta.url` costs it
+ * nothing it did not already have to be told.
  *
  * The module exports nothing: it is loaded for its effect on `globalThis`.
  */

@@ -59,7 +59,7 @@ function join(world: World, id: string, port = connect()): FakeMessagePort {
 }
 
 const probe = (from: string, to = 'all'): unknown =>
-  envelope(from, to, { type: 'status-request', configName: 'Reader' });
+  envelope(from, to, { type: 'status-request', configName: 'Reader', retry: false });
 
 /**
  * The types of the messages a port was posted, without the worker's forwarded records.
@@ -283,7 +283,11 @@ describe('WorkerPorts', () => {
     for (let round = 0; round < 100; round += 1) {
       world.ports.receive(
         mallory,
-        envelope('mallory', 'all', { type: 'status-request', configName: 'R'.repeat(129) }),
+        envelope('mallory', 'all', {
+          type: 'status-request',
+          configName: 'R'.repeat(129),
+          retry: false,
+        }),
       );
     }
     world.ports.receive(mallory, probe('mallory'));

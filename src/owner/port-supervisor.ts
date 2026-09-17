@@ -87,7 +87,8 @@ type ConnectionState =
  * files, and the question a reader arrives with - "what happens after this state" - would
  * then need two files to answer. What could be lifted out has been: device matching
  * (`port-matcher.ts`), the platform error table (`serial-errors.ts`), write serialisation
- * (`write-queue.ts`) and backoff (`core/backoff.ts`).
+ * (`write-queue.ts`), collecting what was read (`receive-buffer.ts`) and backoff
+ * (`core/backoff.ts`).
  */
 export class PortSupervisor {
   #state: ConnectionState = { kind: 'idle' };
@@ -108,7 +109,7 @@ export class PortSupervisor {
    * This is what tells an absent device from a withdrawn permission. `getPorts()` lists neither,
    * but only an unplugged device is announced by a `disconnect` event - so while this is set, a
    * port missing from the list is a device that has not come back, and the attempt has failed.
-   * See the ADR-0010 amendment.
+   * See ADR-0010.
    */
   #foundPortDetached = false;
   /**
@@ -206,7 +207,8 @@ export class PortSupervisor {
    * Resolves only once the device is closed, because the caller releases the ownership lock
    * next and the tab that is granted it opens the device at once (ADR-0005). That includes a
    * port whose `open()` is still pending - it is closed when the open settles - and a lost
-   * connection still being closed. Every wait is bounded by `openTimeoutMs`.
+   * connection still being closed. Every wait is bounded: by `openTimeoutMs`, and the wait for
+   * writes to be answered by `writeTimeoutMs`.
    *
    * Waits for an in-flight write to finish rather than cutting it off, so a command already
    * on its way to the device is not truncated. Never throws.
@@ -269,7 +271,8 @@ export class PortSupervisor {
         configName: this.configuration.name,
       });
     } catch {
-      // See above.
+      // Not reported: a write still hanging is answered when it ends, and its issuer has taken it
+      // for lost by then. The release this is part of must not wait for it any longer.
     }
   }
 
@@ -780,7 +783,7 @@ export class PortSupervisor {
    *
    * Every step ends the attempt itself when it cannot go on - with a lost connection, a failed
    * attempt, a wait for permission - and returns nothing; one that finds the world moved on while it
-   * awaited returns nothing either (`#isStale`).
+   * awaited returns nothing either (`#isStale`). It never rejects.
    */
   async #connect(): Promise<void> {
     if (this.#state.kind === 'stopped') {
@@ -796,9 +799,25 @@ export class PortSupervisor {
     this.#state = { kind: 'listing' };
     this.#setStatus(SerialBrokerStatus.Connecting);
 
-    const port = await this.#findPort(generation, attempt);
-    if (port !== undefined && (await this.#open(port, generation, attempt))) {
-      this.#startReading(port, generation, attempt);
+    try {
+      const port = await this.#findPort(generation, attempt);
+      if (port !== undefined && (await this.#open(port, generation, attempt))) {
+        this.#startReading(port, generation, attempt);
+      }
+    } catch (error) {
+      // The steps handle what a port rejects with. This is a port that throws instead - from
+      // `open()` itself, or when its streams are taken. Most callers start an attempt without
+      // waiting for it, so a rejection from here would reach nobody, and the status would stay
+      // `connecting` with no attempt to follow. It is a failed open like any other.
+      if (this.#isStale(generation)) {
+        return;
+      }
+      const failure = mapOpenError(error, {
+        configName: this.configuration.name,
+        timestamp: this.environment.clock.now(),
+        extra: { attempt },
+      });
+      this.#handleConnectionLoss('open-threw', failure, failure.isRetryable ? 'retry' : 'give-up');
     }
   }
 
@@ -855,7 +874,7 @@ export class PortSupervisor {
 
     if (port === undefined && this.#isFoundPortDetached()) {
       // The browser does not list a detached port. The device is away, not the permission, so
-      // this is a failed attempt like any other and backoff continues (ADR-0010 amendment).
+      // this is a failed attempt like any other and backoff continues (ADR-0010).
       this.#recordFailedAttempt(
         'device-absent',
         new SerialBrokerError(
@@ -889,7 +908,7 @@ export class PortSupervisor {
       return;
     }
     // The browser refuses to list the ports at all - a permissions policy, for instance. That
-    // is not retryable, and another attempt would meet the same refusal (see {@link #giveUp}).
+    // is not retryable, and another attempt would meet the same refusal (see `#giveUp`).
     this.#report(
       new SerialBrokerError(
         SerialBrokerErrorCode.WEB_SERIAL_UNAVAILABLE,
@@ -1303,6 +1322,8 @@ export class PortSupervisor {
    *
    * Teardown runs on paths where something has already gone wrong; a step that fails or hangs
    * must not prevent the remaining steps or the caller that is waiting for all of them.
+   *
+   * The deadline is `openTimeoutMs`, so its error carries `OPEN_TIMEOUT`; it is only ever logged.
    */
   async #closeStep(operation: Promise<unknown>, step: string): Promise<void> {
     try {

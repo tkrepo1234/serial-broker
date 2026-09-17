@@ -7,8 +7,8 @@ import type { ClientId, ProtocolMessage } from '../../protocol/messages.js';
 /**
  * The message bus, as the rest of the library sees it.
  *
- * Two implementations exist - a `SharedWorker` broker (ADR-0006) and a `BroadcastChannel`
- * fallback (ADR-0006) - and nothing above this interface can tell which is in use. That is
+ * Two implementations exist - a `SharedWorker` broker and a `BroadcastChannel` fallback
+ * (ADR-0006) - and nothing above this interface can tell which is in use. That is
  * deliberate: the transport is a delivery mechanism, and no correctness property of this
  * library rests on which one delivered a message.
  */

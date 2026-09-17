@@ -1,5 +1,5 @@
 /**
- * Killing a tab's renderer, for the browser suite and the examples' smoke tests alike.
+ * Killing a tab's renderer, for the browser suite.
  */
 
 import type { Page } from '@playwright/test';

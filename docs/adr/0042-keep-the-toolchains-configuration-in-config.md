@@ -88,11 +88,12 @@ toolchain's: it sits with the scenarios it runs and is already named by its scri
 
 - **`package.json`, `package-lock.json`** — npm reads them from the root and accepts no other
   location. Everything else in this decision depends on that being true.
-- **`tsconfig.json`, `tsconfig.build.json`** — an editor's TypeScript language server finds a
+- **`tsconfig.json`** — an editor's TypeScript language server finds a
   project by walking _up_ from the file being edited; moving the root project would leave every
   file in `src/` without one until each editor was configured by hand. `bench/tsconfig.json`,
   `emulator/tsconfig.json` and `docs/site/examples/code/tsconfig.json` extend it by relative path,
-  and `tsc -p` is handed it by name. Its `include` changed `"*.config.ts"` to `"config/*.ts"` so
+  and `tsc -p` is handed it by name. `tsconfig.build.json`, which only the build's `tsc -p` reads,
+  is in `config/` with the rest. Its `include` changed `"*.config.ts"` to `"config/*.ts"` so
   the moved TypeScript configurations stay type-checked and type-aware linting still resolves them.
 - **`eslint.config.js`** — ESLint 10 searches for `eslint.config.*` from the working directory
   upwards. There is no flag that makes that search look in a subdirectory, and `--config` would

@@ -331,8 +331,8 @@ export type TransportMode = 'sharedworker' | 'broadcastchannel';
  * - `'loads'`: this build's worker script, hosting the real broker.
  * - `'fails'`: nothing, until {@link FakeBus.failWorkerScripts} delivers the browser's error
  *   event, as for a script that answers 404.
- * - `'other-version'`: a worker script of an earlier protocol version, such as a copied worker
- *   file left over from an older release. It drops everything a tab says, and keeps only the
+ * - `'other-version'`: a worker script of another protocol version, such as a copied worker
+ *   file that belongs to a different release. It drops everything a tab says, and keeps only the
  *   frozen part of the handshake: it answers `hello` with a welcome in its own version (ADR-0008).
  */
 export type WorkerScript = 'loads' | 'fails' | 'other-version';

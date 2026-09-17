@@ -226,7 +226,7 @@ export interface StatusMessage extends Envelope {
 /** Broadcast when an error occurs that every participant should learn about. */
 export interface ErrorMessage extends Envelope {
   readonly type: 'error';
-  readonly configName: string | undefined;
+  readonly configName: string;
   readonly error: SerializedSerialBrokerError;
   readonly timestamp: number;
 }
@@ -237,7 +237,7 @@ export interface StatusRequestMessage extends Envelope {
   readonly configName: string;
   /**
    * The sender's application set the configuration up again while it had `failed`: the tab holding
-   * the port tries again, as `setup()` in that tab would (ADR-0010). Optional on the bus.
+   * the port tries again, as `setup()` in that tab would (ADR-0010).
    */
   readonly retry: boolean;
   /**

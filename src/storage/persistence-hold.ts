@@ -1,6 +1,7 @@
 import { describeUnknown } from '../core/errors.js';
 import type { ScopedLogger } from '../core/logger.js';
 import type { LockManagerLike } from '../environment/environment.js';
+import { NAMESPACE } from '../protocol/version.js';
 
 import { STORAGE_SCHEMA_VERSION } from './configuration-store.js';
 
@@ -19,7 +20,7 @@ import { STORAGE_SCHEMA_VERSION } from './configuration-store.js';
  * configuration name comes last, so that a name containing `/` cannot be mistaken for a version.
  */
 export function persistenceLockName(configName: string): string {
-  return `serial-broker/persisted/v${String(STORAGE_SCHEMA_VERSION)}/${configName}`;
+  return `${NAMESPACE}/persisted/v${String(STORAGE_SCHEMA_VERSION)}/${configName}`;
 }
 
 /**
@@ -30,25 +31,24 @@ export function persistenceLockName(configName: string): string {
  * before its hold is granted, and again once it is: whichever of the two comes after `forget` puts
  * the entry back.
  *
- * @returns Whether `forget` ran. Where the browser refuses the request, nothing is forgotten: an
- *   entry kept too long is restored once more, and one forgotten too early is lost for good.
+ * Where the browser refuses the request, nothing is forgotten: an entry kept too long is restored
+ * once more, and one forgotten too early is lost for good.
  */
 export async function forgetUnlessHeld(
   locks: LockManagerLike,
   configName: string,
   forget: () => void,
   logger: ScopedLogger,
-): Promise<boolean> {
+): Promise<void> {
   try {
-    return await locks.request(
+    await locks.request(
       persistenceLockName(configName),
       { mode: 'exclusive', ifAvailable: true },
       async (lock) => {
-        if (lock === null) {
-          return false;
+        if (lock !== null) {
+          forget();
         }
-        forget();
-        return await Promise.resolve(true);
+        await Promise.resolve();
       },
     );
   } catch (error) {
@@ -57,6 +57,5 @@ export async function forgetUnlessHeld(
       event: 'storage.hold-failed',
       error: describeUnknown(error),
     });
-    return false;
   }
 }

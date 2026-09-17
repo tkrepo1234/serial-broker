@@ -192,6 +192,18 @@ describe('CdcAcmDevice data', () => {
     expect(results.slice(1).map((result) => [...result.data])).toEqual([[0xc3], [0xbc]]);
   });
 
+  it.each([0, -1, 1.5, Number.NaN])(
+    'refuses a chunk cap of %s, under which no read could return',
+    (cap) => {
+      const { device } = attachedDevice();
+
+      expect(() => {
+        device.setMaxChunkBytes(cap);
+      }).toThrow(RangeError);
+      expect(device.status().maxChunkBytes).toBeUndefined();
+    },
+  );
+
   it('accepts writes and returns nothing in silent mode', () => {
     const { device, results } = attachedDevice();
     device.setBehaviour('silent');

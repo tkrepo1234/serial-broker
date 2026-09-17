@@ -115,8 +115,7 @@ function describeConfiguration(
   const actions = new Set<ConfigurationAction>();
   // Offered for any configuration the page can show, connected or not. Editing settings starts
   // from what is remembered, and disconnecting is how the page offers to forget an entry - which
-  // is about what the browser stores, not about this tab, and used to mean connecting first just
-  // to be allowed to drop it.
+  // is about what the browser stores, not about this tab, so it must not take connecting first.
   actions.add('disconnect');
   if (settings !== undefined) {
     actions.add('edit');

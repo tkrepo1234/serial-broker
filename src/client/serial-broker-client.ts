@@ -1,4 +1,5 @@
 import { copyBytes } from '../core/bytes.js';
+import { withDeadline } from '../core/deadline.js';
 import type { NormalizedConfiguration, ResolvedDevice } from '../core/defaults.js';
 import type { ParticipantDiagnostics } from '../core/diagnostics.js';
 import { DisposalStack } from '../core/disposable.js';
@@ -11,7 +12,7 @@ import type {
   ReleaseOptions,
   RequestAccessOptions,
   SendableData,
-  SerialBrokerEventMap,
+  SerialBrokerListener,
   SerialBrokerEventName,
   SerialBrokerStatusSnapshot,
   Unsubscribe,
@@ -62,9 +63,9 @@ export const MAX_UNHEARD_ERRORS = 16;
  * How many other protocol versions a tab reports, each once, as `PROTOCOL_VERSION_MISMATCH`.
  *
  * A real mixed deployment has one or two (ADR-0008). The versions come from other contexts of the
- * origin, where any script can post them, and each distinct one was remembered - and reported - for
- * the life of the tab. The versions already reported stay recognised; reaching the limit is logged
- * once, as `client.peer-versions-limit`.
+ * origin, where any script can post them, and each distinct one is remembered - and reported - for
+ * the life of the tab, so their number has to be bounded. The versions already reported stay
+ * recognised; reaching the limit is logged once, as `client.peer-versions-limit`.
  */
 export const MAX_REPORTED_PEER_VERSIONS = 8;
 
@@ -255,14 +256,14 @@ export class SerialBrokerClient {
   }
 
   /**
-   * The device the remembered entry of a new auto-mode configuration resolved to (ADR-0036
-   * 2026-09-15), so that a later visit calling only `setup()` reconnects without a prompt, as
+   * The device the remembered entry of a new auto-mode configuration resolved to (ADR-0036),
+   * so that a later visit calling only `setup()` reconnects without a prompt, as
    * `restore()` does, and saves the resolution back rather than a configuration waiting again.
    *
    * Read only for a new configuration: a name already set up in this tab is judged against what it
-   * runs, so `CONFIGURATION_CONFLICT` is decided as before. Taken only from an entry in auto mode
-   * that has resolved: an entry naming its device explicitly was not chosen by the user in this
-   * mode, and `any` is not a device. Not taken for a configuration set up with `remember: false`,
+   * runs, so `CONFIGURATION_CONFLICT` is decided on that alone. Taken only from an entry in auto
+   * mode that has resolved: an entry naming its device explicitly was not chosen by the user in
+   * this mode, and `any` is not a device. Not taken for a configuration set up with `remember: false`,
    * which does not use what is remembered, nor for one that passes `resolved` itself, or names its
    * device - what the call says wins.
    */
@@ -530,7 +531,7 @@ export class SerialBrokerClient {
   subscribe<TEvent extends SerialBrokerEventName>(
     name: unknown,
     event: TEvent,
-    listener: (payload: SerialBrokerEventMap[TEvent]) => void,
+    listener: SerialBrokerListener<TEvent>,
   ): Unsubscribe {
     const validName = this.#validName(name);
     const session = this.#requireSession(validName);
@@ -574,7 +575,7 @@ export class SerialBrokerClient {
   unsubscribe<TEvent extends SerialBrokerEventName>(
     name: unknown,
     event: TEvent,
-    listener: (payload: SerialBrokerEventMap[TEvent]) => void,
+    listener: SerialBrokerListener<TEvent>,
   ): void {
     this.#sessions.get(this.#validName(name))?.unsubscribe(event, listener);
   }
@@ -703,7 +704,7 @@ export class SerialBrokerClient {
   /**
    * Announces this context's protocol version, and reports a tab that announces a different one.
    *
-   * Tabs on different protocol versions share no lock, worker or bus (ADR-0008), so without this
+   * Tabs on different protocol versions share no lock, worker or bus, so without this
    * they never learn of each other - and both try to hold the device. The announcement travels on
    * the one channel whose name carries no version (ADR-0008). Every tab announces itself once and
    * answers each announcement from another version, so a tab opened later still learns of the tabs
@@ -1010,15 +1011,32 @@ export class SerialBrokerClient {
   }
 
   async #forgetDevice(configuration: NormalizedConfiguration): Promise<void> {
+    // Bounded like every other call into Web Serial: `release()` waits for this, and a browser
+    // that never answers must not keep it waiting for ever.
+    const bounded = <T>(operation: Promise<T>, step: string): Promise<T> =>
+      withDeadline(operation, this.environment.clock, {
+        timeoutMs: configuration.connection.openTimeoutMs,
+        code: SerialBrokerErrorCode.OPEN_TIMEOUT,
+        message: `Timed out while ${step}`,
+        configName: configuration.name,
+      });
     try {
-      const ports = await this.environment.serial.getPorts();
+      const ports = await bounded(this.environment.serial.getPorts(), 'listing the granted ports');
       for (const port of ports) {
-        if (matchesDevice(port, configuration)) {
-          await port.forget();
+        if (!matchesDevice(port, configuration)) {
+          continue;
         }
+        if (port.forget === undefined) {
+          // Newer than the rest of Web Serial, and absent in older Chromium.
+          this.#logger.warn('this browser cannot revoke a device permission', {
+            configName: configuration.name,
+            event: 'client.forget-unsupported',
+          });
+          continue;
+        }
+        await bounded(Promise.resolve(port.forget()), 'revoking the device permission');
       }
     } catch (error) {
-      // `forget()` is newer than the rest of Web Serial and is absent in older Chromium.
       // Failing to revoke a permission is not a reason to fail the release.
       this.#logger.warn('could not revoke the device permission', {
         configName: configuration.name,

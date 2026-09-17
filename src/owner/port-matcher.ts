@@ -49,7 +49,7 @@ export async function findGrantedPort(
     // The platform exposes no serial number, so identical devices are genuinely
     // indistinguishable here - and an `any` filter cannot distinguish anything at all.
     // Picking the first is deterministic within a session; warning is the most honest thing
-    // available. Documented as a known limitation in the README.
+    // available. Documented in docs/site/known-limits.md.
     logger.warn('several granted ports match the configuration; using the first', {
       configName: configuration.name,
       event: 'matcher.ambiguous',
@@ -90,8 +90,7 @@ export function matchesDevice(port: SerialPortLike, configuration: DeviceSelecti
  * The device a chosen port is, as auto mode resolves it (ADR-0036).
  *
  * A USB identity needs both IDs. A port that reports one of them is not a USB device a filter
- * could find again, so it counts as a port without one, as ADR-0019 decided for the debugging
- * surface.
+ * could find again, so it counts as a port without one.
  */
 export function resolveDevice(port: SerialPortLike): ResolvedDevice {
   const info = port.getInfo();

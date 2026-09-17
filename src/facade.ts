@@ -4,7 +4,7 @@ import type {
   ReleaseOptions,
   RequestAccessOptions,
   SendableData,
-  SerialBrokerEventMap,
+  SerialBrokerListener,
   SerialBrokerEventName,
   SerialBrokerGlobalOptions,
   SerialBrokerOptions,
@@ -87,8 +87,9 @@ export interface SerialBrokerApi {
    * @throws A `SerialBrokerError` with code `INVALID_ARGUMENT` when an option is invalid,
    *   `CONFIGURATION_CONFLICT` when the name is already set up with different device or line
    *   settings or a different `maxTabs`, or `WEB_SERIAL_UNAVAILABLE`, `WEB_LOCKS_UNAVAILABLE`,
-   *   `TRANSPORT_UNAVAILABLE` or `BROKER_UNAVAILABLE` when the browser cannot support it. Nothing is
-   *   registered when it rejects.
+   *   `TRANSPORT_UNAVAILABLE` or `BROKER_UNAVAILABLE` when the browser cannot support it, or
+   *   `CONFIGURATION_RELEASED` when `dispose()` is called while it waits. Nothing is registered
+   *   when it rejects.
    * @example The device the user chooses in the picker
    * ```ts
    * await SerialBroker.setup('Scale', { serial: { baudRate: 19_200 } });
@@ -141,7 +142,9 @@ export interface SerialBrokerApi {
    *   browser's device permission. Read once, when the call is made.
    * @throws A `SerialBrokerError` with code `INVALID_ARGUMENT` for an invalid name, for `options`
    *   that is not an object, or for a `forget` or `forgetDevice` that is not a boolean. Nothing is
-   *   released then.
+   *   released then. With `forget` or `forgetDevice` for a name that is not set up, also
+   *   `WEB_SERIAL_UNAVAILABLE` or `WEB_LOCKS_UNAVAILABLE`
+   *   in a browser that cannot run the library, where this call is the first to need it.
    * @returns A promise that resolves once the port has been closed and the lock released.
    *   Teardown is bounded: a device that has stopped answering cannot hold it open.
    * @example
@@ -159,8 +162,16 @@ export interface SerialBrokerApi {
    * Forgets nothing by default, as {@link SerialBrokerApi.release} does.
    *
    * @param options - Applied to each configuration in turn, `forget` and `forgetDevice` alike.
+   * @returns A promise that resolves once every port has been closed and every lock released.
    * @throws A `SerialBrokerError` with code `INVALID_ARGUMENT` when `options` is not an object or
    *   `forget` or `forgetDevice` is not a boolean. Nothing is released then.
+   * @example
+   * ```ts
+   * leaveButton.addEventListener('click', async () => {
+   *   await SerialBroker.releaseAll();
+   *   showStartPage();
+   * });
+   * ```
    */
   releaseAll(options?: ReleaseOptions): Promise<void>;
 
@@ -182,14 +193,18 @@ export interface SerialBrokerApi {
    *   transmit buffer of `serial.bufferSize` bytes - not once the device has received them, which
    *   Web Serial does not report. A device that has stopped taking data fails a write with
    *   `WRITE_TIMEOUT` only once that buffer is full (ADR-0013).
-   * @throws A `SerialBrokerError` with code `UNKNOWN_CONFIGURATION`, `INVALID_ARGUMENT` for a
-   *   string while an `encoding` other than UTF-8 is configured or for more than 16 MiB of data,
+   * @throws A `SerialBrokerError` with code `UNKNOWN_CONFIGURATION`, `INVALID_ARGUMENT` for an
+   *   invalid name, for data that is neither a string nor a `BufferSource` or whose buffer is
+   *   detached, for a string while an `encoding` other than UTF-8 is configured or for more than
+   *   16 MiB of data,
    *   `WRITE_FAILED`, `WRITE_TIMEOUT`, `WRITE_QUEUE_FULL` when the tab holding the port already
-   *   keeps as many waiting writes as it may, `CONFIGURATION_RELEASED` when the configuration is released while the write waits,
+   *   keeps as many waiting writes as it may, `CONFIGURATION_RELEASED` when the configuration is
+   *   released while the write waits,
    *   `CONFIGURATION_CONFLICT` once this tab has withdrawn because the tab holding the port runs
    *   a different `maxTabs`, or `OWNER_LOST_DURING_WRITE` when the owning tab closed mid-write
    *   and it is unknowable whether the device received the bytes. The library never retries
-   *   that last case on its own.
+   *   that last case on its own. Also `WEB_SERIAL_UNAVAILABLE` or `WEB_LOCKS_UNAVAILABLE`
+   *   in a browser that cannot run the library, where this call is the first to need it.
    * @example
    * ```ts
    * await SerialBroker.send('Printer', 'INIT');
@@ -217,8 +232,9 @@ export interface SerialBrokerApi {
    *   tab: every tab receives the same events.
    * @returns A function that removes this listener. Calling it twice is harmless.
    * @throws A `SerialBrokerError` with code `UNKNOWN_CONFIGURATION` if `name` is not set up in
-   *   this tab, or `INVALID_ARGUMENT` if `event` is not one of the four events or `listener` is
-   *   not a function.
+   *   this tab, `INVALID_ARGUMENT` if the name is invalid, `event` is not one of the four events or
+   *   `listener` is not a function, or `WEB_SERIAL_UNAVAILABLE` or `WEB_LOCKS_UNAVAILABLE`
+   *   in a browser that cannot run the library, where this call is the first to need it.
    * @example
    * ```ts
    * const stop = SerialBroker.subscribe('Scale', 'onReceive', (event) => {
@@ -231,7 +247,7 @@ export interface SerialBrokerApi {
   subscribe<TEvent extends SerialBrokerEventName>(
     name: string,
     event: TEvent,
-    listener: (payload: SerialBrokerEventMap[TEvent]) => void,
+    listener: SerialBrokerListener<TEvent>,
   ): Unsubscribe;
 
   /**
@@ -244,11 +260,19 @@ export interface SerialBrokerApi {
    * @param name - The configuration name.
    * @param event - The event it was registered for.
    * @param listener - The exact function reference that was registered.
+   * @throws A `SerialBrokerError` with code `INVALID_ARGUMENT` if the name is invalid, `event` is
+   *   not one of the four events or `listener` is not a function.
+   * @example
+   * ```ts
+   * SerialBroker.subscribe('Scale', 'onReceive', this.onWeight);
+   * // later
+   * SerialBroker.unsubscribe('Scale', 'onReceive', this.onWeight);
+   * ```
    */
   unsubscribe<TEvent extends SerialBrokerEventName>(
     name: string,
     event: TEvent,
-    listener: (payload: SerialBrokerEventMap[TEvent]) => void,
+    listener: SerialBrokerListener<TEvent>,
   ): void;
 
   /**
@@ -262,7 +286,9 @@ export interface SerialBrokerApi {
    * @param name - The configuration name.
    * @returns A frozen snapshot. Treat the `status` union as extensible: handle an unrecognised
    *   value gracefully rather than throwing.
-   * @throws A `SerialBrokerError` with code `UNKNOWN_CONFIGURATION`.
+   * @throws A `SerialBrokerError` with code `UNKNOWN_CONFIGURATION`, `INVALID_ARGUMENT` for an
+   *   invalid name, or `WEB_SERIAL_UNAVAILABLE` or `WEB_LOCKS_UNAVAILABLE`
+   *   in a browser that cannot run the library, where this call is the first to need it.
    * @example
    * ```ts
    * const { status, lastErrorCode } = SerialBroker.getStatus('Scale');
@@ -280,11 +306,29 @@ export interface SerialBrokerApi {
    * `false` again once the name is released in this tab, and for a name only another tab has set
    * up: this asks about this tab, not about the origin.
    *
+   * @param name - The configuration name.
+   * @returns `true` while the name is set up in this tab.
    * @throws A `SerialBrokerError` with code `INVALID_ARGUMENT` if the name is not a valid one.
+   * @example
+   * ```ts
+   * if (!SerialBroker.exists('Scale')) {
+   *   await SerialBroker.setup('Scale', { serial: { baudRate: 19_200 } });
+   * }
+   * ```
    */
   exists(name: string): boolean;
 
-  /** Every configuration name set up in this tab, in registration order. */
+  /**
+   * Lists every configuration name set up in this tab, in registration order.
+   *
+   * @returns The names as they are now; the list does not follow later changes.
+   * @example
+   * ```ts
+   * for (const name of SerialBroker.names()) {
+   *   console.info(name, SerialBroker.getStatus(name).status);
+   * }
+   * ```
+   */
   names(): readonly string[];
 
   /**
@@ -320,7 +364,9 @@ export interface SerialBrokerApi {
    *   device, `PERMISSION_REQUIRED` when this tab is `queued` under `maxTabs` or withdrew from the
    *   configuration, or `INVALID_ARGUMENT` for options that are not an object, a `chooseAgain` that
    *   is not a boolean, or `chooseAgain` for a configuration that names its device - set that one up
-   *   with the other device instead.
+   *   with the other device instead. `CONFIGURATION_RELEASED` when the configuration is released
+   *   while the picker is open. Also `WEB_SERIAL_UNAVAILABLE` or `WEB_LOCKS_UNAVAILABLE`
+   *   in a browser that cannot run the library, where this call is the first to need it.
    * @example
    * ```ts
    * connectButton.addEventListener('click', async () => {
@@ -350,6 +396,9 @@ export interface SerialBrokerApi {
    * ones a user created, or a device chosen through the picker in auto mode.
    *
    * @returns The names that were restored.
+   * @throws A `SerialBrokerError` with code `WEB_SERIAL_UNAVAILABLE`, `WEB_LOCKS_UNAVAILABLE`,
+   *   `TRANSPORT_UNAVAILABLE` or `BROKER_UNAVAILABLE` when the browser cannot support the library,
+   *   or `CONFIGURATION_RELEASED` when `dispose()` is called while it runs.
    * @example
    * ```ts
    * const restored = await SerialBroker.restore();
@@ -364,12 +413,11 @@ export interface SerialBrokerApi {
    * Must be called **before any other method**: the settings are read when the internal client
    * is built, by the first call that needs one. Called afterwards, it logs a warning
    * (`facade.late-configure`), and its settings apply only after {@link SerialBrokerApi.dispose}.
-   * `exists`, `names`, `unsubscribe`, `release`, `releaseAll` and `isSupported` build no client
-   * while nothing is
-   * set up.
+   * `exists`, `names`, `unsubscribe`, `releaseAll` and `isSupported` build no client while nothing
+   * is set up, and neither does `release` unless it is asked to forget something.
    *
-   * @param options - Merged into the current settings; omitted fields are left alone. Each field is
-   *   read once, now.
+   * @param options - Merged into the current settings; omitted fields are left alone, and a field
+   *   that is `undefined` goes back to its default. Each field is read once, now.
    * @throws A `SerialBrokerError` with code `INVALID_ARGUMENT` when `options` is not an object, or
    *   a field has the wrong type: `workerUrl` not a non-empty string or `URL`, `transport` not one of
    *   the three kinds, `logger` without a `log` method, `logPayloads` not a boolean. Nothing is
@@ -390,7 +438,13 @@ export interface SerialBrokerApi {
    * Checks for Web Serial, Web Locks and a message bus, a `SharedWorker` or a `BroadcastChannel`.
    * Browsers offer Web Serial and Web Locks only in a secure context, so that is checked as well.
    * Use it to decide whether to offer a device-connected feature, rather than discovering the
-   * problem at `setup()`.
+   * problem at `setup()`. Never throws.
+   *
+   * @returns `true` if `setup()` can work here.
+   * @example
+   * ```ts
+   * connectButton.hidden = !SerialBroker.isSupported();
+   * ```
    */
   isSupported(): boolean;
 
@@ -400,6 +454,12 @@ export interface SerialBrokerApi {
    * Rarely needed: a closing tab releases everything anyway, and ownership moves to another tab
    * automatically. Useful in single-page applications that tear down a feature area, and in
    * tests. A later `setup()` builds a fresh client.
+   *
+   * @returns A promise that resolves once every port has been closed and every lock released.
+   * @example
+   * ```ts
+   * afterEach(() => SerialBroker.dispose());
+   * ```
    */
   dispose(): Promise<void>;
 }

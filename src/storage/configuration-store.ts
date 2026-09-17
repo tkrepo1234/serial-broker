@@ -86,7 +86,7 @@ export class ConfigurationStore {
    * index that cannot be read at all - which leaves nothing behind that would be reported again on
    * every restore.
    *
-   * This is the only call that reports an unreadable index to the application: it is the call an
+   * This is the only call that reports a corrupt index to the application: it is the call an
    * application observes, and reporting from a save would say the same thing on every write.
    */
   load(): NormalizedConfiguration[] {

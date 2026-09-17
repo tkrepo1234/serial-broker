@@ -6,10 +6,14 @@ import type { ScopedLogger } from '../core/logger.js';
 /**
  * The platform surface this library depends on, in one place.
  *
- * Every browser API the library touches is reached through this object. No module outside
- * `src/environment/` references `navigator`, `window`, `self`, `Date`, `Math.random` or
- * `setTimeout`, and a lint rule enforces it. The one exception is the worker script, which runs in a
- * context of its own that nothing can hand an environment to (`src/worker/serial-broker.worker.ts`).
+ * Everything the library asks of the browser that differs between contexts, or that a test has to
+ * control - the serial ports, the locks, the message bus, storage, time, randomness - is reached
+ * through this object. No module outside `src/environment/` references `navigator`, `window`,
+ * `self`, `Date`, `Math.random` or a timer function; for `navigator`, `window`, `localStorage` and
+ * the timer functions a lint rule enforces it. Pure helpers of the platform, such as `TextDecoder`
+ * and `AbortController`, are used where they are needed. The one exception is the worker script,
+ * which runs in a context of its own that nothing can hand an environment to
+ * (`src/worker/serial-broker.worker.ts`).
  *
  * Two things follow, and both are the point:
  *
@@ -62,7 +66,7 @@ export interface SerialBrokerEnvironment {
  * Structural, like every Web Serial type below it: the platform's own `Serial`, `SerialPort` and
  * the rest are *ambient* types, declared globally by `@types/w3c-web-serial`. A declaration this
  * package publishes that names one of them would not type-check in an application that has not
- * installed those types - which the package cannot make it do. See the amendment to ADR-0014.
+ * installed those types - which the package cannot make it do. See ADR-0014.
  * `navigator.serial` satisfies these interfaces as it stands; nothing is cast on the way in.
  */
 export interface SerialLike {
@@ -93,7 +97,7 @@ export interface SerialPortLike {
   /** Closes the port. Refused while a stream of it is still locked. */
   close(): Promise<void>;
   /** Revokes this origin's permission for the device. Absent in older Chromium (ADR-0036). */
-  forget(): Promise<void>;
+  forget?(): Promise<void>;
   /** What the browser knows about the device behind the port. Empty for a non-USB port. */
   getInfo(): SerialPortInfoLike;
   /** Bytes from the device, once the port is open. */

@@ -28,7 +28,9 @@ rmSync(report, { force: true });
 mkdirSync(dirname(report), { recursive: true });
 
 const nodeOptions = [process.env['NODE_OPTIONS'], '--expose-gc'].filter(Boolean).join(' ');
-// Plain arguments pick scenario files; anything starting with `--` goes to Vitest as it is.
+// Plain arguments pick scenario files; anything starting with `--` goes to Vitest as it is. An
+// option with a value is therefore written `--option=value`: a value on its own would be read as
+// a scenario file.
 const filters = process.argv.slice(2).filter((argument) => !argument.startsWith('--'));
 const options = process.argv.slice(2).filter((argument) => argument.startsWith('--'));
 const startedAt = new Date();
@@ -56,12 +58,21 @@ const run = spawnSync(
   },
 );
 
-const rows = existsSync(report)
-  ? readFileSync(report, 'utf8')
-      .split('\n')
-      .filter((line) => line.trim() !== '')
-      .map((line) => JSON.parse(line))
-  : [];
+const rows = [];
+let isReportComplete = true;
+for (const line of existsSync(report) ? readFileSync(report, 'utf8').split('\n') : []) {
+  if (line.trim() === '') {
+    continue;
+  }
+  try {
+    rows.push(JSON.parse(line));
+  } catch {
+    // A scenario killed while writing leaves half a row. The rest of the run is still worth its
+    // record, and the exit code says that the record is not whole.
+    isReportComplete = false;
+    process.stderr.write(`Skipped a row of ${relative(root, report)} that is not JSON: ${line}\n`);
+  }
+}
 
 if (rows.length > 0) {
   const markdown = render(rows, startedAt, run.status === 0);
@@ -71,7 +82,7 @@ if (rows.length > 0) {
   process.stdout.write('\nNo scenario recorded a result.\n');
 }
 
-process.exit(run.status ?? 1);
+process.exit(isReportComplete ? (run.status ?? 1) : run.status || 1);
 
 /** The Markdown record of one run: where it ran, what it ran, and what it measured. */
 function render(rows, startedAt, passed) {

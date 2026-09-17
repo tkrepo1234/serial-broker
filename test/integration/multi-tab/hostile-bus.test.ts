@@ -345,7 +345,7 @@ describe('a script of the origin that floods the bus with well-formed messages',
     const mallory = eavesdrop(harness);
 
     for (let round = 0; round < 500; round += 1) {
-      mallory.post({ ...FORGED, type: 'status-request', configName: 'Reader' });
+      mallory.post({ ...FORGED, type: 'status-request', configName: 'Reader', retry: false });
     }
     await harness.settle();
 
@@ -366,7 +366,7 @@ describe('a script of the origin that floods the bus with well-formed messages',
     const mallory = eavesdrop(harness);
 
     for (let round = 0; round < 2 * STATUS_ANSWER_RATE.burst; round += 1) {
-      mallory.post({ ...FORGED, type: 'status-request', configName: 'Reader' });
+      mallory.post({ ...FORGED, type: 'status-request', configName: 'Reader', retry: false });
     }
     await harness.settle();
 

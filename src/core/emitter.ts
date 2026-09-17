@@ -1,6 +1,6 @@
 import { SerialBrokerErrorCode } from './error-codes.js';
 import { describeUnknown, SerialBrokerError } from './errors.js';
-import type { SerialBrokerEventMap, SerialBrokerEventName } from './types.js';
+import type { SerialBrokerEventMap, SerialBrokerEventName, SerialBrokerListener } from './types.js';
 
 /** Receives errors thrown by application listeners, so they are reported and not swallowed. */
 export type ListenerErrorReporter = (error: SerialBrokerError) => void;
@@ -17,6 +17,10 @@ export type ListenerErrorReporter = (error: SerialBrokerError) => void;
  * - **Fault isolating.** A listener that throws is caught, reported once as `LISTENER_THREW` in
  *   its own tab,
  *   and the remaining listeners still receive the event.
+ * - **Bytes are each listener's own.** A payload that carries `data` is handed to every listener
+ *   with a copy of those bytes. The types promise a copy that is safe to keep or to change, and
+ *   the same array also goes to the other tabs over the bus: a listener that wrote into it would
+ *   otherwise change what the next listener, and every other tab, receives.
  */
 export class EventEmitter {
   /** Each event's listeners, with the registration each one currently belongs to. */
@@ -35,7 +39,7 @@ export class EventEmitter {
    */
   add<TEvent extends SerialBrokerEventName>(
     event: TEvent,
-    listener: (payload: SerialBrokerEventMap[TEvent]) => void,
+    listener: SerialBrokerListener<TEvent>,
   ): () => void {
     let listeners = this.#listeners.get(event);
     if (listeners === undefined) {
@@ -55,7 +59,7 @@ export class EventEmitter {
   /** Removes `listener`. Removing one that was never added is a no-op. */
   remove<TEvent extends SerialBrokerEventName>(
     event: TEvent,
-    listener: (payload: SerialBrokerEventMap[TEvent]) => void,
+    listener: SerialBrokerListener<TEvent>,
   ): void {
     this.#listeners.get(event)?.delete(listener);
   }
@@ -102,7 +106,7 @@ export class EventEmitter {
         continue;
       }
       try {
-        (listener as (payload: SerialBrokerEventMap[TEvent]) => void)(payload);
+        (listener as SerialBrokerListener<TEvent>)(withOwnBytes(payload));
       } catch (error) {
         this.#reportSafely(event, error);
       }
@@ -115,14 +119,14 @@ export class EventEmitter {
    */
   emitTo<TEvent extends SerialBrokerEventName>(
     event: TEvent,
-    listener: (payload: SerialBrokerEventMap[TEvent]) => void,
+    listener: SerialBrokerListener<TEvent>,
     payload: SerialBrokerEventMap[TEvent],
   ): void {
     if (this.#listeners.get(event)?.has(listener) !== true) {
       return;
     }
     try {
-      listener(payload);
+      listener(withOwnBytes(payload));
     } catch (error) {
       this.#reportSafely(event, error);
     }
@@ -153,4 +157,10 @@ export class EventEmitter {
       // no channel left to report on, and losing the event is better than losing the tab.
     }
   }
+}
+
+/** The payload with a copy of its `data`, when it carries bytes; the payload itself otherwise. */
+function withOwnBytes<TPayload extends object>(payload: TPayload): TPayload {
+  const data = (payload as { readonly data?: unknown }).data;
+  return data instanceof Uint8Array ? { ...payload, data: data.slice() } : payload;
 }

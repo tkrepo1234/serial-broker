@@ -20,7 +20,6 @@ import type {
   DeviceFilter,
   ResolvedDeviceFilter,
   SerialBrokerGlobalOptions,
-  SerialBrokerOptions,
   TransportKind,
 } from './types.js';
 
@@ -409,8 +408,7 @@ const TRANSPORT_KINDS: readonly TransportKind[] = ['auto', 'sharedworker', 'broa
  * Validates the options passed to `configure()`, and copies them.
  *
  * Each option is read once, and only the documented ones are kept, so the settings a client is
- * built with later are the ones checked now. `undefined` sets an option back to its default, as
- * merging it always has.
+ * built with later are the ones checked now. `undefined` sets an option back to its default.
  *
  * `logPayloads` in particular must be a boolean: a truthy string would otherwise switch payload
  * bytes into the log.
@@ -481,13 +479,13 @@ function readLog(logger: object): unknown {
  */
 export function normalizeConfiguration(name: unknown, options: unknown): NormalizedConfiguration {
   const validName = validateName(name);
-  const raw = requireObject(options, 'options') as unknown as SerialBrokerOptions;
+  const raw = requireObject(options, 'options');
 
-  const device = raw.device;
-  const serial = requireObject(raw.serial, 'options.serial');
-  const connection = optionalObject(raw.connection, 'options.connection');
-  const encoding = optionalObject(raw.encoding, 'options.encoding');
-  const receive = optionalObject(raw.receive, 'options.receive');
+  const device = raw['device'];
+  const serial = requireObject(raw['serial'], 'options.serial');
+  const connection = optionalObject(raw['connection'], 'options.connection');
+  const encoding = optionalObject(raw['encoding'], 'options.encoding');
+  const receive = optionalObject(raw['receive'], 'options.receive');
 
   // Each option is read with its default and its full argument name in one place, so the name a
   // rejection reports cannot drift from the field that was read.
@@ -517,8 +515,7 @@ export function normalizeConfiguration(name: unknown, options: unknown): Normali
       maxDelayMs: requireInteger(...connectionOption('maxDelayMs'), 0, MAX_DELAY_MS),
       jitter: requireFiniteNumber(...connectionOption('jitter'), 0, 1),
       // From one, not from zero: an attempt is always made. `maxAttempts: 0` reads as "do not
-      // reconnect" and was rejected as a way to say that (ADR-0010) - `autoReconnect` says it -
-      // yet it still made one attempt and then reported giving up "after 1 attempts".
+      // reconnect", which `autoReconnect: false` says (ADR-0010), and would still make one attempt.
       maxAttempts: requireIntegerOrInfinity(...connectionOption('maxAttempts'), 1, MAX_ATTEMPTS),
       stableAfterMs: requireInteger(...connectionOption('stableAfterMs'), 0, MAX_DELAY_MS),
       openTimeoutMs: requireInteger(...connectionOption('openTimeoutMs'), 1, MAX_TIMEOUT_MS),
@@ -554,9 +551,9 @@ export function normalizeConfiguration(name: unknown, options: unknown): Normali
         'options.encoding.decodeText',
       ),
     }),
-    remember: requireBoolean(orDefault(raw.remember, DEFAULT_REMEMBER), 'options.remember'),
+    remember: requireBoolean(orDefault(raw['remember'], DEFAULT_REMEMBER), 'options.remember'),
     maxTabs: requireIntegerOrInfinity(
-      orDefault(raw.maxTabs, DEFAULT_MAX_TABS),
+      orDefault(raw['maxTabs'], DEFAULT_MAX_TABS),
       'options.maxTabs',
       1,
       MAX_TAB_LIMIT,

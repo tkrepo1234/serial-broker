@@ -214,9 +214,13 @@ describe('SharedWorkerTransport, when its worker ends', () => {
       configName: 'Reader',
       retry: false,
     } as ProtocolMessage);
-    worker(workers, 0).deliver(envelope(PEER, SELF, { type: 'status-request', configName: 'A' }));
+    worker(workers, 0).deliver(
+      envelope(PEER, SELF, { type: 'status-request', configName: 'A', retry: false }),
+    );
     worker(workers, 0).failToClone();
-    worker(workers, 1).deliver(envelope(PEER, SELF, { type: 'status-request', configName: 'B' }));
+    worker(workers, 1).deliver(
+      envelope(PEER, SELF, { type: 'status-request', configName: 'B', retry: false }),
+    );
 
     expect(worker(workers, 1).posted.at(-1)).toMatchObject({ type: 'status-request' });
     expect(messages).toEqual([expect.objectContaining({ configName: 'B' })]);

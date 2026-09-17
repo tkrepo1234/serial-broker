@@ -16,7 +16,7 @@ actually needs. Why this approach and not a virtual COM port driver is in
 [ADR-0035](../docs/adr/0035-browser-tests-with-playwright.md).
 
 > **Status:** covered by its own tests (`emulator/test/`), which drive it with an independent
-> USB/IP client, and **run against usbip-win2 0.9.8.0 on Windows 11 since 2026-09-15**:
+> USB/IP client, and **run against usbip-win2 0.9.8.0 on Windows 11**:
 > `test/browser/hardware/emulator.spec.ts` drives it from a real browser
 > (`SERIAL_BROKER_HARDWARE=emulator`). The run is recorded in
 > [the manual test plan](../docs/manual-test-plan.md).

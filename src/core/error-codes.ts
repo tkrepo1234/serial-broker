@@ -6,7 +6,7 @@
  * See ADR-0012 and docs/guidelines/error-handling.md.
  *
  * Declared as a constant object with a string-union type of the same name, not as a TypeScript
- * `enum`: `code === SerialBrokerErrorCode.WriteTimeout` and `code === 'WRITE_TIMEOUT'` are both
+ * `enum`: `code === SerialBrokerErrorCode.WRITE_TIMEOUT` and `code === 'WRITE_TIMEOUT'` are both
  * valid, and a `switch` over the union is exhaustive either way.
  *
  * @enum
@@ -92,8 +92,7 @@ export const SerialBrokerErrorCode = {
 
   // --- Coordination ----------------------------------------------------------------------
   /**
-   * Another tab, or the worker script, runs an incompatible wire protocol version. See ADR-0008
-   * and ADR-0008.
+   * Another tab, or the worker script, runs an incompatible wire protocol version. See ADR-0008.
    */
   PROTOCOL_VERSION_MISMATCH: 'PROTOCOL_VERSION_MISMATCH',
 

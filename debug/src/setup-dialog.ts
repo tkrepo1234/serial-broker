@@ -35,9 +35,9 @@ export interface SetupRequest {
 /** What "More options" promises where every field it holds may be left blank. */
 const BLANK_IS_DEFAULT = 'More options — leave blank for the default';
 
-/** What editing a running configuration does, said above the form. */
+/** What saving edited settings does, said above the form. */
 const EDIT_NOTE =
-  'Applies to this page only: it disconnects and connects again with these settings. Other tabs keep theirs.';
+  'Applies to this page only: Save connects it with these settings, disconnecting first if it is connected. Other tabs keep theirs.';
 
 /** What connecting to a chosen device does, said above the form. */
 const CHOOSE_NOTE =
@@ -51,7 +51,7 @@ const DEVICE_CHOICES: readonly [value: string, label: string][] = [
 ];
 
 /**
- * The dialog that creates a configuration, or edits the settings of one this page is connected to.
+ * The dialog that creates a configuration, or edits the settings of one the page shows.
  *
  * The essentials - name, device, baud rate - are all that is visible; every other option waits
  * under "More options". A rejected value keeps the dialog open with the library's reason and the
@@ -213,12 +213,15 @@ export class SetupDialog {
     this.#field('baudRate').focus();
   }
 
-  /** Opens the dialog on the settings a configuration runs with in this page. */
+  /**
+   * Opens the dialog on the settings of a configuration: those it runs with, or those remembered
+   * for one this page is not connected to, which saving then connects.
+   */
   edit(name: string, settings: EffectiveSettings): void {
     this.#replaces = name;
     this.#requestsAccess = false;
     this.#title.textContent = `Edit ${name}`;
-    this.#submitButton.textContent = 'Save and reconnect';
+    this.#submitButton.textContent = 'Save and connect';
     // Every field shows the value in use, so "blank means default" would not be true here.
     this.#moreSummary.textContent = 'More options';
     this.#editNote.textContent = EDIT_NOTE;

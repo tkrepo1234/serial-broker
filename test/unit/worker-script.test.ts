@@ -81,8 +81,10 @@ describe('serial-broker.worker', () => {
     // earlier release, or a cached one (ADR-0008).
     const otherVersion = { v: PROTOCOL_VERSION + 1, from: 'alice', to: 'all' };
     alice.deliver({ ...otherVersion, type: 'hello' });
-    alice.deliver({ ...otherVersion, type: 'status-request', configName: 'Reader' });
-    bob.deliver(envelope('bob', 'all', { type: 'status-request', configName: 'Reader' }));
+    alice.deliver({ ...otherVersion, type: 'status-request', configName: 'Reader', retry: false });
+    bob.deliver(
+      envelope('bob', 'all', { type: 'status-request', configName: 'Reader', retry: false }),
+    );
 
     // The welcome carries this worker's version, which is how the tab learns that the two differ.
     // Everything else the tab says is still dropped, so it never takes part.
@@ -171,7 +173,9 @@ describe('serial-broker.worker', () => {
     // build with a different protocol version.
     alice.deliver({ nonsense: true });
     alice.deliver({ v: PROTOCOL_VERSION + 99, from: 'alice', to: 'all', type: 'status-request' });
-    alice.deliver(envelope('alice', 'all', { type: 'status-request', configName: 'Reader' }));
+    alice.deliver(
+      envelope('alice', 'all', { type: 'status-request', configName: 'Reader', retry: false }),
+    );
 
     expect(bob.posted).toHaveLength(1);
   });
@@ -189,7 +193,9 @@ describe('serial-broker.worker', () => {
     });
     const survivor = join('survivor');
 
-    alice.deliver(envelope('alice', 'all', { type: 'status-request', configName: 'Reader' }));
+    alice.deliver(
+      envelope('alice', 'all', { type: 'status-request', configName: 'Reader', retry: false }),
+    );
 
     // One dead port must not cost every other tab its message.
     expect(survivor.posted).toHaveLength(1);

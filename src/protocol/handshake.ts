@@ -13,7 +13,7 @@ import { PROTOCOL_VERSION } from './version.js';
  * only slow to start - so it would stay cut off from every other tab, with nothing reported.
  *
  * This exchange is therefore frozen, like the version announcement (ADR-0008). Every later version
- * has to keep exactly this (ADR-0008):
+ * has to keep exactly this:
  *
  * 1. A tab's first message on the port is an object with `type: 'hello'` and the tab's identity, a
  *    non-empty string, in `from`.
@@ -27,7 +27,7 @@ import { PROTOCOL_VERSION } from './version.js';
 /**
  * How long a tab waits for the worker's `welcome` before it gives up on that worker.
  *
- * The one timer the liveness of the bus still needs (ADR-0041): a worker that has ended frees its
+ * The one timer the liveness of the bus needs (ADR-0041): a worker that has ended frees its
  * lifetime lock, but a worker whose script fetch hangs, or one that cannot take its lock, never
  * holds one to free. Only whether the welcome has arrived is checked, not how late the timer ran,
  * so a hidden tab whose timers the browser holds back is not misjudged: its welcome arrived long

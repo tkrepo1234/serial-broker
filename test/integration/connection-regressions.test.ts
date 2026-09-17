@@ -585,3 +585,65 @@ describe('leaving the election', () => {
     expect(acquired).toEqual(['tab1']);
   });
 });
+
+describe('a port that throws where the platform would reject', () => {
+  it('counts a throwing open() as a failed attempt, and connects with the next one', async () => {
+    const harness = new BrowserHarness();
+    const device = harness.serial.addDevice(READER.vendorId, READER.productId);
+    harness.serial.grant(device);
+    const tab = harness.openTab();
+    const [port] = await harness.serial.forContext(tab.id).getPorts();
+    if (port === undefined) {
+      throw new Error('the granted port is listed');
+    }
+    const open = port.open.bind(port);
+    let throwsLeft = 1;
+    Object.assign(port, {
+      open: (options: SerialOptionsLike) => {
+        if (throwsLeft > 0) {
+          throwsLeft -= 1;
+          throw new TypeError('open() threw');
+        }
+        return open(options);
+      },
+    });
+
+    // Nobody awaits an attempt, so one that rejected would be an unhandled rejection - which fails
+    // this test - and would leave the status `connecting` for ever.
+    await tab.setup('Reader', READER_OPTIONS);
+    await harness.settle();
+
+    expect(tab.errorCodes('Reader')).toEqual([SerialBrokerErrorCode.OPEN_FAILED]);
+    expect(tab.client.getStatus('Reader').status).toBe(SerialBrokerStatus.Reconnecting);
+
+    await harness.clock.advance(1000);
+    await harness.settle();
+
+    expect(tab.client.getStatus('Reader').status).toBe(SerialBrokerStatus.Open);
+  });
+
+  it('counts streams that cannot be taken as a failed attempt, and closes the port', async () => {
+    const harness = new BrowserHarness();
+    const device = harness.serial.addDevice(READER.vendorId, READER.productId);
+    harness.serial.grant(device);
+    const tab = harness.openTab();
+    const [port] = await harness.serial.forContext(tab.id).getPorts();
+    if (port === undefined) {
+      throw new Error('the granted port is listed');
+    }
+    Object.defineProperty(port, 'readable', {
+      get: () => ({
+        getReader: () => {
+          throw new TypeError('getReader() threw');
+        },
+      }),
+    });
+
+    await tab.setup('Reader', { ...READER_OPTIONS, connection: { autoReconnect: false } });
+    await harness.settle();
+
+    expect(tab.errorCodes('Reader')).toEqual([SerialBrokerErrorCode.OPEN_FAILED]);
+    expect(tab.client.getStatus('Reader').status).toBe(SerialBrokerStatus.Failed);
+    expect(device.isOpen).toBe(false);
+  });
+});

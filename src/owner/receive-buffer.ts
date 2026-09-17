@@ -1,8 +1,9 @@
 import type { Clock, TimerHandle } from '../core/clock.js';
 
 /**
- * The most bytes one delivery carries. A device that never pauses still reaches the tabs in
- * pieces of a size every transport carries at once.
+ * Collected bytes are delivered as soon as there are this many, so a delivery exceeds it by at
+ * most one read. A device that never pauses still reaches the tabs in pieces of a size every
+ * transport carries at once.
  */
 export const MAX_RECEIVE_DELIVERY_BYTES = 64 * 1024;
 

@@ -28,6 +28,7 @@ import type { WebSerialStandInControl } from '../../test/browser/stand-in/web-se
 import {
   ExampleTab,
   installLoopback,
+  urlOfExample,
   type ExampleManifest,
   type ExampleUi,
 } from '../smoke-support.js';
@@ -41,8 +42,7 @@ const manifest = JSON.parse(
 const ID = '#container-terminal---app--';
 
 const UI: ExampleUi = {
-  url: `http://localhost:${String(manifest.port)}${manifest.readyPath}`,
-  statusIn: 'text',
+  url: urlOfExample(manifest),
   // The text inside the status badge: the badge itself also carries its state for screen readers.
   status: `${ID}status-text`,
   connect: `${ID}connect`,
@@ -57,7 +57,7 @@ const UI: ExampleUi = {
 
 /** Opens the terminal, which connects to nothing until it is told to. */
 async function open(context: BrowserContext, ui: ExampleUi = UI): Promise<ExampleTab> {
-  await installLoopback(context, false);
+  await installLoopback(context);
   const tab = await ExampleTab.open(context, ui);
   await tab.expectStatus('disconnected');
   await expect(tab.locator(ui.connect)).toHaveText('Connect');
@@ -287,6 +287,41 @@ test('keeps the log the size it is, however much arrives and however long a line
     await tab.page.evaluate(() => document.documentElement.scrollHeight <= window.innerHeight),
   ).toBe(true);
   await expect(tab.locator(UI.sendInput)).toBeInViewport();
+});
+
+test('leaves the log where the reader put it while auto-scroll is off', async ({ context }) => {
+  const tab = await open(context);
+  await connect(tab);
+  const log = tab.locator('#received');
+  const send = async (count: number): Promise<void> => {
+    for (let line = 0; line < count; line += 1) {
+      await tab.sendLine(`line ${String(line)} ${'ABCDEFGHIJ '.repeat(12)}`);
+    }
+  };
+  const fromTheEnd = (): Promise<number> =>
+    log.evaluate((element) => element.scrollHeight - element.scrollTop - element.clientHeight);
+
+  await send(20);
+  expect(await fromTheEnd()).toBeLessThan(4);
+
+  // Off means off, at the end of the log as much as in the middle of it: the reader is reading.
+  await tab.locator(`${ID}display`).click();
+  await tab.locator(`${ID}optAutoscroll`).click();
+  await tab.page.keyboard.press('Escape');
+  const at = await log.evaluate((element) => element.scrollTop);
+  await send(5);
+  expect(await log.evaluate((element) => element.scrollTop)).toBe(at);
+  expect(await fromTheEnd()).toBeGreaterThan(20);
+
+  // On again, the log follows from wherever it was left.
+  await log.evaluate((element) => {
+    element.scrollTop = 0;
+  });
+  await tab.locator(`${ID}display`).click();
+  await tab.locator(`${ID}optAutoscroll`).click();
+  await tab.page.keyboard.press('Escape');
+  await send(1);
+  expect(await fromTheEnd()).toBeLessThan(4);
 });
 
 test('shares the port between two tabs, and a Disconnect in one disconnects the other', async ({

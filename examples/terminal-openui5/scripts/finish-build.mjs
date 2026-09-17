@@ -42,6 +42,7 @@ const embedded = [
 ];
 
 // An application build writes no version file, and the framework asks for one all the same.
+/** @type {Record<string, string>} */
 const preload = {
   'sap-ui-version.json': JSON.stringify({
     name: 'serial-broker.terminal',
@@ -94,6 +95,8 @@ const KEPT_MODULES = new Set([
  * Whether a file under `resources/` is asked for by the built page: the bundle, the modules above,
  * and of the two themes their style sheets and fonts. Everything else - some 2 600 files and 39 MB
  * of single modules, debug sources, theme sources and other languages - is never loaded.
+ *
+ * @param {string} relative
  */
 function isNeeded(relative) {
   const name = relative.split(path.sep).join('/');
@@ -106,6 +109,10 @@ function isNeeded(relative) {
   return name.endsWith('/library.css') || name.endsWith('.woff2');
 }
 
+/**
+ * @param {string} directory
+ * @returns {Promise<number>}
+ */
 async function prune(directory) {
   let kept = 0;
   for (const entry of await readdir(directory, { withFileTypes: true })) {

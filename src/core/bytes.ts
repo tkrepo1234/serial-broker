@@ -13,7 +13,7 @@ const EXPECTED_DATA = 'a string, an ArrayBuffer or an ArrayBufferView';
  * @throws A `SerialBrokerError` with code `INVALID_ARGUMENT` if `source` is not a
  *   `BufferSource`, or its buffer has been detached.
  */
-export function copyBytes(source: BufferSource, argumentName = 'data'): Uint8Array {
+export function copyBytes(source: BufferSource): Uint8Array {
   let bytes: Uint8Array | undefined;
   try {
     // A `DataView` or a `Uint16Array` contributes exactly the bytes it spans, not its whole
@@ -26,7 +26,7 @@ export function copyBytes(source: BufferSource, argumentName = 'data'): Uint8Arr
     }
   } catch (error) {
     // A view of a buffer that was transferred elsewhere cannot even be looked at.
-    throw invalidArgument(argumentName, `${EXPECTED_DATA} whose buffer is not detached`, source, {
+    throw invalidArgument('data', `${EXPECTED_DATA} whose buffer is not detached`, source, {
       cause: error,
       context: { detached: true },
     });
@@ -39,7 +39,7 @@ export function copyBytes(source: BufferSource, argumentName = 'data'): Uint8Arr
     return bytes.slice();
   }
 
-  throw invalidArgument(argumentName, EXPECTED_DATA, source);
+  throw invalidArgument('data', EXPECTED_DATA, source);
 }
 
 function isBuffer(value: unknown): value is ArrayBufferLike {
@@ -47,11 +47,14 @@ function isBuffer(value: unknown): value is ArrayBufferLike {
   return tag === '[object ArrayBuffer]' || tag === '[object SharedArrayBuffer]';
 }
 
+/** How many bytes of a payload a log record shows. */
+const MAX_HEX_BYTES = 64;
+
 /** Formats bytes as space-separated uppercase hex, for `debug` log records. */
-export function toHex(data: Uint8Array, maxBytes = 64): string {
-  const shown = data.subarray(0, maxBytes);
+export function toHex(data: Uint8Array): string {
+  const shown = data.subarray(0, MAX_HEX_BYTES);
   const hex = Array.from(shown, (byte) => byte.toString(16).padStart(2, '0').toUpperCase()).join(
     ' ',
   );
-  return data.byteLength > maxBytes ? `${hex} ... (${String(data.byteLength)} bytes)` : hex;
+  return data.byteLength > MAX_HEX_BYTES ? `${hex} ... (${String(data.byteLength)} bytes)` : hex;
 }

@@ -99,6 +99,8 @@ export class FallbackTransport implements Transport {
       return;
     }
     if (this.#isSettled) {
+      // The worker transport reports a failed start once, and never after it was ready. One that
+      // did would find nothing left to move: the failure is the transport's, like any other.
       this.#request.onTransportError(event);
       return;
     }

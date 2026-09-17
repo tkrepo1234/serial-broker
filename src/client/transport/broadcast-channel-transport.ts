@@ -70,7 +70,7 @@ export class BroadcastChannelTransport implements Transport {
     this.#disposal.add(() => {
       this.#channel.close();
     });
-    // No presence messages: with no broker, nobody keeps track of who is on the channel.
+    // No `hello`: with no broker, nobody keeps track of who is on the channel.
   }
 
   /** {@inheritDoc Transport.send} */

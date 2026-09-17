@@ -98,7 +98,7 @@ interface PendingWrite {
   /**
    * The `writeTimeoutMs` deadline. One that runs late - the tab was frozen or asleep - first hears
    * the messages that arrived meanwhile, so a write that began or ended is not reported as one that
-   * never started (see `late-deadline.ts`).
+   * never started (see `scheduleDeadline`).
    */
   deadline: Deadline | undefined;
 }
@@ -229,7 +229,7 @@ export class PendingWrites {
    *
    * Only the term the request was addressed to may begin it: no other tab was asked to write it
    * (ADR-0030). A question from anywhere else concerns a copy that reached the wrong tab, or is forged,
-   * and approving it would strand a write nobody is writing (ADR-0030).
+   * and approving it would strand a write nobody is writing.
    *
    * @returns `true` if the term may begin the write.
    */
@@ -245,7 +245,7 @@ export class PendingWrites {
   /**
    * Takes the answer to a request from the term it was addressed to.
    *
-   * Only that term writes the request (ADR-0030), so only that term knows how it went, and an
+   * Only that term writes the request, so only that term knows how it went, and an
    * answer from anywhere else is a copy that reached the wrong tab or a message from a script of
    * the origin that read the request id off the bus (ADR-0030). Such an answer is ignored: taken,
    * it would settle - resolve, even - a write that is still on its way to the device.

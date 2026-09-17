@@ -138,6 +138,11 @@
           // is offered exactly while the library is waiting for one.
           el('connect').hidden = event.status !== 'awaiting-permission';
           el('send-button').disabled = event.status !== 'open';
+          // An error the library recovered from is over once the port is open again; left
+          // standing, it would contradict the status beside it.
+          if (event.status === 'open') {
+            el('error').textContent = '';
+          }
         });
 
         // A chunk is an arbitrary piece of the byte stream, not a line: the device's own line

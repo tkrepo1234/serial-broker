@@ -145,7 +145,7 @@ export type DeviceKind = 'usb' | 'non-usb' | 'any' | 'auto';
  * applied for everything except `baudRate`.
  */
 export interface SerialSettings {
-  /** Bits per second. Required; there is no sensible default. */
+  /** Bits per second: an integer from 1 to 20,000,000. Required; there is no sensible default. */
   readonly baudRate: number;
   /** @defaultValue 8 */
   readonly dataBits?: 7 | 8;
@@ -153,7 +153,12 @@ export interface SerialSettings {
   readonly stopBits?: 1 | 2;
   /** @defaultValue 'none' */
   readonly parity?: 'none' | 'even' | 'odd';
-  /** Read buffer size in bytes. @defaultValue 255 */
+  /**
+   * Size of the browser's read and write buffers for the port, in bytes: 1 to 16,777,216 (16 MiB).
+   * The write buffer is what `send()` resolves against (ADR-0013).
+   *
+   * @defaultValue 255
+   */
   readonly bufferSize?: number;
   /** @defaultValue 'none' */
   readonly flowControl?: 'none' | 'hardware';
@@ -166,28 +171,60 @@ export interface SerialSettings {
  * top-level options object. See ADR-0010.
  */
 export interface ConnectionSettings {
-  /** Delay before the second attempt. The first retry is immediate. @defaultValue 250 */
+  /**
+   * Delay before the second attempt, in milliseconds: an integer from 0 to 3,600,000 (an hour).
+   * The first retry is immediate.
+   *
+   * @defaultValue 250
+   */
   readonly initialDelayMs?: number;
-  /** Multiplier applied per attempt. @defaultValue 2 */
+  /** Multiplier applied per attempt: a number from 1 to 100. @defaultValue 2 */
   readonly factor?: number;
-  /** Upper bound for the delay. @defaultValue 30000 */
+  /**
+   * Upper bound for the delay, in milliseconds: an integer from 0 to 3,600,000 (an hour).
+   *
+   * @defaultValue 30000
+   */
   readonly maxDelayMs?: number;
   /** Full-jitter floor as a fraction of the computed delay, `0`-`1`. @defaultValue 0.5 */
   readonly jitter?: number;
-  /** Attempts before the status becomes `failed`. @defaultValue Infinity */
+  /**
+   * Attempts before the status becomes `failed`: an integer from 1 to 1,000,000, or `Infinity`.
+   * Not `0`: an attempt is always made, and `autoReconnect: false` is how to say "do not
+   * reconnect".
+   *
+   * @defaultValue Infinity
+   */
   readonly maxAttempts?: number;
-  /** How long a connection must hold before the attempt counter resets. @defaultValue 5000 */
+  /**
+   * How long a connection must hold before the attempt counter resets, in milliseconds: an integer
+   * from 0 to 3,600,000 (an hour).
+   *
+   * @defaultValue 5000
+   */
   readonly stableAfterMs?: number;
-  /** Deadline for `port.open()` and `port.close()`. @defaultValue 10000 */
+  /**
+   * Deadline for `port.open()`, `port.close()` and the other calls into Web Serial that have to
+   * finish, in milliseconds: an integer from 1 to 600,000 (ten minutes).
+   *
+   * @defaultValue 10000
+   */
   readonly openTimeoutMs?: number;
   /**
    * Deadline for a single `send()`, including time spent waiting for a connection; and, in the tab
    * holding the port, for how long a write may wait behind others before it begins - one that
-   * waited longer is never begun - and for each chunk handed to the device.
+   * waited longer is never begun - and for each chunk handed to the device. In milliseconds: an
+   * integer from 1 to 600,000 (ten minutes).
+   *
    * @defaultValue 5000
    */
   readonly writeTimeoutMs?: number;
-  /** Largest chunk handed to the device in one `write()`. @defaultValue 4096 */
+  /**
+   * Largest chunk handed to the device in one `write()`, in bytes: an integer from 1 to 16,777,216
+   * (16 MiB).
+   *
+   * @defaultValue 4096
+   */
   readonly maxWriteChunkBytes?: number;
   /**
    * Reconnect by itself after the connection is lost, and try the next attempt when one fails.
@@ -211,15 +248,17 @@ export interface ConnectionSettings {
  */
 export interface ReceiveSettings {
   /**
-   * How long the line has to be quiet before what was collected is delivered, in milliseconds.
-   * `0` delivers every chunk as it is read, the way the Web Serial API returns it.
+   * How long the line has to be quiet before what was collected is delivered, in milliseconds: an
+   * integer from 0 to 3,600,000 (an hour). `0` delivers every chunk as it is read, the way the Web
+   * Serial API returns it.
    *
    * @defaultValue 50
    */
   readonly idleMs?: number;
   /**
    * The longest a delivery waits after its first byte, in milliseconds, however busy the line
-   * stays. A device that never pauses is still delivered at this pace.
+   * stays: an integer from 1 to 3,600,000 (an hour). A device that never pauses is still delivered
+   * at this pace.
    *
    * @defaultValue 500
    */
@@ -231,6 +270,13 @@ export interface ReceiveSettings {
  *
  * See ADR-0015: received data is always delivered as bytes; text is an addition, decoded with
  * a streaming decoder so that multi-byte characters split across chunks survive.
+ *
+ * @remarks
+ * Text is decoded once, by the tab holding the port, and delivered to every tab as that tab decoded
+ * it. So `encoding` and `decodeText` are decided by the tab holding the port: a tab that turned
+ * `decodeText` on receives `text: undefined` while a tab with it off holds the port, and the other
+ * way round. Tabs that differ here are not in conflict (`CONFIGURATION_CONFLICT` concerns the
+ * device and the line settings), so give every tab of a configuration the same values.
  */
 export interface EncodingSettings {
   /**
@@ -254,15 +300,21 @@ export interface SerialBrokerOptions {
   /**
    * Which device to connect to. Omitted, it is taken from the port the user chooses (auto mode,
    * {@link AutoDeviceFilter}).
+   *
+   * @defaultValue `{ auto: true }`
    */
   readonly device?: DeviceFilter | undefined;
   /** Line settings for `SerialPort.open()`. */
   readonly serial: SerialSettings;
-  /** Reconnect and timeout behaviour. */
+  /** Reconnect and timeout behaviour. @defaultValue `{}`: each field's own default */
   readonly connection?: ConnectionSettings;
-  /** How received bytes are collected into `onReceive` events. */
+  /**
+   * How received bytes are collected into `onReceive` events.
+   *
+   * @defaultValue `{}`: each field's own default
+   */
   readonly receive?: ReceiveSettings;
-  /** Text encoding and decoding. */
+  /** Text encoding and decoding. @defaultValue `{}`: each field's own default */
   readonly encoding?: EncodingSettings;
   /**
    * Remember this configuration in `localStorage`, so that `restore()` sets it up again after a
@@ -388,7 +440,10 @@ export interface ReceiveEvent {
    * framing (ADR-0002).
    */
   readonly data: Uint8Array;
-  /** Present only when `encoding.decodeText` is enabled. A character split across reads is whole. */
+  /**
+   * Present only when `encoding.decodeText` is enabled in the tab holding the port, which decodes
+   * for every tab ({@link EncodingSettings}). A character split across reads is whole.
+   */
   readonly text: string | undefined;
   /** Epoch milliseconds at which the tab holding the port delivered the bytes. */
   readonly timestamp: number;
@@ -423,7 +478,7 @@ export interface ErrorEvent {
    * message bus, its storage - is delivered to every configuration of the tab, each under its own
    * name.
    */
-  readonly name: string | undefined;
+  readonly name: string;
   /** The error. Errors raised in a peer context are faithfully reconstructed here. */
   readonly error: SerialBrokerError;
   /** Epoch milliseconds at which the error was observed in this context. */
@@ -441,7 +496,10 @@ export interface StatusChangeEvent {
    * to learn the current status, and in no other.
    */
   readonly previousStatus: SerialBrokerStatus;
-  /** Epoch milliseconds at which the transition happened. */
+  /**
+   * Epoch milliseconds at which this tab observed the transition. In the one event a new listener
+   * receives to learn the current status, the moment it was delivered.
+   */
   readonly timestamp: number;
 }
 
@@ -486,11 +544,17 @@ export interface SerialBrokerGlobalOptions {
    * application serves its assets, and always with the CommonJS build, which has no
    * `import.meta.url`. A `SharedWorker` is identified by its script URL, so this
    * URL must be identical in every tab - a `Blob` URL will not work. See ADR-0006.
+   *
+   * @defaultValue `serial-broker.worker.js` next to the module, resolved against `import.meta.url`
    */
   readonly workerUrl?: string | URL;
   /** Forces a transport instead of selecting one automatically. @defaultValue 'auto' */
   readonly transport?: TransportKind;
-  /** Receives diagnostics. The library logs nothing unless one is supplied. */
+  /**
+   * Receives diagnostics. The library logs nothing unless one is supplied.
+   *
+   * @defaultValue A logger that drops every record
+   */
   readonly logger?: Logger;
   /**
    * Include payload bytes in `debug` log records.

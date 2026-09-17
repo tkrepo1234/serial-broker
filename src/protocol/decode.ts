@@ -152,14 +152,8 @@ class FieldReader {
     return this.raw[field] === undefined ? undefined : this.identifier(field);
   }
 
-  configName(field = 'configName'): string {
-    return this.#boundedString(field, MAX_CONFIG_NAME_LENGTH, 'MAX_CONFIG_NAME_LENGTH');
-  }
-
-  optionalConfigName(): string | undefined {
-    // Optional, but routed on when present: a name that is not one would be dropped by every
-    // receiver as belonging to no configuration, without anyone learning why.
-    return this.raw['configName'] === undefined ? undefined : this.configName();
+  configName(): string {
+    return this.#boundedString('configName', MAX_CONFIG_NAME_LENGTH, 'MAX_CONFIG_NAME_LENGTH');
   }
 
   target(): MessageTarget {
@@ -219,12 +213,6 @@ class FieldReader {
   timestamp(): number {
     const value = this.raw['timestamp'];
     return isFiniteNumber(value) ? value : malformed(this.type, 'timestamp');
-  }
-
-  /** A length of time in milliseconds: finite, and not negative. */
-  duration(field: string): number {
-    const value = this.raw[field];
-    return isFiniteNumber(value) && value >= 0 ? value : malformed(this.type, field);
   }
 
   optionalText(): string | undefined {
@@ -443,8 +431,7 @@ function decodeChecked(raw: unknown): ProtocolMessage {
 
     case 'status-request': {
       const configName = read.configName();
-      // Optional: a request that only asks for the status carries none.
-      const retry = raw['retry'] === undefined ? false : read.boolean('retry');
+      const retry = read.boolean('retry');
       if (raw['device'] === undefined) {
         return { type, v, from, to, configName, retry };
       }
@@ -587,7 +574,7 @@ function decodeChecked(raw: unknown): ProtocolMessage {
       };
 
     case 'error': {
-      const configName = read.optionalConfigName();
+      const configName = read.configName();
       const error = read.error();
       return { type, v, from, to, configName, error, timestamp: read.timestamp() };
     }

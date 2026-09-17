@@ -11,7 +11,7 @@
   "scripts": {
     "prestart": "node scripts/copy-serial-broker-assets.mjs webapp --with-stand-in",
     "start": "ui5 serve --port 8162",
-    "typecheck": "node ../../node_modules/typescript/bin/tsc --noEmit",
+    "typecheck": "node ../../node_modules/typescript/bin/tsc --noEmit && node ../../node_modules/typescript/bin/tsc --noEmit -p scripts",
     "prebuild": "node scripts/copy-serial-broker-assets.mjs webapp --remove",
     "build": "ui5 build self-contained --all --clean-dest && node scripts/finish-build.mjs && node scripts/copy-serial-broker-assets.mjs dist"
   },

@@ -17,6 +17,7 @@ export interface Deferred<T> {
  * Only the first `resolve` or `reject` counts; later ones do nothing.
  */
 export function createDeferred<T>(): Deferred<T> {
+  // Both are assigned by the executor, which runs before `new Promise` returns.
   let resolve!: (value: T | PromiseLike<T>) => void;
   let reject!: (reason: unknown) => void;
   let isSettled = false;
@@ -41,15 +42,7 @@ export function createDeferred<T>(): Deferred<T> {
     };
   });
 
-  return {
-    promise,
-    resolve: (value) => {
-      resolve(value);
-    },
-    reject: (reason) => {
-      reject(reason);
-    },
-  };
+  return { promise, resolve, reject };
 }
 
 /**
@@ -98,12 +91,13 @@ export interface DeadlineOptions {
  * Rejects if `operation` has not settled within the deadline.
  *
  * Every call into Web Serial that has to finish goes through this: listing the ports, `open()`,
- * `close()`, each `write()`, and ending the streams. A yanked device can leave any of them pending
- * forever, and an await that never returns would wedge the state machine with no way out. See
- * docs/guidelines/defensive-programming.md.
+ * `close()`, `forget()`, each `write()`, and ending the streams. A yanked device can leave any of
+ * them pending forever, and an await that never returns would wedge the state machine with no way
+ * out. See docs/guidelines/defensive-programming.md.
  *
- * `read()` is the exception, because waiting for the device to send something is what it is for.
- * A read left pending ends when its reader is cancelled, and that cancellation is bounded.
+ * `read()` and `requestPort()` are the exceptions, because waiting - for the device to send
+ * something, for the user to choose - is what they are for. A read left pending ends when its
+ * reader is cancelled, and that cancellation is bounded.
  *
  * @remarks
  * The operation itself is not cancelled - `port.open()` has no abort signal - and may settle

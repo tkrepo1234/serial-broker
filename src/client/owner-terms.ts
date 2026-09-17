@@ -1,3 +1,6 @@
+import type { Clock } from '../core/clock.js';
+import { withDeadline } from '../core/deadline.js';
+import { SerialBrokerErrorCode } from '../core/error-codes.js';
 import { describeUnknown, isAbortError } from '../core/errors.js';
 import { OnceLog, type ScopedLogger } from '../core/logger.js';
 import type { LockManagerLike } from '../environment/environment.js';
@@ -28,8 +31,14 @@ export interface TermClaim {
 /** What the tracker needs. */
 export interface OwnerTermsHost {
   readonly locks: LockManagerLike;
+  readonly clock: Clock;
   readonly configName: string;
   readonly logger: ScopedLogger;
+  /**
+   * How long the browser has to list its locks. The question is asked while a grant on the term's
+   * lock is held, and the tab letting go of the port waits behind that grant.
+   */
+  readonly lockQueryTimeoutMs: number;
   /**
    * A term ended: nothing more can come from it.
    *
@@ -372,6 +381,7 @@ export class OwnerTerms {
             configName: this.host.configName,
             event: 'session.term-watch-failed',
             term: entry.claim.term,
+            error: describeUnknown(error),
           });
         }
       });
@@ -393,7 +403,12 @@ export class OwnerTerms {
       return false;
     }
     try {
-      const snapshot = await locks.query();
+      const snapshot = await withDeadline(locks.query(), this.host.clock, {
+        timeoutMs: this.host.lockQueryTimeoutMs,
+        code: SerialBrokerErrorCode.OPEN_TIMEOUT,
+        message: 'Listing the locks did not complete in time',
+        configName: this.host.configName,
+      });
       const name = this.#lockNameOf(entry);
       return (
         snapshot.pending?.some(
@@ -401,6 +416,8 @@ export class OwnerTerms {
         ) === true
       );
     } catch {
+      // Not reported: a browser that will not list its locks, or not in time, is a browser
+      // without `query`, and is treated as one - the term ends at the free lock.
       return false;
     }
   }
@@ -484,7 +501,10 @@ export class OwnerTerms {
   }
 }
 
-/** `true` when two messages name the same term, sender and tab limit - the term's whole identity. */
+/**
+ * `true` when two claims of one term name the same sender and tab limit - with the term, which the
+ * caller has matched already, the term's whole identity.
+ */
 function isSameClaim(known: TermClaim, claim: TermClaim): boolean {
   return known.from === claim.from && known.maxTabs === claim.maxTabs;
 }

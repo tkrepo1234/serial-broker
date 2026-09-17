@@ -5,6 +5,7 @@
  *     npm run emulator -- --vendor-id 0x1209 --product-id 0x0001 --no-attach
  *
  * See emulator/README.md for the one-time setup and how this maps onto the manual test plan.
+ * Why the device is emulated over USB/IP rather than as a virtual COM port is in ADR-0035.
  */
 
 import { execFile } from 'node:child_process';
@@ -17,7 +18,7 @@ import type { UsbipOutcome } from './attached-port.ts';
 import { CdcAcmDevice } from './cdc-acm-device.ts';
 import type { DeviceEvent, DeviceStatus } from './cdc-acm-device.ts';
 import { describeBytes, parseEscapedText } from './payload-text.ts';
-import { BUS_ID, UsbipServer } from './usbip-server.ts';
+import { BUS_ID, DEFAULT_HOST, DEFAULT_PORT, UsbipServer } from './usbip-server.ts';
 import type { ServerEvent } from './usbip-server.ts';
 
 const DEFAULT_USBIP_PATH = 'C:\\Program Files\\USBip\\usbip.exe';
@@ -44,8 +45,10 @@ const COMMANDS = `Commands:
 const USAGE = `Usage: node emulator/launch.mjs [options]
 
 Options:
-  --host <address>      listen address (default 127.0.0.1)
-  --port <number>       listen port (default 3240)
+  --host <address>      listen address (default ${DEFAULT_HOST})
+  --port <number>       listen port (default ${String(DEFAULT_PORT)}); usbip.exe attach is run without a
+                        port and dials the default, so with another one "attach" and "plug"
+                        cannot reach this emulator: attach with a client of your own
   --vendor-id <hex>     USB vendor ID (default 0x1209)
   --product-id <hex>    USB product ID (default 0x0001)
   --usbip <path>        usbip.exe from usbip-win2 (default ${DEFAULT_USBIP_PATH})
@@ -54,17 +57,17 @@ Options:
 
 ${COMMANDS}`;
 
-const { values: options } = parseArgs({
-  options: {
-    host: { type: 'string', default: '127.0.0.1' },
-    port: { type: 'string', default: '3240' },
-    'vendor-id': { type: 'string', default: hex4(DEFAULT_VENDOR_ID) },
-    'product-id': { type: 'string', default: hex4(DEFAULT_PRODUCT_ID) },
-    usbip: { type: 'string', default: DEFAULT_USBIP_PATH },
-    'no-attach': { type: 'boolean', default: false },
-    help: { type: 'boolean', default: false },
-  },
-});
+const FLAGS = {
+  host: { type: 'string', default: DEFAULT_HOST },
+  port: { type: 'string', default: String(DEFAULT_PORT) },
+  'vendor-id': { type: 'string', default: hex4(DEFAULT_VENDOR_ID) },
+  'product-id': { type: 'string', default: hex4(DEFAULT_PRODUCT_ID) },
+  usbip: { type: 'string', default: DEFAULT_USBIP_PATH },
+  'no-attach': { type: 'boolean', default: false },
+  help: { type: 'boolean', default: false },
+} as const;
+
+const options = parseFlags();
 
 if (options.help) {
   process.stdout.write(`${USAGE}\n`);
@@ -99,7 +102,7 @@ try {
   // The cause, such as EADDRINUSE, is already logged as a server error. Without this, the
   // rejection would end the process with a stack trace that says nothing about what to do.
   log(
-    `cannot listen on ${options.host}:${options.port}; another USB/IP server or emulator may be using it (pass --port)`,
+    `cannot listen on ${options.host}:${options.port}; another USB/IP server or emulator may be using it`,
   );
   process.exit(1);
 }
@@ -296,6 +299,17 @@ function parseUint16(text: string, flag: string): number {
     process.exit(2);
   }
   return value;
+}
+
+/** Reads the flags. One that is unknown gets the usage text and exit code 2, as a bad value does. */
+function parseFlags() {
+  try {
+    return parseArgs({ options: FLAGS }).values;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    process.stderr.write(`${message}\n\n${USAGE}\n`);
+    process.exit(2);
+  }
 }
 
 function log(line: string): void {

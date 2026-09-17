@@ -4,17 +4,20 @@ import { describeUnknown, SerialBrokerError } from '../core/errors.js';
 /**
  * Turns what Web Serial throws into what this library reports.
  *
- * Every failure from the platform arrives as a `DOMException`, and the only part of it worth
- * keying on is its `name`: the message text differs between Chromium versions and is not a
- * contract. So the mapping is a table of names, kept in one place rather than spread across
- * the call sites that happen to catch things. See ADR-0012.
+ * A failure from the platform arrives as a `DOMException` - or, for options it refuses, as a
+ * `TypeError` - and the only part of it worth keying on is its `name`: the message text differs
+ * between Chromium versions and is not a contract. So the mapping is a table of names, kept in
+ * one place rather than spread across the call sites that happen to catch things. See ADR-0012.
  *
  * A name that is not in a table falls through to that operation's default code - never to a
  * guess, and never silently: the name is preserved in `context.domExceptionName` so an
  * unmapped case is visible in a bug report and can be added here.
  */
 
-/** What `port.open()` rejections mean. */
+/**
+ * What `port.open()` rejections mean. A name that maps to the default code is listed for what is
+ * known about it, not for what the entry changes.
+ */
 const OPEN_FAILURES: Readonly<Record<string, SerialBrokerErrorCode>> = {
   /** The device is no longer attached. Not a failure to report to the user - it is a reconnect. */
   NetworkError: SerialBrokerErrorCode.DEVICE_DISCONNECTED,

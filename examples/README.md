@@ -28,12 +28,13 @@ provides:
     "port": 8159,
     "start": "npm start",
     "readyPath": "/",
-    "summary": "One page that connects, prints received lines and sends text."
+    "summary": "One HTML file in plain JavaScript: connect, print what arrives, send a line."
   }
   ```
 
   Ports are fixed and unique per example, from 8150 upwards; `readyPath` is a path that answers
-  with 200 once the server is up.
+  with 200 once the server is up. The root takes the port from here, and so does the smoke test; a
+  `start` command that has to name it as well (`ui5 serve --port 8162`) names the same one.
 
 - **The library as a dependency** with `"serial-broker": "file:../.."`, so an example exercises the
   working tree. The root has to be built first (`npm run build` at the repository root); the
@@ -50,8 +51,8 @@ provides:
   Serial stand-in installed (`test/browser/stand-in/`), connects, sends a line and sees it come back
   from the loopback device. It imports the stand-in and its helpers with relative paths
   (`../../test/browser/...`), uses the ids above, and passes when run through the root. The steps
-  every example shares - opening a granted device, connecting with a click, living through an
-  unplugged device, releasing and setting up again - live in `examples/smoke-support.ts`: a spec
+  every example shares - connecting with a click, sending a line and seeing it echoed, living
+  through an unplugged device - live in `examples/smoke-support.ts`: a spec
   names its elements once and composes its tests from those steps, keeping only what its example
   alone does:
 

@@ -1,0 +1,14 @@
+{
+  // The build scripts run in Node, the application in a browser: two programs, so neither sees the
+  // other's globals. Node's types are the repository's own, as the compiler is.
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "lib": ["ES2023"],
+    "types": ["node"],
+    "typeRoots": ["../../../node_modules/@types"]
+  },
+  "include": ["*.mjs"],
+  "exclude": []
+}

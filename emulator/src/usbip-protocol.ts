@@ -11,14 +11,14 @@ import type { InterfaceSummary } from './usb-descriptors.ts';
 export const USBIP_VERSION = 0x0111;
 
 export const OP_REQ_DEVLIST = 0x8005;
-export const OP_REP_DEVLIST = 0x0005;
+const OP_REP_DEVLIST = 0x0005;
 export const OP_REQ_IMPORT = 0x8003;
-export const OP_REP_IMPORT = 0x0003;
+const OP_REP_IMPORT = 0x0003;
 
-export const USBIP_CMD_SUBMIT = 1;
-export const USBIP_CMD_UNLINK = 2;
-export const USBIP_RET_SUBMIT = 3;
-export const USBIP_RET_UNLINK = 4;
+const USBIP_CMD_SUBMIT = 1;
+const USBIP_CMD_UNLINK = 2;
+const USBIP_RET_SUBMIT = 3;
+const USBIP_RET_UNLINK = 4;
 
 export const OPERATION_HEADER_BYTES = 8;
 export const BUS_ID_BYTES = 32;

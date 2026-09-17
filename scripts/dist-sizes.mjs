@@ -3,7 +3,7 @@
  *
  * Used by `check-dist.mjs`, which prints the sizes after every build - so CI reports them on every
  * run - and by the benchmark, which puts them in the Performance chapter. There is no size budget
- * (BACKLOG.md, standing decisions; 2026-09-14): the sizes are reported, not enforced.
+ * (BACKLOG.md, standing decisions): the sizes are reported, not enforced.
  */
 
 import { readFileSync, statSync } from 'node:fs';
@@ -16,7 +16,7 @@ import { gzipSync } from 'node:zlib';
  * The worker script is one of them: it is served next to the application whatever the entry point
  * (ADR-0006), so its size is part of every installation.
  */
-export const DIST_FILES = [
+const DIST_FILES = [
   'dist/serial-broker.js',
   'dist/serial-broker.min.js',
   'dist/serial-broker.global.js',
@@ -27,15 +27,14 @@ export const DIST_FILES = [
 ];
 
 /**
- * Measures the files under `root`.
+ * Measures the builds under `root`.
  *
  * @param {string} root - The repository root.
- * @param {readonly string[]} [files] - Which files, relative to `root`.
  * @returns {{ file: string, bytes: number, gzip: number }[]} One entry per file that exists.
  */
-export function distSizes(root, files = DIST_FILES) {
+export function distSizes(root) {
   const sizes = [];
-  for (const file of files) {
+  for (const file of DIST_FILES) {
     const path = join(root, file);
     let bytes;
     try {

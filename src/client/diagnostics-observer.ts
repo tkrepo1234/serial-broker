@@ -26,7 +26,7 @@ import {
   warnLimitExceeded,
 } from '../protocol/limits.js';
 import type { ClientId, ProtocolMessage, RequestId } from '../protocol/messages.js';
-import { PROTOCOL_VERSION } from '../protocol/version.js';
+import { NAMESPACE, PROTOCOL_VERSION } from '../protocol/version.js';
 
 import type { Transport } from './transport/transport.js';
 
@@ -42,8 +42,8 @@ export const DEFAULT_COLLECT_WINDOW_MS = 500;
 
 const LIMIT_EVENT = 'diagnostics.limit-exceeded';
 
-/** Every lock this library takes carries this prefix. See `protocol/version.ts`. */
-const LOCK_NAME_PREFIX = 'serial-broker/';
+/** Every lock this library takes carries this prefix. */
+const LOCK_NAME_PREFIX = `${NAMESPACE}/`;
 
 /** A collection that is still listening. */
 interface Collection {
@@ -338,19 +338,14 @@ export class DiagnosticsObserver {
 
       default:
         // Write requests and results pass between participants and say nothing an operator
-        // needs that the `sent` event does not; presence messages say nothing at all.
+        // needs that the `sent` event does not; `hello` and `welcome` say nothing at all.
         return;
     }
   }
 
-  /** Delivers an event to the watchers of its configuration, or to all of them if it has none. */
-  #emit(configName: string | undefined, event: ObservedEvent): void {
-    const targets =
-      configName === undefined
-        ? [...this.#watchers.values()].flatMap((listeners) => [...listeners])
-        : [...(this.#watchers.get(configName) ?? [])];
-
-    for (const listener of targets) {
+  /** Delivers an event to the watchers of its configuration. */
+  #emit(configName: string, event: ObservedEvent): void {
+    for (const listener of [...(this.#watchers.get(configName) ?? [])]) {
       // A watcher stopped earlier in this delivery - by another watcher, or by `close()` - has been
       // told it hears nothing more, as a configuration's own listeners are (`core/emitter.ts`).
       if (!this.#isWatching(configName, listener)) {
@@ -369,12 +364,9 @@ export class DiagnosticsObserver {
     }
   }
 
-  /** `true` while `listener` watches `configName`, or any configuration when there is no name. */
-  #isWatching(configName: string | undefined, listener: (event: ObservedEvent) => void): boolean {
-    if (configName !== undefined) {
-      return this.#watchers.get(configName)?.has(listener) === true;
-    }
-    return [...this.#watchers.values()].some((listeners) => listeners.has(listener));
+  /** `true` while `listener` watches `configName`. */
+  #isWatching(configName: string, listener: (event: ObservedEvent) => void): boolean {
+    return this.#watchers.get(configName)?.has(listener) === true;
   }
 
   async #queryLocks(): Promise<DiagnosticsSnapshot['locks']> {

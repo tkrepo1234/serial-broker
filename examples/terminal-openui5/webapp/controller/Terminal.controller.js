@@ -48,7 +48,6 @@ sap.ui.define(
       connecting: 'Information',
       reconnecting: 'Warning',
       queued: 'Warning',
-      'awaiting-permission': 'Information',
       failed: 'Error',
     });
 
@@ -65,6 +64,7 @@ sap.ui.define(
       _historyAt: 0,
       _subscriptions: /** @type {(() => void)[]} */ ([]),
       _connecting: /** @type {Promise<void> | undefined} */ (undefined),
+      _settleConnecting: /** @type {(() => void) | undefined} */ (undefined),
       _isSetUp: false,
       _pending: /** @type {[string, 'in' | 'out' | 'note'][]} */ ([]),
       _file: /** @type {File | undefined} */ (undefined),
@@ -87,6 +87,8 @@ sap.ui.define(
         this._subscriptions = /** @type {(() => void)[]} */ ([]);
         /** The connect in flight, while one is: a second click waits for it. */
         this._connecting = /** @type {Promise<void> | undefined} */ (undefined);
+        /** Ends the wait of the connect in flight; `_disconnect` does, so none outlives it. */
+        this._settleConnecting = /** @type {(() => void) | undefined} */ (undefined);
         /**
          * Whether `setup()` has succeeded and not been released since. The status cannot answer
          * this: a `setup()` that throws leaves nothing registered under the name while the page
@@ -154,7 +156,7 @@ sap.ui.define(
           const script = document.createElement('script');
           script.src = new URL('serial-broker/stand-in.js', document.baseURI).href;
           script.onload = () => {
-            /** @type {any} */ (globalThis).installWebSerialStandIn?.({
+            globalThis.installWebSerialStandIn?.({
               devices: [{ id: 'loopback', granted: true }],
             });
             resolve(undefined);
@@ -230,7 +232,14 @@ sap.ui.define(
         // right there to ask again.
         settings.setProperty('/message', '');
         settings.setProperty('/busy', true);
-        void this._connect().then(() => {
+        // What an earlier attempt left in the message strip is not about this one.
+        this._clearError();
+        const attempt = this._connect().catch((/** @type {unknown} */ error) => {
+          // Nothing the library reports - a page without the library's script, say. Shown like any
+          // other failure, so the dialog never stays busy with nothing behind it.
+          this._showError(error);
+        });
+        void attempt.then(() => {
           settings.setProperty('/busy', false);
           if (this._isSetUp) {
             this.onCloseSettings();
@@ -287,11 +296,16 @@ sap.ui.define(
 
         // How this attempt ends, decided by what the library reports - not by waiting a while and
         // looking: a real browser takes longer to say that a permission is missing than a test does.
-        /** @type {(outcome: 'connected' | 'no-port') => void} */
+        // `disconnected` is `_disconnect` ending the wait: whoever disconnects while this attempt
+        // is under way has released everything already, and a later *Connect* finds nothing pending.
+        /** @type {(outcome: 'connected' | 'no-port' | 'disconnected') => void} */
         let settle = () => undefined;
         const outcome = new Promise((resolve) => {
           settle = resolve;
         });
+        this._settleConnecting = () => {
+          settle('disconnected');
+        };
         let asked = false;
         let connected = false;
 
@@ -379,6 +393,9 @@ sap.ui.define(
       _disconnect: async function (say = true) {
         const library = /** @type {SerialBrokerGlobal} */ (this._library);
         this._unsubscribeAll();
+        // With the subscriptions gone, nothing else would end a connect that is still waiting.
+        this._settleConnecting?.();
+        this._settleConnecting = undefined;
         try {
           await library.release(NAME, { forget: true, forgetDevice: true });
           if (say) {
@@ -538,7 +555,8 @@ sap.ui.define(
           event.altKey ||
           event.metaKey ||
           event.shiftKey ||
-          event.key !== 'h'
+          // With Caps Lock on, the key is `H`.
+          event.key.toLowerCase() !== 'h'
         ) {
           return;
         }
@@ -660,12 +678,19 @@ sap.ui.define(
         }
         const chunkSize = Math.max(1, Number(model.getProperty('/chunkSize')) || 256);
         const pause = Math.max(0, Number(model.getProperty('/pause')) || 0);
-        const bytes = /** @type {Uint8Array<ArrayBuffer>} */ (
-          new Uint8Array(await file.arrayBuffer())
-        );
         model.setProperty('/sending', true);
-        this._append(`Sending ${file.name}: ${String(bytes.length)} bytes…`, 'note');
         try {
+          /** @type {Uint8Array<ArrayBuffer>} */
+          let bytes;
+          try {
+            bytes = new Uint8Array(await file.arrayBuffer());
+          } catch (error) {
+            // A file that was moved or deleted after it was chosen cannot be read any more.
+            this._showError(error);
+            this._append(`${file.name} could not be read.`, 'note');
+            return;
+          }
+          this._append(`Sending ${file.name}: ${String(bytes.length)} bytes…`, 'note');
           for (let offset = 0; offset < bytes.length; offset += chunkSize) {
             if (this._status !== library.SerialBrokerStatus.Open) {
               this._append('File transfer stopped: the connection is no longer open.', 'note');

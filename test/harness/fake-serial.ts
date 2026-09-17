@@ -370,7 +370,7 @@ export class FakeSerialRegistry {
     this.#granted.delete(device);
   }
 
-  /** Unplugs a device: `getPorts()` still lists it, but opening fails. */
+  /** Unplugs a device: `getPorts()` stops listing it, its streams break, and opening fails. */
   unplug(device: FakeDevice): void {
     device.isAttached = false;
     device.isOpen = false;

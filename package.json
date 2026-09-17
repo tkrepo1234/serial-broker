@@ -94,7 +94,7 @@
     "./package.json": "./package.json"
   },
   "scripts": {
-    "build": "tsup --config config/tsup.config.ts && tsup --config config/tsup.debug.config.ts && tsc -p tsconfig.build.json && node scripts/entry-declarations.mjs && node scripts/cjs-types.mjs && node scripts/check-dist.mjs",
+    "build": "tsup --config config/tsup.config.ts && tsup --config config/tsup.debug.config.ts && tsc -p config/tsconfig.build.json && node scripts/entry-declarations.mjs && node scripts/cjs-types.mjs && node scripts/check-dist.mjs",
     "typecheck": "tsc --noEmit && tsc -p emulator && tsc -p docs/site/examples/code && tsc -p bench",
     "bench": "npm run build && node bench/run.mjs",
     "bench:browser": "npm run build && playwright test --config bench/browser/playwright.config.ts",

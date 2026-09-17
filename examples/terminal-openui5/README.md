@@ -52,11 +52,11 @@ npm start          # serves http://localhost:8162/index.html
 repository's Web Serial stand-in - a loopback adapter that echoes everything sent. It exists in
 development only; a build does not contain it.
 
-| Command             | What it does                                                         |
-| ------------------- | -------------------------------------------------------------------- |
-| `npm start`         | Serves the application with UI5 Tooling at <http://localhost:8162/>. |
-| `npm run typecheck` | The repository's `tsc`, with `checkJs` over `webapp/`.               |
-| `npm run build`     | Writes `dist/`: the folder that runs from a file.                    |
+| Command             | What it does                                                          |
+| ------------------- | --------------------------------------------------------------------- |
+| `npm start`         | Serves it with UI5 Tooling at <http://localhost:8162/index.html>.     |
+| `npm run typecheck` | The repository's `tsc`, with `checkJs` over `webapp/` and `scripts/`. |
+| `npm run build`     | Writes `dist/`: the folder that runs from a file.                     |
 
 OpenUI5 1.148 comes from npm through UI5 Tooling, not from a CDN: a station may have no internet.
 No SAP system is involved.
@@ -121,7 +121,7 @@ await SerialBroker.release('Terminal', { forget: true, forgetDevice: true }); //
 
 The terminal talks to the library directly, because its log is not a binding (below). An
 application that binds controls to a device - a status in an `ObjectStatus`, received lines in a
-`List` - would put the same four calls behind a `JSONModel` of its own.
+`List` - would put the same calls behind a `JSONModel` of its own.
 
 ## Design decisions
 
@@ -145,12 +145,13 @@ application that binds controls to a device - a status in an `ObjectStatus`, rec
 Control ids are stable because the component and the root view have fixed ids
 (`index.html`, `manifest.json`): `container-terminal---app--<id>`. The smoke test uses `status`
 (its text is `status-text`), `connect` (the one button), `settingsDialog`, `baudRate`,
-`connectConfirm`, `settingsCancel`, `connectMessage`, `display`, `optHex`, `sendMode`,
-`sendInput` (the element that takes text is `sendInput-inner`), `sendEnding`, `sendButton`,
-`error`, `errorCode`, `errorRemediation`, `displaySummary` - and `#received`, the log, which is
+`connectConfirm`, `settingsCancel`, `connectMessage`, `display`, `optHex`, `optTimestamps`,
+`optAutoscroll`, `more`, `fileDialog`, `fileClose`, `theme`, `sendMode`, `sendInput` (the element
+that takes text is `sendInput-inner`), `sendEnding`, `sendButton`, `error`, `errorCode`,
+`errorRemediation`, `displaySummary` - and `#received`, the log, which is
 plain DOM with an id of its own.
 
 `smoke.spec.ts` connects through the dialog, checks the baud rates and that the last settings come
 back, that _Disconnect_ forgets everything, that the dialog stays when no port is chosen, an
-unplugged adapter, hex across a reload, the size of the log, two tabs sharing the port -
-and builds the application and opens `dist/index.html` from a file in two tabs.
+unplugged adapter, hex across a reload, the size of the log, auto-scroll on and off, two tabs
+sharing the port - and builds the application and opens `dist/index.html` from a file in two tabs.

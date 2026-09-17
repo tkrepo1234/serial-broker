@@ -42,7 +42,7 @@ describe('diagnostics observer on a misbehaving bus', () => {
     ]);
   });
 
-  it('delivers an error that names no configuration to every watcher', async () => {
+  it('delivers an error that names no configuration to nobody', async () => {
     const harness = new BrowserHarness({ transport: 'broadcastchannel' });
     const observer = harness.openObserver();
     const seen: string[] = [];
@@ -50,8 +50,8 @@ describe('diagnostics observer on a misbehaving bus', () => {
     observer.watch('Scale', (event) => seen.push(`Scale:${event.kind}`));
     await harness.settle();
 
-    // A failure some context reports without tying it to a configuration concerns every
-    // configuration an operator is watching, not none of them.
+    // No participant sends one: an error is reported under the configuration it concerns, and on
+    // the worker transport a message without one is routed to nobody. Both transports agree.
     harness.bus.broadcastHub.injectForeign(brokerChannelName(), {
       v: PROTOCOL_VERSION,
       from: 'c-elsewhere',
@@ -66,7 +66,7 @@ describe('diagnostics observer on a misbehaving bus', () => {
     });
     await harness.settle();
 
-    expect(seen.sort()).toEqual(['Reader:error', 'Scale:error']);
+    expect(seen).toEqual([]);
   });
 
   it('finishes a collection at its window when the browser never lists its locks', async () => {

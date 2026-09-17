@@ -11,7 +11,12 @@ import type { AddressInfo, Server, Socket } from 'node:net';
 
 import { ByteQueue } from './byte-queue.ts';
 import type { CdcAcmDevice } from './cdc-acm-device.ts';
-import { interfaceSummaries } from './usb-descriptors.ts';
+import {
+  BCD_DEVICE,
+  CDC_SUBCLASS_ABSTRACT_CONTROL_MODEL,
+  interfaceSummaries,
+  USB_CLASS_COMMUNICATIONS,
+} from './usb-descriptors.ts';
 import {
   BUS_ID_BYTES,
   decodeBusId,
@@ -35,11 +40,11 @@ import type { ExportedDevice } from './usbip-protocol.ts';
 const BUS_NUMBER = 1;
 const DEVICE_NUMBER = 1;
 
-/** Where the server listens and what bus ID it exports the device under. */
+/** Where the server listens. */
 export interface UsbipServerOptions {
-  /** @defaultValue `'127.0.0.1'` — never exposed beyond this machine unless asked. */
+  /** @defaultValue {@link DEFAULT_HOST} — never exposed beyond this machine unless asked. */
   readonly host?: string;
-  /** @defaultValue 3240, the registered USB/IP port and the one usbip.exe assumes. */
+  /** @defaultValue {@link DEFAULT_PORT}, the registered USB/IP port and the one usbip.exe assumes. */
   readonly port?: number;
 }
 
@@ -54,6 +59,12 @@ export type ServerEvent =
   | { readonly kind: 'unlinked'; readonly seqnum: number; readonly wasPending: boolean }
   | { readonly kind: 'protocol-error'; readonly remoteAddress: string; readonly message: string }
   | { readonly kind: 'server-error'; readonly message: string };
+
+/** The loopback address: the device is not offered beyond this machine unless asked. */
+export const DEFAULT_HOST = '127.0.0.1';
+
+/** The registered USB/IP port, which `usbip.exe attach` dials. */
+export const DEFAULT_PORT = 3240;
 
 /** The bus ID the device is exported under, as `usbip.exe attach -b` expects it. */
 export const BUS_ID = `${String(BUS_NUMBER)}-${String(DEVICE_NUMBER)}`;
@@ -83,8 +94,8 @@ export class UsbipServer {
     onEvent: (event: ServerEvent) => void = ignoreEvent,
   ) {
     this.#device = device;
-    this.#host = options.host ?? '127.0.0.1';
-    this.#port = options.port ?? 3240;
+    this.#host = options.host ?? DEFAULT_HOST;
+    this.#port = options.port ?? DEFAULT_PORT;
     this.#onEvent = onEvent;
     this.#server = createServer((socket) => {
       this.#accept(socket);
@@ -185,10 +196,14 @@ export class UsbipServer {
           consumed = this.#handleNext(socket, received, isImported, remoteAddress);
         }
       } catch (error) {
-        if (!(error instanceof UsbipProtocolError)) {
-          throw error;
+        // Thrown from an event handler, an error would end the process and with it every other
+        // connection. Whatever went wrong went wrong on this connection, so this one ends.
+        if (error instanceof UsbipProtocolError) {
+          this.#onEvent({ kind: 'protocol-error', remoteAddress, message: error.message });
+        } else {
+          const message = error instanceof Error ? error.message : String(error);
+          this.#onEvent({ kind: 'server-error', message });
         }
-        this.#onEvent({ kind: 'protocol-error', remoteAddress, message: error.message });
         socket.destroy();
       }
     });
@@ -312,9 +327,9 @@ export class UsbipServer {
       speed: USB_SPEED_FULL,
       vendorId: identity.vendorId,
       productId: identity.productId,
-      bcdDevice: 0x0100,
-      deviceClass: 0x02,
-      deviceSubClass: 0x02,
+      bcdDevice: BCD_DEVICE,
+      deviceClass: USB_CLASS_COMMUNICATIONS,
+      deviceSubClass: CDC_SUBCLASS_ABSTRACT_CONTROL_MODEL,
       deviceProtocol: 0x00,
       configurationValue: this.#device.status().configurationValue,
       configurationCount: 1,

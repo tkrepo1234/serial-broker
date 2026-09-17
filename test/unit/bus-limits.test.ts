@@ -485,12 +485,15 @@ describe.each(['sharedworker', 'broadcastchannel'] as const)(
       const oversized = envelope('peer', 'all', {
         type: 'status-request',
         configName: 'n'.repeat(1000),
+        retry: false,
       });
 
       for (let round = 0; round < 1_000; round += 1) {
         deliver(oversized);
       }
-      deliver(envelope('peer', 'all', { type: 'status-request', configName: 'Reader' }));
+      deliver(
+        envelope('peer', 'all', { type: 'status-request', configName: 'Reader', retry: false }),
+      );
 
       // Reported as malformed, each would be a warning of its own in the client.
       expect(decodeFailures).toEqual([]);
@@ -527,7 +530,10 @@ describe('Broker within MAX_CONFIGURATIONS', () => {
       alice,
       message(alice, { type: 'hello', configNames: [...names, 'Overflow'] }),
     );
-    broker.handleMessage(alice, message(alice, { type: 'status-request', configName: 'Overflow' }));
+    broker.handleMessage(
+      alice,
+      message(alice, { type: 'status-request', configName: 'Overflow', retry: false }),
+    );
     expect(delivered).toEqual([]);
     expect(fieldsOfEvent(records, 'broker.limit-exceeded')).toEqual([
       expect.objectContaining({ limit: 'MAX_CONFIGURATIONS' }),
@@ -538,7 +544,10 @@ describe('Broker within MAX_CONFIGURATIONS', () => {
       message(alice, { type: 'hello', configNames: [...names.slice(1), 'Overflow'] }),
     );
     broker.handleMessage(bob, message(bob, { type: 'hello', configNames: ['Overflow'] }));
-    broker.handleMessage(alice, message(alice, { type: 'status-request', configName: 'Overflow' }));
+    broker.handleMessage(
+      alice,
+      message(alice, { type: 'status-request', configName: 'Overflow', retry: false }),
+    );
     expect(delivered).toEqual([bob]);
   });
 });

@@ -1,4 +1,3 @@
-import type { ReleaseOptions } from '../../src/core/types.js';
 import type {
   ConfigurationDiagnostics,
   EffectiveSettings,
@@ -33,11 +32,6 @@ export interface DetailHost {
   /** Sets the configuration up in this page, with these settings. */
   connect(name: string, settings: EffectiveSettings): void;
   /**
-   * Releases it in this page, with the options saying what should also go: the configuration this
-   * browser remembers (`forget`), its permission for the device (`forgetDevice`), both or neither.
-   */
-  disconnect(name: string, options: ReleaseOptions): void;
-  /**
    * Asks what should be forgotten, and disconnects with the answer.
    *
    * Stopping here and letting go of what the browser keeps are two decisions, and the second one
@@ -51,7 +45,7 @@ export interface DetailHost {
    * `chooseAgain`, an auto-mode configuration lets the user choose a different device.
    */
   chooseDevice(name: string, chooseAgain: boolean): void;
-  /** Opens the settings dialog for a configuration this page is connected to. */
+  /** Opens the settings dialog; offered for every configuration, connected here or not. */
   edit(name: string, settings: EffectiveSettings): void;
   send(name: string, data: Uint8Array<ArrayBuffer>): void;
 }

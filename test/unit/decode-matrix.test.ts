@@ -18,7 +18,7 @@ const REQUIRED_FIELDS: Record<ProtocolMessageType, readonly string[]> = {
   welcome: ['worker'],
   'owner-claimed': ['configName', 'maxTabs'],
   'owner-released': ['configName'],
-  'status-request': ['configName'],
+  'status-request': ['configName', 'retry'],
   'write-request': ['configName', 'requestId', 'payload', 'term'],
   'write-ready': ['configName', 'requestId', 'term'],
   'write-approval': ['configName', 'requestId', 'term', 'approved'],
@@ -26,7 +26,7 @@ const REQUIRED_FIELDS: Record<ProtocolMessageType, readonly string[]> = {
   'data-received': ['configName', 'payload', 'timestamp'],
   'data-sent': ['configName', 'payload', 'originClientId', 'timestamp'],
   status: ['configName', 'status', 'maxTabs', 'device', 'timestamp'],
-  error: ['error', 'timestamp'],
+  error: ['configName', 'error', 'timestamp'],
   'diagnostics-request': ['requestId'],
   'diagnostics-report': ['requestId', 'report'],
 };
@@ -89,12 +89,6 @@ describe('decode matrix', () => {
 
   it('accepts a failed write result carrying an error', () => {
     const message = { ...VALID['write-result'], ok: false, error: ERROR_PAYLOAD };
-
-    expect(decodeMessage(message).ok).toBe(true);
-  });
-
-  it('accepts an error message that concerns no configuration', () => {
-    const message = { ...VALID.error, configName: undefined };
 
     expect(decodeMessage(message).ok).toBe(true);
   });

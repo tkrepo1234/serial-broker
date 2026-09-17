@@ -30,7 +30,7 @@ export function validMessages(): Record<ProtocolMessageType, Record<string, unkn
       maxTabs: Number.POSITIVE_INFINITY,
     },
     'owner-released': { ...BASE, type: 'owner-released', configName: 'Reader', term: 't-1' },
-    'status-request': { ...BASE, type: 'status-request', configName: 'Reader' },
+    'status-request': { ...BASE, type: 'status-request', configName: 'Reader', retry: false },
     'write-request': {
       ...BASE,
       type: 'write-request',

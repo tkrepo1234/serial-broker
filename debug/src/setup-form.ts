@@ -76,17 +76,21 @@ export const DEVICE_PRESETS: readonly DevicePreset[] = [
   { label: 'Emulated device (emulator/)', vendorId: '0x1209', productId: '0x0001' },
 ];
 
+/** What a configuration is called before anyone knows what its device is. */
+export const DEFAULT_NAME = 'Device';
+
 /**
  * What the form holds when the dialog opens: auto mode, so the device comes from the port the
  * user chooses, with the first preset's IDs ready should they switch to naming one.
  */
 export function defaultFormValues(): SetupFormValues {
+  const [firstPreset] = DEVICE_PRESETS;
   return {
-    name: 'Device',
+    name: DEFAULT_NAME,
     deviceKind: 'auto',
     resolved: '',
-    vendorId: '0x1a86',
-    productId: '0x7523',
+    vendorId: firstPreset?.vendorId ?? '',
+    productId: firstPreset?.productId ?? '',
     baudRate: '9600',
     dataBits: '',
     stopBits: '',

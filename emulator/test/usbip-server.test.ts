@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { CdcAcmDevice } from '../src/cdc-acm-device.ts';
 import { UsbipServer } from '../src/usbip-server.ts';
@@ -251,6 +251,22 @@ describe('UsbipServer', () => {
         message: 'OUT transfer of 4294967295 bytes exceeds the 1048576-byte limit.',
       }),
     );
+  });
+
+  it('drops only the connection on which handling fails, reports it, and keeps serving', async () => {
+    // The handler runs in a socket event: an error thrown out of it would end the process.
+    vi.spyOn(device, 'submit').mockImplementation(() => {
+      throw new Error('device fault');
+    });
+    const client = await importDevice();
+
+    client.write(submitCommand({ seqnum: 1, direction: 'in', endpoint: 2, length: 8 }));
+    await client.closed();
+
+    expect(events).toContainEqual({ kind: 'server-error', message: 'device fault' });
+    const next = await connectClient();
+    next.write(deviceListRequest());
+    expect(new DataView((await next.read(8)).buffer).getUint32(4)).toBe(0);
   });
 
   it('reassembles a large write that arrives in many small pieces, its header split too, and answers it once', async () => {

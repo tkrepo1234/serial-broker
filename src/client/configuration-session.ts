@@ -15,7 +15,7 @@ import { OnceLog, type ScopedLogger } from '../core/logger.js';
 import { RateLimiter } from '../core/rate-limit.js';
 import {
   SerialBrokerStatus,
-  type SerialBrokerEventMap,
+  type SerialBrokerListener,
   type SerialBrokerEventName,
   type SerialBrokerStatusSnapshot,
 } from '../core/types.js';
@@ -198,8 +198,10 @@ export class ConfigurationSession {
 
     this.#terms = new OwnerTerms({
       locks: environment.locks,
+      clock: environment.clock,
       configName: configuration.name,
       logger,
+      lockQueryTimeoutMs: configuration.connection.openTimeoutMs,
       onEnded: (term, wasCurrent) => {
         this.#writes.handleTermEnded(term);
         // The port is with nobody until the next tab claims it. Only the term that held it as far
@@ -350,7 +352,7 @@ export class ConfigurationSession {
    */
   subscribe<TEvent extends SerialBrokerEventName>(
     event: TEvent,
-    listener: (payload: SerialBrokerEventMap[TEvent]) => void,
+    listener: SerialBrokerListener<TEvent>,
   ): () => void {
     const remove = this.#emitter.add(event, listener);
     if (event === 'onStatusChange') {
@@ -361,16 +363,12 @@ export class ConfigurationSession {
         if (this.#isReleased) {
           return;
         }
-        this.#emitter.emitTo(
-          'onStatusChange',
-          listener as (payload: SerialBrokerEventMap['onStatusChange']) => void,
-          {
-            name: this.#configuration.name,
-            status: this.#status,
-            previousStatus: this.#status,
-            timestamp: this.environment.clock.now(),
-          },
-        );
+        this.#emitter.emitTo('onStatusChange', listener as SerialBrokerListener<'onStatusChange'>, {
+          name: this.#configuration.name,
+          status: this.#status,
+          previousStatus: this.#status,
+          timestamp: this.environment.clock.now(),
+        });
       });
     }
     return remove;
@@ -379,7 +377,7 @@ export class ConfigurationSession {
   /** Removes an event listener. */
   unsubscribe<TEvent extends SerialBrokerEventName>(
     event: TEvent,
-    listener: (payload: SerialBrokerEventMap[TEvent]) => void,
+    listener: SerialBrokerListener<TEvent>,
   ): void {
     this.#emitter.remove(event, listener);
   }
@@ -563,6 +561,20 @@ export class ConfigurationSession {
       });
     }
 
+    // The picker stays open for as long as the user likes. A tab that left the configuration
+    // meanwhile - released it, or withdrew from it - must not give it a device any more, nor tell
+    // the tab holding the port to go looking for one.
+    if (this.#isReleased) {
+      throw new SerialBrokerError(
+        SerialBrokerErrorCode.CONFIGURATION_RELEASED,
+        'The configuration was released while the port picker was open',
+        { configName: this.#configuration.name, timestamp: this.environment.clock.now() },
+      );
+    }
+    if (this.#withdrawal !== undefined) {
+      throw this.#withdrawal;
+    }
+
     const device = this.#configuration.device;
     if (device.kind === 'auto' && (chooseAgain || device.resolved === undefined)) {
       return this.resolveDevice(resolveDevice(port), 'picker');
@@ -729,7 +741,7 @@ export class ConfigurationSession {
       case 'hello':
       case 'welcome':
       case 'worker-log':
-        // Presence bookkeeping and the worker's own records, handled by the broker or the
+        // The broker's bookkeeping and the worker's own records, handled by the broker or the
         // transport, which logs a forwarded record itself (ADR-0018). Nothing to do here.
         return;
 

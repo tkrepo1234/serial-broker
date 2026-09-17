@@ -14,8 +14,8 @@
  *   its tabs unable to coordinate with tabs on any other build.
  * - A minified file is smaller than its readable counterpart.
  * - The size of every build is printed, as built and gzipped, so that CI reports it on every run.
- *   There is no size budget: the sizes are reported, not enforced (BACKLOG.md, standing decisions; decided
- *   2026-09-14).
+ *   There is no size budget: the sizes are reported, not enforced (BACKLOG.md, standing
+ *   decisions).
  * - Every declaration the build emitted - not only the ones an entry point names - type-checks
  *   without the Web Serial types, which the package cannot make an application install.
  *
@@ -45,7 +45,7 @@ for (const target of exportTargets(packageJson.exports)) {
 const WORKER_SCRIPT = 'serial-broker.worker.js';
 
 /**
- * The three builds of each entry point, and what the classic one leaves on a page.
+ * The four builds of each entry point, and what the classic one leaves on a page.
  *
  * `isTheGlobal` names the one export the global *is* rather than carries: the main entry point's
  * global is the facade itself, so `SerialBroker.setup()` reads the same as in a module and a page
@@ -55,6 +55,7 @@ const ENTRY_POINTS = [
   {
     readable: 'dist/serial-broker.js',
     minified: 'dist/serial-broker.min.js',
+    commonJs: 'dist/serial-broker.cjs',
     classic: 'dist/serial-broker.global.js',
     global: 'SerialBroker',
     isTheGlobal: 'SerialBroker',
@@ -62,6 +63,7 @@ const ENTRY_POINTS = [
   {
     readable: 'dist/serial-broker.diagnostics.js',
     minified: 'dist/serial-broker.diagnostics.min.js',
+    commonJs: 'dist/serial-broker.diagnostics.cjs',
     classic: 'dist/serial-broker.diagnostics.global.js',
     global: 'SerialBrokerDiagnostics',
     isTheGlobal: undefined,
@@ -69,18 +71,25 @@ const ENTRY_POINTS = [
 ];
 
 for (const entry of ENTRY_POINTS) {
-  const files = [entry.readable, entry.minified, entry.classic];
+  const files = [entry.readable, entry.minified, entry.commonJs, entry.classic];
   const missingFiles = files.filter((file) => !existsSync(join(root, file)));
   if (missingFiles.length > 0) {
     problems.push(`the build did not produce ${missingFiles.join(', ')}`);
     continue;
   }
 
-  const namespace = await import(pathToFileURL(join(root, entry.readable)).href);
+  let namespace;
+  let minifiedNamespace;
+  try {
+    namespace = await import(pathToFileURL(join(root, entry.readable)).href);
+    minifiedNamespace = await import(pathToFileURL(join(root, entry.minified)).href);
+  } catch (error) {
+    // A build that throws on import is a finding like any other, and belongs in the list.
+    problems.push(`${entry.readable} or ${entry.minified} cannot be imported: ${String(error)}`);
+    continue;
+  }
   const readableExports = Object.keys(namespace).sort();
-  const minifiedExports = Object.keys(
-    await import(pathToFileURL(join(root, entry.minified)).href),
-  ).sort();
+  const minifiedExports = Object.keys(minifiedNamespace).sort();
   if (JSON.stringify(readableExports) !== JSON.stringify(minifiedExports)) {
     problems.push(
       `${entry.minified} exports ${minifiedExports.join(', ')}, but ${entry.readable} exports ${readableExports.join(', ')}`,

@@ -60,6 +60,8 @@ export interface DiagnosticsOptions {
    * A `SharedWorker` is identified by its URL: an observer that loads the script from anywhere
    * else talks to a broker of its own and sees nobody. Irrelevant on the `BroadcastChannel`
    * transport. See ADR-0006.
+   *
+   * @defaultValue `serial-broker.worker.js` next to the module, resolved against `import.meta.url`
    */
   readonly workerUrl?: string | URL;
   /**
@@ -67,7 +69,11 @@ export interface DiagnosticsOptions {
    * @defaultValue 'auto'
    */
   readonly transport?: TransportKind;
-  /** Receives the observer's own diagnostics, such as reports it had to drop. */
+  /**
+   * Receives the observer's own diagnostics, such as reports it had to drop.
+   *
+   * @defaultValue A logger that drops every record
+   */
   readonly logger?: Logger;
 }
 
@@ -133,7 +139,8 @@ export interface SerialBrokerDiagnostics {
  * @param options - Must name the same broker script and transport as the application.
  * @returns An open observer. Close it when done; a closing page closes it anyway.
  * @throws A `SerialBrokerError` with code `WEB_SERIAL_UNAVAILABLE`, `WEB_LOCKS_UNAVAILABLE` or
- *   `TRANSPORT_UNAVAILABLE` in a browser that cannot run the library at all.
+ *   `TRANSPORT_UNAVAILABLE` in a browser that cannot run the library at all, or
+ *   `BROKER_UNAVAILABLE` when the `sharedworker` transport is asked for and cannot be had.
  * @example
  * ```ts
  * import { openDiagnostics } from 'serial-broker/diagnostics';

@@ -138,5 +138,6 @@ serves `dist/` on a local port. Which configuration offers which action is decid
 `debug/src/model.ts`, and what a port chosen in the picker becomes in `debug/src/chosen-port.ts`;
 both are unit-tested.
 
-Keep the page free of inline script and inline style, including `style` attributes, or its own
-content security policy will refuse what you add.
+Keep the page free of inline script and inline style, including `style` attributes in the markup,
+or its own content security policy will refuse what you add. Setting `element.style` from the
+script is allowed by the policy, and is how the ⋯ menu is placed under its button.

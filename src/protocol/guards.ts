@@ -4,8 +4,8 @@ import { SerialBrokerStatus } from '../core/types.js';
  * The type guards the message-boundary validators are built from (ADR-0008).
  *
  * Both `decode.ts` and `decode-diagnostics.ts` ask the same questions of untrusted values - is
- * this an object, a name, a number, a status - and two private copies of the answers had
- * already drifted apart. One set means a field is judged the same way wherever it appears.
+ * this an object, a name, a number, a status - and two private copies of the answers drift
+ * apart. One set means a field is judged the same way wherever it appears.
  * See docs/guidelines/defensive-programming.md.
  */
 

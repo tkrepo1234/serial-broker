@@ -22,7 +22,8 @@ sap.ui.define([], function () {
    * @typedef {object} LogOptions
    * @property {boolean} timestamps - Whether each line starts with the time it was added.
    * @property {boolean} ansi - Whether a device's colour sequences are honoured.
-   * @property {boolean} autoscroll - Whether the log follows what arrives.
+   * @property {boolean} autoscroll - Whether the log follows what arrives: on, every new line
+   *   scrolls the log to its end; off, the log stays where the reader left it.
    */
 
   /**
@@ -96,8 +97,6 @@ sap.ui.define([], function () {
   }
 
   return {
-    MAX_LINES,
-
     /**
      * Adds a line to the log.
      *
@@ -107,9 +106,6 @@ sap.ui.define([], function () {
      * @param {LogOptions} options
      */
     append(log, text, kind, options) {
-      const wasAtBottom =
-        log.scrollHeight - log.scrollTop - log.clientHeight < 24 || options.autoscroll;
-
       const line = document.createElement('div');
       line.className =
         kind === 'out'
@@ -140,7 +136,7 @@ sap.ui.define([], function () {
       while (log.childElementCount > MAX_LINES) {
         log.firstElementChild?.remove();
       }
-      if (wasAtBottom) {
+      if (options.autoscroll) {
         log.scrollTop = log.scrollHeight;
       }
     },

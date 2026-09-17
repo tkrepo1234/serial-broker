@@ -1,4 +1,6 @@
-import { defaultFormValues, type SetupFormValues } from './setup-form.js';
+import type { ReleaseOptions } from '../../src/core/types.js';
+
+import { DEFAULT_NAME, defaultFormValues, type SetupFormValues } from './setup-form.js';
 
 /**
  * What _Choose a device…_ sets up: a configuration in auto mode, ready for the browser's picker.
@@ -10,9 +12,6 @@ import { defaultFormValues, type SetupFormValues } from './setup-form.js';
  * `requestAccess()` in the click that submits them. Pure, so it is unit-tested rather than clicked
  * through with a device on the desk.
  */
-
-/** What a configuration is called before anyone knows what its device is. */
-const DEFAULT_NAME = 'Device';
 
 /**
  * A name for the new configuration that no configuration on this origin uses yet.
@@ -53,4 +52,41 @@ export function formValuesForChosenDevice(taken: Iterable<string>): SetupFormVal
     vendorId: '',
     productId: '',
   };
+}
+
+/** What {@link chooseDeviceOrUndo} needs of the library's client. */
+export interface DeviceChooser {
+  requestAccess(name: string): Promise<boolean>;
+  release(name: string, options?: ReleaseOptions): Promise<void>;
+}
+
+/**
+ * Opens the browser's port picker for a configuration just set up in auto mode, and takes the
+ * configuration back when no port comes of it.
+ *
+ * A dismissed picker is an answer, not a failure: the configuration is released again, so nothing
+ * waits for a device nobody chose. It is released with `forget`, because `setup()` remembers a
+ * configuration at once and a plain release keeps what is remembered (ADR-0033): without it the
+ * name would stay in the list as remembered, and the next attempt would be offered "Device 2".
+ *
+ * @returns Whether a port was chosen.
+ * @throws What `requestAccess()` threw, after the configuration has been taken back.
+ */
+export async function chooseDeviceOrUndo(page: DeviceChooser, name: string): Promise<boolean> {
+  let isGranted: boolean;
+  try {
+    isGranted = await page.requestAccess(name);
+  } catch (error) {
+    try {
+      await page.release(name, { forget: true });
+    } catch {
+      // The failure of the picker is what the caller has to hear about; a release that fails on
+      // top of it would only replace that error with a less useful one.
+    }
+    throw error;
+  }
+  if (!isGranted) {
+    await page.release(name, { forget: true });
+  }
+  return isGranted;
 }

@@ -25,7 +25,7 @@ interface Row {
  * The table of every configuration on the origin, one row each.
  *
  * Choosing a row shows that configuration's details. Rows are kept and updated in place across
- * refreshes, so a row that has keyboard focus keeps it while the page redraws every two seconds.
+ * refreshes, so a row that has keyboard focus keeps it while the page redraws on every refresh.
  */
 export class ConfigurationList {
   readonly #body: HTMLElement;

@@ -34,6 +34,10 @@ different protocol versions do not coordinate with each other. It is noted whene
   library correctly - entry points, the API with every default, statuses, events, error codes, the
   rules that matter - in about 3 000 tokens.
 
+- **An icon**, `docs/icon.svg`: three tabs on one bus above the one port, the filled tab holding it.
+  One colour, no background. It is in the README, beside the name in the documentation, in the
+  browser tab and in the OpenUI5 terminal's title bar.
+
 ### Changed
 
 - **`USER_GESTURE_REQUIRED` says what is true.** Its remediation and the documentation claimed that any
@@ -53,6 +57,30 @@ different protocol versions do not coordinate with each other. It is noted whene
 - **The documentation's navigation has two arrows, up and down**, each shown only while there is more
   its way, each moving the list two thirds of what is visible. The single arrow back to the top
   never disappeared: the style sheet's `display: flex` won over the `hidden` attribute.
+
+### Fixed
+
+- **Received bytes are a copy in every listener**, as the documentation says: two listeners of one
+  `onReceive` were handed the same `Uint8Array`, so one changing it changed what the other saw.
+- **A configuration released while the browser's picker is open stays released.** The choice made
+  afterwards used to be adopted anyway; `requestAccess()` now rejects with `CONFIGURATION_RELEASED`.
+- **A port that throws instead of rejecting** - a synchronous `open()` or `getReader()` - is an
+  `OPEN_FAILED` like any other: retried, or `failed` without `autoReconnect`.
+- **`release(name, { forgetDevice: true })` cannot hang**: `getPorts()`, `forget()` and the
+  `locks.query()` behind the holder's terms are bounded by `openTimeoutMs`. A browser without
+  `SerialPort.forget()` is logged as `client.forget-unsupported`.
+- **An `error` message without a configuration name is refused by the decoder**, and `retry` is
+  required on a `status-request`. No version of the library ever sent either, so the wire protocol
+  version is unchanged.
+- **The debugging surface undoes a setup whose picker was dismissed** the same way on every path,
+  and its edit dialog says what it does: _Save and connect_. Help is a `?` button beside the actions.
+- **The emulator** answers an unknown flag with its usage text and exit code 2, refuses a chunk size
+  that is not a positive integer, and turns an unexpected error on a connection into a
+  `server-error` event instead of taking the process down.
+- **`check-dist` checks the CommonJS builds** for the worker script's name as well.
+- **The OpenUI5 terminal** shows a failed Connect and a file it could not read as errors, clears the
+  old error on a new Connect, and leaves the log where the reader put it while auto-scroll is off.
+  The minimal example clears its error when the connection is back.
 
 ### Removed
 

@@ -31,8 +31,8 @@ declare const self: {
 declare const navigator: { readonly locks: LockManagerLike };
 
 // Nothing here writes anywhere: a `SharedWorker` cannot reach the logger an application configured.
-// What the worker records at `warn` is instead sent to the connected tabs, which log it through
-// their own loggers (ADR-0018).
+// What the worker records at `warn` and above is instead sent to the connected tabs, which log it
+// through their own loggers (ADR-0018).
 const ports = new WorkerPorts<MessagePort>({
   logger: NOOP_LOGGER,
   locks: navigator.locks,

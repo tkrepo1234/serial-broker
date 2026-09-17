@@ -229,8 +229,15 @@ export class CdcAcmDevice {
    * @param maxChunkBytes - A positive byte count, or `undefined` to fill each read as far as
    *   its buffer allows. A small cap splits text across reads, including inside a multi-byte
    *   character.
+   * @throws RangeError when the count is not a positive integer: a cap of 0 or NaN would let no
+   *   read ever return anything.
    */
   setMaxChunkBytes(maxChunkBytes: number | undefined): void {
+    if (maxChunkBytes !== undefined && (!Number.isInteger(maxChunkBytes) || maxChunkBytes < 1)) {
+      throw new RangeError(
+        `The chunk cap must be a positive whole number of bytes, got ${String(maxChunkBytes)}.`,
+      );
+    }
     this.#maxChunkBytes = maxChunkBytes;
     this.#deliverToHost();
   }
