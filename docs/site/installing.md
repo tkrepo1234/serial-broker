@@ -64,7 +64,19 @@ opened from files share Web Locks, a `BroadcastChannel` and `localStorage`. Two 
 a served page:
 
 - **Use the classic script build**, `serial-broker.global.js`, with relative paths. A page opened
-  from a file may load neither an ES module nor an import map.
+  from a file may load neither an ES module nor an import map. An absolute path such as
+  `/assets/…` resolves against the root of the drive there, so both paths are relative and the
+  worker URL is resolved against the page:
+
+  ```html
+  <script src="./serial-broker/serial-broker.global.js"></script>
+  <script>
+    SerialBroker.configure({
+      workerUrl: new URL('./serial-broker/serial-broker.worker.js', document.baseURI).href,
+    });
+  </script>
+  ```
+
 - **No `SharedWorker` is started** - the browser refuses one there - so the tabs coordinate over the
   `BroadcastChannel` and log `environment.transport-fallback` once. Naming the worker URL is still
   right: the same folder then works unchanged when it is served.
@@ -126,26 +138,48 @@ Copy `serial-broker.global.js` and `serial-broker.worker.js` into one directory 
 with a plain `<script src>`:
 
 ```html
+<button id="choose" hidden>Choose the scale</button>
+
 <script src="/assets/serial-broker/serial-broker.global.js"></script>
 <script>
   // Required, and before the first setup(): see below.
   SerialBroker.configure({ workerUrl: '/assets/serial-broker/serial-broker.worker.js' });
+
+  const weight = document.querySelector('#weight');
+  const choose = document.querySelector('#choose');
 
   // subscribe() after setup() resolves: a name is only known once it is set up, and a setup that
   // waits for an earlier release of the same name resolves a moment later than it is called.
   SerialBroker.setup('Scale', { serial: { baudRate: 19200 }, encoding: { decodeText: true } })
     .then(() => {
       SerialBroker.subscribe('Scale', 'onReceive', (event) => {
-        document.querySelector('#weight').textContent = event.text;
+        weight.textContent = event.text;
+      });
+      // No device is named above, so the configuration takes it from the port the user picks, and
+      // waits with `awaiting-permission` until someone does. The browser shows its picker only
+      // during a click, so the page needs one button - shown exactly while it is wanted, and never
+      // again once the browser remembers the port.
+      SerialBroker.subscribe('Scale', 'onStatusChange', (event) => {
+        choose.hidden = event.status !== 'awaiting-permission';
+      });
+      choose.addEventListener('click', () => {
+        SerialBroker.requestAccess('Scale').catch((error) => {
+          weight.textContent = error.message;
+        });
       });
     })
     .catch((error) => {
       // A page with no build step has no other place for this: an unhandled rejection here is
       // invisible, and setup() is where a wrong option or a missing worker shows up.
-      document.querySelector('#weight').textContent = error.message;
+      weight.textContent = error.message;
     });
 </script>
 ```
+
+Name the device instead - `device: { vendorId: 0x0403, productId: 0x6001 }` - and the button is
+needed only until the browser has been given the permission once; the page then opens the port on
+every later visit by itself. [First connection](first-connection.md#3-ask-for-permission-once) has
+both ways in full.
 
 The build leaves **one global, `SerialBroker`**. It is the same facade a module imports —
 `setup()`, `subscribe()`, `send()`, `requestAccess()`, `release()`, `configure()` and the rest —
@@ -213,7 +247,9 @@ Where the browser has no `SharedWorker`, refuses to create one, or cannot load t
 it was not deployed, or is served from another path — serial-broker uses a `BroadcastChannel`
 instead and keeps working; see [The message bus](shared-ports.md#the-message-bus). It logs
 `environment.transport-fallback` at `warn` level. Check the log once after deploying: the fallback
-works, but a missing script is usually a mistake. `transport: 'sharedworker'` turns it into an error
+works, but a missing script is usually a mistake. **The library writes nothing anywhere on its
+own** - pass a logger first, with `SerialBroker.configure({ logger })`; see
+[Logging](diagnostics.md#logging). `transport: 'sharedworker'` turns it into an error
 instead; see [`configure()`](configuration.md#configure).
 
 After deploying a new release, serve its worker script under the URL the pages use; a copy left over

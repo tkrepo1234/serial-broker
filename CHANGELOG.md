@@ -10,6 +10,15 @@ different protocol versions do not coordinate with each other. It is noted whene
 
 ## [Unreleased]
 
+### Changed
+
+- **The documentation says what it takes to run each example**, after following every page of it
+  literally in a fresh project: the worker script is part of "running it", the classic-script page
+  asks for a port as it must, the page opened from a file has its own snippet with relative paths,
+  the content security policy allows the icon the pages declare, and the hash of an import map is
+  computed by `scripts/importmap-hash.mjs` rather than by a one-liner that only runs in a POSIX
+  shell.
+
 ### Fixed
 
 - **A port another program holds is reported as `OPEN_FAILED`**, not as `DEVICE_DISCONNECTED`.
