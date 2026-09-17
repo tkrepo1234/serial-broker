@@ -81,12 +81,29 @@
     scroller.addEventListener('scroll', update, { passive: true });
     update();
 
-    // The theme drags this list along with the page: its window scroll handler adds however far
-    // the content moved to the navigation's own position, so following a link into the middle of
-    // a page takes the navigation somewhere the reader never asked to go, and the entry they were
-    // looking at is gone. The navigation is a map, not a second view of the page - it should stay
-    // where it was put. Only that one handler is dropped; the theme highlights the current
-    // section from `hashchange`, which is left alone.
+    /**
+     * Brings the chapter heading above the current entry fully into view.
+     *
+     * The theme opens a page with the list scrolled to the entry being read, which is right - it
+     * says where the reader is. But it scrolls that entry to the top, so the chapter heading above
+     * it ends up cut in half behind the search box, and the list reads as though it had slipped a
+     * few lines. Pulling back to the heading costs nothing: the entry stays in view, and the
+     * reader can see which chapter they are in.
+     */
+    const showTheChapterHeading = () => {
+      const current = scroller.querySelector('.wy-menu-vertical li.current');
+      const caption = current?.closest('ul')?.previousElementSibling;
+      if (caption === null || caption === undefined || !caption.classList.contains('caption')) {
+        return;
+      }
+      const searchBottom = search?.getBoundingClientRect().bottom ?? 0;
+      const gap = caption.getBoundingClientRect().top - searchBottom;
+      // Only ever pulls back, and only when the heading is above the search box or tight under it.
+      if (gap < 8) {
+        scroller.scrollTop += gap - 8;
+      }
+    };
+
     // The theme moves this list twice over. Its window scroll handler adds however far the content
     // moved to the navigation's own position, so reading down a page drags the navigation with it;
     // and its hashchange handler scrolls whichever entry matches the anchor into view, so following
@@ -98,6 +115,11 @@
       const jquery = window.jQuery;
       if (typeof jquery === 'function') {
         jquery(window).off('scroll').off('hashchange');
+      }
+      // After the theme has placed the list, and only if the reader has not taken over already.
+      if (!readerHasScrolled) {
+        showTheChapterHeading();
+        update();
       }
     });
   }

@@ -107,7 +107,10 @@ Remembered configurations moved from **storage version 1 to 2** and are not migr
   reader was looking at was gone, in a list long enough that finding it again is work. The
   navigation is a map, not a second view of the page; the highlighting that says where the reader
   is remains.
-- **The navigation's search box stays in view** while the list under it scrolls.
+- **The navigation's search box stays in view** while the list under it scrolls, and the chapter
+  heading above the page being read stays fully visible: the theme scrolled that page's entry to
+  the very top, which left the heading cut in half behind the search box and made the list read as
+  though it had slipped a few lines.
 - **An arrow back to the top of the documentation's navigation.** The sidebar scrolls separately
   from the page and its scrollbar is easy to miss, so a reader far down a long list - the
   application API now lists every method - had no sign that anything was above. The arrow appears
