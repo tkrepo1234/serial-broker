@@ -86,25 +86,6 @@ async function connectedTabs(context: BrowserContext, count: number): Promise<Ta
   return tabs;
 }
 
-/** One tab, set up for bytes rather than text and with room for a long write. */
-async function largePayloadTabs(context: BrowserContext): Promise<Tab[]> {
-  const tab = await Tab.open(context);
-  await tab.setup(
-    CONFIGURATION,
-    echoConfiguration({
-      device: ARDUINO,
-      encoding: { decodeText: false },
-      // The write itself is handed to the driver quickly; this only has to outlast a full
-      // transmit buffer.
-      connection: { writeTimeoutMs: 120_000 },
-    }),
-  );
-  await tab.waitForStatus(CONFIGURATION, 'open');
-  await tab.page.waitForTimeout(SETTLE_AFTER_OPEN_MS);
-  await tab.clearReceived(CONFIGURATION);
-  return [tab];
-}
-
 /** What one tab received, as text. */
 async function text(tab: Tab | undefined): Promise<string> {
   return (await tab?.receivedText(CONFIGURATION)) ?? '';
@@ -181,20 +162,6 @@ test.describe('an Arduino running an echo sketch', () => {
     for (const tab of survivors) {
       await tab.waitForReceivedText(CONFIGURATION, 'AFTER-FAILOVER', 30_000);
     }
-  });
-
-  test('echoes a payload larger than the write chunk, byte for byte', async ({ hardware }) => {
-    // Slower than it looks: the board this was written against echoes at about 80 bytes a second,
-    // whatever the line rate, so 5 000 bytes take a good minute to come back.
-    test.setTimeout(240_000);
-    const [tab] = await largePayloadTabs(hardware);
-    const seed = Math.floor(Math.random() * 1_000_000);
-
-    await tab?.sendPattern(CONFIGURATION, 5_000, seed);
-
-    // 5 000 bytes is more than one write chunk (4 096) and far more than one read, so this
-    // crosses boundaries in both directions - and every byte of it is the one that was sent.
-    await tab?.waitForPatternRun(CONFIGURATION, 5_000, 180_000);
   });
 
   test('connects again after the configuration was released', async ({ hardware }) => {

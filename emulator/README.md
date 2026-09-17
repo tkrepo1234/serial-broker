@@ -96,9 +96,8 @@ Every transfer is logged, so you can see exactly which bytes reached the device 
 | 22 (binary)                  | As written; `send \x02\xff\x03` covers the receiving direction.                                                                                  |
 | 24 (owner lost during write) | `hang`, write from tab B, kill tab A, then `resume`. The bytes must not repeat.                                                                  |
 
-Not covered: step 26, which needs an Android device. And the plan still has to be run on real
-hardware once before a release: an emulated device proves the software path, not the electrical
-one.
+The run on real hardware is the Arduino suite's (`SERIAL_BROKER_HARDWARE=arduino`): an emulated
+device proves the software path, not the electrical one.
 
 ## Limitations
 

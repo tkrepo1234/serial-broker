@@ -53,8 +53,8 @@ npm install serial-broker
 ```
 
 Serve `serial-broker.worker.js` from the application's origin, and name its URL before the first
-`setup()`: `SerialBroker.configure({ workerUrl })`. **Requirements:** a Chromium-based browser, a
-secure context (HTTPS or `localhost`), all tabs on one origin.
+`setup()`: `SerialBroker.configure({ workerUrl })`. **Requirements:** a Chromium-based desktop browser,
+a secure context (HTTPS or `localhost`), all tabs on one origin.
 
 ## Documentation
 

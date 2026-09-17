@@ -251,7 +251,7 @@ describe('createBrowserEnvironment', () => {
       recordTransportRequest('c-1' as ClientId, logger).request,
     );
 
-    // Chrome for Android has no SharedWorker but does have Web Serial. Failing there would
+    // A browser can have Web Serial and no SharedWorker - a policy takes it away. Failing there would
     // mean no device access at all, for a coordination detail the fallback handles (ADR-0006).
     // The selection is automatic, and reported in the tab's own log.
     expect(transport.kind).toBe('broadcastchannel');

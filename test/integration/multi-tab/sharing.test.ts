@@ -8,7 +8,7 @@ import { READER, READER_OPTIONS } from '../../harness/devices.js';
  * The product claim, tested end to end: several tabs, one port.
  *
  * Every scenario runs against both transports, because the fallback must not be a path that
- * only gets exercised on someone's Android phone in production (ADR-0006).
+ * only gets exercised on a locked-down station in production (ADR-0006).
  */
 describe.each(TRANSPORT_MODES)('sharing one port across tabs (%s)', (transport) => {
   /** A harness with one granted device, and no tab open yet. */

@@ -10,8 +10,8 @@ every status change, in the same order. Writes from tabs that do not hold the po
 tab that does, and their outcome must come back to their originator. Ownership is already solved by
 Web Locks ([ADR-0005](./0005-owner-election-via-web-locks.md)); what remains is a bus.
 
-`SharedWorker` is not universally available even where Web Serial is. It is absent on Chrome for
-Android, it can be disabled by enterprise policy, and a worker whose script URL cannot be resolved -
+`SharedWorker` is not universally available even where Web Serial is. It can be disabled by
+enterprise policy, a sandboxed frame can be without it, and a worker whose script URL cannot be resolved -
 because of an unusual bundler setup, a strict `script-src`, or a worker file copied to the wrong
 path - is still created: the browser reports the failure afterwards, as an `error` event.
 
@@ -97,7 +97,7 @@ and nothing else.
 - **A worker that elects the owner by observing port disconnects.** Presence is not mutual
   exclusion (ADR-0005).
 - **No fallback; throw `SHARED_WORKER_UNAVAILABLE`.** Honest and simple, but an application that
-  cannot open a port at all on Android is a worse outcome than one on a slower bus.
+  cannot open a port at all where the worker is missing is a worse outcome than one on a slower bus.
 - **Fall back to "every tab opens its own port".** Violates the entire premise.
 - **Replay what was sent before the `welcome` into the fallback.** What the fallback did until
   2026-09-15, bounded at 1000 messages. Restating what the other tabs need to know is smaller and

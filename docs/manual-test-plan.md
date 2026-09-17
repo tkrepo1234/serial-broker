@@ -103,8 +103,7 @@ each step are in [`emulator/README.md`](../emulator/README.md); the reasoning is
 [ADR-0035](./adr/0035-browser-tests-with-playwright.md).
 
 A run with the emulator is recorded like any other run, naming the emulator and the usbip-win2
-version instead of a device. It does not replace the run on real hardware that a release needs:
-it proves the software path, not the electrical one.
+version instead of a device. The run on real hardware is the Arduino suite's.
 
 ## Setup
 
@@ -158,21 +157,20 @@ What they cover of the checklist below, step by step:
 | 17 (a device that takes nothing) | on the emulator (`hang`): a short write resolves, a long one fails with `WRITE_TIMEOUT`, port open |
 | 18 (permission revoked)          | **by hand**, in the site settings                                                                  |
 | 19 (forget the device)           | on the emulator: after `release(name, { forgetDevice: true })` the status is `awaiting-permission` |
-| 20                               | in a browser; 5 000 bytes on the Arduino; 65 536 bytes of every value on the emulator              |
+| 20                               | in a browser, and 65 536 bytes of every value on the emulator                                      |
 | 21                               | in a browser (reads of 8 bytes) and on the emulator (`chunk 1`, one byte per read)                 |
 | 22 (hex in the send box)         | the bytes on the emulator; the debugging surface's hex box and display in `debug-surface.spec.ts`  |
 | 23 (no payload in the log)       | in-process (`test/integration/diagnostics.test.ts`)                                                |
 | 24                               | on the emulator: the holder crashed while the device holds the write                               |
 | 25                               | in a browser, repeating 5, 6, 9 and 13 over the fallback                                           |
-| 26 (Chrome for Android)          | **by hand**, with a device and an OTG adapter                                                      |
+| 26                               | withdrawn: Chrome for Android is not a target (see [Known limits](./site/known-limits.md))         |
 | 27 (worker script answers 404)   | in-process (`test/integration/multi-tab/worker-script-fallback.test.ts`)                           |
 | 28                               | in a browser                                                                                       |
 | 29                               | in a browser: the worker terminated, each tab reporting once, and a tab frozen throughout it       |
 
-So a release run by hand comes down to step 18 - the browser's settings offer nothing a test can
-hold on to - and step 26, plus unplugging a physical adapter (13–16) once, since the emulator proves
-the software path and not the electrical one. Two of the runs above need a desktop, because they
-show a browser window, and are opt-in like the hardware suites:
+So a release run by hand comes down to step 18: the browser's settings offer nothing a test can
+hold on to. Unplugging (13–16) is the emulator's. Two of the runs above need a desktop, because
+they show a browser window, and are opt-in like the hardware suites:
 
 ```sh
 SERIAL_BROKER_HARDWARE=picker npm run test:browser -- test/browser/hardware/picker.spec.ts
@@ -261,8 +259,9 @@ they are left unticked because the checklist is about a run **with** hardware.
 
 - [ ] **25.** Force it with `SerialBroker.configure({ transport: 'broadcastchannel' })` before
       `setup()`, then repeat steps 5, 6, 9 and 13. Behaviour must be indistinguishable.
-- [ ] **26.** If an Android device is available, open the debugging surface on Chrome for Android
-      with an OTG adapter. `SharedWorker` is absent there, so the fallback is what runs.
+- **26.** Withdrawn on 2026-09-17. It asked for Chrome for Android, which is not a target: the
+  library is built for operator stations and tested on desktop Chromium and Edge. The number stays
+  so that the steps after it keep theirs.
 - [ ] **27.** Configure a `workerUrl` that answers 404, open two tabs and set the configuration up
       in both, then repeat steps 5 and 6. Both tabs must log `environment.transport-fallback` with
       `reason: 'worker-script-failed'` and behave as in step 25.
@@ -396,9 +395,8 @@ close and reopen take milliseconds. The library now leaves such a write in fligh
 tearing the connection down.
 
 Not covered here: steps 1–2, 4, 4a and 18–19 (the picker and site settings), 10 (a tab killed from
-the task manager), 16 (two minutes of backoff), 25–29 (their browser tests run against the
-stand-in) and 26 (Android). Nor the electrical path: an emulated device proves the software stack,
-not a UART.
+the task manager), 16 (two minutes of backoff) and 25–29 (their browser tests run against the
+stand-in).
 
 ### 2026-09-15, later — the same machine: receiving, reconnecting, the Arduino again
 
@@ -528,3 +526,12 @@ ending is greyed out, and the traffic shows `02 FF 03` for what was sent and for
 permission as text without a control a test can address, and the address bar's page-info bubble
 did not stay open when opened through UI Automation. Whether Chromium sends `disconnect` on a
 revoked permission (ADR-0010) therefore remains assumed.
+
+### 2026-09-17, evening — the scope of a release run, as Tim set it
+
+Three things left the plan. **Unplugging a physical adapter by hand** will not take place: steps
+13–16 are the emulator's. **Step 26** is withdrawn, because Chrome for Android is not a target
+([Known limits](./site/known-limits.md)). **The Arduino's 5 000-byte round trip** is removed: the
+board has no flow control and loses what arrives faster than its sketch reads, so payloads beyond
+one write chunk are the emulator's alone. The Arduino suite without it: **6 of 6 passed** on the
+same day. What a release still needs by hand is step 18.

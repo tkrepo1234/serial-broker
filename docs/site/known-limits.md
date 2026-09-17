@@ -89,6 +89,17 @@ the port then end in `WRITE_TIMEOUT`, and what the device sends reaches only the
 port, until the page is reloaded. Only a worker that never answers when a tab connects is caught, by
 the handshake deadline.
 
+## Chrome for Android is not a target
+
+serial-broker is built for operator stations: desktop Chromium and Microsoft Edge, which is where it
+is tested. Chrome for Android is not tested and not supported. Nothing in the library refuses to run
+there - Android has no `SharedWorker`, and a browser without one gets the `BroadcastChannel` bus like
+any other - but no release is checked on it, and a defect that shows only there is not a defect of a
+release.
+
+**What to do:** use a desktop browser for anything that has to work. `isSupported()` answers for the
+APIs the library needs, not for the platforms it is tested on.
+
 ## Tabs on different message buses do not see each other
 
 Tabs reach each other through the `SharedWorker` of their worker URL. A tab whose worker script did

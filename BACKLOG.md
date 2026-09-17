@@ -18,20 +18,18 @@ ready; the version and the date go into the changelog when Tim decides.
       and 19 were added to the emulator suite, and on 2026-09-17 a frozen tab - step 7's harsher
       case and the second half of step 29 - joined the browser suite, and later that day steps 2, 4a,
       7's background tab and 22's display were automated too (`picker.spec.ts`,
-      `npm run test:background`, `debug-surface.spec.ts`). What stays by hand: 18, 26, and
-      unplugging a physical adapter once.
+      `npm run test:background`, `debug-surface.spec.ts`). What stays by hand: step 18. Step 26
+      (Chrome for Android) was withdrawn the same day - Android is not a target, and Known limits
+      says so - and so was unplugging a physical adapter: steps 13-16 are the emulator's.
 - [x] A second pass over every test file (1 410 → 1 345 tests).
 - [x] A documentation drift check against the code, and a cold-read usability test of ten industrial
       use cases built from the documentation alone (below).
-- [ ] **Decide what becomes of the tag `v0.1.0-alpha.1`.** It has sat on `8deb133` since 2026-09-14,
-      270 commits behind `main` on 2026-09-17, while `package.json` still carries that version: the
-      release needs either the next version (`0.1.0-alpha.2`, say) or that tag moved, and moving a
-      pushed tag is Tim's call. The rename pushed the tag again, which started the Release workflow
-      twice on 2026-09-17; both runs failed at lint on the code of that day, and the draft release
-      they would have replaced was deleted on Tim's word the same day. Until the changelog has its
-      version section, the workflow's dry run stops at the notes step, as designed.
-- [ ] At release: move Unreleased into `## [x.y.z] - date`, bump `package.json`, run the manual steps
-      that stay by hand against a physical adapter, then tag. Tim's call.
+- [x] The tag `v0.1.0-alpha.1` of 2026-09-14 is gone, deleted here and on GitHub on 2026-09-17
+      (Tim): it sat 270 commits behind `main` while `package.json` carried its version, and the
+      rename had pushed it again, which started the Release workflow twice on code that no longer
+      lints. No tag and no GitHub release exist now; `0.1.0-alpha.1` is free for the first release.
+- [ ] At release: move Unreleased into `## [x.y.z] - date`, set `package.json` to it, run
+      `npm run release:check`, then tag. Tim's call.
 
 ## Usability findings of the cold read (2026-09-15)
 
@@ -54,9 +52,8 @@ Done in the same round:
   2026-09-16: **5 of 6 tests pass**, and `echoes a payload larger than the write chunk` fails because
   the board loses what arrives from roughly 255 bytes on - measured with Web Serial alone, without
   the library, and recovering for small payloads right afterwards. Both runs are in the manual test
-  plan. **Before the release**, run that test against a board that keeps up (a power cycle, a sketch
-  that reads while it writes, or flow control); the emulator's 64 KiB round trip covers large
-  payloads meanwhile.
+  plan. The test was removed on 2026-09-17 (Tim): large payloads are the emulator's, whose 64 KiB
+  round trip counts what reached the device.
 - Documentation: deploying on a web server (files, a strict CSP with the import map, cache headers,
   a checklist), one import-map specifier, operator stations (every window watches, one operates),
   the framing and request/answer examples fixed, and every contradiction the reviewers logged.
@@ -131,7 +128,7 @@ further down says otherwise, this section wins.
 
 ### Release and distribution
 
-- Tag the first version once the manual steps have run against a physical adapter. Tim's call.
+- Tag the first version when Tim says so.
 - **npm: not before 1.0.** At 1.0, bring the question back to Tim.
 - The repository stays **private** until Tim says otherwise. License stays MIT, "serial-broker
   contributors".
@@ -488,7 +485,7 @@ What the implementers left open:
 - The seeded serial permission is Windows-only (device instance ID); macOS and Linux store vendor,
   product and serial number. CI exercises Chromium only.
 - ~~The 64 KiB hardware round trip takes a quarter of an hour on the Arduino.~~ Removed on 2026-09-15;
-  the emulator's 64 KiB test and the Arduino's 5 000-byte test cover it.
+  the emulator's 64 KiB test covers it, and since 2026-09-17 every payload beyond one write chunk.
 - No browser test for `USER_GESTURE_REQUIRED`: every script an automation evaluates carries
   transient activation. The stand-in has no fault injection yet (open/write failing or hanging, a
   non-USB port).

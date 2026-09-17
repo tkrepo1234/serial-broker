@@ -72,8 +72,8 @@ against an Arduino echoing on a COM port; `SERIAL_BROKER_HARDWARE=emulator` runs
 a child process and driving its failure modes on cue. Both are Windows-only and never run in CI. They
 get the port through a throwaway browser profile whose `Preferences` grant the serial permission for
 the test origin by the port's device instance ID (content setting `serial_chooser_data`, as Chromium
-stores a grant), so no prompt is answered and no policy or registry key is touched. The 64 KiB round
-trip on the Arduino needs `SERIAL_BROKER_HARDWARE_LARGE=1`. Runs are recorded in the manual test
+stores a grant), so no prompt is answered and no policy or registry key is touched. Payloads beyond one
+write chunk are the emulator's alone: the board has no flow control. Runs are recorded in the manual test
 plan, which stays for what cannot be automated.
 
 **The browser's own UI.** Two steps of that plan are about what Playwright cannot reach or will not

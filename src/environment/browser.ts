@@ -168,7 +168,7 @@ function createStorage(): KeyValueStorage {
  *
  * `SharedWorker` first, because point-to-point routing is cheaper (ADR-0006). `BroadcastChannel`
  * when it is unavailable, when its construction throws, or when its script fails to load -
- * realistic outcomes of Chrome for Android, a strict CSP, an unusual bundler setup, or a worker
+ * realistic outcomes of an enterprise policy, a strict CSP, an unusual bundler setup, or a worker
  * file that was not deployed (ADR-0006). Every such switch is logged. `transport: 'sharedworker'`
  * never switches: it exists to make a missing worker loud.
  *

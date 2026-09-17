@@ -2,8 +2,9 @@
 
 ## Requirements
 
-**A browser that implements Web Serial.** Web Serial is part of Chromium, and serial-broker is
-tested in Chromium and in Microsoft Edge. Firefox and Safari do not implement Web Serial.
+**A desktop browser that implements Web Serial.** Web Serial is part of Chromium, and serial-broker
+is tested in Chromium and in Microsoft Edge on the desktop. Firefox and Safari do not implement Web
+Serial. Chrome for Android is [not a target](known-limits.md#chrome-for-android-is-not-a-target).
 `isSupported()`, [below](#checking-support-at-run-time), tells at run time.
 
 **A secure context.** Browsers offer Web Serial and Web Locks only on pages served over HTTPS, or
