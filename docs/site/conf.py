@@ -50,6 +50,8 @@ html_show_sourcelink = False
 # Keeps pages from scrolling sideways; see the stylesheet for what it changes and why.
 html_static_path = ["_static"]
 html_css_files = ["serial-broker.css"]
+# Adds the arrow back to the top of the navigation; see the file for what it does and why.
+html_js_files = ["serial-broker.js"]
 
 # Copied to the root of the built site. `serve.json` turns off the clean URLs of `npx serve`, which
 # would redirect .../index/index.html - the generated reference of the `index` entry point - to its

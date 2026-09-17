@@ -37,3 +37,47 @@
 .rst-content .inherits-table td:last-child {
   max-width: 150px;
 }
+
+/*
+ * The arrow back to the top of the navigation (serial-broker.js).
+ *
+ * The sidebar scrolls separately from the page and its scrollbar is easy to miss, so a reader
+ * far down a long list - the application API lists every method - has no sign that anything is
+ * above. It sits in the top left corner of the fixed sidebar frame, above the scrolling list,
+ * and appears only once that list has been scrolled.
+ */
+.serial-broker-to-top {
+  position: absolute;
+  top: 0.5rem;
+  left: 0.5rem;
+  z-index: 300;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.9rem;
+  height: 1.9rem;
+  padding: 0;
+  border: 1px solid rgba(252, 252, 252, 0.25);
+  border-radius: 50%;
+  background: #2980b9;
+  color: #fcfcfc;
+  cursor: pointer;
+  /* Over the dark navigation, so it reads as sitting above the list rather than in it. */
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
+}
+
+.serial-broker-to-top svg {
+  width: 1.1rem;
+  height: 1.1rem;
+  fill: currentColor;
+}
+
+.serial-broker-to-top:hover {
+  background: #3091d1;
+}
+
+/* Keyboard users must see what they are on: the theme removes outlines in this area. */
+.serial-broker-to-top:focus-visible {
+  outline: 2px solid #fcfcfc;
+  outline-offset: 2px;
+}

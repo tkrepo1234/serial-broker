@@ -101,6 +101,10 @@ Remembered configurations moved from **storage version 1 to 2** and are not migr
   picker in the same click, and the page carries a strict `Content-Security-Policy` (ADR-0019).
   _Choose device…_ is offered in every tab using a configuration that waits for permission, not only
   in the tab holding the port.
+- **An arrow back to the top of the documentation's navigation.** The sidebar scrolls separately
+  from the page and its scrollbar is easy to miss, so a reader far down a long list - the
+  application API now lists every method - had no sign that anything was above. The arrow appears
+  in the top left of the sidebar as soon as that list is scrolled, and takes them back.
 - **A documentation page showing a complete page with no build step**, "No build step" under
   Examples: the whole of `examples/minimal-js` - one HTML file, an import map, one inline module
   script - embedded from the example itself rather than described, with the line assembly a page
