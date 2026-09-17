@@ -9,7 +9,7 @@ import { defineConfig } from 'tsup';
  * anyone. `publicDir` copies its HTML next to the bundle.
  */
 export default defineConfig({
-  entry: { debug: 'debug/src/main.ts' },
+  entry: { 'serial-broker-debug': 'debug/src/main.ts' },
   outDir: 'dist/debug',
   publicDir: 'debug/public',
   format: ['esm'],

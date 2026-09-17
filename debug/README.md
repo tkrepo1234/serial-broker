@@ -68,8 +68,8 @@ dist/
 ├── serial-broker.worker.js
 └── debug/
     ├── index.html
-    ├── debug.css
-    └── debug.js
+    ├── serial-broker-debug.css
+    └── serial-broker-debug.js
 ```
 
 It must be on the **same origin** as the application, because tabs of different origins never

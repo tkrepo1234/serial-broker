@@ -247,8 +247,8 @@ dist/
 ├── serial-broker.worker.js
 └── debug/
     ├── index.html
-    ├── debug.css
-    └── debug.js
+    ├── serial-broker-debug.css
+    └── serial-broker-debug.js
 ```
 
 If the application loads the worker from a different URL, set it under _Settings_ on the page, or

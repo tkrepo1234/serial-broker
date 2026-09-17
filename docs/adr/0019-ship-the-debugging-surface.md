@@ -49,7 +49,7 @@ can resolve its files.
   img-src 'self'; font-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'
   ```
 
-  Its styles live in `dist/debug/debug.css`, and no element carries a `style` attribute.
+  Its styles live in `dist/debug/serial-broker-debug.css`, and no element carries a `style` attribute.
   `frame-ancestors` stays a header the operator sends; `debug/README.md` gives the complete policy,
   and the page refuses to start in a frame of another origin.
 
@@ -96,7 +96,7 @@ can resolve its files.
 - **An operator who serves `dist/` wholesale exposes a page that can send to devices and revoke
   permissions.** The documentation says so plainly; nothing technical prevents it, because
   preventing it would be the library deciding for the operator.
-- `debug.css` has to be served with `index.html`, and a copy served through something that rewrites
+- `serial-broker-debug.css` has to be served with `index.html`, and a copy served through something that rewrites
   HTML or injects a script breaks under its own policy.
 
 ### Risks and mitigations

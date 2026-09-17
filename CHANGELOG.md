@@ -36,6 +36,10 @@ different protocol versions do not coordinate with each other. It is noted whene
   seconds; only what outlasts them loses it. Measured with the browser's own picker: `setup()` and
   then `requestAccess()` from one click opens it.
 
+- **The debugging surface's files are named after the package**: `dist/debug/serial-broker-debug.js`
+  and `serial-broker-debug.css`, where they were `debug.js` and `debug.css` - names that say nothing
+  once the files lie on a web server (ADR-0043 gave the library's own files theirs).
+
 ### Removed
 
 - **Eleven example applications**, on Tim's decision of 2026-09-17: `terminal`, `minimal`,
