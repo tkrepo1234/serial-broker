@@ -148,7 +148,7 @@ export const REMEDIATION: Record<SerialBrokerErrorCode, string> = {
   PERMISSION_DENIED:
     'The user dismissed the port picker or the permission was revoked in site settings. Offer the action again from a user gesture.',
   USER_GESTURE_REQUIRED:
-    'Call requestAccess() synchronously from a user gesture handler. Any await before the call consumes the transient activation.',
+    'Call requestAccess() from a user gesture handler, before anything slow. The browser counts a click as a gesture for a few seconds only, and an await that outlasts them loses it.',
   DEVICE_MISMATCH:
     'The selected port reports different USB vendor/product IDs than configured. Check the IDs in `context` against your device, or widen the configuration.',
   OPEN_FAILED:

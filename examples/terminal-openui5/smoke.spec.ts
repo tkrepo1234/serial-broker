@@ -123,6 +123,24 @@ test('reads and writes hex, and keeps the display options between visits', async
   await expect(tab.locator(`${ID}displaySummary`)).toContainText('hex');
 });
 
+test('Connect again asks for the device in the same press when none was granted', async ({
+  context,
+}) => {
+  await installLoopback(context, false);
+  const tab = await ExampleTab.open(context, UI);
+  await tab.expectStatus('awaiting-permission');
+
+  // Disconnected without ever having chosen a device. Whoever presses Connect again wants one, so
+  // the picker opens from that press - no second button to find.
+  await tab.locator(`${ID}release`).click();
+  await tab.expectStatus('released');
+  await tab.locator(`${ID}release`).click();
+
+  await tab.expectStatus('open');
+  await expect(tab.locator(UI.error)).toBeHidden();
+  await tab.sendLine('AFTER ONE PRESS');
+});
+
 test('changes the baud rate in the settings dialog and connects again with it', async ({
   context,
 }) => {
@@ -131,7 +149,10 @@ test('changes the baud rate in the settings dialog and connects again with it', 
   await tab.expectOpenWithoutClick();
 
   await tab.locator(`${ID}settings`).click();
-  // A combo box: the usual rates are offered, and any other can be typed.
+  // A combo box: the usual rates are offered whatever the field holds, and any other can be typed.
+  await tab.locator(`${ID}baudRate-arrow`).click();
+  await expect(tab.page.getByRole('option')).toHaveCount(12);
+  await tab.page.keyboard.press('Escape');
   await tab.locator(`${ID}baudRate-inner`).fill('250000');
   await tab.locator(`${ID}settingsApply`).click();
 

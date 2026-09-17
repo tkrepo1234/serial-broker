@@ -18,6 +18,7 @@ package-lock.json
 ../examples/openui5/.ui5-tooling-modules
 ../examples/openui5-js/webapp/serial-broker
 ../examples/openui5-js/.ui5-tooling-modules
+../examples/terminal-openui5/webapp/serial-broker
 ../examples/minimal-js/.typecheck
 
 # The extreme suite's records of its last run, written by the runs themselves.

@@ -444,6 +444,7 @@ dialog h2 {
 }
 
 .grid label,
+.grid .field,
 .file-field {
   display: flex;
   flex-direction: column;
@@ -460,6 +461,55 @@ dialog h2 {
 
 .file-field {
   margin-bottom: 0.7rem;
+}
+
+/* --- The combo box: a text field with a list of the usual values ------------------------------ */
+
+.combo {
+  position: relative;
+  display: flex;
+}
+
+.combo input {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding-right: 2rem;
+}
+
+/* The arrow sits inside the field, where a select has its own. */
+.combo-toggle {
+  position: absolute;
+  inset: 1px 1px 1px auto;
+  width: 1.9rem;
+  padding: 0;
+  border: 0;
+  border-radius: 0 5px 5px 0;
+  background: transparent;
+  color: var(--muted);
+  line-height: 1;
+}
+
+.combo-toggle:hover {
+  color: var(--fg);
+}
+
+.combo-list {
+  min-width: 0;
+  max-height: 14rem;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.combo-list li {
+  padding: 0.3rem 0.6rem;
+  border-radius: 5px;
+  cursor: pointer;
+}
+
+.combo-list li:hover,
+.combo-list li[aria-selected='true'] {
+  background: var(--accent);
+  color: var(--accent-fg);
 }
 
 .settings-error {

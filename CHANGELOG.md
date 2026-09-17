@@ -27,6 +27,13 @@ different protocol versions do not coordinate with each other. It is noted whene
   `sap_horizon_dark`. Its build runs from a folder opened as a file, with no server and no internet:
   a self-contained bundle with the text bundles and locale data OpenUI5 would otherwise fetch
   embedded into it.
+- **`USER_GESTURE_REQUIRED` says what is true.** Its remediation and the documentation claimed that any
+  `await` before `requestAccess()` uses the click up. Chromium counts a click as a gesture for a few
+  seconds; only what outlasts them loses it. Measured with the browser's own picker: `setup()` and
+  then `requestAccess()` from one click opens it.
+- **Both terminals: _Connect again_ asks for the device in the same click** when no permission is
+  there, instead of showing a second button; and the plain terminal's baud rate is a combo box that
+  lists the usual rates whatever the field holds - its `<datalist>` offered only the one in it.
 - **The terminal example needs no web server.** It loads the classic script build by relative
   paths, so `examples/terminal/dist/` runs from wherever it lies, opened as a file or served.
 

@@ -7,6 +7,7 @@
         <Label text="{i18n>baudRate}" labelFor="baudRate" />
         <!-- A combo box, not a select: the usual rates are offered, and any other can be typed. -->
         <ComboBox id="baudRate" value="{settings>/baudRate}" width="100%">
+          <core:Item key="300" text="300" />
           <core:Item key="1200" text="1200" />
           <core:Item key="2400" text="2400" />
           <core:Item key="4800" text="4800" />

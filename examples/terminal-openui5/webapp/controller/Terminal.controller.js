@@ -241,6 +241,50 @@ sap.ui.define(
         );
       },
 
+      /**
+       * Connects, and opens the browser's port picker at once if a permission is what is missing.
+       *
+       * For *Connect again*: whoever presses it wants the device, and being shown a second button
+       * to press for the same thing is a step nobody asked for. The picker needs a click, and this
+       * still is one - Chromium counts a click as such for a few seconds, and a setup takes a
+       * fraction of one. Should it ever take longer, the library refuses with
+       * `USER_GESTURE_REQUIRED`; that is not shown as an error, because *Connect* is on the page by
+       * then and does the same.
+       */
+      _connectAndAsk: async function () {
+        const library = /** @type {SerialBrokerGlobal} */ (this._library);
+        await this._connect();
+        // `setup()` resolves a moment before the library knows whether a permission is there: the
+        // status is `idle`, then `connecting`, and only then says what is needed (20 ms, measured).
+        const unsettled = /** @type {string[]} */ ([
+          library.SerialBrokerStatus.Idle,
+          library.SerialBrokerStatus.Connecting,
+        ]);
+        const deadline = Date.now() + 2000;
+        while (
+          this._isSetUp &&
+          Date.now() < deadline &&
+          unsettled.includes(library.getStatus(NAME).status)
+        ) {
+          await new Promise((resolve) => setTimeout(resolve, 20));
+        }
+        if (
+          !this._isSetUp ||
+          library.getStatus(NAME).status !== library.SerialBrokerStatus.AwaitingPermission
+        ) {
+          return;
+        }
+        try {
+          if (!(await library.requestAccess(NAME))) {
+            this._append('The picker was dismissed; nothing was chosen.', 'note');
+          }
+        } catch (error) {
+          if (!library.isSerialBrokerError(error) || error.code !== 'USER_GESTURE_REQUIRED') {
+            this._showError(error);
+          }
+        }
+      },
+
       _unsubscribeAll: function () {
         for (const unsubscribe of this._subscriptions.splice(0)) {
           unsubscribe();
@@ -250,8 +294,8 @@ sap.ui.define(
       onConnect: function () {
         const library = /** @type {SerialBrokerGlobal} */ (this._library);
         this._clearError();
-        // The first thing in the handler: anything awaited before it uses the click up, and without
-        // a click the browser shows no picker.
+        // Early in the handler: the browser counts a click as one for a few seconds only, and
+        // without a click it shows no picker.
         library.requestAccess(NAME).then(
           (granted) => {
             if (!granted) {
@@ -267,7 +311,7 @@ sap.ui.define(
         this._clearError();
         // `_isSetUp`, not the status: a setup that threw shows `failed` with nothing registered.
         if (!this._isSetUp) {
-          void this._connect();
+          void this._connectAndAsk();
           return;
         }
         // Releasing forgets nothing: the configuration stays, and connecting again needs no prompt.

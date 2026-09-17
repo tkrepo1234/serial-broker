@@ -229,8 +229,10 @@ failure.
 
 `USER_GESTURE_REQUIRED`
 : **Raised by** `requestAccess()` when it is not called in response to a click or key press. The
-most common cause is an `await` before the call, which uses up the gesture.
-**Do:** call `requestAccess()` as the first thing in the event handler.
+most common cause is a slow `await` before the call: the browser counts a click as a gesture for a
+few seconds only (about five in Chromium), and what outlasts them loses it.
+**Do:** call `requestAccess()` as the first thing in the event handler, or after nothing slower than
+a `setup()`.
 
 `DEVICE_MISMATCH`
 : **Raised by** `requestAccess()` when the chosen port is not the configured device: its USB IDs

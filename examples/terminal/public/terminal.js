@@ -495,6 +495,43 @@
     );
   }
 
+  /**
+   * Connects, and opens the browser's port picker at once if a permission is what is missing.
+   *
+   * For *Connect again*: whoever clicks it wants the device, and being shown a second button to
+   * click for the same thing is a step nobody asked for. The picker needs a click, and this still
+   * is one - Chromium counts a click as such for a few seconds, and a setup takes a fraction of
+   * one. Should it ever take longer, the library refuses with `USER_GESTURE_REQUIRED`; that is not
+   * shown as an error, because *Connect* is on the page by then and does the same.
+   */
+  async function connectAndAsk() {
+    await connect();
+    // `setup()` resolves a moment before the library knows whether a permission is there: the
+    // status is `idle`, then `connecting`, and only then says what is needed (20 ms, measured).
+    const deadline = Date.now() + 2000;
+    while (
+      isSetUp &&
+      Date.now() < deadline &&
+      [SerialBrokerStatus.Idle, SerialBrokerStatus.Connecting].includes(
+        /** @type {any} */ (SerialBroker.getStatus(NAME).status),
+      )
+    ) {
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    }
+    if (!isSetUp || SerialBroker.getStatus(NAME).status !== SerialBrokerStatus.AwaitingPermission) {
+      return;
+    }
+    try {
+      if (!(await SerialBroker.requestAccess(NAME))) {
+        append('The picker was dismissed; nothing was chosen.', 'note');
+      }
+    } catch (error) {
+      if (!isSerialBrokerError(error) || error.code !== 'USER_GESTURE_REQUIRED') {
+        showError(error);
+      }
+    }
+  }
+
   /** Undoes every subscription {@link connect} made, so a second connect does not double the log. */
   function unsubscribeAll() {
     for (const unsubscribe of subscriptions.splice(0)) {
@@ -519,8 +556,8 @@
 
     el('connect').addEventListener('click', () => {
       clearError();
-      // The first thing in the handler: anything awaited before it uses the click up, and without a
-      // click the browser shows no picker.
+      // Early in the handler: the browser counts a click as one for a few seconds only, and
+      // without a click it shows no picker.
       SerialBroker.requestAccess(NAME).then((granted) => {
         if (!granted) {
           append('The picker was dismissed; nothing was chosen.', 'note');
@@ -533,7 +570,7 @@
       // `isSetUp`, not the status: a setup that threw shows `failed` with nothing registered, and
       // releasing that name would resolve silently and report a disconnection that never happened.
       if (!isSetUp) {
-        void connect();
+        void connectAndAsk();
         return;
       }
       // Releasing forgets nothing: the configuration stays, and connecting again needs no prompt.
@@ -653,10 +690,85 @@
 
   // --- Connection settings ----------------------------------------------------------------------
 
+  /**
+   * The baud rate's combo box: the usual rates in a list under the field, any other typed in.
+   *
+   * A `<datalist>` would be less code, and offers less: it filters by what the field holds, so a
+   * field that starts with 9600 in it offers 9600 and nothing else. Here the list always shows every
+   * rate. It is a popover, so it lies above the dialog rather than inside its scrolling box.
+   */
+  function wireUpBaudRates() {
+    const input = el('baud-rate');
+    const list = el('baud-rates');
+    const options = /** @type {HTMLElement[]} */ ([...list.querySelectorAll('[role="option"]')]);
+
+    const markSelected = () => {
+      for (const option of options) {
+        option.setAttribute(
+          'aria-selected',
+          String(option.dataset['value'] === input.value.trim()),
+        );
+      }
+    };
+
+    el('baud-rates-toggle').addEventListener('click', () => {
+      list.togglePopover();
+    });
+
+    list.addEventListener('toggle', () => {
+      const isOpen = list.matches(':popover-open');
+      input.setAttribute('aria-expanded', String(isOpen));
+      if (!isOpen) {
+        return;
+      }
+      const field = input.getBoundingClientRect();
+      list.style.top = `${String(field.bottom + 4)}px`;
+      list.style.left = `${String(field.left)}px`;
+      list.style.width = `${String(field.width)}px`;
+      markSelected();
+      list.querySelector('[aria-selected="true"]')?.scrollIntoView({ block: 'nearest' });
+    });
+
+    list.addEventListener('click', (event) => {
+      const option = event.target instanceof HTMLElement ? event.target.closest('li') : null;
+      if (option === null) {
+        return;
+      }
+      input.value = option.dataset['value'] ?? '';
+      list.hidePopover();
+      input.focus();
+    });
+
+    // Up and down step through the usual rates from wherever the field stands, open or not; with
+    // Alt they open the list, as they do for a select.
+    input.addEventListener('keydown', (event) => {
+      const keyboard = /** @type {KeyboardEvent} */ (event);
+      if (keyboard.key !== 'ArrowDown' && keyboard.key !== 'ArrowUp') {
+        return;
+      }
+      event.preventDefault();
+      if (keyboard.altKey) {
+        list.togglePopover();
+        return;
+      }
+      const values = options.map((option) => Number(option.dataset['value']));
+      const current = Number(input.value);
+      const next =
+        keyboard.key === 'ArrowDown'
+          ? values.find((value) => value > current)
+          : [...values].reverse().find((value) => value < current);
+      if (next !== undefined) {
+        input.value = String(next);
+        markSelected();
+      }
+    });
+  }
+
   function wireUpSettings() {
     const dialog = /** @type {HTMLDialogElement} */ (
       /** @type {unknown} */ (document.getElementById('settings-dialog'))
     );
+    wireUpBaudRates();
 
     el('settings').addEventListener('click', () => {
       el('baud-rate').value = String(preferences.serial.baudRate);

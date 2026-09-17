@@ -100,6 +100,45 @@ test('reads and writes hex, and keeps the display options between visits', async
   tab.expectQuiet();
 });
 
+test('Connect again asks for the device in the same click when none was granted', async ({
+  context,
+}) => {
+  await installLoopback(context, false);
+  const tab = await ExampleTab.open(context, UI);
+  await tab.expectStatus('awaiting-permission');
+
+  // Disconnected without ever having chosen a device. Whoever clicks Connect again wants one, so
+  // the picker opens from that click - no second button to find.
+  await tab.locator('#release').click();
+  await tab.expectStatus('released');
+  await tab.locator('#release').click();
+
+  await tab.expectStatus('open');
+  await expect(tab.locator('#error')).toBeHidden();
+  await tab.sendLine('AFTER ONE CLICK');
+});
+
+test('offers the usual baud rates whatever the field holds, and takes any other', async ({
+  context,
+}) => {
+  await installLoopback(context, true);
+  const tab = await ExampleTab.open(context, UI);
+  await tab.expectOpenWithoutClick();
+
+  await tab.locator('#settings').click();
+  // The field holds 9600, and the list still offers every rate: a <datalist> offered only 9600.
+  await tab.locator('#baud-rates-toggle').click();
+  await expect(tab.locator('#baud-rates [role="option"]')).toHaveCount(12);
+  await tab.locator('#baud-rates [data-value="115200"]').click();
+  await expect(tab.locator('#baud-rate')).toHaveValue('115200');
+
+  // And a rate that is not in the list is typed in.
+  await tab.locator('#baud-rate').fill('250000');
+  await tab.page.getByRole('button', { name: 'Apply and connect' }).click();
+  await tab.expectStatus('open');
+  await expect(tab.locator('#display-summary')).toContainText('250000 baud');
+});
+
 test('runs from a folder opened as a file, with no web server, and shares the port between tabs', async ({
   context,
 }, testInfo) => {

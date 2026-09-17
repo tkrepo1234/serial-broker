@@ -123,22 +123,55 @@
         </p>
 
         <div class="grid">
-          <label
-            >Baud rate<input
-              id="baud-rate"
-              name="baudRate"
-              type="text"
-              inputmode="numeric"
-              autocomplete="off"
-              list="baud-rates"
-          /></label>
-          <datalist id="baud-rates">
-            <option value="9600"></option>
-            <option value="19200"></option>
-            <option value="38400"></option>
-            <option value="57600"></option>
-            <option value="115200"></option>
-          </datalist>
+          <!--
+            A combo box: the usual rates in a list, and any other typed in. Not a <datalist> - that
+            one filters by what the field already holds, so with 9600 in it, it offered only 9600.
+          -->
+          <div class="field">
+            <label for="baud-rate">Baud rate</label>
+            <div class="combo">
+              <input
+                id="baud-rate"
+                name="baudRate"
+                type="text"
+                inputmode="numeric"
+                autocomplete="off"
+                role="combobox"
+                aria-controls="baud-rates"
+                aria-expanded="false"
+                aria-autocomplete="none"
+              />
+              <button
+                id="baud-rates-toggle"
+                type="button"
+                class="combo-toggle"
+                tabindex="-1"
+                aria-label="Common baud rates"
+              >
+                ▾
+              </button>
+            </div>
+            <ul
+              id="baud-rates"
+              class="menu combo-list"
+              role="listbox"
+              aria-label="Common baud rates"
+              popover
+            >
+              <li role="option" data-value="300">300</li>
+              <li role="option" data-value="1200">1200</li>
+              <li role="option" data-value="2400">2400</li>
+              <li role="option" data-value="4800">4800</li>
+              <li role="option" data-value="9600">9600</li>
+              <li role="option" data-value="19200">19200</li>
+              <li role="option" data-value="38400">38400</li>
+              <li role="option" data-value="57600">57600</li>
+              <li role="option" data-value="115200">115200</li>
+              <li role="option" data-value="230400">230400</li>
+              <li role="option" data-value="460800">460800</li>
+              <li role="option" data-value="921600">921600</li>
+            </ul>
+          </div>
 
           <label
             >Data bits
