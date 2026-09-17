@@ -55,7 +55,7 @@ development only; a build does not contain it.
 | Command             | What it does                                                         |
 | ------------------- | -------------------------------------------------------------------- |
 | `npm start`         | Serves the application with UI5 Tooling at <http://localhost:8162/>. |
-| `npm run typecheck` | `tsc` with `checkJs` over `webapp/`, against `@openui5/types`.       |
+| `npm run typecheck` | The repository's `tsc`, with `checkJs` over `webapp/`.               |
 | `npm run build`     | Writes `dist/`: the folder that runs from a file.                    |
 
 OpenUI5 1.148 comes from npm through UI5 Tooling, not from a CDN: a station may have no internet.
@@ -68,7 +68,8 @@ npm run build
 ```
 
 Then **open `dist/index.html` in Chrome or Edge** - a double click will do - or copy `dist/` to a
-station, a network share or a web server. It is about 40 MB, nearly all of it OpenUI5.
+station, a network share or a web server. It is about 10 MB in some fifty files: the page, its
+style sheet, the framework as one script, six of its modules, the two themes, and the library.
 
 A UI5 application does not normally survive this. Three things stand in the way of a page opened
 from a file, and the build takes each of them away:
@@ -87,7 +88,10 @@ from a file, and the build takes each of them away:
    coordinates the tabs over a `BroadcastChannel` instead; two tabs still share one port.
 
 What the framework loads with a `<script>` or a `<link>` - a calendar, a lazily loaded part of a
-library, the theme - works from a file as it is, so every module and both themes stay in `dist/`.
+library, the theme - works from a file as it is. Those are six modules and the two themes' style
+sheets and fonts, found by opening every part of the built page with every request recorded; the
+other 2 600 files of OpenUI5 are never asked for and are not in `dist/`. The smoke test walks the
+same path, so a framework update that needs one more module fails there and not on a station.
 
 One thing to know when several applications are opened from files on one machine: to the browser
 they all belong to the same place, so they share configuration names. This terminal's is

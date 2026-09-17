@@ -9,18 +9,17 @@
     "node": ">=22.13"
   },
   "scripts": {
-    "prestart": "node scripts/copy-serial-broker-assets.mjs",
+    "prestart": "node scripts/copy-serial-broker-assets.mjs webapp --with-stand-in",
     "start": "ui5 serve --port 8162",
-    "typecheck": "tsc --noEmit",
-    "prebuild": "node scripts/copy-serial-broker-assets.mjs",
-    "build": "ui5 build self-contained --all --clean-dest && node scripts/finish-build.mjs"
+    "typecheck": "node ../../node_modules/typescript/bin/tsc --noEmit",
+    "prebuild": "node scripts/copy-serial-broker-assets.mjs webapp --remove",
+    "build": "ui5 build self-contained --all --clean-dest && node scripts/finish-build.mjs && node scripts/copy-serial-broker-assets.mjs dist"
   },
   "dependencies": {
     "serial-broker": "file:../.."
   },
   "devDependencies": {
     "@openui5/types": "1.148.8",
-    "@ui5/cli": "^4.0.67",
-    "typescript": "^6.0.3"
+    "@ui5/cli": "^4.0.67"
   }
 }

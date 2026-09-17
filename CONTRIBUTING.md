@@ -40,7 +40,8 @@ The [device emulator](./emulator/README.md) (`npm run emulator`) is the exceptio
 TypeScript sources directly, on Node's built-in type stripping, and so needs a Node that has it
 switched on by default — 22.18 or newer on the 22 line.
 
-`npm run docs` also needs Python, in a virtual environment at `docs/.venv`. Create it once with
+`npm run docs` also needs Python, in a virtual environment at `docs/.venv` - or, to keep it out of
+the working folder, at `~/.serial-broker/docs-venv`. Create it once with
 `python -m venv docs/.venv`, then install `docs/site/requirements.txt` with that environment's
 `pip`. The build fails on any warning, in CI as locally.
 

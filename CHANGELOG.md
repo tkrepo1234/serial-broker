@@ -41,6 +41,11 @@ different protocol versions do not coordinate with each other. It is noted whene
   and `serial-broker-debug.css`, where they were `debug.js` and `debug.css` - names that say nothing
   once the files lie on a web server (ADR-0043 gave the library's own files theirs).
 
+- **The OpenUI5 terminal's build is 10 MB in fifty files**, where it was 43 MB in 2 700: it keeps the
+  bundle, the six framework modules and the theme files the page asks for - found by recording every
+  request of a walk through the whole page - and nothing else. The examples type-check with the
+  repository's TypeScript instead of installing their own.
+
 ### Removed
 
 - **Eleven example applications**, on Tim's decision of 2026-09-17: `terminal`, `minimal`,

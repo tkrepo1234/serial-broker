@@ -1,8 +1,10 @@
 /**
  * Builds the documentation site: the API reference from the source comments, then Sphinx.
  *
- * Run through `npm run docs`. Python is only needed here, so it lives in its own virtual
- * environment at docs/.venv rather than being a requirement of the repository (ADR-0020).
+ * Run through `npm run docs`. Python is only needed here, so it lives in a virtual environment of
+ * its own rather than being a requirement of the repository (ADR-0020): at `docs/.venv`, or - to
+ * keep a hundred megabytes out of the working folder - at `~/.serial-broker/docs-venv`, or wherever
+ * `SERIAL_BROKER_DOCS_VENV` says.
  *
  * With `--links` (`npm run docs:links`) it checks where the documentation's links lead instead of
  * building the site. That is a separate command rather than part of the build: it goes out to the
@@ -13,19 +15,28 @@
 
 import { spawnSync } from 'node:child_process';
 import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
-const python = [
-  join(root, 'docs', '.venv', 'Scripts', 'python.exe'),
-  join(root, 'docs', '.venv', 'bin', 'python'),
-].find((candidate) => existsSync(candidate));
+const environments = [
+  process.env['SERIAL_BROKER_DOCS_VENV'],
+  join(root, 'docs', '.venv'),
+  join(homedir(), '.serial-broker', 'docs-venv'),
+].filter((directory) => directory !== undefined && directory !== '');
+const python = environments
+  .flatMap((directory) => [
+    join(directory, 'Scripts', 'python.exe'),
+    join(directory, 'bin', 'python'),
+  ])
+  .find((candidate) => existsSync(candidate));
 
 if (python === undefined) {
   process.stderr.write(
     [
-      'The documentation needs a Python environment at docs/.venv. Create it once with:',
+      'The documentation needs a Python environment, at docs/.venv or at ~/.serial-broker/docs-venv.',
+      'Create it once with:',
       '',
       '  python -m venv docs/.venv',
       '  docs/.venv/Scripts/python -m pip install -r docs/site/requirements.txt   (Windows)',

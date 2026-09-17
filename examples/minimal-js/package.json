@@ -7,13 +7,9 @@
   "type": "module",
   "scripts": {
     "start": "node serve.mjs",
-    "typecheck": "node scripts/extract-page-script.mjs && tsc --noEmit"
+    "typecheck": "node scripts/extract-page-script.mjs && node ../../node_modules/typescript/bin/tsc --noEmit"
   },
   "dependencies": {
     "serial-broker": "file:../.."
-  },
-  "devDependencies": {
-    "@types/node": "^22.20.2",
-    "typescript": "^6.0.3"
   }
 }

@@ -12,7 +12,7 @@
  * `sap.ui.require.preload()`, placed before the statement that boots the framework. The page fixes
  * its language to English (index.html), so one language is enough.
  *
- * Then it removes what the built page never loads; `isNeeded()` below says what that is.
+ * Then it removes what the built page never loads - nearly everything; `isNeeded()` says what stays.
  */
 
 import { readdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
@@ -71,25 +71,39 @@ await writeFile(
 );
 
 /**
- * Whether a file under `resources/` can still be asked for by the built page.
+ * The modules the framework asks for at run time although the bundle holds the application's whole
+ * static dependency tree: its bootstrap's entry, two endpoints its boot starts, the calendar, and
+ * the lazy part of a library. It loads them with a script element, which a page opened from a file
+ * may do, so they stay as files.
  *
- * The bundle holds what the application requires statically. The framework requires more on its
- * own at run time - a calendar, a lazy part of a library - and loads those with a script element,
- * which a page opened from a file may do. So every module stays; what goes is what no page loads:
- * debug sources, source maps, theme sources, right-to-left style sheets, and the texts and locale
- * data of languages the page never shows.
+ * Measured, not guessed: the built page was opened from a file and every dialog, menu, select,
+ * theme and error path exercised, in both themes and at two widths, with every request recorded
+ * (2026-09-17, OpenUI5 1.148.8). The smoke test's last case does the same walk and fails on the
+ * first request the browser refuses - which is how a framework update that needs one more is found.
+ */
+const KEPT_MODULES = new Set([
+  'sap/ui/core/ComponentSupport.js',
+  'sap/ui/core/boot/FieldHelpEndpoint.js',
+  'sap/ui/core/boot/KeyboardInteractionEndpoint.js',
+  'sap/ui/core/date/Gregorian.js',
+  'sap/ui/layout/library-preload-lazy.js',
+  'sap/ui/unified/library-preload-lazy.js',
+]);
+
+/**
+ * Whether a file under `resources/` is asked for by the built page: the bundle, the modules above,
+ * and of the two themes their style sheets and fonts. Everything else - some 2 600 files and 39 MB
+ * of single modules, debug sources, theme sources and other languages - is never loaded.
  */
 function isNeeded(relative) {
   const name = relative.split(path.sep).join('/');
-  if (name === 'sap-ui-custom.js.map') {
+  if (name === 'sap-ui-custom.js' || KEPT_MODULES.has(name)) {
     return true;
   }
-  if (name.includes('/themes/')) {
-    const shown =
-      THEMES.some((theme) => name.includes(`/themes/${theme}/`)) || name.includes('/themes/base/');
-    return shown && !name.endsWith('.less') && !name.includes('-RTL') && !name.endsWith('.json');
+  if (!THEMES.some((theme) => name.includes(`/themes/${theme}/`))) {
+    return false;
   }
-  return name.endsWith('.js') && !name.endsWith('-dbg.js');
+  return name.endsWith('/library.css') || name.endsWith('.woff2');
 }
 
 async function prune(directory) {
@@ -113,12 +127,21 @@ async function prune(directory) {
 
 const kept = await prune(RESOURCES);
 await rm(path.join(DIST, 'test-resources'), { recursive: true, force: true });
-// `?stand-in` is for trying the terminal without hardware, and has no business on a station.
-for (const file of ['stand-in.js', 'stand-in.js.map']) {
-  await rm(path.join(DIST, 'serial-broker', file), { force: true });
+// The application's own modules, views, texts and manifest are in the bundle; the copies the build
+// leaves beside it are never asked for. What stays is the page, its style sheet, the framework and
+// the library.
+for (const entry of [
+  'Component.js',
+  'Component.js.map',
+  'controller',
+  'view',
+  'lib',
+  'i18n',
+  'manifest.json',
+  'types.d.ts',
+]) {
+  await rm(path.join(DIST, entry), { recursive: true, force: true });
 }
-// Types for `npm run typecheck`, which no browser asks for.
-await rm(path.join(DIST, 'types.d.ts'), { force: true });
 for (const entry of await readdir(DIST, { recursive: true })) {
   if (entry.endsWith('-dbg.js') || entry.endsWith('-dbg.js.map')) {
     await rm(path.join(DIST, entry), { force: true });

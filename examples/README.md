@@ -16,8 +16,9 @@ provides:
 
 - **`package.json`** with `"private": true`, a `package-lock.json`, and these scripts:
   - `npm start` - serves the application on the port named in `example.json`, until stopped;
-  - `npm run typecheck` - type-checks it (`tsc --noEmit` or the framework's equivalent), which CI
-    runs for every example;
+  - `npm run typecheck` - type-checks it with the repository's own TypeScript
+    (`node ../../node_modules/typescript/bin/tsc`), so an example installs no compiler of its own;
+    CI runs it for every example;
   - `npm run build` - a production build, where the toolchain has one.
 - **`example.json`** - the manifest the root reads:
 

@@ -281,6 +281,9 @@ test('the built folder runs when opened as a file, with no web server, and share
   // which embeds what the framework would otherwise fetch - a page opened from a file may not.
   test.setTimeout(420_000);
   execFileSync('npm', ['run', 'build'], { cwd: HERE, stdio: 'ignore', shell: true });
+  // The build takes the library's files out of webapp/ so the bundler leaves them alone; the server
+  // the other tests use gets them back.
+  execFileSync('npm', ['run', 'prestart'], { cwd: HERE, stdio: 'ignore', shell: true });
   const url = pathToFileURL(path.join(HERE, 'dist', 'index.html')).href;
   const fromFile = { ...UI, url };
 
@@ -295,6 +298,32 @@ test('the built folder runs when opened as a file, with no web server, and share
   for (const tab of [first, second]) {
     await expect(tab.locator('#received')).toContainText('HELLO FROM A FILE');
     await expect(tab.locator(UI.error)).toBeHidden();
+  }
+
+  // The build keeps six of the framework's modules and the two themes, and nothing else of its
+  // 2 600 files (scripts/finish-build.mjs). So every part of the page is opened once: a module the
+  // framework asks for and does not find shows here, as a request the browser refused.
+  await first.locator(`${ID}display`).click();
+  await first.locator(`${ID}optTimestamps`).click();
+  await first.page.keyboard.press('Escape');
+  await first.locator(`${ID}sendMode`).click();
+  await first.page.keyboard.press('Escape');
+  await first.locator(`${ID}more`).click();
+  await first.page.getByText('Send a file').click();
+  await expect(first.locator(`${ID}fileDialog`)).toBeVisible();
+  await first.locator(`${ID}fileClose`).click();
+  await first.locator(`${ID}theme`).click();
+  await expect(first.page.locator('html')).toHaveClass(
+    /sap_horizon_dark|sapUiTheme-sap_horizon_dark/,
+  );
+  await first.locator(UI.connect).click();
+  await first.expectStatus('disconnected');
+  await first.locator(UI.connect).click();
+  await first.locator(`${ID}baudRate-arrow`).click();
+  await first.page.keyboard.press('Escape');
+  await first.locator(`${ID}settingsCancel`).click();
+
+  for (const tab of [first, second]) {
     // Nothing the framework asked for was refused: no text bundle, no locale data, no module.
     tab.expectQuiet();
   }

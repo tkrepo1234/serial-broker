@@ -28,7 +28,8 @@ Three things had to be settled first:
 - **The API reference is generated from TSDoc** by typedoc with `typedoc-plugin-markdown` into
   `docs/site/api/reference/` at build time, and never committed. Gaps in the reference are closed
   in the source comments, not in the site.
-- **Python lives in a virtual environment at `docs/.venv`**, created from pinned
+- **Python lives in a virtual environment at `docs/.venv`** (or at `~/.serial-broker/docs-venv`,
+  which `docs/site/build.mjs` looks at too), created from pinned
   `docs/site/requirements.txt`, so the repository itself does not depend on Python.
   `npm run docs` runs typedoc and then Sphinx, and fails on any warning.
 - **CI builds the site** in a job of its own, with the same virtual environment, and keeps the built

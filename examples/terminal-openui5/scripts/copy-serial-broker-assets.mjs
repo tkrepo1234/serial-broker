@@ -4,17 +4,22 @@
  * Two of them: the library as a classic script (`serial-broker.global.js`), which index.html loads
  * with a plain `<script>` so the built page can run from a folder opened as a file, and the broker
  * script (`serial-broker.worker.js`), which every tab has to load from the same URL. The package's
- * `dist/` is not part of what UI5 Tooling serves, so both are copied into `webapp/serial-broker/`
- * before the server starts or the build runs. That folder is therefore generated, and git-ignored.
+ * `dist/` is not part of what UI5 Tooling serves, so both are copied next to the page:
  *
- * In development it also writes `stand-in.js`: the repository's Web Serial stand-in as a classic
- * script, so `?stand-in` lets the terminal be tried on a machine with no adapter. A build removes
- * it again (scripts/finish-build.mjs): it has no business on a station.
+ *     node scripts/copy-serial-broker-assets.mjs webapp --with-stand-in   (before `npm start`)
+ *     node scripts/copy-serial-broker-assets.mjs webapp --remove          (before a build)
+ *     node scripts/copy-serial-broker-assets.mjs dist                     (after a build)
  *
- * Run automatically by `npm start` and `npm run build` (as `prestart` / `prebuild`).
+ * `webapp/serial-broker/` is generated, and git-ignored. It is removed before a build because the
+ * bundler would otherwise try to pack a worker and a classic script into the application's bundle;
+ * the built folder gets its copy afterwards.
+ *
+ * `--with-stand-in` also writes `stand-in.js`: the repository's Web Serial stand-in as a classic
+ * script, so `?stand-in` lets the terminal be tried on a machine with no adapter. A build has
+ * none: it has no business on a station.
  */
 
-import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { createRequire, stripTypeScriptTypes } from 'node:module';
 import { dirname, join } from 'node:path';
 import process from 'node:process';
@@ -22,7 +27,13 @@ import { fileURLToPath } from 'node:url';
 
 const require = createRequire(import.meta.url);
 const appRoot = join(dirname(fileURLToPath(import.meta.url)), '..');
-const target = join(appRoot, 'webapp', 'serial-broker');
+const [folder = 'webapp', option] = process.argv.slice(2);
+const target = join(appRoot, folder, 'serial-broker');
+
+if (option === '--remove') {
+  rmSync(target, { recursive: true, force: true });
+  process.exit(0);
+}
 
 /** What the browser fetches at run time. The source maps are optional but make debugging sane. */
 const FILES = [
@@ -63,7 +74,7 @@ for (const file of FILES) {
 // The stand-in lives in the repository's test sources, as a TypeScript module. Stripped of its
 // types and of its `export`, it is a classic script that defines one function.
 const standIn = join(packageRoot, 'test', 'browser', 'stand-in', 'web-serial-stand-in.ts');
-if (existsSync(standIn)) {
+if (option === '--with-stand-in' && existsSync(standIn)) {
   const script = stripTypeScriptTypes(readFileSync(standIn, 'utf8'), { mode: 'strip' }).replace(
     /^export (async )?function /gm,
     '$1function ',

@@ -173,5 +173,5 @@ examples/minimal-js/
 ├── scripts/extract-page-script.mjs  puts the inline script where tsc can read it
 ├── smoke.spec.ts                  Playwright: loads the page, connects, sends, sees the echo
 ├── tsconfig.json                  checkJs over the extracted script and the Node scripts
-└── package.json                   typescript, "serial-broker": "file:../.."
+└── package.json                   "serial-broker": "file:../..", and nothing else
 ```
