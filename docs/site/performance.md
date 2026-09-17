@@ -142,11 +142,14 @@ the first to hold the port. The worker holds a Web Lock for its lifetime, which 
 
 ### Over the expectation, by less than ten times
 
-- **A handover after a crash** (`wall` and `everyTab`): 382.3 ms at the
-  median on the `SharedWorker` transport and 349.7 ms on `BroadcastChannel`, against 250 ms, with a
-  95th percentile of 714.6 ms and 645.7 ms. Almost none of it is the library's: `library` - the same moment against a plain Web Lock the crashed page held, freed by the browser in the same crash - is 8.600 ms and 6.300 ms at the median. The rest is Chromium noticing that the renderer is gone, plus the
-  DevTools round trip that orders the crash. The first crash after the browser starts takes about twice as long as the ones
-  after it. The expectation stays at 250 ms, so that the next run is judged against the same line.
+- **A handover after a crash** (`wall` and `everyTab`): 349.3 ms at the median on the
+  `SharedWorker` transport and 388.5 ms on `BroadcastChannel`, against 250 ms, with a 95th
+  percentile of 676.5 ms and 854.8 ms. Almost none of it is the library's: `library` - the same
+  moment against a plain Web Lock the crashed page held, freed by the browser in the same crash -
+  is 6.500 ms and 6.100 ms at the median. The rest is Chromium noticing that the renderer is gone,
+  plus the DevTools round trip that orders the crash. The first crash after the browser starts
+  takes about twice as long as the ones after it. The expectation stays at 250 ms, so that the
+  next run is judged against the same line.
 
 ### What else the numbers say
 

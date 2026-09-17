@@ -4,10 +4,10 @@ Written by `npm run test:extreme` (`scripts/test-extreme.mjs`); do not edit by h
 scenario does and what its bounds are is in the scenario files next to this one, and in
 docs/guidelines/testing.md, "The extreme suite".
 
-- **Run:** 2026-09-17 21:20:52 UTC, every bound held
+- **Run:** 2026-09-17 21:55:18 UTC, every bound held
 - **Machine:** AMD Ryzen 7 7840HS w/ Radeon 780M Graphics, 15 GiB, Windows_NT Windows 11 Home
 - **Runtime:** Node v24.21.0, one Vitest worker, `--expose-gc`
-- **Scenarios:** 22, 32 s of measured load in total
+- **Scenarios:** 22, 33 s of measured load in total
 
 ## Load and cost
 
@@ -17,7 +17,7 @@ Each is shown with its budget, the most the scenario allows for its load.
 
 | Scenario | Transport | Load | Wall | Messages sent (budget) | Messages delivered (budget) |
 | --- | --- | --- | ---: | ---: | ---: |
-| tabs freezing under load | sharedworker | tabs 10, frozen 5, chunks 5,000, frozenSeconds 50 | 0.3 s | 5,025 (5,100) | 45,105 (51,000) |
+| tabs freezing under load | sharedworker | tabs 10, frozen 5, chunks 5,000, frozenSeconds 50 | 0.2 s | 5,025 (5,100) | 45,105 (51,000) |
 | tabs freezing under load | broadcastchannel | tabs 10, frozen 5, chunks 5,000, frozenSeconds 50 | 0.2 s | 5,025 (5,100) | 45,225 (51,000) |
 | largest payloads back to back | sharedworker | tabs 4, payloads 12, payloadMiB 16, queuedAtOnce 4 | 1.6 s | 60 (60) | 108 (240) |
 | largest payloads back to back | broadcastchannel | tabs 4, payloads 12, payloadMiB 16, queuedAtOnce 4 | 1.5 s | 60 (60) | 180 (240) |
@@ -35,10 +35,10 @@ Each is shown with its budget, the most the scenario allows for its load.
 | setup and release churn | broadcastchannel | cycles 1,000, tabs 2 | 0.4 s | 9,000 (16,000) | 9,000 (16,000) |
 | a simulated week | sharedworker | tabs 10, days 7 | 0.0 s | 940 (1,008) | 4,836 (10,080) |
 | a simulated week | broadcastchannel | tabs 10, days 7 | 0.0 s | 940 (1,008) | 8,460 (10,080) |
-| sustained device traffic | sharedworker | tabs 10, simulatedMinutes 60, baud 115,200, chunks 162,000, megabytes 41.3 | 5.7 s | 162,000 (162,010) | 1,458,000 (1,458,100) |
-| sustained device traffic | broadcastchannel | tabs 10, simulatedMinutes 60, baud 115,200, chunks 162,000, megabytes 41.3 | 5.0 s | 162,000 (162,010) | 1,458,000 (1,458,100) |
-| writes under owner crashes | sharedworker | writes 10,000, writers 20, writesPerCrash 100 | 2.8 s | 64,800 (80,000) | 730,500 (1,600,000) |
-| writes under owner crashes | broadcastchannel | writes 10,000, writers 20, writesPerCrash 100 | 4.4 s | 74,400 (80,000) | 1,414,000 (1,600,000) |
+| sustained device traffic | sharedworker | tabs 10, simulatedMinutes 60, baud 115,200, chunks 162,000, megabytes 41.3 | 6.3 s | 162,000 (162,010) | 1,458,000 (1,458,100) |
+| sustained device traffic | broadcastchannel | tabs 10, simulatedMinutes 60, baud 115,200, chunks 162,000, megabytes 41.3 | 5.1 s | 162,000 (162,010) | 1,458,000 (1,458,100) |
+| writes under owner crashes | sharedworker | writes 10,000, writers 20, writesPerCrash 100 | 2.9 s | 64,800 (80,000) | 730,500 (1,600,000) |
+| writes under owner crashes | broadcastchannel | writes 10,000, writers 20, writesPerCrash 100 | 4.5 s | 74,400 (80,000) | 1,414,000 (1,600,000) |
 
 ## Footprint before and after the load
 
@@ -47,25 +47,25 @@ must be the same before and after: what the load left behind is the difference.
 
 | Scenario | Transport | Heap | Buffers | Timers | Bus timers | Device listeners | Listeners | Locks held | Locks pending | Pending writes | Queued at port | Worker clients |
 | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| tabs freezing under load | sharedworker | 14.78 → 15.26 | 0.13 | 0 | 0 | 20 | 30 | 23 | 38 | 0 | 0 | 10 |
-| tabs freezing under load | broadcastchannel | 15.17 → 15.34 | 0.13 | 0 | 0 | 20 | 30 | 13 | 18 | 0 | 0 | 0 |
-| largest payloads back to back | sharedworker | 14.36 → 13.38 | 0.13 | 0 | 0 | 8 | 12 | 11 | 14 | 0 | 0 | 4 |
-| largest payloads back to back | broadcastchannel | 13.51 → 13.47 | 0.13 | 0 | 0 | 8 | 12 | 7 | 6 | 0 | 0 | 0 |
-| a long-lived owner accepting writes | sharedworker | 15.44 → 14.38 | 0.13 | 0 | 0 | 20 | 30 | 23 | 38 | 0 | 0 | 10 |
-| a long-lived owner accepting writes | broadcastchannel | 14.37 → 14.36 | 0.13 | 0 | 0 | 20 | 30 | 13 | 18 | 0 | 0 | 0 |
-| 100 tabs, one configuration | sharedworker | 18.02 → 18.37 | 0.13 | 0 | 0 | 200 | 300 | 203 | 398 | 0 | 0 | 100 |
-| 100 tabs, the holder closed 10 times | sharedworker | 18.46 → 20.75 | 0.13 | 0 | 0 | 200 | 0 | 203 | 398 | 0 | 0 | 100 |
-| 20 configurations x 10 tabs | sharedworker | 19.7 → 19.86 | 0.13 | 0 | 0 | 20 | 600 | 251 | 380 | 0 | 0 | 10 |
-| 100 tabs, one configuration | broadcastchannel | 18.78 → 18.82 | 0.13 | 0 | 0 | 200 | 300 | 103 | 198 | 0 | 0 | 0 |
-| 100 tabs, the holder closed 10 times | broadcastchannel | 18.85 → 20.12 | 0.13 | 0 | 0 | 200 | 0 | 103 | 198 | 0 | 0 | 0 |
-| 20 configurations x 10 tabs | broadcastchannel | 19.99 → 20.01 | 0.13 | 0 | 0 | 20 | 600 | 241 | 360 | 0 | 0 | 0 |
-| diagnostics observer under load | sharedworker | 15.05 → 15.71 | 0.13 | 0 | 0 | 20 | 0 | 24 | 40 | 0 | 0 | 11 |
-| diagnostics observer under load | broadcastchannel | 15.57 → 15.71 | 0.13 | 0 | 0 | 20 | 0 | 13 | 18 | 0 | 0 | 0 |
-| setup and release churn | sharedworker | 14.8 → 16.16 | 0.13 | 0 | 0 | 4 | 0 | 3 | 4 | 0 | 0 | 2 |
-| setup and release churn | broadcastchannel | 15.87 → 16.22 | 0.13 | 0 | 0 | 4 | 0 | 1 | 0 | 0 | 0 | 0 |
-| a simulated week | sharedworker | 14.74 → 15.21 | 0.13 | 0 | 0 | 20 | 30 | 23 | 38 | 0 | 0 | 10 |
-| a simulated week | broadcastchannel | 15.13 → 15.25 | 0.13 | 0 | 0 | 20 | 30 | 13 | 18 | 0 | 0 | 0 |
-| sustained device traffic | sharedworker | 14.79 → 15.25 | 0.14 | 0 | 0 | 20 | 20 | 23 | 38 | 0 | 0 | 10 |
-| sustained device traffic | broadcastchannel | 15.13 → 15.28 | 0.14 | 0 | 0 | 20 | 20 | 13 | 18 | 0 | 0 | 0 |
-| writes under owner crashes | sharedworker | 15.14 → 16.45 | 0.15 | 0 | 0 | 40 | 0 | 43 | 78 | 0 | 0 | 20 |
-| writes under owner crashes | broadcastchannel | 15.73 → 16.5 | 0.15 | 0 | 0 | 40 | 0 | 23 | 38 | 0 | 0 | 0 |
+| tabs freezing under load | sharedworker | 14.79 → 15.26 | 0.13 | 0 | 0 | 20 | 30 | 23 | 38 | 0 | 0 | 10 |
+| tabs freezing under load | broadcastchannel | 15.16 → 15.34 | 0.13 | 0 | 0 | 20 | 30 | 13 | 18 | 0 | 0 | 0 |
+| largest payloads back to back | sharedworker | 14.37 → 13.41 | 0.13 | 0 | 0 | 8 | 12 | 11 | 14 | 0 | 0 | 4 |
+| largest payloads back to back | broadcastchannel | 13.54 → 13.48 | 0.13 | 0 | 0 | 8 | 12 | 7 | 6 | 0 | 0 | 0 |
+| a long-lived owner accepting writes | sharedworker | 15.44 → 14.37 | 0.13 | 0 | 0 | 20 | 30 | 23 | 38 | 0 | 0 | 10 |
+| a long-lived owner accepting writes | broadcastchannel | 14.37 → 14.35 | 0.13 | 0 | 0 | 20 | 30 | 13 | 18 | 0 | 0 | 0 |
+| 100 tabs, one configuration | sharedworker | 18.03 → 18.38 | 0.13 | 0 | 0 | 200 | 300 | 203 | 398 | 0 | 0 | 100 |
+| 100 tabs, the holder closed 10 times | sharedworker | 18.47 → 20.76 | 0.13 | 0 | 0 | 200 | 0 | 203 | 398 | 0 | 0 | 100 |
+| 20 configurations x 10 tabs | sharedworker | 19.71 → 19.87 | 0.13 | 0 | 0 | 20 | 600 | 251 | 380 | 0 | 0 | 10 |
+| 100 tabs, one configuration | broadcastchannel | 18.79 → 18.83 | 0.13 | 0 | 0 | 200 | 300 | 103 | 198 | 0 | 0 | 0 |
+| 100 tabs, the holder closed 10 times | broadcastchannel | 18.86 → 20.13 | 0.13 | 0 | 0 | 200 | 0 | 103 | 198 | 0 | 0 | 0 |
+| 20 configurations x 10 tabs | broadcastchannel | 20 → 20.02 | 0.13 | 0 | 0 | 20 | 600 | 241 | 360 | 0 | 0 | 0 |
+| diagnostics observer under load | sharedworker | 15.06 → 15.72 | 0.13 | 0 | 0 | 20 | 0 | 24 | 40 | 0 | 0 | 11 |
+| diagnostics observer under load | broadcastchannel | 15.58 → 15.72 | 0.13 | 0 | 0 | 20 | 0 | 13 | 18 | 0 | 0 | 0 |
+| setup and release churn | sharedworker | 14.81 → 16.18 | 0.13 | 0 | 0 | 4 | 0 | 3 | 4 | 0 | 0 | 2 |
+| setup and release churn | broadcastchannel | 15.88 → 16.21 | 0.13 | 0 | 0 | 4 | 0 | 1 | 0 | 0 | 0 | 0 |
+| a simulated week | sharedworker | 14.75 → 15.22 | 0.13 | 0 | 0 | 20 | 30 | 23 | 38 | 0 | 0 | 10 |
+| a simulated week | broadcastchannel | 15.14 → 15.26 | 0.13 | 0 | 0 | 20 | 30 | 13 | 18 | 0 | 0 | 0 |
+| sustained device traffic | sharedworker | 14.8 → 15.26 | 0.14 | 0 | 0 | 20 | 20 | 23 | 38 | 0 | 0 | 10 |
+| sustained device traffic | broadcastchannel | 15.14 → 15.29 | 0.14 | 0 | 0 | 20 | 20 | 13 | 18 | 0 | 0 | 0 |
+| writes under owner crashes | sharedworker | 15.15 → 16.47 | 0.15 | 0 | 0 | 40 | 0 | 43 | 78 | 0 | 0 | 20 |
+| writes under owner crashes | broadcastchannel | 15.74 → 16.51 | 0.15 | 0 | 0 | 40 | 0 | 23 | 38 | 0 | 0 | 0 |
