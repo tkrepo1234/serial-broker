@@ -96,8 +96,8 @@ version 1**. Before 1.0 a minor version may break the API, the protocol and the 
 - **A documentation site** built with Sphinx from the chapters and the source comments (ADR-0016):
   installing, deploying, a first connection, guarantees, how shared ports behave, configuration,
   errors, diagnostics, known limits, tiered examples, a comparison with plain Web Serial, internals,
-  performance measured against expectations written first (ADR-0023), and a generated API
-  reference.
+  performance measured against expectations written first (ADR-0023), and the interface,
+  generated from the source.
 - **`llms.txt`**, in the repository and in the package: what a language model needs to integrate
   the library correctly - entry points, the API with every default, statuses, events, error codes,
   the rules that matter.

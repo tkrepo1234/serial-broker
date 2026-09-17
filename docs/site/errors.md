@@ -106,7 +106,8 @@ try {
 
 ## Retryable errors
 
-Four codes are retryable: `DEVICE_DISCONNECTED`, `OPEN_FAILED`, `OPEN_TIMEOUT` and `READ_FAILED`.
+Four codes are always retryable: `DEVICE_DISCONNECTED`, `OPEN_FAILED`, `OPEN_TIMEOUT` and
+`READ_FAILED`; `BROKER_UNAVAILABLE` is when it reports a lost worker (see its entry).
 Each ends a connection attempt or a connection, and the tab holding the port schedules the next
 attempt as described in [Reconnecting](guarantees.md#reconnecting). Only when the attempts are used
 up does a non-retryable error follow: `RECONNECT_EXHAUSTED`.
@@ -165,9 +166,10 @@ for a remembered configuration from an older version of the application.
 
 `CONFIGURATION_RELEASED`
 : **Raised** for writes still pending when their configuration is released in this tab, by
-`release()`, `releaseAll()` or `dispose()`, and by a diagnostics observer after `close()`. Calls made
-after `dispose()` do not raise it: they start afresh, so a name raises `UNKNOWN_CONFIGURATION` until
-it is set up again.
+`release()`, `releaseAll()` or `dispose()`, and by a diagnostics observer after `close()`. Also by
+`requestAccess()` when the configuration is released while the port picker is open, and by `setup()`
+and `restore()` when `dispose()` is called while they run. Calls made after `dispose()` do not raise
+it: they start afresh, so a name raises `UNKNOWN_CONFIGURATION` until it is set up again.
 **Do:** nothing, if the release was intended. Otherwise set the configuration up again.
 
 ### The browser environment

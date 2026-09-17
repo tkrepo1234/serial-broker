@@ -7,7 +7,8 @@ which is served by a short static server and covered by a smoke test of its own.
 
 It needs two files next to each other on the web server: `serial-broker.min.js` (or the readable
 `serial-broker.js` from the package) and `serial-broker.worker.js`. Every release attaches them as
-`serial-broker-<version>-browser.zip`; [Installing](../installing.md) says which file is which, and
+`serial-broker-<version>-browser.zip`, which holds the minified build: with it, the import map below
+points at `serial-broker.min.js`. [Installing](../installing.md) says which file is which, and
 [Deploying to a web server](../deploying.md) covers the headers and what to check afterwards.
 
 ```{literalinclude} ../../../examples/minimal-js/index.html
