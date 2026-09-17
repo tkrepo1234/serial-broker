@@ -58,3 +58,13 @@ html_js_files = ["serial-broker.js"]
 # parent folder and break every relative link from there. Without clean URLs `serve` lists a folder
 # instead of opening its index.html, so the folders a reader types in are rewritten to theirs.
 html_extra_path = ["_extra"]
+
+# `npm run docs:links` checks that the links out of this documentation still lead somewhere. The
+# repository's own links are skipped: it is private, so an unauthenticated check is answered with
+# 404 for every one of them - fourteen findings that say nothing about the links and would bury a
+# real one. They are checked by the build instead, which fails on a path that does not exist.
+linkcheck_ignore = [r"https://github\.com/tkrepo1234/serial-broker/.*"]
+# One at a time, and slowly: GitHub rate-limits an unauthenticated caller, and a check that is
+# throttled into failures reports the throttling rather than the links.
+linkcheck_timeout = 20
+linkcheck_retries = 2

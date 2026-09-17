@@ -122,6 +122,12 @@ Remembered configurations moved from **storage version 1 to 2** and are not migr
 - **Eleven example applications**, each with a README, a fixed port and a Playwright smoke test
   against a Web Serial stand-in: `minimal`, `multi-tab-dashboard`, `exclusive`, `no-bundler`,
   `openui5`, `react`, `vue`, `svelte` and `angular` (`npm run test:examples`, in CI).
+- **`npm run docs:links` checks where the documentation's links lead.** A separate command rather
+  than part of the build: it goes out to the network, so it is only as reliable as the sites it
+  asks about, and CI would fail on their bad days rather than on ours. Links into this repository
+  are skipped while it is private - an unauthenticated check is answered with 404 for every one of
+  them, which would bury a real finding under fourteen false ones. First run: six external links,
+  all of them alive.
 - **The debugging surface is driven in a real browser by the test suite.** It is shipped in the
   package and is what someone reaches for when a device misbehaves, and until now only its markup
   was checked, as text. Two tests click it: what is offered for the selected configuration, and the

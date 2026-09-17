@@ -3,6 +3,12 @@
  *
  * Run through `npm run docs`. Python is only needed here, so it lives in its own virtual
  * environment at docs/.venv rather than being a requirement of the repository (ADR-0020).
+ *
+ * With `--links` (`npm run docs:links`) it checks where the documentation's links lead instead of
+ * building the site. That is a separate command rather than part of the build: it goes out to the
+ * network, so it is as reliable as the sites it asks about, and CI would fail on their bad days
+ * rather than on ours. The links into this repository are skipped while it is private - see
+ * `linkcheck_ignore` in conf.py.
  */
 
 import { spawnSync } from 'node:child_process';
@@ -28,6 +34,22 @@ if (python === undefined) {
     ].join('\n'),
   );
   process.exit(1);
+}
+
+// Checking links needs the pages as they are, not a fresh reference: the last build's output is
+// what the reader has, and rebuilding it here would say nothing about the links.
+if (process.argv.includes('--links')) {
+  run(python, [
+    '-m',
+    'sphinx',
+    '-b',
+    'linkcheck',
+    '--keep-going',
+    'docs/site',
+    'docs/site/_build/linkcheck',
+  ]);
+  process.stdout.write('\nEvery link checked; see docs/site/_build/linkcheck/output.txt\n');
+  process.exit(0);
 }
 
 run(process.execPath, [
