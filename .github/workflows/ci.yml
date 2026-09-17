@@ -2,7 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    # The two lasting branches of git-flow and the two kinds that lead to `main`; a feature branch
+    # is checked by its pull request.
+    branches: [main, develop, 'release/**', 'hotfix/**']
   pull_request:
   # The release workflow runs all of CI on the commit it releases.
   workflow_call:

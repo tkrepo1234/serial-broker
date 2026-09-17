@@ -2,9 +2,27 @@
 
 ## Branches
 
-`main` is always releasable: it type-checks, lints, passes every test, and builds. Work
-happens on short-lived branches named `<type>/<short-description>`, e.g.
-`feat/owner-failover`, `fix/write-lost-on-owner-death`, `docs/adr-reconnect`.
+The repository follows git-flow (ADR-0027). Two branches live for ever:
+
+| Branch    | What it holds                                                                  |
+| --------- | ------------------------------------------------------------------------------ |
+| `main`    | Released versions only. Every commit on it is a release and carries its tag.   |
+| `develop` | The next version. It type-checks, lints, passes every test and builds, always. |
+
+Three kinds of branch come and go:
+
+| Branch              | From      | Into                 | For                                                        |
+| ------------------- | --------- | -------------------- | ---------------------------------------------------------- |
+| `feature/<name>`    | `develop` | `develop`            | Any change: a feature, a fix, documentation, tooling.      |
+| `release/<version>` | `develop` | `main` and `develop` | The version number, the changelog section, last fixes.     |
+| `hotfix/<version>`  | `main`    | `main` and `develop` | A fix to a released version that cannot wait for the next. |
+
+- Names are lower case with hyphens: `feature/owner-failover`, `release/0.2.0`, `hotfix/0.2.1`.
+- Every merge into `develop` and `main` is a merge commit (`git merge --no-ff`), so a branch stays
+  visible as one unit and can be reverted as one.
+- Nothing is committed to `main` directly, and nothing reaches it that has not been on a
+  `release/` or `hotfix/` branch with CI green.
+- A branch is deleted once it is merged.
 
 ## Commits
 
@@ -39,6 +57,12 @@ Strict [SemVer](https://semver.org/). The public surface is defined in
   `src/protocol/version.ts`. Bumping it is always at least a minor release and is always
   accompanied by an ADR describing the federation behaviour across the boundary.
 - Pre-1.0: breaking changes bump the minor. From 1.0 on, the major.
+
+## Releases
+
+A release is a `release/<version>` branch that ends in a tag on `main`; the steps are in
+[CONTRIBUTING.md](../../CONTRIBUTING.md#releasing). The tag starts the release workflow, and the
+push to `main` publishes the documentation of that version.
 
 ## Definition of done
 
