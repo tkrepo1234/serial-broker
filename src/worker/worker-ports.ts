@@ -24,7 +24,7 @@ export interface WorkerPort {
 export interface WorkerPortsHost {
   /**
    * Where the worker's own records go in the worker itself: nowhere in a browser, the test's logger
-   * in the suite. Its warnings are forwarded to the connected tabs as well (ADR-0029).
+   * in the suite. Its warnings are forwarded to the connected tabs as well (ADR-0018).
    */
   readonly logger: Logger;
   /** `navigator.locks` of the worker: the locks that say who is still there (ADR-0041). */
@@ -36,7 +36,7 @@ export interface WorkerPortsHost {
 /**
  * Why a decoded message was refused before it reached the broker.
  *
- * - `before-hello`: the port has not said who it is (ADR-0024: a tab's first message is `hello`).
+ * - `before-hello`: the port has not said who it is (ADR-0008: a tab's first message is `hello`).
  * - `sender-mismatch`: the port said `hello` as one context and now speaks as another.
  * - `broker-identity`: the port said `hello` as the broker itself.
  */
@@ -55,7 +55,7 @@ const REFUSAL_MESSAGES: Readonly<Record<Refusal, string>> = {
  * A port is anybody's. Every script of the origin can start the worker and say anything on its port,
  * and the envelope's `from` is whatever the sender wrote (SECURITY.md). Nothing routed here needs to
  * be believed: the broker tracks no owner, and what is meant for the owner goes to every participant
- * (ADR-0040). The worker still keeps each port to one identity, which is cheap:
+ * (ADR-0006). The worker still keeps each port to one identity, which is cheap:
  *
  * - **A port says who it is once.** Its first message must be `hello`, and names the identity the
  *   port speaks as from then on. A message before it, or one naming another sender, is dropped.
@@ -72,7 +72,7 @@ const REFUSAL_MESSAGES: Readonly<Record<Refusal, string>> = {
  * worker script so that the harness routes through exactly this code (ADR-0014).
  *
  * What the worker records would be seen by nobody - a `SharedWorker` cannot reach an application's
- * logger - so its warnings go to the connected contexts (ADR-0029). Every warning is written once per
+ * logger - so its warnings go to the connected contexts (ADR-0018). Every warning is written once per
  * key, so what is forwarded is bounded without a budget of its own.
  */
 export class WorkerPorts<Port extends WorkerPort> {
@@ -161,7 +161,7 @@ export class WorkerPorts<Port extends WorkerPort> {
     }
     if (message.type === 'hello') {
       // The answer tells the port that sent it that this worker runs, and names the lock that tells
-      // it when this worker has ended (ADR-0007, ADR-0041).
+      // it when this worker has ended (ADR-0006, ADR-0041).
       post(port, welcomeFor(message.from, this.host.workerId));
     }
     this.#broker.handleMessage(message.from, message);
@@ -186,7 +186,7 @@ export class WorkerPorts<Port extends WorkerPort> {
   }
 
   /**
-   * Sends one of the worker's records to every context connected to it (ADR-0029).
+   * Sends one of the worker's records to every context connected to it (ADR-0018).
    *
    * Only as a tab would accept it: the decoder's bounds on a record are the bounds here, and fields a
    * tab would refuse - an `undefined` one - are left out.
@@ -272,7 +272,7 @@ export class WorkerPorts<Port extends WorkerPort> {
     // copied from another release, or one kept by a cache. Its hello is the one message every
     // version answers. The welcome carries this worker's version, and so tells the tab that nothing
     // it sends arrives here; the tab is not registered, and nothing else it says is routed
-    // (ADR-0024).
+    // (ADR-0008).
     const otherVersionSender =
       failure.reason === 'version-mismatch' ? helloSenderOf(raw) : undefined;
     if (otherVersionSender !== undefined) {

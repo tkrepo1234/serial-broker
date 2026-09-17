@@ -2,7 +2,7 @@
  * The two message buses, and the worker that is of no use.
  *
  * `BroadcastChannel` is what a tab falls back to when the `SharedWorker` is unavailable or
- * unusable (ADR-0007, ADR-0024). Both paths exist because of browser behaviour, so both are
+ * unusable (ADR-0006, ADR-0008). Both paths exist because of browser behaviour, so both are
  * worth one run in a browser. See ADR-0035.
  */
 
@@ -42,7 +42,7 @@ test.describe('the BroadcastChannel transport', () => {
     // here passing on the worker transport.
     expect(await sharedWorkersOf(first)).toEqual([]);
 
-    // Indistinguishable from the worker transport, which is what ADR-0007 promises - including
+    // Indistinguishable from the worker transport, which is what ADR-0006 promises - including
     // the two things a bus is needed for after nothing has gone wrong: an unplugged device
     // announced to every tab, and ownership moving when the tab holding the port goes away.
     await waitForPortHolder(tabs);
@@ -88,7 +88,7 @@ test.describe('a worker script of another protocol version', () => {
 
     // The worker answers `hello` and drops everything else, so the tabs would be cut off from
     // each other if they kept using it. They switch to the BroadcastChannel and share the port
-    // as usual (ADR-0024).
+    // as usual (ADR-0008).
     for (const tab of tabs) {
       const fallbacks = (await tab.logRecords()).filter(
         (record) => record.event === 'environment.transport-fallback',

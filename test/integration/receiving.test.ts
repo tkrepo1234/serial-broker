@@ -6,7 +6,7 @@ import { BrowserHarness, type VirtualTab } from '../harness/browser-harness.js';
 import { READER } from '../harness/devices.js';
 
 /**
- * How what the device sends is collected into `onReceive` events (ADR-0039): the tab holding the
+ * How what the device sends is collected into `onReceive` events (ADR-0002): the tab holding the
  * port collects the chunks it reads until the line is quiet, and every tab receives the same
  * deliveries.
  */

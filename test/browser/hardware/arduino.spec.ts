@@ -126,7 +126,7 @@ test.describe('an Arduino running an echo sketch', () => {
     await tab?.waitForReceivedText(CONFIGURATION, 'HELLO');
   });
 
-  test('delivers an echoed line as one event, not one per byte (ADR-0039)', async ({
+  test('delivers an echoed line as one event, not one per byte (ADR-0002)', async ({
     hardware,
   }) => {
     const [tab] = await connectedTabs(hardware, 1);

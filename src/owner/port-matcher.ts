@@ -20,7 +20,7 @@ export type DeviceSelection = Pick<NormalizedConfiguration, 'device'>;
  *
  * This is what makes a released port "remembered": the browser keeps the permission, and
  * `getPorts()` returns the granted port on every later visit with no prompt. All this library
- * has to do is recognise which of them is the configured device. See ADR-0009.
+ * has to do is recognise which of them is the configured device. See ADR-0036.
  *
  * @returns The first granted port that matches, or `undefined` if none does - always `undefined`
  *   for an auto-mode configuration that has not resolved, however many ports are granted
@@ -66,7 +66,7 @@ export async function findGrantedPort(
  *
  * An `any` filter matches every granted port, including ports that report no identifying
  * information at all - a built-in RS-232 interface, a virtual COM port pair, a Bluetooth
- * serial profile (ADR-0016). A non-USB filter matches exactly those. An auto-mode filter matches
+ * serial profile (ADR-0036). A non-USB filter matches exactly those. An auto-mode filter matches
  * what it has resolved to, and nothing before it has: the user's choice is the resolution, and a
  * port granted for something else is not it (ADR-0036).
  */
@@ -90,7 +90,7 @@ export function matchesDevice(port: SerialPortLike, configuration: DeviceSelecti
  * The device a chosen port is, as auto mode resolves it (ADR-0036).
  *
  * A USB identity needs both IDs. A port that reports one of them is not a USB device a filter
- * could find again, so it counts as a port without one, as ADR-0034 decided for the debugging
+ * could find again, so it counts as a port without one, as ADR-0019 decided for the debugging
  * surface.
  */
 export function resolveDevice(port: SerialPortLike): ResolvedDevice {

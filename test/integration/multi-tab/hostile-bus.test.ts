@@ -450,7 +450,7 @@ describe('a script on the SharedWorker that uses the identity of a tab', () => {
     const mallory = harness.bus.workerHost.connectForeign();
 
     // A participant of its own that claims the port in a term it made up. A broker that routed what
-    // is meant for the owner to the last claimant would hand it every write (ADR-0040).
+    // is meant for the owner to the last claimant would hand it every write (ADR-0006).
     const forged = { v: PROTOCOL_VERSION, from: 'mallory', to: 'all', configName: 'Reader' };
     mallory.post({ ...forged, type: 'hello', configNames: ['Reader'] });
     mallory.post({ ...forged, type: 'owner-claimed', term: 't-forged', maxTabs: 1 });
@@ -535,7 +535,7 @@ describe('a script on the SharedWorker that uses the identity of a tab', () => {
     const mallory = harness.bus.workerHost.connectForeign();
 
     // Identities are no secret. The port that says hello as the tab is one more port of that
-    // identity (ADR-0040); what ends the tab's participation is the tab's own lock, which a script
+    // identity (ADR-0006); what ends the tab's participation is the tab's own lock, which a script
     // cannot let go of (ADR-0041).
     const forged = { v: PROTOCOL_VERSION, from: other.client.clientId, to: 'all' };
     mallory.post({ ...forged, type: 'hello', configNames: ['Reader'] });

@@ -43,7 +43,7 @@ describe('scheduleDeadline', () => {
 
     await clock.advance(100);
 
-    // Lateness is measured on the monotonic clock (ADR-0032): a punctual deadline stays punctual.
+    // Lateness is measured on the monotonic clock (ADR-0014): a punctual deadline stays punctual.
     expect(order).toEqual(['deadline', 'queued task']);
     expect(clock.pendingTimerCount).toBe(0);
   });

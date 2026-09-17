@@ -252,7 +252,7 @@ describe('createBrowserEnvironment', () => {
     );
 
     // Chrome for Android has no SharedWorker but does have Web Serial. Failing there would
-    // mean no device access at all, for a coordination detail the fallback handles (ADR-0007).
+    // mean no device access at all, for a coordination detail the fallback handles (ADR-0006).
     // The selection is automatic, and reported in the tab's own log.
     expect(transport.kind).toBe('broadcastchannel');
     expect(fieldsOfEvent(records, 'environment.transport-fallback')).toHaveLength(1);

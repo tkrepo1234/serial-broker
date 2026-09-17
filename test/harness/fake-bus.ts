@@ -333,7 +333,7 @@ export type TransportMode = 'sharedworker' | 'broadcastchannel';
  *   event, as for a script that answers 404.
  * - `'other-version'`: a worker script of an earlier protocol version, such as a copied worker
  *   file left over from an older release. It drops everything a tab says, and keeps only the
- *   frozen part of the handshake: it answers `hello` with a welcome in its own version (ADR-0024).
+ *   frozen part of the handshake: it answers `hello` with a welcome in its own version (ADR-0008).
  */
 export type WorkerScript = 'loads' | 'fails' | 'other-version';
 
@@ -342,7 +342,7 @@ export type WorkerScript = 'loads' | 'fails' | 'other-version';
  *
  * Holds both implementations so the same scenario can be run against each without the test
  * knowing which is in play - which is the only way to keep the fallback a first-class path
- * rather than an untested branch (ADR-0007).
+ * rather than an untested branch (ADR-0006).
  */
 export class FakeBus {
   /** What crossed the bus so far, on either transport and through every worker started. */
@@ -452,7 +452,7 @@ export class FakeBus {
     const request: TransportRequest = { ...tabRequest, clock: this.#clockFor(contextId) };
 
     // Wrapped exactly as the browser environment wraps it, so every scenario in this mode also
-    // runs through the path that waits for the broker's welcome (ADR-0007).
+    // runs through the path that waits for the broker's welcome (ADR-0006).
     return new FallbackTransport(
       request,
       (workerRequest, startup) =>
@@ -533,7 +533,7 @@ export class FakeBus {
           return;
         }
         // A port to a worker whose script never ran accepts messages and delivers none. A worker of
-        // another version drops them too, but answers the frozen handshake (ADR-0024).
+        // another version drops them too, but answers the frozen handshake (ADR-0008).
         if (
           script === 'other-version' &&
           isStarted &&

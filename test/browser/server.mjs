@@ -11,7 +11,7 @@
  *   by Node, so the page code is type-checked with the rest of the suite (ADR-0035).
  * - `/other-protocol-version/serial-broker.worker.js` - the worker bundled from source with its
  *   `PROTOCOL_VERSION` changed, which is how a tab meets a worker of another version without a
- *   second checkout (ADR-0024).
+ *   second checkout (ADR-0008).
  * - `/bench/*` - the browser benchmark's pages (`bench/browser/pages/`), served the same way: a
  *   `.js` that is TypeScript on disk is stripped on the way out (ADR-0037).
  *

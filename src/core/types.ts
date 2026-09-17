@@ -59,7 +59,7 @@ export type SerialBrokerStatus = (typeof SerialBrokerStatus)[keyof typeof Serial
  * Identifies a device by its USB vendor and product IDs.
  *
  * These identify a device *type*, not an individual device: two identical adapters cannot be
- * told apart, because the platform exposes no serial number. See ADR-0009.
+ * told apart, because the platform exposes no serial number. See ADR-0036.
  */
 export interface UsbDeviceFilter {
   /** USB vendor ID, `0x0000`-`0xffff`. For a CH340 adapter this is `0x1a86`. */
@@ -78,7 +78,7 @@ export interface UsbDeviceFilter {
  *
  * The cost is that the library cannot tell two such ports apart. With more than one granted,
  * it uses the first and reports the ambiguity at `warn` level. Use the USB filter whenever
- * the device has IDs. See ADR-0016.
+ * the device has IDs. See ADR-0036.
  */
 export interface AnyDeviceFilter {
   /** Must be `true`. Spelled as a field so the intent is explicit at the call site. */
@@ -207,7 +207,7 @@ export interface ConnectionSettings {
  * A read returns whatever the driver has at that moment, so a device that answers byte by byte
  * produces one event per byte. The tab holding the port collects the bytes until the line has
  * been quiet for `idleMs`, and delivers them as one event. Its settings apply to every tab.
- * See ADR-0039.
+ * See ADR-0002.
  */
 export interface ReceiveSettings {
   /**
@@ -381,7 +381,7 @@ export interface ReceiveEvent {
   readonly name: string;
   /**
    * The bytes exactly as the device produced them, as the tab holding the port collected them
-   * until the line was quiet (`receive`, ADR-0039).
+   * until the line was quiet (`receive`, ADR-0002).
    *
    * This is a copy; the library retains no reference to it, so it is safe to keep or mutate.
    * Where one delivery ends and the next begins carries no meaning - this library performs no
@@ -474,7 +474,7 @@ export type Unsubscribe = () => void;
 /** Data accepted by {@link SerialBrokerApi.send}. */
 export type SendableData = string | BufferSource;
 
-/** Which message bus to use. See ADR-0006 and ADR-0007. */
+/** Which message bus to use. See ADR-0006. */
 export type TransportKind = 'auto' | 'sharedworker' | 'broadcastchannel';
 
 /** Library-wide settings, applied by `SerialBroker.configure()`. */

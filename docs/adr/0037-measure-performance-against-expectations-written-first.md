@@ -18,7 +18,7 @@ than its expectation becomes a fix or a documented limit.
 Three things make this harder than a benchmark usually is:
 
 1. **The harness has no real time.** Its clock moves when a test moves it, which is what makes
-   the test suite deterministic (ADR-0014, ADR-0032). A latency in the harness is therefore not a
+   the test suite deterministic (ADR-0014). A latency in the harness is therefore not a
    simulated quantity; it is the wall-clock time the process spent in the library's microtasks
    between the device pushing a chunk and a listener seeing it. That is the number that isolates
    the library's own cost, and it is also a number that varies with the machine.

@@ -38,7 +38,7 @@ describe.skipIf(!IS_EXTREME).each(TRANSPORT_MODES)('tabs freezing under load (%s
       const options = {
         device: READER,
         serial: { baudRate: 115_200 },
-        // Every chunk as it is read: this counts or times chunks, not collected answers (ADR-0039).
+        // Every chunk as it is read: this counts or times chunks, not collected answers (ADR-0002).
         receive: { idleMs: 0 },
         encoding: { decodeText: true },
       };

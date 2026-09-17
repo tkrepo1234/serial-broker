@@ -54,7 +54,7 @@ export interface SerialBrokerApi {
    * If the browser already has permission for a matching device - because the user granted it
    * on an earlier visit - the port is opened immediately, with no prompt and no user gesture.
    * Otherwise the status becomes `awaiting-permission` and the application must call
-   * {@link SerialBrokerApi.requestAccess} from a user gesture (ADR-0009).
+   * {@link SerialBrokerApi.requestAccess} from a user gesture (ADR-0036).
    *
    * Without a `device`, or with `device: { auto: true }`, the configuration is in **auto mode**:
    * it waits with `awaiting-permission` until `requestAccess()` opens the picker with no filter,
@@ -181,7 +181,7 @@ export interface SerialBrokerApi {
    * @returns A promise that resolves once the browser has taken the bytes for the port - into its
    *   transmit buffer of `serial.bufferSize` bytes - not once the device has received them, which
    *   Web Serial does not report. A device that has stopped taking data fails a write with
-   *   `WRITE_TIMEOUT` only once that buffer is full (ADR-0038).
+   *   `WRITE_TIMEOUT` only once that buffer is full (ADR-0013).
    * @throws A `SerialBrokerError` with code `UNKNOWN_CONFIGURATION`, `INVALID_ARGUMENT` for a
    *   string while an `encoding` other than UTF-8 is configured or for more than 16 MiB of data,
    *   `WRITE_FAILED`, `WRITE_TIMEOUT`, `WRITE_QUEUE_FULL` when the tab holding the port already
@@ -203,7 +203,7 @@ export interface SerialBrokerApi {
    *
    * | Event | Fires when |
    * | --- | --- |
-   * | `onReceive` | The tab holding the port delivers what the device sent, collected until the line is quiet (`receive`, ADR-0039), in every tab. Delivery boundaries carry no meaning - this library performs no framing (ADR-0002). |
+   * | `onReceive` | The tab holding the port delivers what the device sent, collected until the line is quiet (`receive`, ADR-0002), in every tab. Delivery boundaries carry no meaning - this library performs no framing (ADR-0002). |
    * | `onSend` | The browser took bytes for the port, in every tab. `origin` is `'local'` if this tab issued the write and `'remote'` if another one did. |
    * | `onError` | Anything goes wrong, in every tab that is affected. |
    * | `onStatusChange` | The connection status changes. A new listener is also told the current status once, right after `subscribe()` returns, with `previousStatus` equal to `status`. |

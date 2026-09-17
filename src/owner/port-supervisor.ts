@@ -60,7 +60,7 @@ type ConnectionState =
       readonly reader: ReadableStreamDefaultReader<Uint8Array>;
       readonly writer: WritableStreamDefaultWriter<Uint8Array>;
       readonly decoder: TextDecoder | undefined;
-      /** Collects what is read into deliveries (ADR-0039); flushed when the connection ends. */
+      /** Collects what is read into deliveries (ADR-0002); flushed when the connection ends. */
       readonly received: ReceiveBuffer;
     }
   /** The connection was lost and the next attempt is scheduled - there is always a timer. */
@@ -143,7 +143,7 @@ export class PortSupervisor {
   #openedAt: number | undefined;
   #bytesReceived = 0;
   #bytesSent = 0;
-  /** Since when a write has been stuck at the device, while one is (ADR-0038). Diagnostics only. */
+  /** Since when a write has been stuck at the device, while one is (ADR-0013). Diagnostics only. */
   #stalledSince: number | undefined;
 
   constructor(
@@ -252,7 +252,7 @@ export class PortSupervisor {
   /**
    * Waits, within `writeTimeoutMs`, until every write handed to this port has been answered.
    *
-   * The caller says `owner-released` next, which has to follow every answer of the term (ADR-0026).
+   * The caller says `owner-released` next, which has to follow every answer of the term (ADR-0030).
    * Each write's own caller heard its outcome first: its reaction was registered before this one. A
    * write still hanging after that is answered when it ends; its issuer has taken it for lost by then,
    * which is what it is.
@@ -468,7 +468,7 @@ export class PortSupervisor {
       // Measured as well as timed: a timer can run late, in a tab the browser throttles, and a write
       // begun in that moment is one its issuer has given up on. On the monotonic clock, the one the
       // expiry timer runs on, so that the system clock being set forward or back neither refuses a
-      // write that is still in time nor lets a lapsed one through (ADR-0032).
+      // write that is still in time nor lets a lapsed one through (ADR-0014).
       if (clock.monotonicNow() - queuedAt >= writeTimeoutMs) {
         throw this.#notBegun('waited-too-long', payload.byteLength, queuedAt);
       }
@@ -508,7 +508,7 @@ export class PortSupervisor {
             // The device has not taken the chunk. Tearing the connection down would not help: the
             // browser cannot abort a write the operating system still holds, and a port with one
             // outstanding neither closes nor opens again, however soon the device recovers
-            // (measured in Chromium on Windows, ADR-0038). So the caller hears now, and the chunk
+            // (measured in Chromium on Windows, ADR-0013). So the caller hears now, and the chunk
             // stays in flight - holding the queue, so that nothing behind it begins - until the
             // device takes it or the connection is lost.
             stalled.reject(error);
@@ -984,7 +984,7 @@ export class PortSupervisor {
     };
     this.#state = state;
 
-    // The stability window is a duration, so it is measured on the monotonic clock (ADR-0032);
+    // The stability window is a duration, so it is measured on the monotonic clock (ADR-0014);
     // `openedAt` is a moment an operator reads, so it is the wall clock.
     this.#backoff.recordConnected(this.environment.clock.monotonicNow());
     this.#openedAt = this.environment.clock.now();

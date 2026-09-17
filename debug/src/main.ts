@@ -368,7 +368,7 @@ window.addEventListener('pagehide', (event) => {
  *
  * This is where someone who has not used serial-broker before starts: no vendor ID, no product
  * ID, no device type - confirm the settings, choose the port, and the page is connected to it
- * (ADR-0034, ADR-0036). The picker is opened by `requestAccess()` in the click that submits the
+ * (ADR-0019, ADR-0036). The picker is opened by `requestAccess()` in the click that submits the
  * dialog, because the browser shows it only for a fresh user gesture.
  */
 function chooseADevice(): void {
@@ -436,7 +436,7 @@ async function refresh(): Promise<void> {
 /**
  * Shows everything, and leaves the other tabs' reports out if they cannot be shown.
  *
- * A report from another tab is checked only as far as filing it needs (ADR-0018, amended): one from a
+ * A report from another tab is checked only as far as filing it needs (ADR-0018): one from a
  * build that reports differently, or from a script of the origin, can lack a field the page reads.
  * It costs the view of the other tabs until the next collection, never the page.
  */

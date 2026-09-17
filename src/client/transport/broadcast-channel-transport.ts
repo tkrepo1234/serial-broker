@@ -32,7 +32,7 @@ export type BroadcastChannelFactory = (name: string) => BroadcastChannelLike;
 /**
  * Delivers messages through a `BroadcastChannel`, with no broker.
  *
- * Used when `SharedWorker` is unavailable or fails to load (ADR-0007). Every message reaches
+ * Used when `SharedWorker` is unavailable or fails to load (ADR-0006). Every message reaches
  * every context of the origin, and each receiver decides for itself whether a message is
  * addressed to it:
  *
@@ -131,7 +131,7 @@ export class BroadcastChannelTransport implements Transport {
       // Addressed to a broker, or written by one, and there is none here. Every script of the origin
       // can post them, and nobody above the transport reads them - on the worker the broker never
       // passes them on - so they go no further, and both transports deliver the same messages. A
-      // forwarded worker record posted here is nobody's record, and is dropped with them (ADR-0029).
+      // forwarded worker record posted here is nobody's record, and is dropped with them (ADR-0018).
       return;
     }
 

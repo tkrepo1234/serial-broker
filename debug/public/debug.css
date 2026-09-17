@@ -665,7 +665,7 @@ button.help:focus-visible {
 }
 
 /* Spacing a few rows need beyond the shared one, so no element carries a style attribute:
-   the page's content security policy allows no inline styles (ADR-0034). */
+   the page's content security policy allows no inline styles (ADR-0019). */
 .row.spaced {
   margin-top: 0.75rem;
 }

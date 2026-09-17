@@ -72,7 +72,7 @@ permission with it: the next `setup()` anywhere needs the picker again.
 A device switched off behind its powered USB adapter, or one holding back data with flow control,
 leaves the port open. The status stays `open`, reads wait, and a write that does not fit the
 browser's transmit buffer fails with `WRITE_TIMEOUT` while its chunk stays in flight: the browser
-can neither withdraw it nor close the port while it is outstanding (ADR-0038). Writes carry on the
+can neither withdraw it nor close the port while it is outstanding (ADR-0013). Writes carry on the
 moment the device takes data again. Releasing the configuration during such a stall cannot close the
 port either; the browser frees it only when the page goes away.
 

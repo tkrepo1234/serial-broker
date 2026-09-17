@@ -91,7 +91,7 @@ about the term: the tab forgets it, and the next message naming it is checked af
 
 - **Keep the claim as the proof, and wait a fixed delay after it.** A clean handover then waits for
   nothing, and a late message cannot be attributed to the old owner or the new.
-- **Term identifiers without locks, a succeeded term ending after a grace period.** What ADR-0026
+- **Term identifiers without locks, a succeeded term ending after a grace period.** What ADR-0030
   decided on 2026-09-14: one second without a word. Too short and a slow message becomes a repeated
   command, too long and every failover waits; and a message could invent a term, or keep a dead one
   alive.

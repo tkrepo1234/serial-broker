@@ -120,7 +120,7 @@ describe('SharedWorkerTransport', () => {
       }),
     );
 
-    // The worker cannot reach an application's logger; a tab writes its records for it (ADR-0029).
+    // The worker cannot reach an application's logger; a tab writes its records for it (ADR-0018).
     // `clientId` stays the identity the worker's record concerns, not this tab's.
     expect(records).toEqual([
       [
@@ -449,7 +449,7 @@ describe('SharedWorkerTransport, while its script is starting', () => {
   it('reports a worker script of another protocol version as a load failure, and the version as a mismatch', () => {
     const { port, ready, loadFailures, decodeFailures, transportErrors } = start();
 
-    // The worker's answer to hello, in its own version (ADR-0024). Such a worker drops everything
+    // The worker's answer to hello, in its own version (ADR-0008). Such a worker drops everything
     // this tab says, so nothing sent so far reached anyone - as with a script that did not load.
     port.deliver({ ...WELCOME, v: PROTOCOL_VERSION + 1 });
 

@@ -33,7 +33,7 @@ usbip-win2 - in Microsoft Edge on Windows. Before 1.0 a minor version may break 
   configuration takes its device from the port the user picks in an unfiltered picker, remembers it,
   and shares it with the other tabs. `{ nonUsb: true }` accepts only ports without a USB identity,
   and `getStatus()` reports `deviceKind`: `'usb'`, `'non-usb'`, `'any'` or `'auto'`.
-- **Received bytes are collected until the line is quiet** (ADR-0039): `receive.idleMs` and
+- **Received bytes are collected until the line is quiet** (ADR-0002): `receive.idleMs` and
   `receive.maxWaitMs`; the tab holding the port collects, and its settings apply everywhere.
 - **Remembered configurations**, one storage key each plus an index (ADR-0033), kept while any tab
   runs them. Releasing forgets nothing: a disconnect is not a deletion, and `release(name,

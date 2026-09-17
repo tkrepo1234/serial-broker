@@ -93,7 +93,7 @@ export const SerialBrokerErrorCode = {
   // --- Coordination ----------------------------------------------------------------------
   /**
    * Another tab, or the worker script, runs an incompatible wire protocol version. See ADR-0008
-   * and ADR-0024.
+   * and ADR-0008.
    */
   PROTOCOL_VERSION_MISMATCH: 'PROTOCOL_VERSION_MISMATCH',
 

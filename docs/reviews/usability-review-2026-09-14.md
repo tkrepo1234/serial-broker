@@ -8,7 +8,7 @@ counts, a cold read of every example application, and the check that no task nee
 
 - **Step counts.** Seven tasks, each written with serial-broker and with the Web Serial API alone,
   counted as calls, options and concepts. The table and the code are the documentation site's new
-  chapter [Tasks, counted](site/tasks.md); the code is type-checked with the other examples.
+  chapter [Tasks, counted](../site/tasks.md); the code is type-checked with the other examples.
 - **Cold read.** For each of the nine example applications (`minimal`, `multi-tab-dashboard`,
   `exclusive`, `no-bundler`, `openui5`, and `react`, `vue`, `svelte`, `angular` from their branches),
   the reviewer read the documentation site, the library's README and the TSDoc that the API reference

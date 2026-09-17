@@ -18,7 +18,7 @@ export type RequestId = string & { readonly __brand: 'RequestId' };
 
 /**
  * Opaque identifier of one term of holding a configuration's port: from the moment a tab is granted
- * the ownership lock until it lets it go (ADR-0026).
+ * the ownership lock until it lets it go (ADR-0030).
  *
  * A tab that holds the port twice has two terms. Messages about ownership, writes and the status
  * carry the term they belong to, because messages from two senders have no order between them: a
@@ -32,7 +32,7 @@ export type TermId = string & { readonly __brand: 'TermId' };
  *
  * There is no target for the tab holding the port. What is meant for it - a write, a request for the
  * status - names the term it is addressed to and goes to every participant; only the tab holding
- * that term acts on it (ADR-0040). So no router has to believe a claim of ownership.
+ * that term acts on it (ADR-0006). So no router has to believe a claim of ownership.
  */
 export type MessageTarget = 'all' | ClientId;
 
@@ -100,7 +100,7 @@ export interface OwnerClaimedMessage extends Envelope {
  * Sent on a graceful release only, after the port is closed and every write of the term has been
  * answered, and before the lock is let go. It is the term's last message: a sender's messages keep
  * their order, so a tab that hears it has heard everything the term said about its writes
- * (ADR-0026). Ownership itself is never derived from these messages - only from the Web Lock
+ * (ADR-0030). Ownership itself is never derived from these messages - only from the Web Lock
  * (ADR-0005), which is also what covers the abrupt-death case: the browser releases the lock, the
  * successor is granted it, and it announces itself.
  */
@@ -120,7 +120,7 @@ export interface WriteRequestMessage extends Envelope {
   /**
    * The term the request is addressed to. Only a tab holding the port in that term writes it; any
    * other answers `NOT_CONNECTED`. So a request is only ever written by the term its sender chose,
-   * and the sender hands it to another term only once this one has ended (ADR-0026).
+   * and the sender hands it to another term only once this one has ended (ADR-0030).
    */
   readonly term: TermId;
 }
@@ -267,7 +267,7 @@ export interface DiagnosticsReportMessage extends Envelope {
 }
 
 /**
- * One diagnostic record of the worker, sent to a tab so that its logger can write it (ADR-0029).
+ * One diagnostic record of the worker, sent to a tab so that its logger can write it (ADR-0018).
  *
  * The worker runs where no application logger exists, so what it records about refused messages and
  * exceeded limits would otherwise be seen by nobody. Only the broker sends this, and only to the

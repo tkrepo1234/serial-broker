@@ -19,7 +19,7 @@ const FALLBACK_LOG_MESSAGES: Readonly<Record<WorkerLoadFailure, string>> = {
  * reports the failure afterwards, as an `error` event. By then the tab has already announced
  * itself, attached its configurations, perhaps claimed a port - all into a port that delivers
  * nothing. Falling back at construction alone would leave that tab cut off from every other
- * (ADR-0007).
+ * (ADR-0006).
  *
  * So until the broker's `welcome` proves the script runs, the transport can still move. When it
  * does, nothing it sent reached anyone, and nothing is sent again: the new bus is told what this

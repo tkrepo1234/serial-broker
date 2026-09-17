@@ -6,7 +6,7 @@ import { normalizeConfiguration, toSetupOptions } from '../core/validation.js';
 import type { KeyValueStorage } from '../environment/environment.js';
 
 /**
- * Version of the stored format, independent of the protocol version (ADR-0022).
+ * Version of the stored format, independent of the protocol version (ADR-0033).
  *
  * Stored entries are the options `setup()` accepts and are validated again on every read, so a
  * change to the message protocol leaves them usable. This is incremented only for a change to what
@@ -57,13 +57,13 @@ interface StoredIndex {
  *
  * What is stored is only the *configuration* - which device type to look for and how to open
  * it. The permission to use the device belongs to the browser and cannot be stored, forged or
- * inspected by script; it is what makes the restore prompt-free (ADR-0009). Nothing sensitive
+ * inspected by script; it is what makes the restore prompt-free (ADR-0036). Nothing sensitive
  * lives here.
  *
  * One key per configuration, plus an index listing their names (ADR-0033). Two tabs remembering
  * different configurations in the same moment write different keys, so neither can lose the
  * other's; the index is the only key they share, and a name missing from it is put back the next
- * time that tab saves - which it does as soon as its persistence hold is granted (ADR-0027).
+ * time that tab saves - which it does as soon as its persistence hold is granted (ADR-0033).
  *
  * Stored data is treated as hostile. It may come from an older version, from a hand-edited
  * developer console, or be truncated by a browser that ran out of quota mid-write, so every
@@ -189,7 +189,7 @@ export class ConfigurationStore {
 
   /**
    * An auto-mode configuration that has not resolved keeps the device a remembered entry of the
-   * same name resolved to (ADR-0036, amended 2026-09-15).
+   * same name resolved to (ADR-0036).
    *
    * `setup()` already starts such a configuration with the remembered device, so this matters only
    * where another tab resolved the name after this tab set it up and before this tab saved again -

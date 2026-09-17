@@ -196,7 +196,7 @@ describe('decode matrix', () => {
     'write-ready',
     'write-approval',
     'status',
-  ] as const)('rejects %s that names no term (ADR-0026)', (type) => {
+  ] as const)('rejects %s that names no term (ADR-0030)', (type) => {
     expect(decodeMessage({ ...VALID[type], term: undefined }).ok).toBe(false);
   });
 

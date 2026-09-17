@@ -6,8 +6,8 @@ Every architectural decision in this library is recorded here, using a
 **One current record per decision** ([ADR-0001](./0001-record-architecture-decisions.md)). A record
 states the decision as it stands today, with the alternatives that were rejected and why; a decision
 that changes is rewritten rather than amended, and what it used to say is left to version control. A
-record whose decision was replaced, merged or retired keeps its number as a short stub pointing
-forward, so every citation in code (`// See ADR-0005.`) still resolves. How the library works, rather
+record whose decision was replaced, merged or retired is removed, and the citations of its number
+are moved to the record that now holds the decision. How the library works, rather
 than why, is the Internals chapter of the developer documentation (`docs/site/internals.md`).
 
 ## Current decisions
@@ -40,25 +40,3 @@ than why, is the Internals chapter of the developer documentation (`docs/site/in
 | [0041](./0041-tell-liveness-through-web-locks.md)                        | Tell who is still there through Web Locks, not heartbeats                           |
 | [0042](./0042-keep-the-toolchains-configuration-in-config.md)            | Keep the toolchain's configuration in config/                                       |
 | [0043](./0043-a-classic-script-build-and-published-names.md)             | Ship a classic script build on one global; name published files after the package   |
-
-## Superseded
-
-| #                                                                     | Was                                                      | Now in |
-| --------------------------------------------------------------------- | -------------------------------------------------------- | ------ |
-| [0007](./0007-broadcastchannel-fallback-transport.md)                 | BroadcastChannel fallback                                | 0006   |
-| [0009](./0009-device-identity-and-permission-persistence.md)          | USB IDs, persisted configuration, browser permission     | 0036   |
-| [0016](./0016-non-usb-devices.md)                                     | Ports that are not USB devices                           | 0036   |
-| [0017](./0017-usbip-device-emulator.md)                               | USB/IP device emulator                                   | 0035   |
-| [0021](./0021-forget-silent-participants.md)                          | Heartbeats                                               | 0041   |
-| [0022](./0022-version-stored-configurations-separately.md)            | A storage version, with migration                        | 0033   |
-| [0023](./0023-announce-the-protocol-version.md)                       | Protocol version announcement                            | 0008   |
-| [0024](./0024-keep-the-worker-handshake-version-independent.md)       | Frozen worker handshake                                  | 0008   |
-| [0026](./0026-attribute-messages-to-a-term-of-holding-the-port.md)    | Terms with a grace period                                | 0030   |
-| [0027](./0027-keep-a-remembered-configuration-while-a-tab-runs-it.md) | Remembered while any tab runs it                         | 0033   |
-| [0028](./0028-bind-an-identity-on-the-worker-to-a-secret.md)          | Identity secret on the worker (removed)                  | 0006   |
-| [0029](./0029-forward-the-workers-records-to-the-tabs.md)             | The worker's warnings forwarded to the tabs              | 0018   |
-| [0032](./0032-measure-durations-on-a-monotonic-clock.md)              | Monotonic clock for durations                            | 0014   |
-| [0034](./0034-start-the-debugging-surface-from-a-chosen-port.md)      | Debugging surface: chosen port (retired), its own policy | 0019   |
-| [0038](./0038-leave-a-write-the-device-has-not-taken-in-flight.md)    | A write the device has not taken stays in flight         | 0013   |
-| [0039](./0039-collect-received-bytes-until-the-line-is-quiet.md)      | Collect received bytes until the line is quiet           | 0002   |
-| [0040](./0040-route-to-all-participants-drop-the-identity-secret.md)  | Route to all participants, drop the identity secret      | 0006   |

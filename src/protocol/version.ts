@@ -9,7 +9,7 @@
  * lock name and the broker channel name, so they partition into independent groups rather than
  * corrupting each other (ADR-0008). They still learn of each other through the version
  * announcement, whose channel carries no version, and report `PROTOCOL_VERSION_MISMATCH`
- * (ADR-0023).
+ * (ADR-0008).
  */
 export const PROTOCOL_VERSION = 1;
 
@@ -18,7 +18,7 @@ export const PROTOCOL_VERSION = 1;
  *
  * Whatever else a sender puts where a version belongs - an object, a string, a fraction, `NaN`,
  * `-0` - names no build of this library. Reporting it as a version would let one sender produce a
- * new "version" with every message, and each is reported once (ADR-0008, ADR-0023).
+ * new "version" with every message, and each is reported once (ADR-0008).
  */
 export function isProtocolVersion(value: unknown): value is number {
   return typeof value === 'number' && Number.isSafeInteger(value) && value >= 1;

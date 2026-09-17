@@ -64,7 +64,7 @@ const probe = (from: string, to = 'all'): unknown =>
 /**
  * The types of the messages a port was posted, without the worker's forwarded records.
  *
- * Every connected port is posted the worker's own warnings (ADR-0029), which say nothing about the
+ * Every connected port is posted the worker's own warnings (ADR-0018), which say nothing about the
  * routing these tests are about; {@link recordsPosted} is what asserts on those.
  */
 const typesPosted = (port: FakeMessagePort): unknown[] =>
@@ -112,7 +112,7 @@ describe('WorkerPorts', () => {
     join(world, 'mallory', mallory);
     world.ports.receive(mallory, probe('mallory'));
 
-    // A tab's first message is always hello (ADR-0024); one that is not comes from something else.
+    // A tab's first message is always hello (ADR-0008); one that is not comes from something else.
     expect(beforeHello).toEqual([]);
     expect(typesPosted(bob)).toEqual(['status-request']);
   });
@@ -205,7 +205,7 @@ describe('WorkerPorts', () => {
     world.ports.receive(mallory, probe('mallory'));
 
     // A worker has no logger of its own: what it records is seen only where a tab writes it
-    // (ADR-0029). A port that has said nothing the worker accepted is no participant and gets none.
+    // (ADR-0018). A port that has said nothing the worker accepted is no participant and gets none.
     const record = {
       type: 'worker-log',
       level: 'warn',

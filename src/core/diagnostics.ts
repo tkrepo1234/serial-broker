@@ -94,7 +94,7 @@ export interface ConnectionDiagnostics {
   readonly bytesSent: number;
   /**
    * Epoch milliseconds since which a write has been stuck at the device, while one is: the device
-   * has not taken it within `writeTimeoutMs`, and the status still says `open` (ADR-0038).
+   * has not taken it within `writeTimeoutMs`, and the status still says `open` (ADR-0013).
    */
   readonly stalledWriteSince: number | undefined;
 }
@@ -196,7 +196,7 @@ export interface DiagnosticsSnapshot {
    * Every context that answered within the window, in the order the answers arrived.
    *
    * A report of another context is checked only as far as filing it needs - its sender and its named
-   * configurations (ADR-0018, amended). Read its other fields defensively: another build may report
+   * configurations (ADR-0018). Read its other fields defensively: another build may report
    * differently.
    */
   readonly participants: readonly ParticipantDiagnostics[];

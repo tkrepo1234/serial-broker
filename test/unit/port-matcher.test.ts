@@ -49,7 +49,7 @@ describe('matchesDevice', () => {
     const configuration = device({ nonUsb: true });
 
     expect(matchesDevice(bareport, configuration)).toBe(true);
-    // Half an identity is no identity a filter could find the port by again (ADR-0034).
+    // Half an identity is no identity a filter could find the port by again (ADR-0019).
     expect(matchesDevice(halfPort, configuration)).toBe(true);
     expect(matchesDevice(usbPort, configuration)).toBe(false);
   });

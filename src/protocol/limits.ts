@@ -120,7 +120,7 @@ export const MAX_PORTS_PER_PARTICIPANT = 8;
 export const MAX_CONFIGURATIONS = 4 * MAX_HELLO_CONFIGURATIONS;
 
 /**
- * The most fields, counting their values, one forwarded worker record may carry (ADR-0029).
+ * The most fields, counting their values, one forwarded worker record may carry (ADR-0018).
  *
  * The worker's own records carry six fields at most. The limit bounds what a tab holds while it
  * hands a record to the application's logger.

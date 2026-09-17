@@ -97,7 +97,7 @@ export class BackoffState {
    *
    * @param now - A monotonic reading, `Clock.monotonicNow()`: the window is a duration, and a
    *   system clock the user or an NTP step moves must neither end it early nor hold it open
-   *   (ADR-0032).
+   *   (ADR-0014).
    */
   recordConnected(now: number): void {
     this.#connectedAt = now;

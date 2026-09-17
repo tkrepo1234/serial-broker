@@ -82,7 +82,7 @@ const notConnected = (): SerialBrokerError =>
  * Every test here answers one question: *may this command be sent again?* Getting it wrong in
  * one direction loses a command; getting it wrong in the other executes it twice, and for a
  * device that cuts, dispenses or moves something, twice is materially worse than zero times.
- * A write belongs to the term it was handed to, and only that term ending decides it (ADR-0026).
+ * A write belongs to the term it was handed to, and only that term ending decides it (ADR-0030).
  * No term begins it without this tracker's approval, which is what makes `started: false` true.
  */
 describe('PendingWrites', () => {

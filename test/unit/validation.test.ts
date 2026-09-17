@@ -305,7 +305,7 @@ describe('the device filter in auto mode (ADR-0036)', () => {
     ['any and a resolution', { any: true, resolved: { nonUsb: true } }],
   ])('rejects a device that mixes shapes: %s', (_label, device) => {
     // Either reading would be a guess about which device to open, and that is not a guess worth
-    // making (ADR-0016).
+    // making (ADR-0036).
     expect(argumentOf(() => normalizeConfiguration('R', { device, serial }))).toBe(
       'options.device',
     );

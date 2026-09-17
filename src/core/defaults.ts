@@ -26,7 +26,7 @@ export type ResolvedDevice =
  * A validated device filter.
  *
  * Discriminated rather than "optional IDs", so that no code can read a vendor ID that a
- * configuration does not have. See ADR-0016.
+ * configuration does not have. See ADR-0036.
  *
  * `auto` keeps its resolution beside the mode rather than becoming the device it resolved to: the
  * configuration stays one that follows the tab holding the port, and a later `setup()` in auto
@@ -90,7 +90,7 @@ export const DEFAULT_CONNECTION_SETTINGS: NormalizedConnectionSettings = {
 };
 
 /**
- * Defaults for {@link ReceiveSettings}. See ADR-0039: 50 ms of silence joins a device answering
+ * Defaults for {@link ReceiveSettings}. See ADR-0002: 50 ms of silence joins a device answering
  * byte by byte, even a slow microcontroller echoing about 80 bytes a second, and is too short
  * for a person to notice; 500 ms bounds the wait on a line that never pauses.
  */

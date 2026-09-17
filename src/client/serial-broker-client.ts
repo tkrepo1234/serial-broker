@@ -61,7 +61,7 @@ export const MAX_UNHEARD_ERRORS = 16;
 /**
  * How many other protocol versions a tab reports, each once, as `PROTOCOL_VERSION_MISMATCH`.
  *
- * A real mixed deployment has one or two (ADR-0023). The versions come from other contexts of the
+ * A real mixed deployment has one or two (ADR-0008). The versions come from other contexts of the
  * origin, where any script can post them, and each distinct one was remembered - and reported - for
  * the life of the tab. The versions already reported stay recognised; reaching the limit is logged
  * once, as `client.peer-versions-limit`.
@@ -104,7 +104,7 @@ export class SerialBrokerClient {
   readonly #store: ConfigurationStore;
   /**
    * The holds that tell other tabs this one still runs a remembered configuration, by name
-   * (ADR-0027). Only configurations set up with `remember: true` have one.
+   * (ADR-0033). Only configurations set up with `remember: true` have one.
    */
   readonly #holds = new Map<string, HeldLock>();
   readonly #disposal = new DisposalStack();
@@ -255,7 +255,7 @@ export class SerialBrokerClient {
   }
 
   /**
-   * The device the remembered entry of a new auto-mode configuration resolved to (ADR-0036, amended
+   * The device the remembered entry of a new auto-mode configuration resolved to (ADR-0036
    * 2026-09-15), so that a later visit calling only `setup()` reconnects without a prompt, as
    * `restore()` does, and saves the resolution back rather than a configuration waiting again.
    *
@@ -381,7 +381,7 @@ export class SerialBrokerClient {
   }
 
   /**
-   * Remembers a configuration for later visits, and says so to the other tabs (ADR-0027).
+   * Remembers a configuration for later visits, and says so to the other tabs (ADR-0033).
    *
    * Saved at once, so that a reload straight after `setup()` restores it, and again once the hold is
    * granted: a tab releasing the same name may forget the entry in between, and it waits for that
@@ -470,7 +470,7 @@ export class SerialBrokerClient {
    * Forgets a remembered configuration, unless another tab still runs it with `remember: true`.
    *
    * The entry is one per name for the whole origin. Forgetting it while another tab runs the
-   * configuration would cost that tab the configuration on its next reload (ADR-0027, ADR-0033).
+   * configuration would cost that tab the configuration on its next reload (ADR-0033).
    * Reached by `release(name, { forget: true })` and by setting the name up with `remember: false`;
    * a name with nothing stored under it is left as it is rather than reported.
    */
@@ -633,7 +633,7 @@ export class SerialBrokerClient {
     }
     this.#sessions.clear();
     // Let go, but nothing forgotten: disposing is what a closing tab does, and a configuration it
-    // ran stays remembered for the next visit (ADR-0027).
+    // ran stays remembered for the next visit (ADR-0033).
     await Promise.all([...this.#holds.values()].map((hold) => hold.stop()));
     this.#holds.clear();
     // A `release()` still under way has not closed its port or let its lock go yet, and still
@@ -705,7 +705,7 @@ export class SerialBrokerClient {
    *
    * Tabs on different protocol versions share no lock, worker or bus (ADR-0008), so without this
    * they never learn of each other - and both try to hold the device. The announcement travels on
-   * the one channel whose name carries no version (ADR-0023). Every tab announces itself once and
+   * the one channel whose name carries no version (ADR-0008). Every tab announces itself once and
    * answers each announcement from another version, so a tab opened later still learns of the tabs
    * already open; a reply is never answered, so two versions cannot keep each other talking.
    */

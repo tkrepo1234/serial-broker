@@ -226,7 +226,7 @@ they are left unticked because the checklist is about a run **with** hardware.
       The port stays open and the read loop stalls. A short write still resolves — the browser
       buffers `serial.bufferSize` bytes — but a write larger than that fails with
       `WRITE_TIMEOUT`, the status stays `open`, and once the device is back sending works
-      again with no reload (ADR-0038).
+      again with no reload (ADR-0013).
 
 ### Permission changes
 
@@ -351,15 +351,15 @@ and anything the debugging surface shows.
 
 ### 2026-09-15 — Edge 153.0.4234.32 (headless), Windows 11 Home 26200, usbip-win2 0.9.8.0: the first run against the emulator
 
-The USB/IP emulator (`emulator/`, ADR-0017) attached by usbip-win2 0.9.8.0: Windows bound
+The USB/IP emulator (`emulator/`, ADR-0035) attached by usbip-win2 0.9.8.0: Windows bound
 `usbser.sys` and named the port **COM4**, device instance ID `USB\VID_1209&PID_0001\EMULATOR-0001`
 — stable across attaches, because the emulator reports a serial number. By hand first (`npm run
 emulator`: attached, configured, 9600 8N1, COM4 in Device Manager), then automatically by
 `test/browser/hardware/emulator.spec.ts`, which starts the emulator and drives it through its
-terminal (ADR-0035, amended). Browser and permission as in the Arduino run: Playwright 1.63.0, a
+terminal (ADR-0035). Browser and permission as in the Arduino run: Playwright 1.63.0, a
 throwaway profile, no prompt answered.
 
-Ten tests, all green, against the build containing ADR-0038:
+Ten tests, all green, against the build containing ADR-0013:
 
 - **Step 3** — one tab echoes `HELLO`.
 - **Steps 5, 6** — two tabs share the port; a write from the second reaches the device **once**,
@@ -381,7 +381,7 @@ Ten tests, all green, against the build containing ADR-0038:
   holder) crashed: B's `send()` rejects with `OWNER_LOST_DURING_WRITE`, B takes the port over, and
   after `resume` the device has received the bytes at most once.
 
-**Found on the way, and fixed in the same change (ADR-0038):** before the fix the long write of
+**Found on the way, and fixed in the same change (ADR-0013):** before the fix the long write of
 step 17 left the configuration reconnecting for ever. A probe with Web Serial alone showed why: with
 a write outstanding at the device, `writer.abort()` and `port.close()` never settle and
 `port.open()` fails with "The port is already open" — also after the device recovers — until the
@@ -396,7 +396,7 @@ not a UART.
 
 ### 2026-09-15, later — the same machine: receiving, reconnecting, the Arduino again
 
-Against the build with ADR-0039 (received bytes collected until the line is quiet) and protocol
+Against the build with ADR-0002 (received bytes collected until the line is quiet) and protocol
 version 10, both hardware suites at once, each device on its own COM port.
 
 - **Arduino on COM3, 7 tests green** (the 64 KiB round trip skipped as usual). New: writing

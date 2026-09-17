@@ -122,7 +122,7 @@ describe.each(TRANSPORT_MODES)('a tab running a different tab limit (%s)', (tran
       maxTabs: 2,
       holdingTabMaxTabs: 1,
     });
-    // The other tabs believe errors only from the tab holding the port (ADR-0025, amended).
+    // The other tabs believe errors only from the tab holding the port (ADR-0025).
     expect(holder.errorCodes('Reader')).not.toContain(SerialBrokerErrorCode.CONFIGURATION_CONFLICT);
 
     device.emit('HOLDER');

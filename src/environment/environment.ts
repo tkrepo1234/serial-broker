@@ -29,7 +29,7 @@ export interface SerialBrokerEnvironment {
   /** Opens the message bus. */
   readonly createTransport: (request: TransportRequest) => Transport;
   /**
-   * Opens a `BroadcastChannel`, for the version announcement (ADR-0023).
+   * Opens a `BroadcastChannel`, for the version announcement (ADR-0008).
    *
    * Absent where the platform has none. Tabs on other protocol versions then go unnoticed, which
    * costs a diagnosis and nothing else.
@@ -92,7 +92,7 @@ export interface SerialPortLike {
   open(options: SerialOptionsLike): Promise<void>;
   /** Closes the port. Refused while a stream of it is still locked. */
   close(): Promise<void>;
-  /** Revokes this origin's permission for the device. Absent in older Chromium (ADR-0009). */
+  /** Revokes this origin's permission for the device. Absent in older Chromium (ADR-0036). */
   forget(): Promise<void>;
   /** What the browser knows about the device behind the port. Empty for a non-USB port. */
   getInfo(): SerialPortInfoLike;

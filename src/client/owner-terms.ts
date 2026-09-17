@@ -57,7 +57,7 @@ interface KnownTerm {
 }
 
 /**
- * What one tab knows about the terms of holding a configuration's port (ADR-0026, ADR-0030), and so
+ * What one tab knows about the terms of holding a configuration's port (ADR-0030), and so
  * who may say what about the port.
  *
  * Every term is a Web Lock, held by the tab that holds the port from before its first word in that
@@ -222,7 +222,7 @@ export class OwnerTerms {
     }
     if (entry.isSucceeded) {
       // A later term has been heard of since. This one's word on the port is stale, however live
-      // its lock still looks (ADR-0026).
+      // its lock still looks (ADR-0030).
       return;
     }
     this.#makeCurrent(entry);

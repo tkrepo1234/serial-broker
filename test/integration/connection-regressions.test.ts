@@ -443,7 +443,7 @@ describe('a device that stops taking writes', () => {
   // Measured in Chromium on Windows against the USB/IP emulator: a write the device has not taken
   // cannot be aborted, and a port with one outstanding neither closes nor opens again, however soon
   // the device recovers. Tearing the connection down for a write timeout therefore made recovery
-  // impossible. See ADR-0038.
+  // impossible. See ADR-0013.
 
   /** Past the deadline of the tab holding the port, which starts the write a little after `send()`. */
   const PAST_THE_DEADLINE_MS = 2_000;

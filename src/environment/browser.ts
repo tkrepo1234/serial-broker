@@ -36,7 +36,7 @@ export interface BrowserEnvironmentOptions {
  * Browsers offer Web Serial and Web Locks only in a secure context, so their presence is the check
  * for one. Either bus is enough: `setup()` works on a `SharedWorker` alone, and a `BroadcastChannel`
  * is otherwise needed only for the version announcement and the fallback, both of which a tab does
- * without (ADR-0007, ADR-0023). Where neither exists, `setup()` raises `TRANSPORT_UNAVAILABLE`.
+ * without (ADR-0006, ADR-0008). Where neither exists, `setup()` raises `TRANSPORT_UNAVAILABLE`.
  *
  * Nothing is constructed, so the answer is for the default `transport: 'auto'` and a worker the
  * browser lets the page create; see `TRANSPORT_UNAVAILABLE` and `BROKER_UNAVAILABLE` in
@@ -95,7 +95,7 @@ export const BROWSER_CLOCK: Clock = {
   now: () => Date.now(),
   // `performance.now()` rather than `Date.now()`: it counts on regardless of the system clock, so a
   // duration measured with it cannot be turned into a negative or an hour-long one by a time zone
-  // change or an NTP step (ADR-0032). It exists in every context this library runs in - a window, a
+  // change or an NTP step (ADR-0014). It exists in every context this library runs in - a window, a
   // worker - and needs no permission.
   monotonicNow: () => performance.now(),
   setTimer: (callback, delayMs) => setTimeout(callback, delayMs),
@@ -169,7 +169,7 @@ function createStorage(): KeyValueStorage {
  * `SharedWorker` first, because point-to-point routing is cheaper (ADR-0006). `BroadcastChannel`
  * when it is unavailable, when its construction throws, or when its script fails to load -
  * realistic outcomes of Chrome for Android, a strict CSP, an unusual bundler setup, or a worker
- * file that was not deployed (ADR-0007). Every such switch is logged. `transport: 'sharedworker'`
+ * file that was not deployed (ADR-0006). Every such switch is logged. `transport: 'sharedworker'`
  * never switches: it exists to make a missing worker loud.
  *
  * Logged through the tab's own logger, as the switch after a failed script load is
@@ -208,7 +208,7 @@ function createTransport(request: TransportRequest, options: BrowserEnvironmentO
 
       // A script that cannot be fetched does not make construction throw: the browser creates
       // the worker and reports the failure afterwards. A transport that can still switch then
-      // keeps such a tab connected to the others (ADR-0007).
+      // keeps such a tab connected to the others (ADR-0006).
       return new FallbackTransport(
         request,
         (workerRequest, startup) =>

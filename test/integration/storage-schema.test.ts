@@ -7,7 +7,7 @@ import { READER, READER_OPTIONS } from '../harness/devices.js';
 import { remember, rememberedEntry, rememberedNames } from '../harness/stored-configurations.js';
 
 /**
- * How remembered configurations are laid out in storage (ADR-0022, ADR-0033).
+ * How remembered configurations are laid out in storage (ADR-0033).
  *
  * One key per configuration and an index of their names, carrying a storage version of their own,
  * so that a change to the message protocol costs nobody their configurations and two tabs saving at

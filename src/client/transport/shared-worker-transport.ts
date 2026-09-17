@@ -44,16 +44,16 @@ export type SharedWorkerFactory = (url: string | URL, name: string) => SharedWor
  * Why a worker cannot be used, found out before a broker of this version ever answered.
  *
  * - `worker-script-failed`: the browser reported that the script did not load, or threw while it
- *   was evaluated (ADR-0007).
+ *   was evaluated (ADR-0006).
  * - `worker-other-protocol-version`: the script runs another protocol version, and said so in its
- *   answer to `hello` (ADR-0024).
+ *   answer to `hello` (ADR-0008).
  * - `worker-not-answering`: the worker said nothing within {@link HANDSHAKE_DEADLINE_MS} - a fetch
- *   that hangs, or a script from before the handshake was frozen (ADR-0024, ADR-0041).
+ *   that hangs, or a script from before the handshake was frozen (ADR-0008, ADR-0041).
  */
 export type WorkerLoadFailure =
   'worker-script-failed' | 'worker-other-protocol-version' | 'worker-not-answering';
 
-/** Tells whoever created the transport whether the worker script started (ADR-0007). */
+/** Tells whoever created the transport whether the worker script started (ADR-0006). */
 export interface WorkerStartup {
   /** The broker answered `hello`: the script loaded and runs. Called at most once. */
   readonly onReady: () => void;
@@ -91,7 +91,7 @@ type Phase = 'starting' | 'ready' | 'restarting' | 'other-version';
  *
  * A worker whose script runs another protocol version answers `hello` and nothing else. A new worker
  * from the same URL would run the same script, so a transport that does not hand such a worker over
- * to a fallback gives up on workers altogether (ADR-0024, amended).
+ * to a fallback gives up on workers altogether (ADR-0008).
  */
 export class SharedWorkerTransport implements Transport {
   readonly kind = 'sharedworker' as const;
@@ -305,7 +305,7 @@ export class SharedWorkerTransport implements Transport {
     }
     if (this.#phase === 'starting' && this.#startup !== undefined) {
       // No broker of this version ever answered: a fetch that hangs, or a script from before the
-      // handshake was frozen (ADR-0024). As when the script does not load, nothing sent reached
+      // handshake was frozen (ADR-0008). As when the script does not load, nothing sent reached
       // anyone, so whoever created the transport can send it elsewhere.
       this.#startup.onLoadFailed(
         new Error(`The SharedWorker did not answer within ${String(HANDSHAKE_DEADLINE_MS)} ms`),
@@ -397,7 +397,7 @@ export class SharedWorkerTransport implements Transport {
       // version. A message in another version is therefore the worker's own answer to hello: the
       // script runs another protocol version and drops everything this context says. Before a
       // welcome of this version, that means nothing sent so far reached anyone - as when the script
-      // does not load at all, and with the same remedy (ADR-0024).
+      // does not load at all, and with the same remedy (ADR-0008).
       if (result.failure.reason === 'version-mismatch') {
         this.#workerRunsOtherVersion(result.failure.theirVersion);
       }
@@ -414,7 +414,7 @@ export class SharedWorkerTransport implements Transport {
 
     if (message.type === 'worker-log') {
       // Meant for this tab's logger, not for the client. Only the worker sends one: the broker
-      // passes none on, and no port may speak as the broker (ADR-0029).
+      // passes none on, and no port may speak as the broker (ADR-0018).
       if (message.from === BROKER_ID) {
         this.#logWorkerRecord(message);
       }
@@ -483,7 +483,7 @@ export class SharedWorkerTransport implements Transport {
   }
 
   /**
-   * Writes one of the worker's records to this tab's logger (ADR-0029).
+   * Writes one of the worker's records to this tab's logger (ADR-0018).
    *
    * The record is logged as the worker wrote it: its own `event`, its own message, its own fields.
    * `clientId` is the identity the worker's record concerns - often another tab's, and absent where
@@ -510,7 +510,7 @@ export class SharedWorkerTransport implements Transport {
    * and then closes it. Where it cannot - `transport: 'sharedworker'`, a fallback that could not be
    * built, or a worker started in place of one that died - the transport gives up on workers: it
    * closes the port, so the stale worker can end once no tab holds one. The mismatch itself has been
-   * reported by then, once (ADR-0024, amended).
+   * reported by then, once (ADR-0008).
    */
   #workerRunsOtherVersion(theirVersion: unknown): void {
     if (this.#phase === 'other-version') {

@@ -81,7 +81,7 @@ export class ConfigurationSession {
   readonly #emitter: EventEmitter;
   readonly #election: OwnershipElection;
   readonly #writes: PendingWrites;
-  /** The terms of holding the port this context has heard of (ADR-0026, ADR-0030). */
+  /** The terms of holding the port this context has heard of (ADR-0030). */
   readonly #terms: OwnerTerms;
   /** This context's term while it holds the port. */
   #term: TermId | undefined;
@@ -262,14 +262,14 @@ export class ConfigurationSession {
     // Ask whoever owns the port to restate its status. Without this, a tab joining an
     // already-open configuration would sit at `idle` until the next status change, which on a
     // healthy connection could be hours away. Asking here rather than letting the broker do it
-    // keeps both transports on one code path - the fallback has no broker to ask (ADR-0007).
+    // keeps both transports on one code path - the fallback has no broker to ask (ADR-0006).
     this.#requestStatus();
 
     this.#election.start();
   }
 
   /**
-   * The bus reached a new broker after the old one died (ADR-0021, amended).
+   * The bus reached a new broker after the old one died (ADR-0041).
    *
    * Statuses and write requests sent through the dead one may be lost. The tab holding the port
    * restates its status, which a tab that reached the new broker first could not ask for yet; any
@@ -637,7 +637,7 @@ export class ConfigurationSession {
       // status this port does not have, and a claim would hand this context's own writes out again.
       return;
     }
-    // Who may say what about the port is the terms' to decide (ADR-0026, ADR-0030).
+    // Who may say what about the port is the terms' to decide (ADR-0030).
     this.#terms.authorize(message, () => {
       this.#apply(message);
     });
@@ -721,7 +721,7 @@ export class ConfigurationSession {
         return;
 
       case 'owner-claimed':
-        // Believed, and so the term holding the port (ADR-0026). Waiting writes go to it once it
+        // Believed, and so the term holding the port (ADR-0030). Waiting writes go to it once it
         // states `open`: until then there is nothing to write to.
         return;
 
@@ -730,7 +730,7 @@ export class ConfigurationSession {
       case 'welcome':
       case 'worker-log':
         // Presence bookkeeping and the worker's own records, handled by the broker or the
-        // transport, which logs a forwarded record itself (ADR-0029). Nothing to do here.
+        // transport, which logs a forwarded record itself (ADR-0018). Nothing to do here.
         return;
 
       case 'diagnostics-request':
@@ -832,7 +832,7 @@ export class ConfigurationSession {
 
     // Becoming the owner is also a change of owner, and has to treat pending writes exactly as an
     // announcement from a peer would. Whoever held the port before let go of the lock - but what it
-    // said about a write may still be on its way, so its term is waited for (ADR-0026).
+    // said about a write may still be on its way, so its term is waited for (ADR-0030).
     this.#terms.takeOwn({
       term,
       from: this.transport.clientId,
@@ -856,7 +856,7 @@ export class ConfigurationSession {
     }
 
     // `owner-released` is the term's last word, and a tab that hears it concludes that a write the
-    // term began and did not answer was lost with it (ADR-0026). So the answers go first: the
+    // term began and did not answer was lost with it (ADR-0030). So the answers go first: the
     // supervisor stops only once every write handed to it has been answered, or has hung for as long
     // as a write may.
     await supervisor.stop();
@@ -932,7 +932,7 @@ export class ConfigurationSession {
       return;
     }
 
-    // To every participant: only the tab holding `term` acts on it (ADR-0040).
+    // To every participant: only the tab holding `term` acts on it (ADR-0006).
     this.transport.send({
       type: 'write-request',
       v: PROTOCOL_VERSION,
@@ -956,7 +956,7 @@ export class ConfigurationSession {
     const term = this.#term;
     if (supervisor === undefined || term === undefined || requestedTerm !== term) {
       // Addressed to a term this tab does not hold: every participant hears a write request, and
-      // only the tab holding its term acts on it (ADR-0040). A tab that let go of the port in that
+      // only the tab holding its term acts on it (ADR-0006). A tab that let go of the port in that
       // term is released and hears nothing; its issuer hands the write on once the term has ended.
       return;
     }

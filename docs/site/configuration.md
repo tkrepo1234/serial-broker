@@ -282,7 +282,7 @@ smaller writes, each with its own deadline.
 
 ## `receive`
 
-How what the device sends is collected into `onReceive` events (ADR-0039).
+How what the device sends is collected into `onReceive` events (ADR-0002).
 
 | Option      | Type and range         | Default |
 | ----------- | ---------------------- | ------- |

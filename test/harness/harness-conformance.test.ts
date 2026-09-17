@@ -379,7 +379,7 @@ describe('FakeClock', () => {
     clock.jumpWallClock(7_200_000);
 
     // What `performance.now()` does while `Date.now()` is moved: a duration measured on it is the
-    // time that really passed (ADR-0032).
+    // time that really passed (ADR-0014).
     expect(clock.monotonicNow() - startedAt).toBe(1_000);
   });
 

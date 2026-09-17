@@ -269,7 +269,7 @@ const DEVICE_SHAPES =
  * Four shapes, kept apart rather than merged into one with optional IDs: a configuration
  * identifies a USB device, accepts whatever the user granted, accepts only ports without a USB
  * identity, or takes its device from the port the user chooses - and code downstream must not be
- * able to read a vendor ID from a kind that has none. See ADR-0016 and ADR-0036.
+ * able to read a vendor ID from a kind that has none. See ADR-0036.
  *
  * Mixing them - passing `any` *and* IDs, say - is rejected rather than silently resolved, because
  * either interpretation would be a guess about what the caller meant. An absent `device` is auto

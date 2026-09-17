@@ -15,7 +15,7 @@ export interface ReceiveBufferSettings {
 }
 
 /**
- * Collects the chunks read from the device into fewer, larger deliveries (ADR-0039).
+ * Collects the chunks read from the device into fewer, larger deliveries (ADR-0002).
  *
  * A read returns whatever the driver has at that moment, so a device that answers one byte at a
  * time - an echo, a slow microcontroller - produces one event per byte. The tab holding the port

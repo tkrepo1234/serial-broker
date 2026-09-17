@@ -3,7 +3,7 @@ import type { ParticipantDiagnostics } from '../core/diagnostics.js';
 import { isFiniteNumber, isNonEmptyString, isRecord } from './guards.js';
 
 /**
- * The check a diagnostics report from another context passes on arrival (ADR-0018, amended).
+ * The check a diagnostics report from another context passes on arrival (ADR-0018).
  *
  * A report is only ever displayed, never acted on, and the decoder has already held it to its
  * structure budget: a tree of plain values of bounded size (`limits.ts`). So only what is needed to

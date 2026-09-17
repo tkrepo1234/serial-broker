@@ -12,7 +12,7 @@ import type { FakeDevice } from '../../harness/fake-serial.js';
  * senders, and nothing orders them against each other. A tab can hear the new holder's
  * `owner-claimed` before the last words of the former one. What the former holder said is
  * attributed to its own term of holding the port, and only that term ending decides the fate of a
- * write handed to it (ADR-0026).
+ * write handed to it (ADR-0030).
  */
 
 /** How a promise settled, attached at once so a rejection is never unhandled. */

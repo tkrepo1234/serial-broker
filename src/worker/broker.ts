@@ -23,14 +23,14 @@ export interface BrokerHost {
  *
  * - **Who owns the port** is decided by the Web Locks API in the participants (ADR-0005). What is
  *   meant for the owner goes to every participant, and only the tab holding the addressed term acts
- *   on it (ADR-0040): a claim of ownership the broker believed would be one anybody could forge.
+ *   on it (ADR-0006): a claim of ownership the broker believed would be one anybody could forge.
  * - **What happens to a write when the owner dies** is decided by the context that issued it
  *   (ADR-0013), which is the only context that knows whether repeating the command is safe.
  * - **Who is still there** is decided by the Web Locks the contexts hold, which the worker waits
  *   on (`worker-ports.ts`, ADR-0041).
  *
  * The same is what lets the `BroadcastChannel` fallback do without a broker at all: each tab
- * resolves the same targets from the envelope for itself (ADR-0006, ADR-0007).
+ * resolves the same targets from the envelope for itself (ADR-0006).
  */
 export class Broker {
   /** The participants of each configuration. */
@@ -57,7 +57,7 @@ export class Broker {
       case 'welcome':
       case 'worker-log':
         // Only the worker sends these: one arriving here came from something else, and is never
-        // passed on - a tab takes a forwarded record for the worker's own (ADR-0029).
+        // passed on - a tab takes a forwarded record for the worker's own (ADR-0018).
         return;
 
       case 'diagnostics-request':

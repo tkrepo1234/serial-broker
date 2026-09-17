@@ -85,10 +85,10 @@ Format: MADR-derived, see [`0000-template.md`](../adr/0000-template.md).
 - **One current record per decision** ([ADR-0001](../adr/0001-record-architecture-decisions.md)).
   A decision that changes is rewritten to state the decision as it now stands. No amendments are
   appended, and no record keeps a history of its own: what it used to say is in version control.
-- A record whose decision was replaced, merged into another or retired becomes a stub of a few
-  lines - `Superseded by ADR-NNNN (date)` and the original decision in one sentence - and keeps its
-  number and file, so citations still resolve.
-- `docs/adr/README.md` lists the current records and, below them, where each superseded number went.
+- A record whose decision was replaced, merged into another or retired is removed, and every
+  citation of its number is moved to the record that now holds the decision, in the same change.
+  Numbers are never reused.
+- `docs/adr/README.md` lists the current records, and nothing else.
 - Every ADR states what was **rejected** and why. An ADR without alternatives is a note, not
   a decision record.
 - Code that exists because of an ADR references it: `// See ADR-0005.`

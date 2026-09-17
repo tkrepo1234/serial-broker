@@ -309,7 +309,7 @@ test.describe('the USB/IP emulator, attached by usbip-win2', () => {
     expect(await tab?.receivedText(CONFIGURATION)).toBe(text);
   });
 
-  test('delivers an answer read one byte at a time as one event (ADR-0039)', async ({
+  test('delivers an answer read one byte at a time as one event (ADR-0002)', async ({
     hardware,
     emulator,
   }) => {
@@ -336,9 +336,9 @@ test.describe('the USB/IP emulator, attached by usbip-win2', () => {
     await tab?.waitForPatternRun(CONFIGURATION, 65_536, 180_000);
   });
 
-  // Not the library: Web Serial alone. This is the platform behaviour ADR-0038 rests on, pinned so
+  // Not the library: Web Serial alone. This is the platform behaviour ADR-0013 rests on, pinned so
   // that a browser which changes it fails here rather than silently.
-  test('cannot abort, close or reopen a port while the device holds a write (ADR-0038)', async ({
+  test('cannot abort, close or reopen a port while the device holds a write (ADR-0013)', async ({
     hardware,
     emulator,
   }) => {

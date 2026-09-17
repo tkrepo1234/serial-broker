@@ -215,7 +215,7 @@ describe.each(TRANSPORT_MODES)('diagnostics observer (%s)', (transport) => {
     expect(snapshot.locks?.pending.filter((lock) => lock.name.includes('/term/'))).toEqual([
       expect.objectContaining({ mode: 'shared', browserClientId: peer.id }),
     ]);
-    // Both tabs run the configuration remembered, and each holds it for the other (ADR-0027).
+    // Both tabs run the configuration remembered, and each holds it for the other (ADR-0033).
     expect(snapshot.locks?.held.filter((lock) => !ownership(lock))).toEqual(
       expect.arrayContaining([
         { name: persistenceLockName('Reader'), mode: 'shared', browserClientId: owner.id },

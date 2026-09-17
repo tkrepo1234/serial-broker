@@ -25,8 +25,7 @@ const CONFIGURATION = ['configurations', 0] as const;
 
 /**
  * A report is display-only, and bounded by the decoder before this check. Only what files it - its
- * sender and its named configurations - is checked; the rest is displayed defensively (ADR-0018,
- * amended).
+ * sender and its named configurations - is checked; the rest is displayed defensively (ADR-0018).
  */
 describe('isParticipantDiagnostics', () => {
   it('accepts a complete report, and one from a context with no configurations', () => {

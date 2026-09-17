@@ -51,7 +51,7 @@ Found on the way, and taken into the reduction rather than left:
 39 records in eleven clusters; 16 of them amend or are amended by others, several carry in-place
 amendments although ADR-0001 calls records immutable. Proposed: 23 current decisions and 16
 superseded pointers, about 1 000 lines fewer. Drift found, among others: ADR-0031 names the wall
-clock for rates the code measures monotonically; ADR-0032 cites a grace period ADR-0030 removed;
+clock for rates the code measures monotonically; ADR-0014 cites a grace period ADR-0030 removed;
 ADR-0036 still says protocol version 9 and `persist`; ADR-0013 still says a resolved write reached
 the device; ADR-0020 says CI does not build the site, which it does.
 
@@ -70,7 +70,7 @@ used from the same several tabs (matrix row 11), and two real tabs on different 
 The same facts live in up to ten places - option defaults, what a resolved `send()` means, the
 at-most-once guarantee, failover, install steps, browser requirements, status names. Drift: several
 chapters and four example READMEs still say `setup()` does nothing for a failed configuration;
-receiving is described as chunk-by-chunk in most places after ADR-0039; the README promises
+receiving is described as chunk-by-chunk in most places after ADR-0002; the README promises
 at-most-once without the crash exception `shared-ports.md` states; `persist` survives in TSDoc and
 ADRs. Proposed: a "Guarantees" chapter as the single home of every promise, a README of about 90
 lines, generated or checked option tables.

@@ -4,7 +4,7 @@ import { BrowserHarness } from '../harness/browser-harness.js';
 import { READER, READER_OPTIONS } from '../harness/devices.js';
 
 /**
- * Durations survive the system clock being set (ADR-0032).
+ * Durations survive the system clock being set (ADR-0014).
  *
  * The user correcting the time, a time zone change, an NTP step: `Date.now()` jumps forwards or
  * backwards while the timers keep counting. Everything this library times - how long a connection

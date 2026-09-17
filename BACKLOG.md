@@ -192,21 +192,21 @@ device the user chooses in the browser's port picker.
   opens the browser's port picker with no filter, takes the vendor and product ID from the chosen
   port - or `device: { any: true }` for a port without a USB identity - suggests a name and a baud
   rate the user can change, and sets the configuration up. It is the first thing a developer trying
-  the library should find. Done the same day (ADR-0034); once the library has an automatic device
+  the library should find. Done the same day (ADR-0019); once the library has an automatic device
   mode (above), the action becomes that mode.
 
 ### Hardening (protocol version 8) - done 2026-09-14
 
-Done, see the CHANGELOG and ADR-0028 to ADR-0031: a secret in `hello`; one Web Lock per term; the
+Done, see the CHANGELOG and ADR-0006 to ADR-0031: a secret in `hello`; one Web Lock per term; the
 four session checks; rate limits for status and diagnostics answers, malformed-message warnings,
 remote errors and observer reports. What the implementers left open is under "Follow-ups from the
 hardening round" below.
 
 ### Robustness - done 2026-09-14
 
-Done, see the CHANGELOG and ADR-0032, ADR-0033: one storage key per configuration plus an index
+Done, see the CHANGELOG and ADR-0014, ADR-0033: one storage key per configuration plus an index
 (one storage key per configuration); a monotonic clock for durations; the worker's `warn` records
-forwarded to the tabs (ADR-0029); structural Web Serial types, every emitted declaration checked
+forwarded to the tabs (ADR-0018); structural Web Serial types, every emitted declaration checked
 without `@types/w3c-web-serial`.
 
 ### Tests, hardware and examples
@@ -294,7 +294,7 @@ after this many iterations is what hardens the product now.
 - [x] Every fact in the documentation lives in one place (Guarantees for the promises, Configuration
       for the options); the drift found was fixed, and `test/unit/documentation.test.ts` checks
       documented defaults, ranges and log events against the source.
-- [x] The ADR index shows only current decisions (24) plus a superseded trail (17 stubs).
+- [x] The ADR index shows only current decisions (27); records that stopped holding were removed and their citations moved.
 - [x] No two tests pin the same behaviour; no test covers code that is gone. The duplicates the
       inventory named were removed, and a second pass over every test file on 2026-09-15 took the
       in-process suite from 1 410 to 1 345 tests; what it kept on purpose is in the CHANGELOG.
@@ -322,7 +322,7 @@ round"). All eleven example applications exist with smoke tests. The usability r
   and overwrote the remembered resolution. Fixed on 2026-09-15 (ADR-0036, amendment): `setup()` in
   auto mode takes a remembered auto-mode resolution, and the documentation no longer calls
   `restore()` first.
-- **P2:** done on 2026-09-15 (ADR-0010, amended): `setup()` with equal options starts a `failed`
+- **P2:** done on 2026-09-15 (ADR-0010): `setup()` with equal options starts a `failed`
   configuration again, from any tab; the example applications use it.
 - **P3:** done on 2026-09-15: a new `onStatusChange` listener receives the current status once, and no
   example calls `getStatus()` right after `subscribe()` any more.
@@ -426,8 +426,8 @@ Everything below holds, and nothing beyond it is part of this item.
 
 ## Follow-ups from the hardening round of 2026-09-14
 
-The hardening decisions (ADR-0028 to ADR-0031), the storage layout (ADR-0033), the monotonic clock
-(ADR-0032), the worker's records in the tabs (ADR-0029) and the structural declarations are done.
+The hardening decisions (ADR-0006 to ADR-0031), the storage layout (ADR-0033), the monotonic clock
+(ADR-0014), the worker's records in the tabs (ADR-0018) and the structural declarations are done.
 What the implementers left open:
 
 ### Worker and bus
@@ -440,8 +440,8 @@ What the implementers left open:
   no buffer to replay. A small bounded replay to a newly registered tab would help an operator who
   opens a tab after the fact. The worker's records are not in the diagnostics observer's `collect()`
   either, and the debugging surface shows them like any other log line.
-- ~~`MAX_BOUND_IDENTITIES` eviction is the residual weakness of ADR-0028.~~ Gone with the identity
-  secret (ADR-0040, 2026-09-15): nothing is bound any more, and integrity rests on the term locks.
+- ~~`MAX_BOUND_IDENTITIES` eviction is the residual weakness of ADR-0006.~~ Gone with the identity
+  secret (ADR-0006, 2026-09-15): nothing is bound any more, and integrity rests on the term locks.
 - The broker itself has no rate limit: it still routes and clones every well-formed message. Rate
   limits are per context, not per sender, so a flood can crowd legitimate answers out of the
   allowance (ADR-0031 says why per-sender rates were rejected).
@@ -467,11 +467,11 @@ What the implementers left open:
 
 ### Browser and hardware tests
 
-- **A stuck write is invisible in the status** (ADR-0038): while the device takes nothing, the status
+- **A stuck write is invisible in the status** (ADR-0013): while the device takes nothing, the status
   stays `open`. Since 2026-09-15 diagnostics report `stalledWriteSince` and log
   `supervisor.write-stalled`, and the debugging surface shows it; a public status for it is not planned.
 - **Releasing a configuration while the device holds a write cannot close the port** - the platform
-  keeps it until the page goes (ADR-0038). Measured with usbip-win2 only; whether a physical
+  keeps it until the page goes (ADR-0013). Measured with usbip-win2 only; whether a physical
   USB-serial adapter's driver ends such a write is unverified.
 - ~~The emulator spec does not cover steps 10, 16 and 18-19.~~ Since 2026-09-15 it covers 4, 11, 12,
   16 and 19; step 10's crash path runs in the stand-in suite (the renderer killed over CDP) and in
@@ -501,7 +501,7 @@ browser or real hardware to settle:
   through - the ordering guarantee of ADR-0013 holds only while the bus delivers.
 - ~~**Two tabs saving configurations at the same moment may overwrite each other's entry.**~~ Fixed by
   one key per configuration (ADR-0033); what remains of it is the shared index, under "Storage" above.
-- **An unplugged device versus a revoked permission** (ADR-0010, amended) is told apart by the
+- **An unplugged device versus a revoked permission** (ADR-0010) is told apart by the
   `disconnect` event. That Chromium sends no `disconnect` when a permission is revoked in site
   settings is assumed, not verified.
 - **The back/forward cache and the debugging surface's observer.** The observer is no longer closed
@@ -535,7 +535,7 @@ chapters in Markdown (MyST), the API reference generated from TSDoc, Python in `
 ### Found while writing the chapters
 
 Checking every statement against the source turned up behaviour worth deciding on. A worker script
-that fails to load now falls back to `BroadcastChannel` too (ADR-0007, amended). Fixed at once:
+that fails to load now falls back to `BroadcastChannel` too (ADR-0006). Fixed at once:
 `SerialBroker.configure({ logPayloads })` was never passed on and did nothing, and the remediation
 for `RECONNECT_EXHAUSTED` advised a second `setup()`, which is a no-op. Open, and documented as
 they were: `STORAGE_CORRUPT` during `restore()` in a fresh tab only reached the log. Since the
@@ -608,12 +608,12 @@ The verified defects were fixed in `6d31c59` and the commits after it. What rema
 Decided by Tim on 2026-09-13 and done:
 
 - Stored configurations have a storage version of their own and are moved from the old keys
-  ([ADR-0022](./docs/adr/0022-version-stored-configurations-separately.md)).
+  ([ADR-0033](./docs/adr/0033-one-storage-key-per-configuration.md)).
 - `MALFORMED_MESSAGE` and `OWNERSHIP_TRANSFER_TIMEOUT` are removed; `UNKNOWN` is what a code
   reported by a later version becomes.
 - `LISTENER_THREW` is reported in the listener's own tab only.
 - Tabs announce their protocol version on an unversioned channel
-  ([ADR-0023](./docs/adr/0023-announce-the-protocol-version.md)).
+  ([ADR-0008](./docs/adr/0008-wire-protocol-and-versioning.md)).
 - A late `configure()` logs `facade.late-configure`.
 
 ### Refactorings

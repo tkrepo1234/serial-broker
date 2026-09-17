@@ -21,7 +21,7 @@ export interface RateLimit {
  * joins, every tab answering one diagnostics request - and a flood is what a hostile or broken
  * sender looks like. A bucket lets the first through untouched and bounds the second.
  *
- * The allowance is measured on the monotonic clock (`clock.monotonicNow()`, ADR-0032), so setting
+ * The allowance is measured on the monotonic clock (`clock.monotonicNow()`, ADR-0014), so setting
  * the system time neither refills it at once nor freezes it.
  */
 export class RateLimiter {

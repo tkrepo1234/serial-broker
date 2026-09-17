@@ -48,7 +48,7 @@ const probe = (from: ClientId, to: ProtocolMessage['to'], configName = 'Reader')
  *
  * It resolves two delivery targets from what each participant's latest `hello` says. That is
  * deliberately all it does - everything requiring judgement lives in the participants (ADR-0006,
- * ADR-0040) - so these tests are about routing and nothing else.
+ * ADR-0006) - so these tests are about routing and nothing else.
  */
 describe('Broker', () => {
   it('delivers a broadcast to every participant except the sender', () => {
@@ -107,7 +107,7 @@ describe('Broker', () => {
       message(BOB, 'all', { type: 'write-request', configName: 'Reader', term: 't-1' } as never),
     );
 
-    // Only the tab holding the addressed term acts on it (ADR-0040); a forged claim diverts nothing.
+    // Only the tab holding the addressed term acts on it (ADR-0006); a forged claim diverts nothing.
     expect(delivered.map((entry) => entry.to)).toEqual([ALICE, CAROL]);
   });
 

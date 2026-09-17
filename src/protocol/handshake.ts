@@ -12,8 +12,8 @@ import { PROTOCOL_VERSION } from './version.js';
  * everything the tab says, and a tab that hears nothing back cannot tell it from a worker that is
  * only slow to start - so it would stay cut off from every other tab, with nothing reported.
  *
- * This exchange is therefore frozen, like the version announcement (ADR-0023). Every later version
- * has to keep exactly this (ADR-0024):
+ * This exchange is therefore frozen, like the version announcement (ADR-0008). Every later version
+ * has to keep exactly this (ADR-0008):
  *
  * 1. A tab's first message on the port is an object with `type: 'hello'` and the tab's identity, a
  *    non-empty string, in `from`.
@@ -31,7 +31,7 @@ import { PROTOCOL_VERSION } from './version.js';
  * lifetime lock, but a worker whose script fetch hangs, or one that cannot take its lock, never
  * holds one to free. Only whether the welcome has arrived is checked, not how late the timer ran,
  * so a hidden tab whose timers the browser holds back is not misjudged: its welcome arrived long
- * before. A tab that has never been welcomed moves to `BroadcastChannel` (ADR-0007); one that was,
+ * before. A tab that has never been welcomed moves to `BroadcastChannel` (ADR-0006); one that was,
  * starts a new worker.
  */
 export const HANDSHAKE_DEADLINE_MS = 45_000;

@@ -27,13 +27,12 @@ decision as it now stands, with the rejected alternatives that still matter. Ame
 appended, and a record carries no history of its own: only what holds today is written down, and
 what it used to say is in version control beside the change that moved it.
 
-**Superseded records are stubs.** When a record's decision is replaced by another record, merged
-into one, or retired, the old record keeps its number and its file and becomes a stub of a few
-lines: `Status: Superseded by ADR-NNNN (date)` and the decision as first recorded in one sentence.
-Every citation of its number therefore still resolves, and leads forward to the current decision.
+**A record that stops holding is removed.** When a decision is replaced by another record, merged
+into one, or retired, the old record goes, and every citation of its number - in code, in tests and
+in the documentation - is moved to the record that now holds the decision, in the same change. A
+number is never reused.
 
-**The index shows what holds.** `docs/adr/README.md` lists the current records, and below them
-which number went where. How the library works, rather than why, is described in the Internals
+**The index shows what holds.** `docs/adr/README.md` lists the current records, and nothing else. How the library works, rather than why, is described in the Internals
 chapter of the developer documentation.
 
 ## Alternatives considered
@@ -50,7 +49,13 @@ chapter of the developer documentation.
   change from being made again - but it makes every record two documents, one of which nobody
   maintains, and it invites a reader to weigh a superseded sentence against a current one. Only the
   current state is guaranteed; version control holds the rest, with the change that caused it.
-- **Deleting superseded records.** Breaks every citation of their numbers in code and documentation.
+- **Keeping a superseded record as a stub** that names its successor, so old citations resolve. The
+  rule this record first stated after history sections were dropped. It buys nothing that moving the
+  citations does not, and it costs more than it looks: a stub states the decision _as first
+  recorded_, which is by definition no longer true, so a reader following the citation of a retired
+  record on non-USB devices was taught that `{ any: true }` selects ports without a USB identity - a filter that had been
+  `{ nonUsb: true }` for days. Seventeen stubs were carried for one guarantee, that a number
+  resolves; moving the citation gives that guarantee and lands the reader on the answer.
 - **A single `ARCHITECTURE.md`.** Describes the current state and silently loses the rejected
   alternatives - the information that prevents someone re-litigating a decision.
 - **Decisions in commit messages, or a wiki.** Not discoverable, and a wiki cannot be reviewed in
@@ -61,7 +66,7 @@ chapter of the developer documentation.
 ### Positive
 
 - Rejected options survive, so the same debate is not repeated.
-- A reader finds a decision in one record, and a citation of any number leads to it.
+- A reader finds a decision in one record, and every citation leads to a record that still holds.
 - An ADR is reviewable alongside the code it governs.
 
 ### Negative
@@ -75,5 +80,6 @@ chapter of the developer documentation.
 
 ## Verification
 
-`docs/adr/README.md` lists every current record and every stub; the review checklist requires an
-ADR, or a rewritten one, for architectural changes.
+`docs/adr/README.md` lists every current record and nothing else, and no citation anywhere in the
+tree names a number that has none; the review checklist requires an ADR, or a rewritten one, for
+architectural changes.

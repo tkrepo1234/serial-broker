@@ -14,7 +14,7 @@ import { READER_OPTIONS } from '../../harness/devices.js';
 
 /**
  * Tabs on different protocol versions share no lock, worker or bus, and learn of each other only
- * through the version announcement (ADR-0008, ADR-0023).
+ * through the version announcement (ADR-0008).
  */
 
 /**
@@ -155,7 +155,7 @@ describe('a platform without BroadcastChannel', () => {
 
 describe('the announcement message', () => {
   it('keeps the shape every version has to understand', () => {
-    // Frozen (ADR-0023): changing this loses the ability to detect every earlier version.
+    // Frozen (ADR-0008): changing this loses the ability to detect every earlier version.
     expect(versionAnnouncement(7, false)).toEqual({
       type: 'serial-broker/protocol-version',
       protocolVersion: 7,

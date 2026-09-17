@@ -10,7 +10,7 @@ import { READER, READER_OPTIONS } from '../harness/devices.js';
  *
  * Two things persist and they live in different places: the browser keeps the *permission*,
  * which script can neither store nor forge, and this library keeps the *configuration*. See
- * ADR-0009.
+ * ADR-0036.
  */
 describe('permission and persistence', () => {
   it('waits for permission when no granted device matches', async () => {

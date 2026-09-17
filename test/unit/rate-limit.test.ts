@@ -56,7 +56,7 @@ describe('RateLimiter', () => {
       limiter.take();
     }
 
-    // Set forward: no allowance comes back before time has really passed (ADR-0032).
+    // Set forward: no allowance comes back before time has really passed (ADR-0014).
     clock.jumpWallClock(60_000);
     expect(limiter.take()).toBe(false);
 

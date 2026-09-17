@@ -60,7 +60,7 @@ export interface StandInDeviceOptions {
    * Whether this device reports USB identity at all.
    *
    * A built-in RS-232 interface, a virtual COM port pair and a Bluetooth serial profile report an
-   * empty dictionary from `getInfo()` (ADR-0016). @defaultValue true
+   * empty dictionary from `getInfo()` (ADR-0036). @defaultValue true
    */
   readonly usb?: boolean | undefined;
   /** Whether the origin already has permission for it, as after an earlier visit. @defaultValue false */

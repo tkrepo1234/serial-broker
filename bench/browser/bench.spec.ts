@@ -45,7 +45,7 @@ const NAME = 'Reader';
 const OPTIONS: SerialBrokerOptions = {
   device: STAND_IN_DEVICE,
   serial: { baudRate: 9600 },
-  // Every chunk as it is read: this counts or times chunks, not collected answers (ADR-0039).
+  // Every chunk as it is read: this counts or times chunks, not collected answers (ADR-0002).
   receive: { idleMs: 0 },
   remember: false,
 };

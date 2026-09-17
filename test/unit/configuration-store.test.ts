@@ -261,7 +261,7 @@ describe('ConfigurationStore', () => {
     // Another tab, with a stale copy of the index, has listed only its own configuration, so this
     // tab's name is gone from the index. Its entry is untouched - which is the point of a key per
     // configuration - and saving again, as a tab does once its persistence hold is granted
-    // (ADR-0027), lists the name once more.
+    // (ADR-0033), lists the name once more.
     entries.set(storageIndexKey(), JSON.stringify(['Scale']));
     entries.set(storageEntryKey('Scale'), JSON.stringify(OPTIONS));
     store.save(normalizeConfiguration('Reader', OPTIONS));

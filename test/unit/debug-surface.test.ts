@@ -641,7 +641,7 @@ describe('debugging surface: framing', () => {
   });
 
   it('names every header control that sets a configuration up, the help beside them included', async () => {
-    // A page that cannot start hides `SETUP_ACTION_IDS` (ADR-0034). A control the list misses -
+    // A page that cannot start hides `SETUP_ACTION_IDS` (ADR-0019). A control the list misses -
     // the `?` that explains an action the page has just removed, for instance - stays behind, so
     // the markup is checked against the list rather than trusted to agree with it.
     const html = await import('node:fs/promises').then(

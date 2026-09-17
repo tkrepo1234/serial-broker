@@ -61,7 +61,7 @@ to whoever waits. `navigator.locks` is exposed to workers in every browser that 
 ## Alternatives considered
 
 - **Heartbeats with a sweep in the worker and a count of unanswered heartbeats in the tabs.** What
-  ADR-0021 decided on 2026-09-13. Rejected for the cost and the delay above.
+  ADR-0041 decided on 2026-09-13. Rejected for the cost and the delay above.
 - **Keep the heartbeats and shorten the timeouts.** A timeout short enough to matter fires for every
   throttled tab, and every hidden tab is throttled.
 - **Close the port of a silent participant.** A tab that was only throttled would lose its connection

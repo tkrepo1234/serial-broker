@@ -106,7 +106,7 @@ function applied(): { run: () => void; count: () => number } {
 }
 
 /**
- * What one tab knows about the terms of holding a port (ADR-0026, ADR-0030).
+ * What one tab knows about the terms of holding a port (ADR-0030).
  *
  * Every question here is answered by a Web Lock, never by what a message says: a term is live
  * while its lock is held, and over when the browser frees it. So a message can neither invent a

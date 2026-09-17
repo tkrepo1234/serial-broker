@@ -255,7 +255,7 @@ describe('decodeMessage within its limits', () => {
   it('refuses the fields of a worker record without reading past the limit', () => {
     // A proxy is the measuring instrument, not the threat: no structured clone carries one. It
     // counts what the decoder touches while a script of the origin posts a record whose `fields`
-    // hold far more keys than one may - which every tab decodes before dropping it (ADR-0029).
+    // hold far more keys than one may - which every tab decodes before dropping it (ADR-0018).
     const inspected: string[] = [];
     const fields = new Proxy({} as Record<string, unknown>, {
       ownKeys: () => Array.from({ length: 10_000 }, (_, index) => `f${String(index)}`),

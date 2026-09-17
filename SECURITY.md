@@ -79,7 +79,7 @@ sends, and in its diagnostics report.
   sender, and a `hello` in the name of the broker itself are refused.
 - **Divert or delay another tab's writes by claiming the port.** The broker tracks no owner: a write
   request goes to every participant of its configuration, and only the tab holding the term it names
-  acts on it (ADR-0040).
+  acts on it (ADR-0006).
 - **Take a tab's messages away on the worker, or end its participation.** Ports of one identity are
   served next to each other, never instead of each other, and a context's participation ends only
   when the browser lets go of the Web Lock that context holds for its lifetime (ADR-0041).
@@ -120,7 +120,7 @@ These follow from the missing sender identity, and no validation can prevent the
 
 - **Read** all traffic, statuses, errors and write requests of a configuration, by attaching to it
   on the worker or by listening on the channel - and what is addressed to one tab alone, by saying
-  `hello` on the worker under that tab's identity, which is no secret (ADR-0040).
+  `hello` on the worker under that tab's identity, which is no secret (ADR-0006).
 - **Write to the device**, with a `write-request` addressed to the current term, which every status
   names - or by calling serial-broker itself.
 - **Say anything a tab can say**, on either transport, under the identity of any tab, the tab

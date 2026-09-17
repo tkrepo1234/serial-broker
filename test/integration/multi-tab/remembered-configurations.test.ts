@@ -11,7 +11,7 @@ import { READER, READER_OPTIONS } from '../../harness/devices.js';
  * Releasing forgets nothing: a disconnect is not a deletion, and the application says when
  * something is to be forgotten, with `release(name, { forget: true })`. That path is the one the
  * hold protects - an entry must not be removed while another tab still runs the configuration with
- * `remember: true` (ADR-0027, ADR-0033).
+ * `remember: true` (ADR-0033).
  */
 
 describe.each(TRANSPORT_MODES)(

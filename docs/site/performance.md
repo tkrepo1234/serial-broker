@@ -128,7 +128,7 @@ after a crash is over its expectation, by less than ten times.
 ### Documented limits
 
 **The benchmark measures deliveries as they are read.** Its configurations set `receive: { idleMs: 0 }`,
-so `device-to-tabs` times the library and the bus, not the collection of received bytes (ADR-0039).
+so `device-to-tabs` times the library and the bus, not the collection of received bytes (ADR-0002).
 With the defaults, a delivery also waits until the line has been quiet for `receive.idleMs` (50 ms),
 and on a line that never goes quiet for up to `receive.maxWaitMs` (500 ms); see
 [Configuration](configuration.md). A run with the defaults measured about 240 ms at the median for

@@ -6,7 +6,7 @@ import { STORAGE_SCHEMA_VERSION } from './configuration-store.js';
 
 /**
  * Name of the Web Lock every tab running a configuration with `remember: true` holds in shared mode,
- * to say across every tab of the origin that it still runs the configuration (ADR-0027).
+ * to say across every tab of the origin that it still runs the configuration (ADR-0033).
  *
  * The remembered configurations are one entry per name for the whole origin, so a tab that releases
  * a configuration must not forget it while another tab still runs it: that tab would lose it on its
@@ -15,7 +15,7 @@ import { STORAGE_SCHEMA_VERSION } from './configuration-store.js';
  * closed or crashed tab's locks, so a tab that went away never keeps an entry alive.
  *
  * Versioned with the stored format, not with the protocol: tabs on different protocol versions
- * share the stored configurations (ADR-0022), so they have to share this lock too. The
+ * share the stored configurations (ADR-0033), so they have to share this lock too. The
  * configuration name comes last, so that a name containing `/` cannot be mistaken for a version.
  */
 export function persistenceLockName(configName: string): string {
