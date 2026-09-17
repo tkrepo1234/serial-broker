@@ -101,6 +101,66 @@ test('connects through the settings dialog, sends a line and sees it echoed', as
   tab.expectQuiet();
 });
 
+test('keeps line settings the library refused out of the summary and out of the next visit', async ({
+  context,
+}) => {
+  const tab = await open(context);
+
+  await tab.locator(UI.connect).click();
+  await tab.locator(`${ID}baudRate-inner`).fill('99999999');
+  await tab.locator(`${ID}connectConfirm`).click();
+
+  // The library has the verdict on the settings, and says why in the dialog, which stays open.
+  await expect(tab.locator(`${ID}connectMessage`)).toContainText('INVALID_ARGUMENT');
+  await expect(tab.locator(`${ID}settingsDialog`)).toBeVisible();
+  await tab.locator(`${ID}settingsCancel`).click();
+
+  // Nothing about that attempt is kept: the summary describes no connection it has not made, and
+  // the rate is not offered again - it would fail the same way on every visit from now on.
+  await expect(tab.locator(`${ID}displaySummary`)).toContainText('9600 baud');
+  await expect(tab.locator(`${ID}displaySummary`)).not.toContainText('99999999');
+  await tab.locator(UI.connect).click();
+  await expect(tab.locator(`${ID}baudRate-inner`)).toHaveValue('9600');
+});
+
+test('says that hex the composer cannot read is the line, not the page', async ({ context }) => {
+  const tab = await open(context);
+  await connect(tab);
+
+  await tab.locator(`${ID}sendMode`).click();
+  await tab.page.getByRole('option', { name: 'Hex' }).click();
+  await tab.locator(UI.sendInput).fill('zz');
+  await tab.locator(UI.sendButton).click();
+
+  await expect(tab.locator(`${ID}errorCode`)).toHaveText('Invalid input');
+  await expect(tab.locator(`${ID}errorMessage`)).toContainText('even number of digits');
+  await expect(tab.locator(`${ID}errorRemediation`)).toContainText('Correct the line');
+});
+
+test('offers the file dialog again after it has been used once', async ({ context }) => {
+  const tab = await open(context);
+  await connect(tab);
+  const file = { name: 'payload.txt', mimeType: 'text/plain', buffer: Buffer.from('one line\n') };
+
+  const openDialog = async (): Promise<void> => {
+    await tab.locator(`${ID}more`).click();
+    await tab.locator(`${ID}fileTransfer`).click();
+    await expect(tab.locator(`${ID}fileDialog`)).toBeVisible();
+  };
+
+  await openDialog();
+  await tab.locator(`${ID}fileInput`).locator('input[type="file"]').setInputFiles(file);
+  await expect(tab.locator(`${ID}fileSend`)).toBeEnabled();
+  await tab.locator(`${ID}fileClose`).click();
+
+  // The control keeps what it was given, so choosing the same file again fires no event of its
+  // own: the dialog has to start from nothing, or Send never becomes available again.
+  await openDialog();
+  await expect(tab.locator(`${ID}fileSend`)).toBeDisabled();
+  await tab.locator(`${ID}fileInput`).locator('input[type="file"]').setInputFiles(file);
+  await expect(tab.locator(`${ID}fileSend`)).toBeEnabled();
+});
+
 test('offers the usual baud rates, takes any other, and shows the last settings next time', async ({
   context,
 }) => {

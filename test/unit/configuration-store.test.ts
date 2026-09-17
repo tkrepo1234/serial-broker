@@ -5,11 +5,18 @@ import type { SerialBrokerError } from '../../src/core/errors.js';
 import { NOOP_LOGGER, ScopedLogger } from '../../src/core/logger.js';
 import { normalizeConfiguration } from '../../src/core/validation.js';
 import type { KeyValueStorage } from '../../src/environment/environment.js';
+import type {
+  LockLike,
+  LockManagerLike,
+  LockRequestOptions,
+  LockSnapshotLike,
+} from '../../src/environment/environment.js';
 import {
   ConfigurationStore,
   storageEntryKey,
   storageIndexKey,
 } from '../../src/storage/configuration-store.js';
+import { forgetUnlessHeld, persistenceLockName } from '../../src/storage/persistence-hold.js';
 
 const OPTIONS = { device: { vendorId: 0x1a86, productId: 0x7523 }, serial: { baudRate: 9600 } };
 
@@ -414,5 +421,145 @@ describe('ConfigurationStore', () => {
     expect(reported.map((error) => error.code)).toEqual([
       SerialBrokerErrorCode.STORAGE_UNAVAILABLE,
     ]);
+  });
+});
+
+describe('forgetting a remembered configuration', () => {
+  /**
+   * A lock manager that refuses the first `refusals` requests, as a browser does while a request
+   * this context has just withdrawn is still in its queue.
+   *
+   * @param held - What `query()` reports as held. A lock a tab really holds is here; the queue of
+   *   withdrawn requests is not, which is the difference the rule turns on.
+   */
+  function refusingLocks(
+    refusals: number,
+    held: readonly { name: string }[] = [],
+  ): { locks: LockManagerLike; asked: string[]; queries: number } {
+    const asked: string[] = [];
+    const state = { queries: 0 };
+    const locks: LockManagerLike = {
+      request: async <T>(
+        name: string,
+        options: LockRequestOptions,
+        callback: (lock: LockLike | null) => Promise<T>,
+      ): Promise<T> => {
+        asked.push(`${name} ${options.mode ?? 'exclusive'}`);
+        const refuse = asked.length <= refusals;
+        return await callback(refuse ? null : { name, mode: 'exclusive' });
+      },
+      query: async (): Promise<LockSnapshotLike> => {
+        state.queries += 1;
+        return { held, pending: [] };
+      },
+    };
+    return {
+      locks,
+      asked,
+      get queries() {
+        return state.queries;
+      },
+    };
+  }
+
+  const name = 'Scale';
+  const lockName = persistenceLockName(name);
+
+  it('forgets when the lock is free at once', async () => {
+    const { locks, asked } = refusingLocks(0);
+    let forgotten = false;
+
+    await forgetUnlessHeld(
+      locks,
+      name,
+      () => (forgotten = true),
+      new ScopedLogger(NOOP_LOGGER, {}),
+    );
+
+    expect(forgotten).toBe(true);
+    expect(asked).toEqual([`${lockName} exclusive`]);
+  });
+
+  it('asks again when a tab is refused by its own withdrawn request', async () => {
+    // Measured in Edge 153: a shared hold withdrawn a moment ago can still be in the browser's
+    // queue, and the browser then refuses a lock that nothing holds. Nothing is held here, so the
+    // refusal says nothing about other tabs and the entry would be kept for no reason.
+    const { locks, asked } = refusingLocks(1);
+    let forgotten = false;
+
+    await forgetUnlessHeld(
+      locks,
+      name,
+      () => (forgotten = true),
+      new ScopedLogger(NOOP_LOGGER, {}),
+    );
+
+    expect(forgotten).toBe(true);
+    expect(asked).toHaveLength(2);
+  });
+
+  it('keeps the entry while a tab holds the lock, without asking again and again', async () => {
+    const { locks, asked } = refusingLocks(Number.POSITIVE_INFINITY, [{ name: lockName }]);
+    let forgotten = false;
+
+    await forgetUnlessHeld(
+      locks,
+      name,
+      () => (forgotten = true),
+      new ScopedLogger(NOOP_LOGGER, {}),
+    );
+
+    expect(forgotten).toBe(false);
+    expect(asked).toHaveLength(1);
+  });
+
+  it('gives up after a few refusals, rather than asking for ever', async () => {
+    const { locks, asked } = refusingLocks(Number.POSITIVE_INFINITY);
+    let forgotten = false;
+
+    await forgetUnlessHeld(
+      locks,
+      name,
+      () => (forgotten = true),
+      new ScopedLogger(NOOP_LOGGER, {}),
+    );
+
+    expect(forgotten).toBe(false);
+    expect(asked.length).toBeLessThanOrEqual(5);
+  });
+
+  it('takes a refusal at its word where the browser offers no query()', async () => {
+    const { locks, asked } = refusingLocks(1);
+    const withoutQuery: LockManagerLike = { request: locks.request };
+    let forgotten = false;
+
+    await forgetUnlessHeld(
+      withoutQuery,
+      name,
+      () => (forgotten = true),
+      new ScopedLogger(NOOP_LOGGER, {}),
+    );
+
+    expect(forgotten).toBe(false);
+    expect(asked).toHaveLength(1);
+  });
+
+  it('reports a lock manager that throws, and forgets nothing', async () => {
+    const records: string[] = [];
+    const logger = new ScopedLogger(
+      { log: (_level, _message, fields) => records.push(String(fields?.event)) },
+      {},
+    );
+    const locks: LockManagerLike = {
+      request: async () => {
+        throw new Error('no locks here');
+      },
+    };
+    let forgotten = false;
+
+    await forgetUnlessHeld(locks, name, () => (forgotten = true), logger);
+
+    expect(forgotten).toBe(false);
+    expect(records).toContain('storage.hold-failed');
   });
 });
