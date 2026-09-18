@@ -38,7 +38,7 @@ const MAX_LOG_LINES = 200;
 export class ScalePanel {
   readonly #elements: PanelElements;
   #listeners: Unsubscribe[] = [];
-  /** Bounded, and emptied whenever the status leaves `open`: a line torn by a gap is not joined. */
+  /** Bounded, and emptied before a delivery marked `afterGap`: a line torn by a gap is not joined. */
   readonly #lines = new LineSplitter();
   /** Set once the user disconnected this window: a change made elsewhere must not reconnect it. */
   #isStopped = false;
