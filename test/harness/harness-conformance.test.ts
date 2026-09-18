@@ -680,6 +680,32 @@ describe('FakeSerialRegistry', () => {
     expect(await serial.getPorts()).toHaveLength(1);
   });
 
+  it('fails the read of an unplugged port before it announces the disconnect, as Edge does', async () => {
+    const registry = new FakeSerialRegistry();
+    const device = registry.addDevice(1, 2);
+    registry.grant(device);
+    const serial = registry.forContext('tab1');
+    const [port] = await serial.getPorts();
+    await port!.open({ baudRate: 9600 });
+    const seen: string[] = [];
+    serial.addEventListener('disconnect', () => seen.push('disconnect'));
+    serial.addEventListener('connect', () => seen.push('connect'));
+    const read = port!
+      .readable!.getReader()
+      .read()
+      .catch((error: unknown) => {
+        seen.push(`read ${String((error as { name?: string }).name)}`);
+      });
+
+    // Measured in Edge against the USB/IP emulator: the read rejects first, the event comes after.
+    registry.unplug(device);
+    registry.plug(device);
+    await read;
+    await flushMicrotasks();
+
+    expect(seen).toEqual(['read NetworkError', 'disconnect', 'connect']);
+  });
+
   it('refuses to close a port whose readable stream is still locked', async () => {
     const registry = new FakeSerialRegistry();
     registry.grant(registry.addDevice(1, 2));

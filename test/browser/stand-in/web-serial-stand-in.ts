@@ -513,14 +513,21 @@ export function installWebSerialStandIn(options: WebSerialStandInOptions): void 
     }
   }
 
+  // Measured in Edge 153 against the USB/IP emulator: the read of an open port fails first, and
+  // `disconnect` follows in a later task. `connect` keeps its place behind it.
   function applyUnplug(deviceId: string): void {
     const device = deviceOf(deviceId);
     ports.get(device.id)?.lose();
-    fireDeviceEvent('disconnect', portFor(device));
+    setTimeout(() => {
+      fireDeviceEvent('disconnect', portFor(device));
+    }, 0);
   }
 
   function applyPlug(deviceId: string): void {
-    fireDeviceEvent('connect', portFor(deviceOf(deviceId)));
+    const device = deviceOf(deviceId);
+    setTimeout(() => {
+      fireDeviceEvent('connect', portFor(device));
+    }, 0);
   }
 
   // The pages of the origin share the device, so an unplug in one is an unplug in all, and so is a

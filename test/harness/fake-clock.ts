@@ -113,6 +113,9 @@ export class FakeClock implements Clock {
     // Never backwards, and never back over a stall: time that has passed has passed.
     const target = this.#now + Math.max(0, byMs);
     let iterations = 0;
+    // What is already under way happens now, before any time passes: a read that rejected and the
+    // event that follows it in a later task both belong to the moment the test caused them.
+    await flushMicrotasks();
 
     for (;;) {
       const due = [...this.#timers.values()]
