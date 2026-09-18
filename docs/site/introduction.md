@@ -75,8 +75,8 @@ production line.
 Search the [error codes](errors.md) first: every error carries a remediation sentence that is
 usually the answer. For a deployment that misbehaves, open the
 [debugging surface](diagnostics.md#the-debugging-surface): it shows which tab holds each port, what
-its connection is doing, and what every tab is waiting for. [Troubleshooting](diagnostics.md#troubleshooting)
-lists the common symptoms.
+its connection is doing, and what every tab is waiting for.
+[Troubleshooting](diagnostics.md#troubleshooting) lists the common symptoms.
 
 ## License
 

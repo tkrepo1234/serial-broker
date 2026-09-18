@@ -21,7 +21,7 @@ import {
 import { persistenceLockName } from '../../../src/storage/persistence-hold.js';
 import type { BrowserHarness } from '../../harness/browser-harness.js';
 import { TRANSPORT_MODES } from '../../harness/browser-harness.js';
-import { READER, READER_OPTIONS, readerHarness } from '../../harness/devices.js';
+import { READER, READER_OPTIONS, readerHarness, twoTabs } from '../../harness/devices.js';
 import { fieldsOfEvent, recordingLogger } from '../../harness/recording-logger.js';
 import { sampleReport } from '../../unit/fixtures/diagnostics-report.js';
 
@@ -36,20 +36,6 @@ const WINDOW_MS = 100;
  * owning the port would move it the moment the application's tabs closed.
  */
 describe.each(TRANSPORT_MODES)('diagnostics observer (%s)', (transport) => {
-  async function twoTabsSharingAPort(): Promise<{
-    harness: BrowserHarness;
-    device: ReturnType<BrowserHarness['serial']['addDevice']>;
-    owner: ReturnType<BrowserHarness['openTab']>;
-    peer: ReturnType<BrowserHarness['openTab']>;
-  }> {
-    const { harness, device } = readerHarness({ transport });
-    const owner = harness.openTab();
-    await owner.setup('Reader', READER_OPTIONS);
-    const peer = harness.openTab();
-    await peer.setup('Reader', READER_OPTIONS);
-    return { harness, device, owner, peer };
-  }
-
   /** Runs one collection to the end of its window. */
   async function collect(
     harness: BrowserHarness,
@@ -73,7 +59,7 @@ describe.each(TRANSPORT_MODES)('diagnostics observer (%s)', (transport) => {
   }
 
   it('hears from every tab with a configuration, with its role, status and effective settings', async () => {
-    const { harness, owner, peer } = await twoTabsSharingAPort();
+    const { harness, owner, other: peer } = await twoTabs({ transport });
     harness.openTab(); // never set anything up, so it is not on the bus
     const observer = harness.openObserver();
 
@@ -104,7 +90,7 @@ describe.each(TRANSPORT_MODES)('diagnostics observer (%s)', (transport) => {
   });
 
   it('describes the owner connection, with the bytes that went each way', async () => {
-    const { harness, device, owner } = await twoTabsSharingAPort();
+    const { harness, device, owner } = await twoTabs({ transport });
     const observer = harness.openObserver();
 
     await owner.client.send('Reader', 'PING');
@@ -144,7 +130,7 @@ describe.each(TRANSPORT_MODES)('diagnostics observer (%s)', (transport) => {
   });
 
   it('shows a write that is waiting on a device, both where it was issued and at the port', async () => {
-    const { harness, device, owner, peer } = await twoTabsSharingAPort();
+    const { harness, device, owner, other: peer } = await twoTabs({ transport });
     const observer = harness.openObserver();
     device.faults.hangOnWrite = true;
 
@@ -164,7 +150,7 @@ describe.each(TRANSPORT_MODES)('diagnostics observer (%s)', (transport) => {
   });
 
   it('counts the listeners each tab has registered', async () => {
-    const { harness, owner } = await twoTabsSharingAPort();
+    const { harness, owner } = await twoTabs({ transport });
     const observer = harness.openObserver();
 
     owner.client.subscribe('Reader', 'onReceive', () => undefined);
@@ -180,7 +166,7 @@ describe.each(TRANSPORT_MODES)('diagnostics observer (%s)', (transport) => {
   });
 
   it('reports every configuration a tab has set up', async () => {
-    const { harness, owner } = await twoTabsSharingAPort();
+    const { harness, owner } = await twoTabs({ transport });
     harness.serial.grant(harness.serial.addDevice(0x0403, 0x6001));
     await owner.setup('Scale', { device: { any: true }, serial: { baudRate: 19_200 } });
     const observer = harness.openObserver();
@@ -194,7 +180,7 @@ describe.each(TRANSPORT_MODES)('diagnostics observer (%s)', (transport) => {
   });
 
   it('lists who holds the ownership lock and who is queued behind it', async () => {
-    const { harness, owner, peer } = await twoTabsSharingAPort();
+    const { harness, owner, other: peer } = await twoTabs({ transport });
     const observer = harness.openObserver();
 
     const snapshot = await collect(harness, observer);
@@ -236,7 +222,7 @@ describe.each(TRANSPORT_MODES)('diagnostics observer (%s)', (transport) => {
   });
 
   it('streams traffic, and the handover when the owning tab is killed', async () => {
-    const { harness, device, owner, peer } = await twoTabsSharingAPort();
+    const { harness, device, owner, other: peer } = await twoTabs({ transport });
     const observer = harness.openObserver();
     const events: ObservedEvent[] = [];
     observer.watch('Reader', (event) => events.push(event));
@@ -259,7 +245,7 @@ describe.each(TRANSPORT_MODES)('diagnostics observer (%s)', (transport) => {
   });
 
   it('stops streaming once the last listener unsubscribes', async () => {
-    const { harness, device } = await twoTabsSharingAPort();
+    const { harness, device } = await twoTabs({ transport });
     const observer = harness.openObserver();
     const events: ObservedEvent[] = [];
     const stop = observer.watch('Reader', (event) => events.push(event));
@@ -279,7 +265,7 @@ describe.each(TRANSPORT_MODES)('diagnostics observer (%s)', (transport) => {
   });
 
   it('keeps delivering to other listeners when one of them throws', async () => {
-    const { harness, device } = await twoTabsSharingAPort();
+    const { harness, device } = await twoTabs({ transport });
     const observer = harness.openObserver();
     const events: ObservedEvent[] = [];
     observer.watch('Reader', () => {
@@ -295,7 +281,7 @@ describe.each(TRANSPORT_MODES)('diagnostics observer (%s)', (transport) => {
   });
 
   it('ends a collection early, with what arrived, when the observer is closed', async () => {
-    const { harness } = await twoTabsSharingAPort();
+    const { harness } = await twoTabs({ transport });
     const observer = harness.openObserver();
 
     const pending = observer.collect(60_000);
@@ -308,7 +294,7 @@ describe.each(TRANSPORT_MODES)('diagnostics observer (%s)', (transport) => {
   });
 
   it('refuses to be used after it is closed, and refuses a nonsensical window', async () => {
-    const { harness } = await twoTabsSharingAPort();
+    const { harness } = await twoTabs({ transport });
     const observer = harness.openObserver();
 
     await expect(observer.collect(-1)).rejects.toMatchObject({
@@ -326,7 +312,7 @@ describe.each(TRANSPORT_MODES)('diagnostics observer (%s)', (transport) => {
   });
 
   it('never appears among the participants it reports on', async () => {
-    const { harness } = await twoTabsSharingAPort();
+    const { harness } = await twoTabs({ transport });
     const observer = harness.openObserver();
 
     const snapshot = await collect(harness, observer);

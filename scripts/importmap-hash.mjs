@@ -16,9 +16,7 @@ import process from 'node:process';
 
 const [page] = process.argv.slice(2);
 if (page === undefined) {
-  process.stderr.write(
-    'Usage: node scripts/importmap-hash.mjs <page.html>' + String.fromCharCode(10),
-  );
+  process.stderr.write('Usage: node scripts/importmap-hash.mjs <page.html>\n');
   process.exit(2);
 }
 

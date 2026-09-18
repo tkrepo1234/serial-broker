@@ -4,7 +4,7 @@ Everything an application imports from `serial-broker`, generated from the docum
 in the source, so it always matches the version it was built from.
 
 The one page most applications need is the
-**[Application API](reference/index/interfaces/SerialBrokerApi.md)** - every method of
+**[Application API](reference/index/interfaces/SerialBrokerApi.md)** — every method of
 `SerialBroker`, each with its parameters, what it returns and what it throws. Jump straight to what
 you need:
 

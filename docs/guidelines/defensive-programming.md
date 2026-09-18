@@ -38,8 +38,8 @@ could only discover at runtime. This is why the library has no general `assert(c
 helper: wherever one would go, a discriminated union or a narrower parameter says it
 better. The one helper in `core/assert.ts` is `assertNever`, below.
 
-Where the compiler genuinely cannot help - a union member arriving from outside the type
-system - use `assertNever` in the `default` of the switch. It makes an unhandled case a
+Where the compiler genuinely cannot help — a union member arriving from outside the type
+system — use `assertNever` in the `default` of the switch. It makes an unhandled case a
 compile error, and a runtime `INTERNAL_INVARIANT` for values that were never typed at all.
 
 ### Every await can hang — bound it

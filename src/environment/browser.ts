@@ -22,9 +22,9 @@ import type {
 export interface BrowserEnvironmentOptions {
   /** {@inheritDoc SerialBrokerGlobalOptions.workerUrl} */
   readonly workerUrl?: string | URL | undefined;
-  /** Forces a transport instead of selecting one automatically. @defaultValue 'auto' */
+  /** {@inheritDoc SerialBrokerGlobalOptions.transport} */
   readonly transport?: TransportKind | undefined;
-  /** Receives diagnostics. Nothing is logged unless one is supplied. */
+  /** {@inheritDoc SerialBrokerGlobalOptions.logger} */
   readonly logger?: Logger | undefined;
   /** {@inheritDoc SerialBrokerGlobalOptions.logPayloads} */
   readonly logPayloads?: boolean | undefined;

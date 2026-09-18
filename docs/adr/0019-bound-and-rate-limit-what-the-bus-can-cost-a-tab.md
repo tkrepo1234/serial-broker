@@ -4,8 +4,8 @@
 
 ## Context
 
-The limits of `protocol/limits.ts` bound what **one** message can cost: how long an identifier may
-be, how large a payload, how many values a report may hold (SECURITY.md). **How many** messages
+The limits of `src/protocol/limits.ts` bound what **one** message can cost: how long an identifier
+may be, how large a payload, how many values a report may hold (SECURITY.md). **How many** messages
 there are needs bounds of its own, because every well-formed one is worked on:
 
 - the tab holding the port answers a `status-request` with a broadcast;
@@ -24,11 +24,11 @@ application with a loop in it could do the same by accident.
 ## Decision
 
 Every place where the bus makes a tab do more than drop a message gets a **named limit**, defined
-with its reason in `protocol/limits.ts`, and what a flood would repeat is logged through one
+with its reason in `src/protocol/limits.ts`, and what a flood would repeat is logged through one
 `OnceLog`, **once per key** - a kind of malformed message, an exceeded limit - rather than once per
 message.
 
-A token bucket (`core/rate-limit.ts`) expresses the rates: `burst` allowed at once, `perSecond`
+A token bucket (`src/core/rate-limit.ts`) expresses the rates: `burst` allowed at once, `perSecond`
 coming back. A burst is what legitimate use looks like - every tab of an origin asking for the
 status as it joins - and what follows it is not. The allowance is measured on the **monotonic
 clock** ([ADR-0012](./0012-dependency-injection-of-the-environment.md)), so setting the system time

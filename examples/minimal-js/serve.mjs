@@ -58,24 +58,21 @@ const server = createServer((request, response) => {
   const pathname = new URL(request.url ?? '/', `http://localhost:${String(PORT)}`).pathname;
   const file = fileFor(pathname);
   const type = file === undefined ? undefined : CONTENT_TYPES.get(path.extname(file));
-
-  if (file === undefined || type === undefined) {
+  const notFound = () => {
     response.writeHead(404, { 'content-type': 'text/plain; charset=utf-8' });
     response.end(`Not found: ${pathname}\n`);
+  };
+
+  if (file === undefined || type === undefined) {
+    notFound();
     return;
   }
 
-  readFile(file).then(
-    (body) => {
-      // A developer who rebuilds the library must see that build on reload, not a cached mixture.
-      response.writeHead(200, { 'content-type': type, 'cache-control': 'no-store' });
-      response.end(body);
-    },
-    () => {
-      response.writeHead(404, { 'content-type': 'text/plain; charset=utf-8' });
-      response.end(`Not found: ${pathname}\n`);
-    },
-  );
+  readFile(file).then((body) => {
+    // A developer who rebuilds the library must see that build on reload, not a cached mixture.
+    response.writeHead(200, { 'content-type': type, 'cache-control': 'no-store' });
+    response.end(body);
+  }, notFound);
 });
 
 try {

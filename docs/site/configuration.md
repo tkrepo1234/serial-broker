@@ -199,18 +199,12 @@ these settings feed are in [Reconnecting](guarantees.md#reconnecting).
 
 `autoReconnect`
 : Whether the tab holding the port reconnects by itself. With `false`, a lost connection or a failed
-attempt ends in `failed` with the error reported, and nothing is tried again — not after a delay,
-and not when the device is plugged in again. The application decides when to try: calling `setup()`
-again with the same options, in any tab, starts the configuration again. A handover does not start
-it either: when the tab holding a `failed` configuration closes or crashes, the tab taking the port
-over stays `failed`, as every other tab does. The errors of the loss carry `isRetryable: false`. Only
-a configuration still in `awaiting-permission` — it never found its device — connects when the
-device appears; that is its first connection, not a reconnect. A first attempt that fails ends in
-`failed` too. A page that loads while no other tab runs the configuration knows nothing of the
-failure, and connects when it sets the configuration up: that is the application asking. **Set it
-to `false`** on a production line where a lost device must be acknowledged by a
-person before the application talks to it again. **Cost:** every glitch — a loose cable, an adapter
-reset on wake — needs the application to act.
+attempt ends in `failed` with the error reported, and nothing is tried again; the application starts
+the configuration again by calling `setup()` with the same options, in any tab.
+[Reconnecting](guarantees.md#reconnecting) states the rules in full. **Set it to `false`** on a
+production line where a lost device must be acknowledged by a person before the application talks to
+it again. **Cost:** every glitch — a loose cable, an adapter reset on wake — needs the application
+to act.
 
 The delay before reconnect attempt _n_ is
 
@@ -263,12 +257,11 @@ block the connection indefinitely; a timeout counts as a failed attempt, reporte
 **Raise it** only for an adapter known to take long to open.
 
 `writeTimeoutMs`
-: Three deadlines in one. In the tab that called `send()`, the whole write, counted from `send()`,
-including waiting for a connection. The tab holding the port begins no write without that tab's
-approval, which it no longer gives once this deadline has run, so tabs may set it differently. In the
-tab holding the port, how long a write may wait there before it begins — behind other writes, and for
-the approval of the tab that issued it; one that waited longer is never begun — and how long the
-device has to take each chunk.
+: Three deadlines in one: in the tab that called `send()`, the whole write, counted from `send()`
+and including waiting for a connection; in the tab holding the port, how long a write may wait there
+before it begins, and how long the device has to take each chunk. The tab holding the port begins no
+write without the issuing tab's approval, so tabs may set it differently; see
+[Write outcomes](guarantees.md#write-outcomes).
 **Raise it** for a large payload to a slow device, or a device that applies flow control for long
 stretches; up to ten minutes. **Lower it** when a user is waiting for the result. **Cost** of a high
 value: a device that stopped taking data is noticed later, and the writes behind a stuck one wait
@@ -363,17 +356,15 @@ The browser remembers the device permission independently of this option.
 | `maxTabs` | integer, 1 – 100, or `Infinity` | `Infinity` |
 
 - **What it does:** at most this many tabs of the origin use the configuration at the same time, the
-  tab holding the port included. Every tab with a limit starts at `queued`, and moves on as soon as it
-  has a place, at once when one is free. A tab beyond the limit stays `queued`: it receives nothing,
-  and its writes wait for their deadline. When another tab releases the configuration, closes or
-  crashes, the tab that has waited longest takes its place. See
+  tab holding the port included; the rest wait with the status `queued`, receive nothing, and take
+  their turn in order. See
   [Limiting how many tabs use a port](shared-ports.md#limiting-how-many-tabs-use-a-port).
 - **Set it to `1`** when only one tab may drive the device at a time — a machine operated from one
   screen. Larger values bound how many tabs follow the device's traffic.
 - **Cost:** each waiting tab requests every place as a Web Lock.
 - **Keep in mind:** every tab has to pass the same value. A tab that finds the tab holding the port
   running a different limit reports `CONFIGURATION_CONFLICT`, withdraws, and shows `failed` until it
-  is released and set up again. Only tabs of the same origin are counted.
+  is released and set up again.
 
 ## `configure()`
 

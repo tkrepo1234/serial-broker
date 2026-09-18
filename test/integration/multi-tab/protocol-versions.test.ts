@@ -142,7 +142,7 @@ describe.each(TRANSPORT_MODES)('tabs on different protocol versions (%s)', (tran
 });
 
 describe('a platform without BroadcastChannel', () => {
-  it('still sets configurations up, without detecting other versions', async () => {
+  it('sets a configuration up, having no channel to announce its version on', async () => {
     const harness = new BrowserHarness();
     const client = new SerialBrokerClient({
       ...harness.createEnvironment('bare'),

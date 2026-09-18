@@ -11,7 +11,9 @@ import {
   termLockName,
 } from '../../../src/protocol/version.js';
 import { BrowserHarness } from '../../harness/browser-harness.js';
-import { READER, READER_OPTIONS, readerHarness } from '../../harness/devices.js';
+import { READER, READER_OPTIONS, readerHarness, twoTabs } from '../../harness/devices.js';
+import type { TransportMode } from '../../harness/fake-bus.js';
+import { outcomeSoFar } from '../../harness/outcomes.js';
 import { fieldsOfEvent, recordingLogger } from '../../harness/recording-logger.js';
 
 /**
@@ -22,20 +24,14 @@ import { fieldsOfEvent, recordingLogger } from '../../harness/recording-logger.j
  * tests hold the line on what it must not achieve.
  */
 
-async function twoTabs(transport: 'sharedworker' | 'broadcastchannel'): Promise<{
-  harness: BrowserHarness;
-  device: ReturnType<BrowserHarness['serial']['addDevice']>;
-  owner: ReturnType<BrowserHarness['openTab']>;
-  other: ReturnType<BrowserHarness['openTab']>;
-  records: ReturnType<typeof recordingLogger>['records'];
-}> {
+/** Two tabs sharing a port, with what they logged: a forgery that is dropped says so there. */
+async function twoLoggedTabs(
+  transport: TransportMode,
+): Promise<
+  Awaited<ReturnType<typeof twoTabs>> & { records: ReturnType<typeof recordingLogger>['records'] }
+> {
   const { logger, records } = recordingLogger();
-  const { harness, device } = readerHarness({ transport, logger });
-  const owner = harness.openTab();
-  await owner.setup('Reader', READER_OPTIONS);
-  const other = harness.openTab();
-  await other.setup('Reader', READER_OPTIONS);
-  return { harness, device, owner, other, records };
+  return { ...(await twoTabs({ transport, logger })), records };
 }
 
 /** Every message a script of the origin posts on the channel carries this much. */
@@ -105,7 +101,7 @@ async function twoWatchedTabs(): Promise<{
  */
 describe('a script of the origin that forges messages about the port', () => {
   it('cannot end a live term by claiming the port for a term nobody holds', async () => {
-    const { harness, device, other } = await twoTabs('broadcastchannel');
+    const { harness, device, other } = await twoLoggedTabs('broadcastchannel');
     const mallory = eavesdrop(harness);
 
     mallory.post({
@@ -242,11 +238,7 @@ describe('a script of the origin that forges messages about the port', () => {
     const { harness, device, other, mallory } = await twoWatchedTabs();
 
     device.pauseWrites();
-    let outcome: unknown = 'pending';
-    void other.client.send('Reader', 'PING').then(
-      () => (outcome = 'resolved'),
-      (error: unknown) => (outcome = error),
-    );
+    const outcome = outcomeSoFar(other.client.send('Reader', 'PING'));
     await harness.settle();
 
     const request = heardOf(mallory.heard, 'write-request');
@@ -264,11 +256,11 @@ describe('a script of the origin that forges messages about the port', () => {
 
     // Answering a write is the term's own business: resolving it here would tell the application
     // that bytes reached the device which are still waiting at the port.
-    expect(outcome).toBe('pending');
+    expect(outcome()).toBe('pending');
 
     device.resumeWrites();
     await harness.settle();
-    expect(outcome).toBe('resolved');
+    expect(outcome()).toBe('resolved');
     expect(device.writtenText()).toBe('PING');
   });
 
@@ -283,11 +275,7 @@ describe('a script of the origin that forges messages about the port', () => {
 
     // The issuing tab is busy: the question of the tab holding the port waits there, unanswered.
     issuer.hold(owner.client.clientId);
-    let outcome: unknown = 'pending';
-    void issuer.client.send('Reader', 'PING').then(
-      () => (outcome = 'resolved'),
-      (error: unknown) => (outcome = error),
-    );
+    const outcome = outcomeSoFar(issuer.client.send('Reader', 'PING'));
     await harness.settle();
     const question = heardOf(mallory.heard, 'write-ready');
     expect(question).toBeDefined();
@@ -309,12 +297,12 @@ describe('a script of the origin that forges messages about the port', () => {
 
     issuer.deliverHeld();
     await harness.settle();
-    expect(outcome).toBe('resolved');
+    expect(outcome()).toBe('resolved');
     expect(device.writtenText()).toBe('PING');
   });
 
   it('cannot deliver device data it made up', async () => {
-    const { harness, device, other } = await twoTabs('broadcastchannel');
+    const { harness, device, other } = await twoLoggedTabs('broadcastchannel');
     const mallory = eavesdrop(harness);
 
     mallory.post({
@@ -335,7 +323,7 @@ describe('a script of the origin that forges messages about the port', () => {
 
 describe('a script of the origin that floods the bus with well-formed messages', () => {
   it('is answered only as often as the rate for status requests allows, and no tab is left without a status', async () => {
-    const { harness } = await twoTabs('broadcastchannel');
+    const { harness } = await twoLoggedTabs('broadcastchannel');
     const mallory = eavesdrop(harness);
 
     for (let round = 0; round < 500; round += 1) {
@@ -356,7 +344,7 @@ describe('a script of the origin that floods the bus with well-formed messages',
   });
 
   it('makes a tab joining during the flood miss the chunks that arrive before it learns the term', async () => {
-    const { harness, device, records } = await twoTabs('broadcastchannel');
+    const { harness, device, records } = await twoLoggedTabs('broadcastchannel');
     const mallory = eavesdrop(harness);
 
     for (let round = 0; round < 2 * STATUS_ANSWER_RATE.burst; round += 1) {
@@ -389,7 +377,7 @@ describe('a script of the origin that floods the bus with well-formed messages',
   });
 
   it('is answered only as often as the rate for diagnostics requests allows', async () => {
-    const { harness } = await twoTabs('broadcastchannel');
+    const { harness } = await twoLoggedTabs('broadcastchannel');
     const mallory = eavesdrop(harness);
 
     for (let round = 0; round < 200; round += 1) {
@@ -418,7 +406,7 @@ describe('a script of the origin that floods the bus with well-formed messages',
   });
 
   it('is logged once per context, however many malformed messages arrive', async () => {
-    const { harness, device, other, records } = await twoTabs('broadcastchannel');
+    const { harness, device, other, records } = await twoLoggedTabs('broadcastchannel');
 
     for (let round = 0; round < 200; round += 1) {
       harness.bus.broadcastHub.injectForeign(brokerChannelName(), {
@@ -440,7 +428,7 @@ describe('a script of the origin that floods the bus with well-formed messages',
 
 describe('a script on the SharedWorker that uses the identity of a tab', () => {
   it('diverts no write, and delays none, by claiming to hold the port', async () => {
-    const { harness, device, other } = await twoTabs('sharedworker');
+    const { harness, device, other } = await twoLoggedTabs('sharedworker');
     const mallory = harness.bus.workerHost.connectForeign();
 
     // A participant of its own that claims the port in a term it made up. A broker that routed what
@@ -486,11 +474,7 @@ describe('a script on the SharedWorker that uses the identity of a tab', () => {
     // The issuing tab is busy, so the question of the tab holding the port waits there. The script
     // reads the request off the worker as a participant of the configuration.
     issuer.hold(owner.client.clientId);
-    let outcome: unknown = 'pending';
-    void issuer.client.send('Reader', 'PING').then(
-      () => (outcome = 'resolved'),
-      (error: unknown) => (outcome = error),
-    );
+    const outcome = outcomeSoFar(issuer.client.send('Reader', 'PING'));
     await harness.settle();
     const request = [...mallory.received]
       .reverse()
@@ -518,12 +502,12 @@ describe('a script on the SharedWorker that uses the identity of a tab', () => {
 
     issuer.deliverHeld();
     await harness.settle();
-    expect(outcome).toBe('resolved');
+    expect(outcome()).toBe('resolved');
     expect(device.writtenText()).toBe('PING');
   });
 
   it('does not make the worker forget a tab by leaving under its identity', async () => {
-    const { harness, device, other, records } = await twoTabs('sharedworker');
+    const { harness, device, other, records } = await twoLoggedTabs('sharedworker');
     const mallory = harness.bus.workerHost.connectForeign();
 
     // Identities are no secret. The port that says hello as the tab is one more port of that
@@ -540,7 +524,7 @@ describe('a script on the SharedWorker that uses the identity of a tab', () => {
   });
 
   it('cannot speak for a tab from a port that said hello as something else', async () => {
-    const { harness, device, owner, other, records } = await twoTabs('sharedworker');
+    const { harness, device, owner, other, records } = await twoLoggedTabs('sharedworker');
     const mallory = harness.bus.workerHost.connectForeign();
 
     // An identity of its own: the port is served, and is held to the identity it said hello as.
@@ -572,7 +556,7 @@ describe('a script on the SharedWorker that uses the identity of a tab', () => {
 
 describe('a script flooding the BroadcastChannel with messages beyond a limit', () => {
   it('is logged once in each tab, and the tabs go on sharing the port', async () => {
-    const { harness, device, other, records } = await twoTabs('broadcastchannel');
+    const { harness, device, other, records } = await twoLoggedTabs('broadcastchannel');
     // Fake device data, from a sender whose identity is longer than any identifier may be.
     const oversized = {
       v: PROTOCOL_VERSION,

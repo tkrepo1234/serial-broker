@@ -102,5 +102,4 @@ modes; `test/unit/worker-script.test.ts` (a worker answers a `hello` in another 
 `test/unit/worker-transport-liveness.test.ts`; `test/unit/bus-limits.test.ts` (the frozen shape of
 the announcement and its decoder); `test/integration/multi-tab/shared-worker.test.ts` (a worker
 script of another version) and `hostile-bus.test.ts` (a message of another version on this build's
-channel);
-and `test/browser/transports.spec.ts`, which serves a worker of another protocol version.
+channel); and `test/browser/transports.spec.ts`, which serves a worker of another protocol version.

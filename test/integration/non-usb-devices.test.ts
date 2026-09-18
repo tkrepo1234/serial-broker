@@ -19,12 +19,18 @@ const ANY_DEVICE = {
  * write and the library has to accept whatever the user granted. See ADR-0022.
  */
 describe('a device with no USB identity', () => {
-  it('sends and receives like any other device', async () => {
+  /** A tab connected to one granted port that reports no USB identity. */
+  async function tabOnALocalPort() {
     const harness = new BrowserHarness();
     const port = harness.serial.addNonUsbPort();
     harness.serial.grant(port);
     const tab = harness.openTab();
     await tab.setup('LocalPort', ANY_DEVICE);
+    return { harness, port, tab };
+  }
+
+  it('sends and receives like any other device', async () => {
+    const { harness, port, tab } = await tabOnALocalPort();
 
     await tab.client.send('LocalPort', 'AT');
     port.emit('OK');
@@ -35,10 +41,7 @@ describe('a device with no USB identity', () => {
   });
 
   it('reports no vendor or product ID in its status', async () => {
-    const harness = new BrowserHarness();
-    harness.serial.grant(harness.serial.addNonUsbPort());
-    const tab = harness.openTab();
-    await tab.setup('LocalPort', ANY_DEVICE);
+    const { tab } = await tabOnALocalPort();
 
     const status = tab.client.getStatus('LocalPort');
     expect(status.vendorId).toBeUndefined();
@@ -46,11 +49,8 @@ describe('a device with no USB identity', () => {
   });
 
   it('is restored from storage like any other configuration', async () => {
-    const harness = new BrowserHarness();
-    harness.serial.grant(harness.serial.addNonUsbPort());
+    const { harness, tab: first } = await tabOnALocalPort();
 
-    const first = harness.openTab();
-    await first.setup('LocalPort', ANY_DEVICE);
     await first.close();
 
     const reloaded = harness.openTab();
@@ -66,8 +66,8 @@ describe('a device with no USB identity', () => {
     const second = harness.serial.addNonUsbPort();
     harness.serial.grant(first);
     harness.serial.grant(second);
-
     const tab = harness.openTab();
+
     await tab.setup('LocalPort', ANY_DEVICE);
 
     // The honest outcome: an `any` filter cannot tell two ports apart, so it takes the first

@@ -7,7 +7,7 @@ import {
   type NormalizedDeviceFilter,
   type ResolvedDevice,
 } from '../core/defaults.js';
-import { describeSettings, type ConfigurationDiagnostics } from '../core/diagnostics.js';
+import type { ConfigurationDiagnostics } from '../core/diagnostics.js';
 import { EventEmitter } from '../core/emitter.js';
 import { SerialBrokerErrorCode } from '../core/error-codes.js';
 import { deserializeError, SerialBrokerError } from '../core/errors.js';
@@ -19,6 +19,7 @@ import {
   type SerialBrokerEventName,
   type SerialBrokerStatusSnapshot,
 } from '../core/types.js';
+import { toSetupOptions } from '../core/validation.js';
 import type { SerialPortLike, SerialBrokerEnvironment } from '../environment/environment.js';
 import { OwnershipElection } from '../owner/election.js';
 import {
@@ -237,6 +238,19 @@ export class ConfigurationSession {
   }
 
   /**
+   * The three fields every message this session sends carries: the protocol version, this context
+   * as the sender, and the configuration the message is about. Spread into each message beside the
+   * fields that are its own.
+   */
+  #envelope(): { readonly v: number; readonly from: ClientId; readonly configName: string } {
+    return {
+      v: PROTOCOL_VERSION,
+      from: this.transport.clientId,
+      configName: this.#configuration.name,
+    };
+  }
+
+  /**
    * Joins the bus and the election - at once, or, with a tab limit, once this tab holds one of the
    * places (ADR-0017). Until then the status is `queued`.
    */
@@ -430,7 +444,7 @@ export class ConfigurationSession {
       status: this.#status,
       statusSince: this.#statusSince,
       lastErrorCode: this.#lastErrorCode,
-      settings: describeSettings(this.#configuration),
+      settings: toSetupOptions(this.#configuration),
       listeners: this.#emitter.listenerCounts(),
       pendingWrites: this.#writes.diagnostics(),
       connection: this.#supervisor?.diagnostics(),
@@ -472,9 +486,7 @@ export class ConfigurationSession {
    * @throws A {@link SerialBrokerError} with code `INVALID_ARGUMENT` for `chooseAgain` in a
    *   configuration that names its device, before the picker opens.
    */
-  async requestAccess(
-    options: { readonly chooseAgain: boolean } = { chooseAgain: false },
-  ): Promise<void> {
+  async requestAccess(options: { readonly chooseAgain: boolean }): Promise<void> {
     const { chooseAgain } = options;
     if (chooseAgain && this.#configuration.device.kind !== 'auto') {
       throw new SerialBrokerError(
@@ -668,11 +680,9 @@ export class ConfigurationSession {
         // Decided here, in this context's own event loop, against whether it has given the write up
         // (ADR-0011). Answered either way, so that a refused write does not hold the port's queue.
         this.transport.send({
+          ...this.#envelope(),
           type: 'write-approval',
-          v: PROTOCOL_VERSION,
-          from: this.transport.clientId,
           to: message.from,
-          configName: this.#configuration.name,
           requestId: message.requestId,
           term: message.term,
           approved: this.#writes.approve(message.requestId, message.term),
@@ -788,11 +798,9 @@ export class ConfigurationSession {
     this.#term = term;
 
     this.transport.send({
+      ...this.#envelope(),
       type: 'owner-claimed',
-      v: PROTOCOL_VERSION,
-      from: this.transport.clientId,
       to: 'all',
-      configName: this.#configuration.name,
       term,
       maxTabs: this.#configuration.maxTabs,
     });
@@ -822,11 +830,9 @@ export class ConfigurationSession {
             timestamp: this.environment.clock.now(),
           });
           this.transport.send({
+            ...this.#envelope(),
             type: 'data-received',
-            v: PROTOCOL_VERSION,
-            from: this.transport.clientId,
             to: 'all',
-            configName: this.#configuration.name,
             payload: data,
             text,
             timestamp: this.environment.clock.now(),
@@ -881,11 +887,9 @@ export class ConfigurationSession {
     this.#queueGoodbye(term);
 
     this.transport.send({
+      ...this.#envelope(),
       type: 'owner-released',
-      v: PROTOCOL_VERSION,
-      from: this.transport.clientId,
       to: 'all',
-      configName: this.#configuration.name,
       term,
     });
     // The term's lock and the ownership lock go together, after the term's last word.
@@ -948,11 +952,9 @@ export class ConfigurationSession {
 
     // To every participant: only the tab holding `term` acts on it (ADR-0006).
     this.transport.send({
+      ...this.#envelope(),
       type: 'write-request',
-      v: PROTOCOL_VERSION,
-      from: this.transport.clientId,
       to: 'all',
-      configName: this.#configuration.name,
       requestId,
       payload,
       term,
@@ -981,11 +983,9 @@ export class ConfigurationSession {
         const answer = createDeferred<boolean>();
         this.#awaitedApprovals.set(key, { term, answer });
         this.transport.send({
+          ...this.#envelope(),
           type: 'write-ready',
-          v: PROTOCOL_VERSION,
-          from: this.transport.clientId,
           to: origin,
-          configName: this.#configuration.name,
           requestId,
           term,
         });
@@ -1075,11 +1075,9 @@ export class ConfigurationSession {
     error: SerialBrokerError | undefined,
   ): void {
     this.transport.send({
+      ...this.#envelope(),
       type: 'write-result',
-      v: PROTOCOL_VERSION,
-      from: this.transport.clientId,
       to: origin,
-      configName: this.#configuration.name,
       requestId,
       ok: error === undefined,
       error: error?.toJSON(),
@@ -1099,11 +1097,9 @@ export class ConfigurationSession {
     });
 
     this.transport.send({
+      ...this.#envelope(),
       type: 'data-sent',
-      v: PROTOCOL_VERSION,
-      from: this.transport.clientId,
       to: 'all',
-      configName: this.#configuration.name,
       payload,
       originClientId,
       timestamp,
@@ -1259,11 +1255,9 @@ export class ConfigurationSession {
   /** @param retry - Whether the tab holding the port is to try again where it gave up. */
   #requestStatus(retry = false): void {
     this.transport.send({
+      ...this.#envelope(),
       type: 'status-request',
-      v: PROTOCOL_VERSION,
-      from: this.transport.clientId,
       to: 'all',
-      configName: this.#configuration.name,
       retry,
       ...(retry ? this.#chosenDevice() : {}),
     });
@@ -1285,11 +1279,9 @@ export class ConfigurationSession {
       return;
     }
     this.transport.send({
+      ...this.#envelope(),
       type: 'status',
-      v: PROTOCOL_VERSION,
-      from: this.transport.clientId,
       to: 'all',
-      configName: this.#configuration.name,
       status,
       maxTabs: this.#configuration.maxTabs,
       device: statusDevice(this.#configuration.device),
@@ -1318,11 +1310,9 @@ export class ConfigurationSession {
 
     if (options.broadcast) {
       this.transport.send({
+        ...this.#envelope(),
         type: 'error',
-        v: PROTOCOL_VERSION,
-        from: this.transport.clientId,
         to: 'all',
-        configName: this.#configuration.name,
         error: error.toJSON(),
         timestamp: this.environment.clock.now(),
       });

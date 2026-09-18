@@ -19,20 +19,28 @@ const AUTO = { serial: { baudRate: 9600 } };
 const OTHER = { vendorId: 0x0403, productId: 0x6001 };
 
 describe('a configuration in auto mode', () => {
-  it('waits for the user even when exactly one port is granted', async () => {
-    const { harness, device } = readerHarness();
+  // The two spellings of auto mode mean the same thing: no device at all, and `{ auto: true }`
+  // written out.
+  it.each([
+    ['named no device', AUTO],
+    ['named { auto: true }', { device: { auto: true }, ...AUTO }],
+  ] as const)(
+    'waits for the user even when exactly one port is granted, having %s',
+    async (_label, options) => {
+      const { harness, device } = readerHarness();
 
-    const tab = harness.openTab();
-    await tab.setup('Reader', AUTO);
+      const tab = harness.openTab();
+      await tab.setup('Reader', options);
 
-    // The safer default: the one granted port may belong to another configuration, and auto mode
-    // promises the device the user chose, not the one that happened to be there.
-    const status = tab.client.getStatus('Reader');
-    expect(status.status).toBe(SerialBrokerStatus.AwaitingPermission);
-    expect(status.deviceKind).toBe('auto');
-    expect(status.vendorId).toBeUndefined();
-    expect(device.isOpen).toBe(false);
-  });
+      // The safer default: the one granted port may belong to another configuration, and auto mode
+      // promises the device the user chose, not the one that happened to be there.
+      const status = tab.client.getStatus('Reader');
+      expect(status.status).toBe(SerialBrokerStatus.AwaitingPermission);
+      expect(status.deviceKind).toBe('auto');
+      expect(status.vendorId).toBeUndefined();
+      expect(device.isOpen).toBe(false);
+    },
+  );
 
   it('takes no device from a picker that was still open when the tab released the configuration', async () => {
     const { logger, records } = recordingLogger();
@@ -72,15 +80,6 @@ describe('a configuration in auto mode', () => {
     expect(other.client.getStatus('Reader')).toMatchObject({ deviceKind: 'auto' });
     expect(other.client.getStatus('Reader').vendorId).toBeUndefined();
     expect(device.isOpen).toBe(false);
-  });
-
-  it('is the same with { auto: true } spelled out', async () => {
-    const { harness } = readerHarness();
-
-    const tab = harness.openTab();
-    await tab.setup('Reader', { device: { auto: true }, ...AUTO });
-
-    expect(tab.client.getStatus('Reader').status).toBe(SerialBrokerStatus.AwaitingPermission);
   });
 
   it('takes the USB identity of the port the user picks, and connects to it', async () => {

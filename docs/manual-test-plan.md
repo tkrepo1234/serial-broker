@@ -1,7 +1,7 @@
 # Manual test plan
 
 The in-process suite simulates the browser. It is faithful, it is exhaustive, and it cannot prove
-that this library works against a real Chromium and a real device - a fake that is wrong in the same
+that this library works against a real Chromium and a real device — a fake that is wrong in the same
 way the code is wrong passes every test. This plan is what has to hold against the real thing.
 
 Nearly all of it runs by itself: in a real browser against a Web Serial stand-in on every CI run,
@@ -65,7 +65,7 @@ What they cover of the checklist below, step by step:
 | 7 (a tab in the background)      | a frozen tab in a browser; a hidden, throttled tab holding the port in `npm run test:background`   |
 | 8 (one `SharedWorker`)           | in a browser, counted in Chromium's target list                                                    |
 | 9                                | in a browser against the stand-in, on the Arduino and on the emulator                              |
-| 10 (a killed tab)                | in a browser, the renderer killed over CDP - the same path as the task manager's _End process_     |
+| 10 (a killed tab)                | in a browser, the renderer killed over CDP — the same path as the task manager's _End process_     |
 | 11, 12                           | on the emulator: handed on until one tab is left, then a new tab after the last                    |
 | 13–15                            | in a browser against the stand-in, and on the emulator (`unplug`, `plug`)                          |
 | 16 (backoff while unplugged)     | on the emulator: the delays grow to the cap, and plugging in cuts the wait short                   |
@@ -98,8 +98,8 @@ The checklist exercises on real hardware what the scenario matrix in
 
 ### First connection
 
-- [ ] **1.** Click _New configuration_, choose the device in the _Device_ list - a preset, or _Other
-      USB device_ and its vendor and product ID - and click _Create and connect_. Its detail view
+- [ ] **1.** Click _New configuration_, choose the device in the _Device_ list — a preset, or _Other
+      USB device_ and its vendor and product ID — and click _Create and connect_. Its detail view
       shows `awaiting-permission` and _Choose device…_.
 - [ ] **2.** Click _Choose device…_. Chrome shows its port picker, filtered to the configured
       device. Pick it: status becomes `open`.
@@ -209,7 +209,7 @@ system, devices, and the outcome of each suite and of step 18.
 
 ## Worth knowing before the next run
 
-- **The Arduino board loses what arrives faster than its sketch reads**, from about 255 bytes on -
+- **The Arduino board loses what arrives faster than its sketch reads**, from about 255 bytes on —
   measured with Web Serial alone, without the library. It has no flow control. Payloads beyond one
   write chunk are therefore the emulator's, which takes 64 KiB and counts what reached the device.
 - **When the Arduino suite cannot open the port at all**, something outside the browser holds it.
@@ -217,7 +217,7 @@ system, devices, and the outcome of each suite and of step 18.
   next to a failed test.
 - **A fresh browser profile installs the machine's extensions a few seconds in, and Edge ends the
   origin's `SharedWorker` when it does.** Every tab reports `BROKER_UNAVAILABLE` once, logs
-  `transport.broker-lost`, and carries on with a new worker - step 28, met in the wild.
+  `transport.broker-lost`, and carries on with a new worker — step 28, met in the wild.
   `npm run test:background` starts its browser with `--disable-extensions` for that reason.
 - **Step 18 resists automation.** Edge's settings pages list the site's serial permission as text
   without a control a test can address, and the address bar's page-info bubble does not stay open

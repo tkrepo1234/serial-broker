@@ -539,7 +539,7 @@ for (const transport of TRANSPORTS) {
   });
 }
 
-test.afterAll(async ({ browser }) => {
+test.afterAll(({ browser }) => {
   if (results.length === 0) {
     return;
   }
@@ -575,7 +575,6 @@ test.afterAll(async ({ browser }) => {
         : `${String(worst.length)} result(s) more than ten times worse than expected - each needs a fix or a documented limit (docs/site/performance.md).`
     }\nResults in bench/results/browser.json and docs/site/_generated/browser-benchmark.md.\n`,
   );
-  await Promise.resolve();
 });
 
 /** The pinned Playwright, from the root package.json: the one that drove the browser. */

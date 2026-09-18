@@ -6,6 +6,10 @@ behaviour and does not touch documentation is incomplete.
 Style follows the **MDN Writing Style Guide**: second person, present tense, active voice,
 short sentences, no marketing language, no "simply"/"just"/"obviously".
 
+Prose written for readers — the documentation site, the READMEs and these guidelines — uses the em
+dash for a parenthetical or a break. Code comments, TSDoc and the decision records use a spaced
+hyphen.
+
 ## Layers
 
 | Artefact                   | Audience                                        | Rule                                                                                                          |

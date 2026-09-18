@@ -3,7 +3,7 @@
  *
  * TCP hands over a stream in arbitrary pieces, so a message is often incomplete when its first
  * piece arrives. Appending every piece to one growing array would copy everything buffered so
- * far on each arrival — quadratic in the size of a large transfer that trickles in. The queue
+ * far on each arrival - quadratic in the size of a large transfer that trickles in. The queue
  * instead only remembers the pieces, and copies bytes once, when a caller asks for a message
  * whose bytes have all arrived.
  */

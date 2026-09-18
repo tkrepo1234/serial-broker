@@ -52,20 +52,32 @@ sap.ui.define(
     });
 
     return Controller.extend('serialterminal.controller.Terminal', {
-      // What an instance keeps. Declared here because the class info is what `@openui5/types` takes
-      // the type of `this` from; `onInit` gives every instance values of its own.
+      // What an instance keeps, described once here: the class info is what `@openui5/types` takes
+      // the type of `this` from, and `onInit` gives every instance values of its own.
+
+      /** The library, from the global its classic script build defines (index.html). */
       _library: /** @type {SerialBrokerGlobal | undefined} */ (undefined),
       _preferences: /** @type {TerminalPreferences} */ (/** @type {unknown} */ (undefined)),
       _ui: /** @type {import('sap/ui/model/json/JSONModel').default} */ (
         /** @type {unknown} */ (undefined)
       ),
       _status: 'idle',
+      /** What was sent earlier, newest last, each with the mode it was typed in; up and down walk it. */
       _history: /** @type {{ text: string, mode: string }[]} */ ([]),
       _historyAt: 0,
+      /** Undoing what `_connectOnce` subscribed, so connecting again does not subscribe twice. */
       _subscriptions: /** @type {(() => void)[]} */ ([]),
+      /** The connect in flight, while one is: a second click waits for it. */
       _connecting: /** @type {Promise<void> | undefined} */ (undefined),
+      /** Ends the wait of the connect in flight; `_disconnect` does, so none outlives it. */
       _settleConnecting: /** @type {(() => void) | undefined} */ (undefined),
+      /**
+       * Whether `setup()` has succeeded and not been released since. The status cannot answer this:
+       * a `setup()` that throws leaves nothing registered under the name while the page shows
+       * `failed`, and releasing that name would report a disconnection that never happened.
+       */
       _isSetUp: false,
+      /** Lines that arrived before the log's element was rendered. */
       _pending: /** @type {[string, 'in' | 'out' | 'note'][]} */ ([]),
       _file: /** @type {File | undefined} */ (undefined),
       _fragments:
@@ -73,29 +85,18 @@ sap.ui.define(
       _boundKeyDown: /** @type {(event: KeyboardEvent) => void} */ (() => undefined),
 
       onInit: function () {
-        /** The library, from the global its classic script build defines (index.html). */
         this._library = /** @type {{ SerialBroker?: SerialBrokerGlobal }} */ (
           globalThis
         ).SerialBroker;
 
         /** @type {TerminalPreferences} */
         this._preferences = Preferences.load();
-        /** What was sent earlier, newest last, each with the mode it was typed in; up and down walk it. */
         this._history = [];
         this._historyAt = 0;
-        /** Undoing what `_connectOnce` subscribed, so connecting again does not subscribe twice. */
         this._subscriptions = /** @type {(() => void)[]} */ ([]);
-        /** The connect in flight, while one is: a second click waits for it. */
         this._connecting = /** @type {Promise<void> | undefined} */ (undefined);
-        /** Ends the wait of the connect in flight; `_disconnect` does, so none outlives it. */
         this._settleConnecting = /** @type {(() => void) | undefined} */ (undefined);
-        /**
-         * Whether `setup()` has succeeded and not been released since. The status cannot answer
-         * this: a `setup()` that throws leaves nothing registered under the name while the page
-         * shows `failed`, and releasing that name would report a disconnection that never happened.
-         */
         this._isSetUp = false;
-        /** Lines that arrived before the log's element was rendered. */
         this._pending = /** @type {[string, 'in' | 'out' | 'note'][]} */ ([]);
 
         this._ui = new JSONModel({
@@ -196,22 +197,16 @@ sap.ui.define(
           }),
           'settings',
         );
-        void this._fragment('Settings').then((dialog) => {
-          /** @type {import('sap/m/Dialog').default} */ (dialog).open();
-        });
+        this._dialog('Settings', 'open');
       },
 
       onCloseSettings: function () {
-        void this._fragment('Settings').then((dialog) => {
-          /** @type {import('sap/m/Dialog').default} */ (dialog).close();
-        });
+        this._dialog('Settings', 'close');
       },
 
       /** *Connect* in the dialog: the settings are kept, and the connection is made with them. */
       onConfirmConnect: function () {
-        const settings = /** @type {import('sap/ui/model/json/JSONModel').default} */ (
-          this.getView()?.getModel('settings')
-        );
+        const settings = this._model('settings');
         const chosen = settings.getData();
         const baudRate = Number(chosen.baudRate);
         if (!Number.isInteger(baudRate) || baudRate <= 0) {
@@ -662,9 +657,7 @@ sap.ui.define(
           new JSONModel({ chunkSize: 256, pause: 20, progress: '', chosen: false, sending: false }),
           'file',
         );
-        void this._fragment('SendFile').then((dialog) => {
-          /** @type {import('sap/m/Dialog').default} */ (dialog).open();
-        });
+        this._dialog('SendFile', 'open');
       },
 
       /** @param {import('sap/ui/unified/FileUploader').FileUploader$ChangeEvent} event */
@@ -673,15 +666,11 @@ sap.ui.define(
           /** @type {unknown} */ (event.getParameter('files'))
         );
         this._file = files?.[0];
-        /** @type {import('sap/ui/model/json/JSONModel').default} */ (
-          this.getView()?.getModel('file')
-        ).setProperty('/chosen', this._file !== undefined);
+        this._model('file').setProperty('/chosen', this._file !== undefined);
       },
 
       onCloseFile: function () {
-        void this._fragment('SendFile').then((dialog) => {
-          /** @type {import('sap/m/Dialog').default} */ (dialog).close();
-        });
+        this._dialog('SendFile', 'close');
       },
 
       /**
@@ -693,9 +682,7 @@ sap.ui.define(
        */
       onSendFile: async function () {
         const library = /** @type {SerialBrokerGlobal} */ (this._library);
-        const model = /** @type {import('sap/ui/model/json/JSONModel').default} */ (
-          this.getView()?.getModel('file')
-        );
+        const model = this._model('file');
         const file = /** @type {File | undefined} */ (this._file);
         if (file === undefined) {
           return;
@@ -740,6 +727,30 @@ sap.ui.define(
       },
 
       // --- Helpers ------------------------------------------------------------------------------
+
+      /**
+       * A JSON model the view carries under a name: the connection settings, or the file transfer.
+       *
+       * @param {string} name - `settings` or `file`.
+       * @returns {import('sap/ui/model/json/JSONModel').default}
+       */
+      _model: function (name) {
+        return /** @type {import('sap/ui/model/json/JSONModel').default} */ (
+          this.getView()?.getModel(name)
+        );
+      },
+
+      /**
+       * Opens or closes a dialog fragment, loading it the first time it is asked for.
+       *
+       * @param {string} name - `Settings` or `SendFile`.
+       * @param {'open' | 'close'} action
+       */
+      _dialog: function (name, action) {
+        void this._fragment(name).then((control) => {
+          /** @type {import('sap/m/Dialog').default} */ (control)[action]();
+        });
+      },
 
       /**
        * A fragment of this view, loaded once and kept.

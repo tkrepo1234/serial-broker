@@ -2,9 +2,6 @@ import { SerialBrokerErrorCode } from './error-codes.js';
 import { describeUnknown, SerialBrokerError } from './errors.js';
 import type { SerialBrokerEventMap, SerialBrokerEventName, SerialBrokerListener } from './types.js';
 
-/** Receives errors thrown by application listeners, so they are reported and not swallowed. */
-export type ListenerErrorReporter = (error: SerialBrokerError) => void;
-
 /**
  * Event dispatch for one configuration.
  *
@@ -25,8 +22,12 @@ export class EventEmitter {
   /** Each event's listeners, with the registration each one currently belongs to. */
   readonly #listeners = new Map<SerialBrokerEventName, Map<(event: never) => void, object>>();
 
+  /**
+   * @param reportListenerError - Receives what an application listener threw, so that it is
+   *   reported rather than swallowed.
+   */
   constructor(
-    private readonly reportListenerError: ListenerErrorReporter,
+    private readonly reportListenerError: (error: SerialBrokerError) => void,
     private readonly now: () => number,
   ) {}
 

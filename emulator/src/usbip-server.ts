@@ -42,7 +42,7 @@ const DEVICE_NUMBER = 1;
 
 /** Where the server listens. */
 export interface UsbipServerOptions {
-  /** @defaultValue {@link DEFAULT_HOST} — never exposed beyond this machine unless asked. */
+  /** @defaultValue {@link DEFAULT_HOST} - never exposed beyond this machine unless asked. */
   readonly host?: string;
   /** @defaultValue {@link DEFAULT_PORT}, the registered USB/IP port and the one usbip.exe assumes. */
   readonly port?: number;

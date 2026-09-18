@@ -80,10 +80,9 @@ auto filter conflicts with nothing; a resolved one counts as its resolution; two
 conflict unless equal in kind and IDs, `nonUsb` and `any` being distinct kinds. Between tabs, devices
 are not compared: the documentation says to pass the same options for a name in every tab.
 
-**Releasing.** `release(name)` stops using a configuration in this tab and forgets nothing: what is
-remembered stays (ADR-0020) and the browser permission is kept, so the next `setup()` is
-prompt-free. `{ forget: true }` also removes the remembered entry, under the rule of ADR-0020. `release(name, { forgetDevice: true })` also calls `SerialPort.forget()` where the
-browser supports it.
+**Releasing.** `release(name)` keeps the browser permission, so the next `setup()` is prompt-free;
+what is remembered stays as well, and `{ forget: true }` removes it (ADR-0020).
+`release(name, { forgetDevice: true })` calls `SerialPort.forget()` where the browser supports it.
 
 **Choosing again.** `requestAccess(name, { chooseAgain: true })`, in any tab taking part
 in an auto-mode configuration, opens the picker unfiltered although the configuration has resolved,

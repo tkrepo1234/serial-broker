@@ -3,20 +3,14 @@ import { describe, expect, it } from 'vitest';
 import { SerialBrokerErrorCode } from '../../../src/core/error-codes.js';
 import { BrowserHarness, TRANSPORT_MODES } from '../../harness/browser-harness.js';
 import { READER_OPTIONS, readerHarness } from '../../harness/devices.js';
-import type { TransportMode } from '../../harness/fake-bus.js';
 
 /**
  * Limiting how many tabs use a configuration at once (ADR-0017).
  */
 
-async function harnessWithDevice(transport: TransportMode) {
-  const { harness, device } = readerHarness({ transport });
-  return { harness, device };
-}
-
 describe.each(TRANSPORT_MODES)('tabs beyond the tab limit (%s)', (transport) => {
   it('wait, receive nothing, and join when a tab releases the configuration', async () => {
-    const { harness, device } = await harnessWithDevice(transport);
+    const { harness, device } = readerHarness({ transport });
     const first = harness.openTab();
     await first.setup('Reader', { ...READER_OPTIONS, maxTabs: 1 });
     const second = harness.openTab();
@@ -40,7 +34,7 @@ describe.each(TRANSPORT_MODES)('tabs beyond the tab limit (%s)', (transport) => 
   });
 
   it('join when a tab holding a place crashes', async () => {
-    const { harness } = await harnessWithDevice(transport);
+    const { harness } = readerHarness({ transport });
     const first = harness.openTab();
     await first.setup('Reader', { ...READER_OPTIONS, maxTabs: 1 });
     const second = harness.openTab();
@@ -53,7 +47,7 @@ describe.each(TRANSPORT_MODES)('tabs beyond the tab limit (%s)', (transport) => 
   });
 
   it('count the tab holding the port, and wait for a place a participant gives up', async () => {
-    const { harness, device } = await harnessWithDevice(transport);
+    const { harness, device } = readerHarness({ transport });
     const options = { ...READER_OPTIONS, maxTabs: 2 };
     const owner = harness.openTab();
     await owner.setup('Reader', options);
@@ -75,7 +69,7 @@ describe.each(TRANSPORT_MODES)('tabs beyond the tab limit (%s)', (transport) => 
   });
 
   it('fail their writes at the deadline while they wait', async () => {
-    const { harness } = await harnessWithDevice(transport);
+    const { harness } = readerHarness({ transport });
     const first = harness.openTab();
     await first.setup('Reader', { ...READER_OPTIONS, maxTabs: 1 });
     const second = harness.openTab();
@@ -89,7 +83,7 @@ describe.each(TRANSPORT_MODES)('tabs beyond the tab limit (%s)', (transport) => 
   });
 
   it('refuse requestAccess() with PERMISSION_REQUIRED while they wait', async () => {
-    const { harness } = await harnessWithDevice(transport);
+    const { harness } = readerHarness({ transport });
     const first = harness.openTab();
     await first.setup('Reader', { ...READER_OPTIONS, maxTabs: 1 });
     const second = harness.openTab();
@@ -107,7 +101,7 @@ describe.each(TRANSPORT_MODES)('tabs beyond the tab limit (%s)', (transport) => 
 
 describe.each(TRANSPORT_MODES)('a tab running a different tab limit (%s)', (transport) => {
   it('reports the conflict in that tab, withdraws, and leaves the tab holding the port alone', async () => {
-    const { harness, device } = await harnessWithDevice(transport);
+    const { harness, device } = readerHarness({ transport });
     const holder = harness.openTab();
     await holder.setup('Reader', { ...READER_OPTIONS, maxTabs: 1 });
     const other = harness.openTab();
@@ -131,7 +125,7 @@ describe.each(TRANSPORT_MODES)('a tab running a different tab limit (%s)', (tran
   });
 
   it('refuses a write with the conflict at once, instead of letting it wait for its deadline', async () => {
-    const { harness, device } = await harnessWithDevice(transport);
+    const { harness, device } = readerHarness({ transport });
     const holder = harness.openTab();
     await holder.setup('Reader', { ...READER_OPTIONS, maxTabs: 1 });
     const other = harness.openTab();
@@ -147,7 +141,7 @@ describe.each(TRANSPORT_MODES)('a tab running a different tab limit (%s)', (tran
   });
 
   it('refuses requestAccess() with PERMISSION_REQUIRED once it has withdrawn', async () => {
-    const { harness } = await harnessWithDevice(transport);
+    const { harness } = readerHarness({ transport });
     const holder = harness.openTab();
     await holder.setup('Reader', { ...READER_OPTIONS, maxTabs: 1 });
     const other = harness.openTab();

@@ -208,12 +208,12 @@ Scenario matrix rows 4, 7 and 15. `test/unit/pending-writes.test.ts` (approvals,
 run, `NOT_CONNECTED` after an approval), `test/unit/accepted-writes.test.ts` and
 `test/unit/write-queue.test.ts`; `test/integration/multi-tab/failover.test.ts` kills the tab holding
 the port between queued and started, and after started; `handover-races.test.ts` with a question and
-a result held back past a crash or a close;
-`frozen-tabs.test.ts` with a frozen issuer; `write-backlog.test.ts` for `WRITE_QUEUE_FULL` and for
-a write that found the port closed and is written once it is open again;
-`write-deadlines.test.ts` for tabs with different `writeTimeoutMs`, writes that reach the port part
-way through their time, a request that waited 4 s before the holder handled it, an approval just
-before the deadline, and an issuer that closes or crashes before answering; `hostile-bus.test.ts` for
-approvals forged on both transports; `test/integration/connection-supervision.test.ts`, "a device
-that stops taking writes"; and `test/browser/hardware/emulator.spec.ts`, which pins the measured
-browser behaviour so a Chromium that changes it fails.
+a result held back past a crash or a close; `frozen-tabs.test.ts` with a frozen issuer;
+`write-backlog.test.ts` for `WRITE_QUEUE_FULL` and for a write that found the port closed and is
+written once it is open again; `write-deadlines.test.ts` for tabs with different `writeTimeoutMs`,
+writes that reach the port part way through their time, a request that waited 4 s before the holder
+handled it, an approval just before the deadline, and an issuer that closes or crashes before
+answering; `hostile-bus.test.ts` for approvals forged on both transports;
+`test/integration/connection-supervision.test.ts`, "a device that stops taking writes"; and
+`test/browser/hardware/emulator.spec.ts`, which pins the measured browser behaviour so a Chromium
+that changes it fails.

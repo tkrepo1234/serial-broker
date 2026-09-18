@@ -24,8 +24,8 @@ class SerialBrokerError extends Error {
 Rules:
 
 - **`code` is API.** Codes are `SCREAMING_SNAKE_CASE`, listed in `src/core/error-codes.ts`
-  and documented in the errors chapter of the documentation site (`docs/site/errors.md`). Renaming or repurposing a code is a breaking change; adding
-  one is not.
+  and documented in the errors chapter of the documentation site (`docs/site/errors.md`). Renaming
+  or repurposing a code is a breaking change; adding one is not.
 - **`message` is for humans, `code` is for machines.** Never parse a message. Message text
   may change in a patch release.
 - **`remediation` is mandatory and specific.** "Check your configuration" is not remediation.

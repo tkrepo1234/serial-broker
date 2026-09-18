@@ -31,10 +31,9 @@ compile time.
 
 ## Alternatives considered
 
-- **Bytes only.** Purest. Rejected because every consumer
-  would write the same stateful streaming decoder, and most would write it wrongly - the
-  cross-chunk case is subtle and only fails on non-ASCII input, so it survives testing and
-  breaks in production.
+- **Bytes only.** Purest. Rejected because every consumer would write the same streaming decoder,
+  and most would write it wrongly: the cross-chunk case only fails on non-ASCII input, so it
+  survives testing and breaks in production.
 - **Text only, or a mode switch.** Makes binary protocols second-class and would mean two
   delivery contracts to test against every failover scenario.
 - **Per-chunk `TextDecoder` without streaming state.** The obvious implementation, and the
@@ -52,8 +51,7 @@ compile time.
 ### Negative
 
 - The owner holds decoder state, which must be reset on reconnect and must not survive an
-  ownership transfer. Explicitly covered by a test that splits a multi-byte character across
-  a disconnect and asserts the partial sequence is dropped rather than mis-decoded.
+  ownership transfer.
 
 ## Verification
 

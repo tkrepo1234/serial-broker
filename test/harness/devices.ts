@@ -41,17 +41,19 @@ export function readerHarness(options: HarnessOptions = {}): {
  * {@link readerHarness} with `count` tabs that have each set `Reader` up, one after the other, and
  * settled: the first tab holds the port. A scene that differs in any of this - a tab that must not
  * settle, a busy tab, a fault staged before the first open - stays in its own test file.
+ *
+ * `options` is merged onto {@link READER_OPTIONS}, so a test names only what it is about.
  */
 export async function connectedTabs(
   count: number,
   harnessOptions: HarnessOptions = {},
-  options: SerialBrokerOptions = READER_OPTIONS,
+  options: Partial<SerialBrokerOptions> = {},
 ): Promise<{ harness: BrowserHarness; device: FakeDevice; tabs: VirtualTab[] }> {
   const { harness, device } = readerHarness(harnessOptions);
   const tabs: VirtualTab[] = [];
   for (let index = 0; index < count; index += 1) {
     const tab = harness.openTab();
-    await tab.setup('Reader', options);
+    await tab.setup('Reader', { ...READER_OPTIONS, ...options });
     tabs.push(tab);
   }
   return { harness, device, tabs };
@@ -60,7 +62,7 @@ export async function connectedTabs(
 /** {@link connectedTabs} for two tabs: `owner` holds the port, `other` shares it. */
 export async function twoTabs(
   harnessOptions: HarnessOptions = {},
-  options: SerialBrokerOptions = READER_OPTIONS,
+  options: Partial<SerialBrokerOptions> = {},
 ): Promise<{ harness: BrowserHarness; device: FakeDevice; owner: VirtualTab; other: VirtualTab }> {
   const { harness, device, tabs } = await connectedTabs(2, harnessOptions, options);
   return { harness, device, owner: tabs[0] as VirtualTab, other: tabs[1] as VirtualTab };
@@ -69,7 +71,7 @@ export async function twoTabs(
 /** {@link connectedTabs} for the common case of one tab. */
 export async function connectedTab(
   harnessOptions: HarnessOptions = {},
-  options: SerialBrokerOptions = READER_OPTIONS,
+  options: Partial<SerialBrokerOptions> = {},
 ): Promise<{ harness: BrowserHarness; device: FakeDevice; tab: VirtualTab }> {
   const { harness, device, tabs } = await connectedTabs(1, harnessOptions, options);
   return { harness, device, tab: tabs[0] as VirtualTab };
