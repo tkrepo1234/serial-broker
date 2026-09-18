@@ -176,6 +176,7 @@ describe('an attempt to connect', () => {
   it('looks again for a device plugged in during the listing as part of the same attempt', async () => {
     const { harness, device } = readerHarness();
     harness.serial.unplug(device);
+    await harness.settle();
     harness.serial.onListingPorts = () => {
       harness.serial.onListingPorts = undefined;
       harness.serial.plug(device);

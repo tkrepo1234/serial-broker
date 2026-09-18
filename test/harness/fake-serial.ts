@@ -370,19 +370,24 @@ export class FakeSerialRegistry {
     this.#granted.delete(device);
   }
 
-  /** Unplugs a device: `getPorts()` stops listing it, its streams break, and opening fails. */
+  /**
+   * Unplugs a device: `getPorts()` stops listing it, its streams break, and opening fails.
+   *
+   * The order is the browser's: the read of an open port rejects first, and `disconnect` follows
+   * in a later task. A test sees both once it settles or advances the clock.
+   */
   unplug(device: FakeDevice): void {
     device.isAttached = false;
     device.isOpen = false;
     device.holder = undefined;
     device.breakStream(domException('NetworkError', 'The device has been lost'));
-    this.#dispatch('disconnect', device);
+    this.#dispatchLater('disconnect', device);
   }
 
-  /** Plugs a device back in. */
+  /** Plugs a device back in. Its `connect` event follows in a later task, after any earlier event. */
   plug(device: FakeDevice): void {
     device.isAttached = true;
-    this.#dispatch('connect', device);
+    this.#dispatchLater('connect', device);
   }
 
   /** How many `connect` and `disconnect` listeners are registered, in every context. Assertions only. */
@@ -473,6 +478,13 @@ export class FakeSerialRegistry {
       ports.set(device, port);
     }
     return port;
+  }
+
+  /** Dispatches in a task of its own, as the browser does; tasks run in the order they were queued. */
+  #dispatchLater(type: 'connect' | 'disconnect', device: FakeDevice): void {
+    setImmediate(() => {
+      this.#dispatch(type, device);
+    });
   }
 
   #dispatch(type: 'connect' | 'disconnect', device: FakeDevice): void {
