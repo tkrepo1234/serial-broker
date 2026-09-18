@@ -87,8 +87,7 @@ Each is a documented limit or a test that does not exist; none is a defect waiti
 
 - The seeded serial permission of the hardware suites is Windows-only; CI exercises Chromium only.
 - No browser test for `USER_GESTURE_REQUIRED`: every script an automation evaluates carries
-  transient activation. The stand-in has no fault injection — an `open()` or a write that fails or
-  hangs, a port without a USB identity.
+  transient activation.
 - The extreme suite, both benchmarks and the background-tab run never run in CI. After a change to
   the protocol, run them: `npm run test:extreme`, `npm run bench`,
   `SERIAL_BROKER_BENCH_BROWSER=1 npm run bench:browser`, `npm run test:background`.

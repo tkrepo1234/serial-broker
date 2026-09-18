@@ -14,6 +14,7 @@ import type { SerialBrokerOptions } from '../../../src/core/types.js';
 import type { HarnessLogRecord, HarnessSend, PageHarness } from '../pages/harness.js';
 import {
   installWebSerialStandIn,
+  type StandInFaults,
   type WebSerialStandInControl,
   type WebSerialStandInOptions,
 } from '../stand-in/web-serial-stand-in.js';
@@ -374,6 +375,13 @@ export class Tab {
     await this.page.evaluate(() => {
       (window as unknown as HarnessWindow).webSerialStandIn?.plug();
     });
+  }
+
+  /** Makes the device misbehave for every page of the origin; `{}` lifts every fault. */
+  async setDeviceFaults(faults: StandInFaults): Promise<void> {
+    await this.page.evaluate((deviceFaults) => {
+      (window as unknown as HarnessWindow).webSerialStandIn?.setFaults(deviceFaults);
+    }, faults);
   }
 
   /**
