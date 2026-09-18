@@ -234,6 +234,14 @@ export class Tab {
     );
   }
 
+  /** The text of every delivery marked `afterGap`, in order. */
+  async textsAfterGaps(name: string): Promise<readonly string[]> {
+    return await this.page.evaluate(
+      (configName) => (window as unknown as HarnessWindow).harness.textsAfterGaps(configName),
+      name,
+    );
+  }
+
   async receiveEventCount(name: string): Promise<number> {
     return await this.page.evaluate(
       (configName) => (window as unknown as HarnessWindow).harness.receiveEventCount(configName),

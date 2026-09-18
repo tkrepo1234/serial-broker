@@ -116,6 +116,12 @@ export class ConfigurationSession {
   #statusSince: number;
   #lastErrorCode: SerialBrokerErrorCode | undefined;
   #isReleased = false;
+  /**
+   * Whether bytes may have been missed since this tab's last delivery: nothing delivered yet, a
+   * status other than `open` since, or a message bus that replaced one that died. The next
+   * delivery says so, as `afterGap`.
+   */
+  #afterGap = true;
   /** This tab's place among the `maxTabs` tabs, or `undefined` without a limit (ADR-0017). */
   readonly #slot: TabSlot | undefined;
   /** On the bus and in the election: at once without a limit, once a place is held with one. */
@@ -292,6 +298,8 @@ export class ConfigurationSession {
    * other tab asks for it. Hearing `open` from the owner hands on writes that have not started.
    */
   handleBusReconnected(): void {
+    // Deliveries broadcast into the dead broker are lost, whatever the status says.
+    this.#afterGap = true;
     if (this.#isReleased || !this.#isJoined || this.#withdrawal !== undefined) {
       return;
     }
@@ -707,6 +715,7 @@ export class ConfigurationSession {
           data: message.payload,
           text: message.text,
           timestamp: message.timestamp,
+          afterGap: this.#takeAfterGap(),
         });
         return;
 
@@ -828,6 +837,7 @@ export class ConfigurationSession {
             data,
             text,
             timestamp: this.environment.clock.now(),
+            afterGap: this.#takeAfterGap(),
           });
           this.transport.send({
             ...this.#envelope(),
@@ -1108,6 +1118,13 @@ export class ConfigurationSession {
 
   // --- Status and errors -----------------------------------------------------------------------
 
+  /** Whether the delivery about to be made follows a gap; the one after it does not, unless another comes. */
+  #takeAfterGap(): boolean {
+    const afterGap = this.#afterGap;
+    this.#afterGap = false;
+    return afterGap;
+  }
+
   #setStatus(status: SerialBrokerStatus): void {
     // `released` is the one status a released configuration still reports, and the last.
     if (this.#status === status || (this.#isReleased && status !== SerialBrokerStatus.Released)) {
@@ -1117,6 +1134,9 @@ export class ConfigurationSession {
     const previousStatus = this.#status;
     this.#status = status;
     this.#statusSince = this.environment.clock.now();
+    if (status !== SerialBrokerStatus.Open) {
+      this.#afterGap = true;
+    }
 
     this.#emitter.emit('onStatusChange', {
       name: this.#configuration.name,

@@ -49,6 +49,10 @@ test.describe('the broker dies', () => {
     const tabs = await openConnectedTabs(context, 3);
     const holder = await tabHoldingThePort(tabs);
     const sender = tabs[(holder + 1) % tabs.length];
+    await sender?.send('Echo', 'BEFORE');
+    for (const tab of tabs) {
+      await tab.waitForReceivedText('Echo', 'BEFORE');
+    }
     const [worker] = await terminateSharedWorkers(tabs[0]);
 
     // The browser lets go of the lock the worker held for its lifetime, and every tab waiting on it
@@ -67,6 +71,9 @@ test.describe('the broker dies', () => {
         (await tab.errorCodes()).filter((code) => code === 'BROKER_UNAVAILABLE'),
         'every tab reports the loss exactly once',
       ).toEqual(['BROKER_UNAVAILABLE']);
+      // What was broadcast into the dead worker is lost, though the port never closed: the first
+      // delivery on the new bus says so, in every tab.
+      expect((await tab.textsAfterGaps('Echo')).at(-1)).toContain('AFTER-NEW-BROKER');
     }
     const workersNow = await sharedWorkersOf(tabs[0]);
     expect(workersNow).toHaveLength(1);

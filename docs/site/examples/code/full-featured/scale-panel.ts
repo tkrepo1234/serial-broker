@@ -115,12 +115,12 @@ export class ScalePanel {
 
     this.#listeners = [
       SerialBroker.subscribe(NAME, 'onStatusChange', (event) => {
-        if (event.status !== 'open') {
-          this.#lines.reset();
-        }
         this.#renderStatus(event.status);
       }),
       SerialBroker.subscribe(NAME, 'onReceive', (event) => {
+        if (event.afterGap) {
+          this.#lines.reset();
+        }
         this.#receive(event.text ?? '');
       }),
       SerialBroker.subscribe(NAME, 'onSend', (event) => {
