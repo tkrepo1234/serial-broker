@@ -48,7 +48,8 @@ a job of its own.
 Web Serial is replaced in the page, not in the library: `page.addInitScript()` installs
 `test/browser/stand-in/web-serial-stand-in.ts`, a `navigator.serial` whose permission is per origin,
 whose device can be open in one page only (a Web Lock the browser releases when a page dies), and
-whose device is a loopback that can also speak first. Everything else - worker, channel, locks,
+whose device is a loopback that can also speak first, and that can be made to fail `open()`, to
+refuse writes or to hold them. Everything else - worker, channel, locks,
 streams - is the browser's own. How many `SharedWorker`s an origin has, and when one ends, are taken
 from Chromium's target list over CDP, and the broker is terminated through it.
 
