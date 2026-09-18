@@ -15,6 +15,7 @@ import { SerialBrokerError } from '../../src/core/errors.js';
 import type { Logger, LogLevel, TransportKind, Unsubscribe } from '../../src/core/types.js';
 import { toSetupOptions } from '../../src/core/validation.js';
 import { normalizeConfiguration } from '../../src/core/validation.js';
+import { VERSION } from '../../src/core/version.js';
 import { openDiagnostics } from '../../src/diagnostics.js';
 import type { DiagnosticsSnapshot, SerialBrokerDiagnostics } from '../../src/diagnostics.js';
 import { createBrowserEnvironment } from '../../src/environment/browser.js';
@@ -618,6 +619,7 @@ async function renderFacts(): Promise<void> {
         ? '—'
         : `${shortClientId(client.clientId)}, ${client.transportKind === undefined ? 'joins the bus with its first configuration' : transportName(client.transportKind)}`,
     ],
+    ['Library version', VERSION],
     ['Protocol version', String(PROTOCOL_VERSION)],
     ['Port locks', describeOwnershipLocks(snapshot?.locks, PROTOCOL_VERSION)],
     ['Granted ports', await describePorts()],

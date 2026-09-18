@@ -104,6 +104,14 @@ The package's subpaths are `serial-broker`, `serial-broker/min`, `serial-broker/
 name; a path written to a file inside the package - a deployment's copy step, an import map, a
 server's existence check - names a file that says what it is.
 
+**Every published script names its release on its first line**, `/*! serial-broker <version> | MIT */`,
+and the package exports the same release as `VERSION`. A file on a web server is often all a
+support engineer can see of an installation; the comment says which release it is without loading
+it, and finds the worker script left over from an earlier release that causes
+`PROTOCOL_VERSION_MISMATCH`. `VERSION` is a constant in `src/core/version.ts`, held to
+`package.json` by a unit test, rather than a value the bundler substitutes: the source then reads
+as what it is, and a test that runs from the source sees the same value.
+
 The worker script's minification belongs to the build outputs and is recorded in
 [ADR-0003](./0003-typescript-and-toolchain.md).
 
@@ -178,7 +186,8 @@ The worker script's minification belongs to the build outputs and is recorded in
 `scripts/check-dist.mjs` after every build: every `exports` target exists; the minified and classic
 builds expose what the readable build exports; every published entry-point file names
 `serial-broker.worker.js`; each classic build loads outside a browser without throwing and leaves
-exactly one global, and `SerialBroker.isSupported()` is `false` there.
+exactly one global, and `SerialBroker.isSupported()` is `false` there; every published script
+begins with the release comment of the `version` in `package.json`.
 
 `test/browser/entry-points.spec.ts` in a real browser: a tab on `dist/serial-broker.global.js` and
 a tab on `dist/serial-broker.js` set up the same configuration, see each other's traffic, hold one

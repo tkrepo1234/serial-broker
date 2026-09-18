@@ -13,6 +13,8 @@
  *   identified by its script URL (ADR-0006): a build that started a worker of its own would leave
  *   its tabs unable to coordinate with tabs on any other build.
  * - A minified file is smaller than its readable counterpart.
+ * - Every published script names the release on its first line, so a copy on a web server says
+ *   which one it is.
  * - The size of every build is printed, as built and gzipped, so that CI reports it on every run.
  *   There is no size budget: the sizes are reported, not enforced (BACKLOG.md, standing
  *   constraints).
@@ -109,6 +111,16 @@ for (const entry of ENTRY_POINTS) {
   }
 
   problems.push(...classicSurfaceProblems(entry, namespace));
+}
+
+const banner = `/*! serial-broker ${packageJson.version} | MIT */`;
+for (const file of readdirSync(join(root, 'dist'))) {
+  if (
+    /\.(js|cjs)$/.test(file) &&
+    !readFileSync(join(root, 'dist', file), 'utf8').startsWith(banner)
+  ) {
+    problems.push(`dist/${file} does not begin with ${banner}`);
+  }
 }
 
 // Loading the package where there is no browser, as server-side rendering does, must not throw, and

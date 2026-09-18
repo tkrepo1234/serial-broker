@@ -10,6 +10,13 @@ different protocol versions do not coordinate with each other. It is noted whene
 
 ## [Unreleased]
 
+### Added
+
+- **`VERSION`**, the release of the package, exported beside `PROTOCOL_VERSION` and on the classic
+  script's global. Every published file names the same release in a comment on its first line, so
+  a worker script left on a server from an earlier release can be recognised without loading it,
+  and the debugging surface shows the release it was built from.
+
 ### Changed
 
 - **The documentation says what it takes to run each example**, after following every page of it

@@ -129,7 +129,8 @@ pre-release. Nothing is published to npm before 1.0.
 2. Rename the `[Unreleased]` section of `CHANGELOG.md` to the version and date, such as
    `## [0.2.0] - 2026-10-01`, and start a new, empty `[Unreleased]` above it. The release notes
    are taken from that section; without it, the release fails before anything is built.
-3. Set `version` in `package.json` to the same version, and commit both. Last fixes go onto this
+3. Set `version` in `package.json` and `VERSION` in `src/core/version.ts` to the same version (a
+   unit test fails while they differ), and commit all three. Last fixes go onto this
    branch as well.
 4. Run `npm run release:check`. It prints the notes the release will carry, or says what is
    missing. Push the branch and wait for CI.

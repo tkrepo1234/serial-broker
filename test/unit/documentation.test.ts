@@ -13,6 +13,7 @@ import {
   DEFAULT_SERIAL_SETTINGS,
 } from '../../src/core/defaults.js';
 import { normalizeConfiguration } from '../../src/core/validation.js';
+import { VERSION } from '../../src/core/version.js';
 
 /**
  * The documentation states defaults, ranges and log events that the source decides. These tests
@@ -256,5 +257,12 @@ describe('diagnostics.md', () => {
       (text) => text.includes(`'${event}'`) || (text.includes(prefix) && text.includes(suffix)),
     );
     expect(logged).toBe(true);
+  });
+});
+
+describe('the release', () => {
+  it('is the one package.json names', () => {
+    const { version } = JSON.parse(read('package.json')) as { version: string };
+    expect(VERSION).toBe(version);
   });
 });
