@@ -48,6 +48,7 @@ describe('encapsulation', () => {
     await harness.settle();
 
     expect(Object.keys(tab.recordFor('Reader').received[0] ?? {}).sort()).toEqual([
+      'afterGap',
       'data',
       'name',
       'text',

@@ -11,6 +11,7 @@ function receiveEvent(text: string): ReceiveEvent {
     data: new TextEncoder().encode(text),
     text: undefined,
     timestamp: 0,
+    afterGap: false,
   };
 }
 

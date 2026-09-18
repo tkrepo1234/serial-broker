@@ -54,6 +54,10 @@ function onLines(name, onLine, { separator = '\r\n', maxLength = 1024 } = {}) {
   let pending = '';
 
   SerialBroker.subscribe(name, 'onReceive', (event) => {
+    // Bytes may be missing before this delivery, so an unfinished line must not be joined to it.
+    if (event.afterGap) {
+      pending = '';
+    }
     pending += event.text ?? '';
     for (;;) {
       const end = pending.indexOf(separator);
@@ -64,14 +68,6 @@ function onLines(name, onLine, { separator = '\r\n', maxLength = 1024 } = {}) {
       pending = pending.slice(end + separator.length);
     }
     if (pending.length > maxLength) {
-      pending = '';
-    }
-  });
-
-  // What the device sent while the port changed tabs or reconnected is lost, so an unfinished
-  // line must not be joined to text from after the gap.
-  SerialBroker.subscribe(name, 'onStatusChange', (event) => {
-    if (event.status !== 'open') {
       pending = '';
     }
   });

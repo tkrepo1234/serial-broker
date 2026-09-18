@@ -39,6 +39,15 @@ The defaults are chosen for the devices this library is for. At 9600 baud a char
 second, 12.5 ms apart. 50 ms joins all of these into one answer and is below what a person notices;
 500 ms keeps a device that streams without pause from being delivered in pieces far apart.
 
+**A delivery says when bytes may be missing before it** (`afterGap`). A layer that assembles lines
+or frames across deliveries has to drop the one in progress when the stream it sees is broken, and
+cannot tell that from the bytes. Each tab decides it from what it saw itself, so nothing about it
+travels on the wire and nothing reveals which tab holds the port: `true` on the tab's first
+delivery, and on the first after its status left `open` or after its message bus replaced a worker
+that died. The last is the one gap the status does not show - the port stays open while what was
+broadcast into the dead worker is lost. Watching the status alone, as an application could before,
+misses it.
+
 The settings of the tab holding the port apply, because that tab reads the device. They are not
 part of the comparison that decides a `CONFIGURATION_CONFLICT`: two tabs disagreeing about `idleMs`
 is not two ways of opening a port. Text decoding happens on the delivered bytes, with a streaming
@@ -89,3 +98,7 @@ decoder, so a character split across reads is decoded intact ([ADR-0013](./0013-
 `test/integration/receiving.test.ts` - in every tab: an answer arriving byte by byte is one event,
 `idleMs: 0` delivers each chunk as it is read, a line that never pauses is delivered at
 `maxWaitMs`, and what was collected is delivered before a lost connection is reported.
+`test/integration/multi-tab/receive-after-gap.test.ts` - `afterGap` on the first delivery, after an
+unplug, a handover, a crash of the tab holding the port and a replaced worker, and on no other.
+`test/browser/failover.spec.ts` - the first delivery after a real worker was terminated is marked in
+every tab.

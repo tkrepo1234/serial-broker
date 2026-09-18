@@ -169,6 +169,9 @@ What every tab can rely on:
   when `encoding.decodeText` is on. A character split across two reads is decoded whole.
 - **Delivery boundaries carry no meaning.** There is no framing: a message can arrive in two
   deliveries when the device pauses inside it, and several messages can arrive in one.
+- **A gap is marked.** `afterGap` is `true` on a delivery that bytes may be missing before, in the
+  tab it reaches: the tab's first delivery, and the first after the status left `open` or after the
+  tab's message bus replaced a worker that died. Drop a line or frame in progress when you see it.
 - **A tab that has just joined** receives data from the moment it knows which tab holds the port.
   What arrives before that is dropped and logged once as `session.data-without-a-term`.
 - **Only tabs that have set the configuration up receive anything**, and a tab that is `queued`

@@ -473,6 +473,16 @@ export interface ReceiveEvent {
   readonly text: string | undefined;
   /** Epoch milliseconds at which the tab holding the port delivered the bytes. */
   readonly timestamp: number;
+  /**
+   * `true` when bytes may be missing before this delivery, in this tab: it is the tab's first
+   * delivery, the connection was lost or handed to another tab since the previous one (the status
+   * left `open`), or the tab's message bus was replaced after its worker died. A message the
+   * application was assembling from earlier deliveries - a line, a frame - is then incomplete and
+   * should be discarded.
+   *
+   * `false` when none of these happened since the previous delivery.
+   */
+  readonly afterGap: boolean;
 }
 
 /**

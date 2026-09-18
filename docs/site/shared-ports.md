@@ -254,8 +254,9 @@ same moment differently.
 - Pass the same options for a configuration name in every tab, including the same `maxTabs`.
 - Serve the worker script from one URL, and set `workerUrl` before the first `setup()`.
 - Call `requestAccess()` directly inside a click handler, in response to `awaiting-permission`.
-- Treat an `onReceive` delivery as an arbitrary piece of the byte stream, never as a message, and
-  keep listeners short — above all for a device that sends quickly.
+- Treat an `onReceive` delivery as an arbitrary piece of the byte stream, never as a message; drop
+  a message in progress on a delivery marked `afterGap`; and keep listeners short — above all for a
+  device that sends quickly.
 - Decide, per command, whether it may be repeated after `OWNER_LOST_DURING_WRITE`.
 - Show `queued` to the user as waiting, not as an error, and handle status values you do not
   recognise: the list may grow.

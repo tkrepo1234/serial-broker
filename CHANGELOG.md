@@ -12,6 +12,11 @@ different protocol versions do not coordinate with each other. It is noted whene
 
 ### Added
 
+- **`ReceiveEvent.afterGap`** says that bytes may be missing before a delivery, in the tab it
+  reaches: its first delivery, the first after the status left `open`, and the first after its
+  message bus replaced a worker that died - the one case the status does not show. An application
+  assembling lines or frames drops the one in progress; the examples do so instead of watching the
+  status.
 - **`VERSION`**, the release of the package, exported beside `PROTOCOL_VERSION` and on the classic
   script's global. Every published file names the same release in a comment on its first line, so
   a worker script left on a server from an earlier release can be recognised without loading it,
