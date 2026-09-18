@@ -197,6 +197,7 @@ needs:
 | `SerialBroker.REMEDIATION`           | `REMEDIATION`           |
 | `SerialBroker.isSupported()`         | `isSupported`           |
 | `SerialBroker.PROTOCOL_VERSION`      | `PROTOCOL_VERSION`      |
+| `SerialBroker.VERSION`               | `VERSION`               |
 
 `serial-broker.diagnostics.global.js` is the diagnostics entry point in the same form, on the
 global `SerialBrokerDiagnostics`, carrying `openDiagnostics()`, `CONNECTION_STATES` and
@@ -253,7 +254,9 @@ own** — pass a logger first, with `SerialBroker.configure({ logger })`; see
 instead; see [`configure()`](configuration.md#configure).
 
 After deploying a new release, serve its worker script under the URL the pages use; a copy left over
-from an earlier release is reported as `PROTOCOL_VERSION_MISMATCH`.
+from an earlier release is reported as `PROTOCOL_VERSION_MISMATCH`. Every published file names its
+release on its first line, `/*! serial-broker <version> | MIT */`, so a look at the served file
+says which one it is.
 
 ### CommonJS and the classic script build
 

@@ -1,4 +1,9 @@
+import { readFileSync } from 'node:fs';
+
 import { defineConfig, type Options } from 'tsup';
+
+/** The release, from `package.json`: the working directory is the repository root (ADR-0025). */
+const { version } = JSON.parse(readFileSync('package.json', 'utf8')) as { version: string };
 
 /** Settings every published file is built with. */
 const common = {
@@ -9,6 +14,9 @@ const common = {
   // identical to the ones the test suite type-checks against.
   dts: false,
   sourcemap: true,
+  // Every published file says which release it is on its first line, readable without loading it.
+  // `/*!` keeps the comment through minification. scripts/check-dist.mjs checks it is there.
+  banner: { js: `/*! serial-broker ${version} | MIT */` },
   splitting: false,
   // No `treeshake`: it runs Rollup over esbuild's output, which appends a second
   // `sourceMappingURL` comment to every file and rewrites `import.meta.url` for CommonJS into a

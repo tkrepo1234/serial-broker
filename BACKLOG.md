@@ -40,7 +40,6 @@ None is scheduled.
 - Diagnostics that name a tab in human terms (path, title, visibility, an application label) and
   keep a short error history per configuration.
 - `logPayloads` switchable at run time, applied by whichever tab holds the port.
-- A `VERSION` export, and a version marker in the worker script.
 - A marker on `ReceiveEvent` that bytes were lost before it, after a handover or a reconnect.
 - A reason on each status change: device lost, handover, released.
 - `forgetAll()`, for decommissioning a workstation.

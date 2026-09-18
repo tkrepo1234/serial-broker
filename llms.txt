@@ -99,7 +99,7 @@ coordinates tabs over a BroadcastChannel by itself.
   });
   // SerialBroker.setup(...), .subscribe(...), .send(...) as above.
   // Also on the global: isSupported, isSerialBrokerError, hasCode, SerialBrokerStatus,
-  // SerialBrokerErrorCode, SerialBrokerError, REMEDIATION, PROTOCOL_VERSION.
+  // SerialBrokerErrorCode, SerialBrokerError, REMEDIATION, PROTOCOL_VERSION, VERSION.
 </script>
 ```
 
