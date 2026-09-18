@@ -142,16 +142,36 @@ export type DeviceKind = 'usb' | 'non-usb' | 'any' | 'auto';
  * Serial line settings, passed through to `SerialPort.open()`.
  *
  * Mirrors the `SerialOptions` dictionary of the Web Serial API, with this library's defaults
- * applied for everything except `baudRate`.
+ * applied for everything except `baudRate`. The defaults are the common 8N1 frame: eight data
+ * bits, no parity, one stop bit.
+ *
+ * The port can be opened only one way, so every tab using a configuration has to pass the same
+ * line settings. A tab that passes different ones reports `CONFIGURATION_CONFLICT` and shows the
+ * status `failed`.
  */
 export interface SerialSettings {
   /** Bits per second: an integer from 1 to 20,000,000. Required; there is no sensible default. */
   readonly baudRate: number;
-  /** @defaultValue 8 */
+  /**
+   * Data bits per character: `7` or `8`. Seven, with `parity` even or odd, is the 7E1 or 7O1
+   * frame some older devices use. Must match the device, like `stopBits` and `parity`.
+   *
+   * @defaultValue 8
+   */
   readonly dataBits?: 7 | 8;
-  /** @defaultValue 1 */
+  /**
+   * Stop bits per character: `1` or `2`. Must match the device.
+   *
+   * @defaultValue 1
+   */
   readonly stopBits?: 1 | 2;
-  /** @defaultValue 'none' */
+  /**
+   * Parity bit per character: `'none'`, `'even'` or `'odd'`. Must match the device. A mismatch in
+   * any of the three does not fail the open; it produces garbage, usually visible as replacement
+   * characters in decoded text or as `READ_FAILED`, after which the library opens the port again.
+   *
+   * @defaultValue 'none'
+   */
   readonly parity?: 'none' | 'even' | 'odd';
   /**
    * Size of the browser's read and write buffers for the port, in bytes: 1 to 16,777,216 (16 MiB).
@@ -160,7 +180,13 @@ export interface SerialSettings {
    * @defaultValue 255
    */
   readonly bufferSize?: number;
-  /** @defaultValue 'none' */
+  /**
+   * `'hardware'` uses the RTS and CTS lines. Enable it only if the device and the cable support
+   * it: with a device that never asserts CTS, every write waits and fails with `WRITE_TIMEOUT`.
+   * Web Serial offers no software flow control (XON/XOFF).
+   *
+   * @defaultValue 'none'
+   */
   readonly flowControl?: 'none' | 'hardware';
 }
 
@@ -304,7 +330,7 @@ export interface SerialBrokerOptions {
    * @defaultValue `{ auto: true }`
    */
   readonly device?: DeviceFilter | undefined;
-  /** Line settings for `SerialPort.open()`. */
+  /** Line settings for `SerialPort.open()`. Required, because `baudRate` has no default. */
   readonly serial: SerialSettings;
   /** Reconnect and timeout behaviour. @defaultValue `{}`: each field's own default */
   readonly connection?: ConnectionSettings;
@@ -509,9 +535,16 @@ export interface SerialBrokerEventMap {
   readonly onReceive: ReceiveEvent;
   /** The browser took bytes for the port. Delivered in every tab, including the one that sent them. */
   readonly onSend: SendEvent;
-  /** Something went wrong. */
+  /**
+   * Something went wrong without a call to answer for it. A failure of the connection is
+   * delivered in every tab; a listener that threw, and a failure of one tab's message bus or
+   * storage, only in that tab. A failed call rejects instead.
+   */
   readonly onError: ErrorEvent;
-  /** The connection status changed. */
+  /**
+   * The connection status changed. Delivered in every tab; a new listener first receives one
+   * event with the current status.
+   */
   readonly onStatusChange: StatusChangeEvent;
 }
 

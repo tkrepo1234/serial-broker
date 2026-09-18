@@ -92,7 +92,3 @@ Each is a documented limit or a test that does not exist; none is a defect waiti
 - The extreme suite, both benchmarks and the background-tab run never run in CI. After a change to
   the protocol, run them: `npm run test:extreme`, `npm run bench`,
   `SERIAL_BROKER_BENCH_BROWSER=1 npm run bench:browser`, `npm run test:background`.
-
-**Documentation**
-
-- TSDoc is thin in places where the generated pages of the Interface chapter show it.
