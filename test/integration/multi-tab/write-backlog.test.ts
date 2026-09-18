@@ -2,73 +2,14 @@ import { describe, expect, it } from 'vitest';
 
 import { SerialBrokerErrorCode } from '../../../src/core/error-codes.js';
 import { MAX_WAITING_WRITES } from '../../../src/protocol/limits.js';
-import type { BrowserHarness } from '../../harness/browser-harness.js';
 import { TRANSPORT_MODES } from '../../harness/browser-harness.js';
-import { READER_OPTIONS, readerHarness } from '../../harness/devices.js';
-import type { FakeDevice } from '../../harness/fake-serial.js';
+import { connectedTab, READER_OPTIONS, readerHarness, twoTabs } from '../../harness/devices.js';
 import { outcomeOf, queuedWritesAt } from '../../harness/outcomes.js';
 
-/** One byte per chunk, so that a test can let a write through chunk by chunk. */
-const CHUNKED_OPTIONS = { ...READER_OPTIONS, connection: { maxWriteChunkBytes: 1 } };
-
 /**
- * Writes queue at the port behind the one being written, and a slow device can hold that one for
- * longer than `writeTimeoutMs` while it still accepts every chunk in time. A write whose issuer has
- * given up waiting was reported as never started: writing it afterwards would put a command on the
- * device that the application was told did not go out, and may have sent again.
+ * What the tab holding the port keeps of the writes other tabs hand it. How long each of them may
+ * wait is `write-deadlines.test.ts`.
  */
-describe.each(TRANSPORT_MODES)(
-  'a write waiting at the port behind a slow one (%s)',
-  (transport) => {
-    async function slowDevice() {
-      const { harness, device } = readerHarness({ transport });
-      const owner = harness.openTab();
-      await owner.setup('Reader', CHUNKED_OPTIONS);
-      const participant = harness.openTab();
-      await participant.setup('Reader', CHUNKED_OPTIONS);
-      return { harness, device, owner, participant };
-    }
-
-    /**
-     * Lets the first chunk of the paused slow write through after 3 s, and holds the second until the
-     * test resumes writes after 6 s: each chunk within `writeTimeoutMs`, the write as a whole not.
-     */
-    async function writeSlowly(harness: BrowserHarness, device: FakeDevice): Promise<void> {
-      await harness.advance(3_000);
-      device.resumeWrites();
-      device.pauseWrites();
-      await harness.settle();
-      await harness.advance(3_000);
-    }
-
-    for (const issuer of ['participant', 'owner'] as const) {
-      it(`is never written once its deadline has passed, when the ${issuer} issued it`, async () => {
-        const setup = await slowDevice();
-        const { harness, device } = setup;
-        const tab = setup[issuer];
-        device.pauseWrites();
-        const slow = outcomeOf(tab.client.send('Reader', 'AB'));
-        await harness.settle();
-        const waiting = outcomeOf(tab.client.send('Reader', 'Z'));
-        await harness.settle();
-
-        await writeSlowly(harness, device);
-        const queuedWhileSlow = queuedWritesAt(setup.owner.client);
-        device.resumeWrites();
-        await harness.advance(0);
-
-        expect(await waiting).toMatchObject({
-          code: SerialBrokerErrorCode.WRITE_TIMEOUT,
-          context: { started: false },
-        });
-        expect(await slow).toMatchObject({ context: { started: true } });
-        expect(device.writtenText()).toBe('AB');
-        // Given up on, the waiting write no longer holds its place, or its payload, at the port.
-        expect(queuedWhileSlow).toBe(1);
-      });
-    }
-  },
-);
 
 /**
  * What waits at the port is bounded, in writes and in bytes (ADR-0019). Every tab of the origin can
@@ -77,9 +18,7 @@ describe.each(TRANSPORT_MODES)(
  */
 describe('more writes at the port than it keeps', () => {
   it('refuses the writes beyond the bound, saying that nothing of them was written', async () => {
-    const { harness, device } = readerHarness();
-    const owner = harness.openTab();
-    await owner.setup('Reader', READER_OPTIONS);
+    const { harness, device, tab: owner } = await connectedTab();
 
     device.faults.hangOnWrite = true;
     const outcomes: Promise<unknown>[] = [];
@@ -97,12 +36,8 @@ describe('more writes at the port than it keeps', () => {
     expect(queuedWritesAt(owner.client)).toBe(MAX_WAITING_WRITES);
   });
 
-  it('keeps the promise that a refused write was not written, for a request it has accepted', async () => {
-    const { harness, device } = readerHarness();
-    const owner = harness.openTab();
-    await owner.setup('Reader', READER_OPTIONS);
-    const participant = harness.openTab();
-    await participant.setup('Reader', READER_OPTIONS);
+  it('writes a request it has already accepted once, however often it is handed over again', async () => {
+    const { harness, device, other: participant } = await twoTabs();
 
     device.pauseWrites();
     const outcome = outcomeOf(participant.client.send('Reader', 'PING'));
@@ -118,19 +53,15 @@ describe('more writes at the port than it keeps', () => {
   });
 });
 
-describe('handing a write to the device in chunks', () => {
-  async function chunkSizesFor(byteLength: number, maxWriteChunkBytes: number): Promise<number[]> {
-    const { harness, device } = readerHarness();
-    const tab = harness.openTab();
-    await tab.setup('Reader', { ...READER_OPTIONS, connection: { maxWriteChunkBytes } });
+describe('a payload with no bytes in it', () => {
+  it('is handed to the device as one empty write', async () => {
+    const { device, tab } = await connectedTab();
 
-    await tab.client.send('Reader', new Uint8Array(byteLength));
+    await tab.client.send('Reader', new Uint8Array(0));
 
-    return device.written.map((chunk) => chunk.byteLength);
-  }
-
-  it('hands an empty payload over as one empty write', async () => {
-    expect(await chunkSizesFor(0, 4)).toEqual([0]);
+    // Not dropped on the way: a device that answers every command needs the command, and a
+    // caller that sent nothing has still sent.
+    expect(device.written.map((chunk) => chunk.byteLength)).toEqual([0]);
   });
 });
 

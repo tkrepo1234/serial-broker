@@ -59,7 +59,8 @@ broker's `welcome` proves the script runs, it moves to `BroadcastChannel` when:
 - the worker reports an error (`worker-script-failed`),
 - a message in another protocol version arrives on the worker's port
   (`worker-other-protocol-version`, [ADR-0007](./0007-wire-protocol-and-versioning.md)), or
-- no `welcome` has arrived within the handshake deadline of 45 seconds (`worker-not-answering`).
+- no `welcome` has arrived within the handshake deadline (`worker-not-answering`,
+  [ADR-0024](./0024-tell-liveness-through-web-locks.md)).
 
 Nothing the tab sent before that reached anyone, and nothing is sent again. The new bus is told what
 the tab takes part in, and the client restates itself as after reaching a new worker: the tab holding

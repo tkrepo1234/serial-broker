@@ -12,6 +12,7 @@ import {
   echoConfiguration,
   GRANTED_DEVICE,
   installStandIn,
+  openConnectedTabs,
   sharedWorkersOf,
   Tab,
   waitForPortHolder,
@@ -67,13 +68,7 @@ test.describe('a port shared across tabs', () => {
     // at again rather than having to be reloaded. See step 7 of the manual test plan, whose
     // milder case - a tab merely in the background - is `test/browser/background-tab.mjs`.
     await installStandIn(context, GRANTED_DEVICE);
-    const tabs = [await Tab.open(context), await Tab.open(context), await Tab.open(context)];
-    for (const tab of tabs) {
-      await tab.setup('Echo', echoConfiguration());
-    }
-    for (const tab of tabs) {
-      await tab.waitForStatus('Echo', 'open');
-    }
+    const tabs = await openConnectedTabs(context, 3);
     const holder = tabs[await waitForPortHolder(tabs)];
     const sleeper = tabs.find((tab) => tab !== holder);
     const awake = tabs.filter((tab) => tab !== sleeper);
@@ -124,19 +119,13 @@ test.describe('a port shared across tabs', () => {
     context,
   }) => {
     await installStandIn(context, GRANTED_DEVICE);
-    const first = await Tab.open(context);
-    const second = await Tab.open(context);
-    for (const tab of [first, second]) {
-      await tab.setup('Echo', echoConfiguration());
-      await tab.waitForStatus('Echo', 'open');
-    }
-    const tabs = [first, second] as const;
+    const tabs = await openConnectedTabs(context, 2);
     const holder = await waitForPortHolder(tabs);
     const other = tabs[holder === 0 ? 1 : 0];
 
     // What `release(name, { forgetDevice: true })` ends with, from the tab that does not hold the
     // port: the permission is the origin's, so the tab that has the port open loses it.
-    await other.page.evaluate(async () => {
+    await other?.page.evaluate(async () => {
       const serial = (
         navigator as unknown as { serial: { getPorts(): Promise<{ forget(): Promise<void> }[]> } }
       ).serial;
@@ -152,25 +141,19 @@ test.describe('a port shared across tabs', () => {
 
   test('decodes text whose characters are cut in half by a read boundary', async ({ context }) => {
     await installStandIn(context, GRANTED_DEVICE);
-    const first = await Tab.open(context);
-    const second = await Tab.open(context);
-    const tabs = [first, second];
-
     // `Grüße, 温度` is 15 bytes of UTF-8, and the device answers in reads of 8: 8 and 15 share
     // no factor, so the boundary walks through every offset of the phrase and `ü`, `ß`, `温`
     // and `度` are each split between two reads. A decoder that starts afresh on every read
     // answers with U+FFFD instead.
-    const options = echoConfiguration({
-      serial: { baudRate: 9600, bufferSize: 8 },
-      receive: { idleMs: 0 },
-    });
-    for (const tab of tabs) {
-      await tab.setup('Echo', options);
-      await tab.waitForStatus('Echo', 'open');
-    }
+    const tabs = await openConnectedTabs(
+      context,
+      2,
+      'Echo',
+      echoConfiguration({ serial: { baudRate: 9600, bufferSize: 8 }, receive: { idleMs: 0 } }),
+    );
     const sent = 'Grüße, 温度'.repeat(20);
 
-    await first.send('Echo', sent);
+    await tabs[0].send('Echo', sent);
 
     // In the tab that decoded it and in the tab it was carried to: the text that was sent,
     // exactly, with nothing lost at a boundary and nothing replaced.

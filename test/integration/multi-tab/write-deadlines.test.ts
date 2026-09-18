@@ -5,7 +5,7 @@ import type { BrowserHarness } from '../../harness/browser-harness.js';
 import { TRANSPORT_MODES, type VirtualTab } from '../../harness/browser-harness.js';
 import { READER_OPTIONS, readerHarness } from '../../harness/devices.js';
 import type { FakeDevice } from '../../harness/fake-serial.js';
-import { outcomeOf } from '../../harness/outcomes.js';
+import { outcomeOf, queuedWritesAt } from '../../harness/outcomes.js';
 
 /** One byte per chunk, so that a test can let a write through chunk by chunk. */
 function chunkedOptions(writeTimeoutMs?: number) {
@@ -36,7 +36,7 @@ const NOT_STARTED = { code: SerialBrokerErrorCode.WRITE_TIMEOUT, context: { star
 describe.each(TRANSPORT_MODES)(
   'a write waiting at the port behind a slow one (%s)',
   (transport) => {
-    async function twoTabs(
+    async function twoChunkedTabs(
       ownerTimeoutMs: number | undefined,
       participantTimeoutMs: number | undefined,
     ) {
@@ -48,8 +48,36 @@ describe.each(TRANSPORT_MODES)(
       return { harness, device, owner, participant };
     }
 
+    it.each(['participant', 'owner'] as const)(
+      'is never written once its deadline has passed, when the %s issued it',
+      async (issuer) => {
+        const setup = await twoChunkedTabs(undefined, undefined);
+        const { harness, device } = setup;
+        const tab: VirtualTab = setup[issuer];
+        device.pauseWrites();
+        const slow = outcomeOf(tab.client.send('Reader', 'AB'));
+        await harness.settle();
+        const waiting = outcomeOf(tab.client.send('Reader', 'Z'));
+        await harness.settle();
+
+        // Each chunk within the default 5 s, the write as a whole beyond it.
+        await harness.advance(3_000);
+        await letOneChunkThrough(harness, device);
+        await harness.advance(3_000);
+        const queuedWhileSlow = queuedWritesAt(setup.owner.client);
+        device.resumeWrites();
+        await harness.advance(0);
+
+        expect(await waiting).toMatchObject(NOT_STARTED);
+        expect(await slow).toMatchObject({ context: { started: true } });
+        expect(device.writtenText()).toBe('AB');
+        // Given up on, the waiting write no longer holds its place, or its payload, at the port.
+        expect(queuedWhileSlow).toBe(1);
+      },
+    );
+
     it('is never written once its issuer gave up, when the tab holding the port waits longer', async () => {
-      const { harness, device, participant } = await twoTabs(10_000, 2_000);
+      const { harness, device, participant } = await twoChunkedTabs(10_000, 2_000);
       device.pauseWrites();
       const slow = outcomeOf(participant.client.send('Reader', 'AB'));
       await harness.settle();
@@ -69,7 +97,7 @@ describe.each(TRANSPORT_MODES)(
     });
 
     it('is never written, and fails early, when the tab holding the port waits less', async () => {
-      const { harness, device, participant } = await twoTabs(2_000, 10_000);
+      const { harness, device, participant } = await twoChunkedTabs(2_000, 10_000);
       device.pauseWrites();
       const slow = outcomeOf(participant.client.send('Reader', 'AB'));
       await harness.settle();
@@ -95,9 +123,10 @@ describe.each(TRANSPORT_MODES)(
       expect(device.writtenText()).toBe('AB');
     });
 
-    for (const issuer of ['participant', 'owner'] as const) {
-      it(`is never written when it reached the port part way through its time, issued by the ${issuer}`, async () => {
-        const setup = await twoTabs(undefined, undefined);
+    it.each(['participant', 'owner'] as const)(
+      'is never written when it reached the port part way through its time, issued by the %s',
+      async (issuer) => {
+        const setup = await twoChunkedTabs(undefined, undefined);
         const { harness, device } = setup;
         const tab: VirtualTab = setup[issuer];
 
@@ -125,8 +154,8 @@ describe.each(TRANSPORT_MODES)(
         expect(await slow).toMatchObject({ context: { started: true } });
         expect(await waiting).toMatchObject(NOT_STARTED);
         expect(device.writtenText()).toBe('AB');
-      });
-    }
+      },
+    );
   },
 );
 
@@ -218,8 +247,9 @@ describe.each(TRANSPORT_MODES)(
       expect(device.written).toHaveLength(1);
     });
 
-    for (const ending of ['closes', 'crashes'] as const) {
-      it(`is never written when its issuer ${ending} before answering, and the port's queue goes on`, async () => {
+    it.each(['closes', 'crashes'] as const)(
+      "is never written when its issuer %s before answering, and the port's queue goes on",
+      async (ending) => {
         const { harness, device, holder, issuer } = await busyIssuer();
 
         issuer.hold(holder.client.clientId);
@@ -242,7 +272,7 @@ describe.each(TRANSPORT_MODES)(
 
         expect(await next).toBe('resolved');
         expect(device.writtenText()).toBe('NEXT');
-      });
-    }
+      },
+    );
   },
 );

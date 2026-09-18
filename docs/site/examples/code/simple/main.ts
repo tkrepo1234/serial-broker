@@ -11,12 +11,10 @@ if (!statusLabel || !connectButton || !sendForm || !lineInput || !output) {
   throw new Error('The page is missing an element this script needs.');
 }
 
-function showStatus(status: string): void {
-  if (statusLabel && connectButton) {
-    statusLabel.textContent = status;
-    connectButton.hidden = status !== 'awaiting-permission';
-  }
-}
+const showStatus = (status: string): void => {
+  statusLabel.textContent = status;
+  connectButton.hidden = status !== 'awaiting-permission';
+};
 
 // No `device`: the configuration takes it from the port the user picks, and remembers it. Name
 // one with `device: { vendorId, productId }` to filter the picker to a known USB device.

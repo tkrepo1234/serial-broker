@@ -20,14 +20,14 @@ Not derivable from the code:
 - **Not targets:** Chrome for Android; unplugging a physical adapter by hand; large payloads on the
   Arduino board.
 - **No size budget.** Build sizes are reported, not enforced.
-- Before 1.0 anything may break - protocol, storage, API - with an entry in the changelog.
+- Before 1.0 anything may break — protocol, storage, API — with an entry in the changelog.
 - Dev dependencies stay on TypeScript 6 until typescript-eslint and typedoc support TypeScript 7;
   checked monthly, with `npm audit`.
 
 ## By hand, before a release
 
 - **Step 18 of the [manual test plan](./docs/manual-test-plan.md):** revoke the device in the
-  browser's site settings while connected. Not automatable - the settings pages offer no control a
+  browser's site settings while connected. Not automatable — the settings pages offer no control a
   test can address. It would also settle an assumption of ADR-0008: that Chromium sends no
   `disconnect` when a permission is revoked.
 
@@ -76,7 +76,7 @@ Each is a documented limit or a test that does not exist; none is a defect waiti
 
 - A stuck write is invisible in the status: while the device takes nothing, the status stays
   `open`. Diagnostics report `stalledWriteSince`; a public status for it is not planned.
-- Releasing a configuration while the device holds a write cannot close the port - the platform
+- Releasing a configuration while the device holds a write cannot close the port — the platform
   keeps it until the page goes (ADR-0011). Measured with usbip-win2 only.
 - Whether a page with an open `SharedWorker` or `BroadcastChannel` enters the back/forward cache
   depends on the browser; the debugging surface's observer survives either way.
@@ -87,7 +87,7 @@ Each is a documented limit or a test that does not exist; none is a defect waiti
 
 - The seeded serial permission of the hardware suites is Windows-only; CI exercises Chromium only.
 - No browser test for `USER_GESTURE_REQUIRED`: every script an automation evaluates carries
-  transient activation. The stand-in has no fault injection - an `open()` or a write that fails or
+  transient activation. The stand-in has no fault injection — an `open()` or a write that fails or
   hangs, a port without a USB identity.
 - The in-process harness announces an unplug the wrong way round: it dispatches `disconnect`
   before the read of an open port rejects, where a browser does it the other way (measured in

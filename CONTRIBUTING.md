@@ -41,10 +41,10 @@ The [device emulator](./emulator/README.md) (`npm run emulator`) is the exceptio
 TypeScript sources directly, on Node's built-in type stripping, and so needs a Node that has it
 switched on by default — 22.18 or newer on the 22 line.
 
-`npm run docs` also needs Python, in a virtual environment at `docs/.venv` - or, to keep it out of
-the working folder, at `~/.serial-broker/docs-venv` or wherever `SERIAL_BROKER_DOCS_VENV` points. Create it once with
-`python -m venv docs/.venv`, then install `docs/site/requirements.txt` with that environment's
-`pip`. The build fails on any warning, in CI as locally.
+`npm run docs` also needs Python, in a virtual environment at `docs/.venv` — or, to keep it out of
+the working folder, at `~/.serial-broker/docs-venv` or wherever `SERIAL_BROKER_DOCS_VENV` points.
+Create it once with `python -m venv docs/.venv`, then install `docs/site/requirements.txt` with that
+environment's `pip`. The build fails on any warning, in CI as locally.
 
 `npm run test:browser` builds the package and runs the browser suite (`test/browser/`, ADR-0021)
 against **the Microsoft Edge you already have installed** — no browser is downloaded. It serves
@@ -55,8 +55,8 @@ arguments after `--`, for instance `npm run test:browser -- --headed test/browse
 
 The same suite has a part that needs a real device, in `test/browser/hardware/`. It is skipped
 unless you ask for it, and it **runs on Windows only**: the permission is seeded into the browser
-profile as a Windows device instance ID, read with `Get-CimInstance Win32_PnPEntity`, so on any
-other platform no port is found and the tests fail rather than run.
+profile as a Windows device instance ID, so on any other platform no port is found and the tests
+fail rather than run.
 
 ```sh
 SERIAL_BROKER_HARDWARE=arduino npm run test:browser -- test/browser/hardware
@@ -66,55 +66,33 @@ SERIAL_BROKER_HARDWARE=arduino npm run test:browser -- test/browser/hardware
 $env:SERIAL_BROKER_HARDWARE='arduino'; npm run test:browser -- test/browser/hardware
 ```
 
-That runs seven tests. Large payloads run against the USB/IP emulator
-(`SERIAL_BROKER_HARDWARE=emulator`) rather than the board, which echoes at about 80 bytes a second
-and loses what arrives faster than its sketch reads. `SERIAL_BROKER_HARDWARE_PORT` picks the port when several of
-these boards are attached.
-
-It expects an Arduino (USB `0x2341`/`0x0078`) on a COM port, running a sketch that echoes every
-byte it receives at 9600 baud, and nothing else using that port. The browser is handed the
-permission through a throwaway profile written before it starts; nothing clicks a permission
-prompt and no machine-wide setting is changed. Record what you saw in
+`arduino` expects an Arduino running an echo sketch on a COM port, and runs seven tests; `emulator`
+needs no device and drives the [USB/IP emulator](./emulator/README.md) instead, which is where large
+payloads and unplugging are covered; `picker` answers Chromium's own port picker, and
+`npm run test:background` puts the tab holding the port in the background for real — both of those
+need a desktop. [Against real hardware](./docs/guidelines/testing.md#against-real-hardware) says
+what each one needs and why. Record what you saw in
 [the manual test plan](./docs/manual-test-plan.md).
 
-With [usbip-win2](./emulator/README.md) installed, `SERIAL_BROKER_HARDWARE=emulator` runs the same
-suite's `emulator.spec.ts` against the USB/IP emulator instead. It needs no device: the spec starts
-the emulator, lets usbip-win2 attach it, and unplugs, hangs and slows it down on cue. Nothing else
-may be listening on port 3240, and `SERIAL_BROKER_USBIP` points at `usbip.exe` if it is not in
-`C:\Program Files\USBip`.
+### Benchmarks and the extreme suite
 
-Two more runs show a browser window and so need a desktop: `SERIAL_BROKER_HARDWARE=picker` runs
-`picker.spec.ts`, which answers Chromium's own port picker on the Arduino through Windows UI
-Automation, and `npm run test:background` puts the tab holding the port in the background for real.
-[testing.md](./docs/guidelines/testing.md) says why neither could be an ordinary browser test.
-
-### Benchmarks
-
-`npm run bench` measures what the library costs on the simulated browser - latency and throughput
-from the device to 1, 5 and 10 tabs, write latency, handover and start times, an hour's steady
-state, over both transports - in about a second, and judges every number against the expectation
-written down for it in `bench/expectations.ts` (ADR-0023). It writes `bench/results/harness.json`
-and the fragments under `docs/site/_generated/` that the documentation's Performance chapter
-includes; commit them with a change that is meant to be faster, or that touches what they measure.
-
-The same scenarios run in a real browser with `SERIAL_BROKER_BENCH_BROWSER=1 npm run bench:browser`
-(PowerShell: `$env:SERIAL_BROKER_BENCH_BROWSER='1'; npm run bench:browser`), in the installed Edge,
-on port 8147, in about ten minutes. That run is never part of CI: its numbers are one machine's, and
-they are recorded once in the chapter with the machine named. A result more than ten times worse
-than its expectation has to become a fix with a test, or a limit recorded in the chapter.
-The **extreme suite** measures what the library costs at sizes no operator reaches - a hundred
-tabs, an hour of full-rate traffic, ten thousand writes under crashes, a simulated week - and
-asserts bounds on memory, timers, listeners, locks and messages. It is opt-in, never runs in CI,
-and records its last run in `test/integration/extreme/RESULTS.md`:
+Neither runs in CI, and both belong with a change to `src/client/`, `src/worker/` or `src/owner/`.
+`npm run bench` measures what the library costs on the simulated browser in about a second, and
+judges every number against the expectation written down for it in `bench/expectations.ts`
+(ADR-0023). `SERIAL_BROKER_BENCH_BROWSER=1 npm run bench:browser` (PowerShell:
+`$env:SERIAL_BROKER_BENCH_BROWSER='1'; npm run bench:browser`) does the same in a real browser, in
+about ten minutes. The extreme suite measures cost and stability at sizes no operator reaches:
 
 ```sh
 npm run test:extreme                       # the simulated browser, about a minute
 SERIAL_BROKER_EXTREME=1 npm run test:browser -- test/browser/extreme --workers=1   # Edge, six minutes
 ```
 
-Every size has a `SERIAL_BROKER_EXTREME_*` variable; see
-[the testing guideline](./docs/guidelines/testing.md#the-extreme-suite). Run it after a change to
-`src/client/`, `src/worker/` or `src/owner/`, and commit the updated `RESULTS.md` with the change.
+Commit what they wrote: `bench/results/harness.json`, the fragments under `docs/site/_generated/`
+that the documentation's Performance chapter includes, and each suite's `RESULTS.md`.
+[The benchmarks](./docs/guidelines/testing.md#the-benchmarks) and
+[the extreme suite](./docs/guidelines/testing.md#the-extreme-suite) describe what they measure, and
+what a result worse than its expectation has to become.
 
 ## Making a change
 

@@ -23,16 +23,14 @@ import { recordingLogger } from '../../harness/recording-logger.js';
 const DAY_MS = 24 * 3_600_000;
 
 /** Two tabs that set `name` up one after the other on the SharedWorker: the first holds the port. */
-async function twoTabs(
+async function twoTabsOnTheWorker(
   options: { workerScript?: HarnessOptions['workerScript']; name?: string } = {},
 ): Promise<{ harness: BrowserHarness; device: FakeDevice; owner: VirtualTab; other: VirtualTab }> {
   const name = options.name ?? 'Reader';
-  const harness = new BrowserHarness({
+  const { harness, device } = readerHarness({
     transport: 'sharedworker',
     workerScript: options.workerScript ?? 'loads',
   });
-  const device = harness.serial.addDevice(READER.vendorId, READER.productId);
-  harness.serial.grant(device);
   const owner = harness.openTab();
   await owner.setup(name, READER_OPTIONS);
   const other = harness.openTab();
@@ -50,7 +48,7 @@ describe('tabs on the SharedWorker', () => {
   it.each(['killed', 'closed'] as const)(
     'are forgotten by the worker as soon as the browser lets go of the lock of a tab %s',
     async (ending) => {
-      const { harness, other } = await twoTabs();
+      const { harness, other } = await twoTabsOnTheWorker();
       const before = harness.bus.workerHost.clientCount;
 
       await (ending === 'killed' ? other.kill() : other.close());
@@ -62,7 +60,7 @@ describe('tabs on the SharedWorker', () => {
   );
 
   it('are all kept while they are alive, however long they stay idle, with nothing sent', async () => {
-    const { harness, device, other } = await twoTabs();
+    const { harness, device, other } = await twoTabsOnTheWorker();
     const sentBefore = harness.bus.meter.sent;
 
     await harness.busClock.advance(7 * DAY_MS);
@@ -89,7 +87,7 @@ describe('tabs on the SharedWorker', () => {
  */
 describe('tabs whose worker dies', () => {
   it('share the port again through a new worker, at once', async () => {
-    const { harness, device, owner, other } = await twoTabs();
+    const { harness, device, owner, other } = await twoTabsOnTheWorker();
 
     harness.bus.crashWorker();
     await harness.settle();
@@ -107,7 +105,7 @@ describe('tabs whose worker dies', () => {
   });
 
   it('each report the lost worker once', async () => {
-    const { harness, owner, other } = await twoTabs();
+    const { harness, owner, other } = await twoTabsOnTheWorker();
 
     harness.bus.crashWorker();
     await harness.settle();
@@ -126,7 +124,7 @@ describe('tabs whose worker dies', () => {
   });
 
   it('are joined by a tab opened after the crash', async () => {
-    const { harness, device, other } = await twoTabs();
+    const { harness, device, other } = await twoTabsOnTheWorker();
 
     // The new tab starts the new worker, which knows nothing of the tabs already open.
     harness.bus.crashWorker();
@@ -151,7 +149,7 @@ describe('tabs whose worker dies', () => {
   });
 
   it('hand on a write that was lost with the dead worker, and write it once', async () => {
-    const { harness, device, other } = await twoTabs();
+    const { harness, device, other } = await twoTabsOnTheWorker();
 
     // Sent into the dead worker in the same task that ended it, before any tab could hear of it.
     harness.bus.crashWorker();
@@ -174,7 +172,7 @@ describe('tabs whose worker dies', () => {
  */
 describe('tabs whose worker script fails to load', () => {
   it('share the port over BroadcastChannel once the failure is reported', async () => {
-    const { harness, device, owner, other } = await twoTabs({
+    const { harness, device, owner, other } = await twoTabsOnTheWorker({
       workerScript: 'fails',
       name: 'CardReader',
     });
@@ -197,7 +195,10 @@ describe('tabs whose worker script fails to load', () => {
   });
 
   it('show a joining tab the status it asked for before the failure', async () => {
-    const { harness, other } = await twoTabs({ workerScript: 'fails', name: 'CardReader' });
+    const { harness, other } = await twoTabsOnTheWorker({
+      workerScript: 'fails',
+      name: 'CardReader',
+    });
     // The request went into a worker that never ran, so nothing has answered it yet.
     expect(other.client.getStatus('CardReader').status).not.toBe(SerialBrokerStatus.Open);
 
@@ -208,7 +209,10 @@ describe('tabs whose worker script fails to load', () => {
   });
 
   it('write what was sent before the failure, exactly once', async () => {
-    const { harness, device, other } = await twoTabs({ workerScript: 'fails', name: 'CardReader' });
+    const { harness, device, other } = await twoTabsOnTheWorker({
+      workerScript: 'fails',
+      name: 'CardReader',
+    });
 
     const sent = other.client.send('CardReader', 'PING');
     harness.bus.failWorkerScripts();

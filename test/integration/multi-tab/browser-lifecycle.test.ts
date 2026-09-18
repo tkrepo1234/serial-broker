@@ -4,7 +4,7 @@ import { SerialBrokerErrorCode } from '../../../src/core/error-codes.js';
 import { SerialBrokerStatus } from '../../../src/core/types.js';
 import { ownerLockName } from '../../../src/protocol/version.js';
 import { TRANSPORT_MODES } from '../../harness/browser-harness.js';
-import { READER_OPTIONS, readerHarness } from '../../harness/devices.js';
+import { READER_OPTIONS, twoTabs } from '../../harness/devices.js';
 import { footprintOf, outcomeOf } from '../../harness/outcomes.js';
 
 /**
@@ -13,18 +13,8 @@ import { footprintOf, outcomeOf } from '../../harness/outcomes.js';
  * tabs" in docs/site/shared-ports.md for what the library can and cannot know in each case.
  */
 describe.each(TRANSPORT_MODES)('the browser lifecycle (%s)', (transport) => {
-  async function twoTabs(options: object = READER_OPTIONS) {
-    const { harness, device } = readerHarness({ transport });
-    const owner = harness.openTab();
-    await owner.client.setup('Reader', options);
-    const participant = harness.openTab();
-    await participant.client.setup('Reader', options);
-    await harness.settle();
-    return { harness, device, owner, participant };
-  }
-
   it('is open again in every tab when the machine wakes after an hour and the adapter re-enumerates', async () => {
-    const { harness, device, owner, participant } = await twoTabs();
+    const { harness, device, owner, other: participant } = await twoTabs({ transport });
     const clients = [owner.client, participant.client];
     const before = footprintOf(harness, clients);
 
@@ -49,7 +39,7 @@ describe.each(TRANSPORT_MODES)('the browser lifecycle (%s)', (transport) => {
   });
 
   it('writes each write of a tab whose timers run once a minute exactly once, minute after minute', async () => {
-    const { harness, device, owner, participant } = await twoTabs();
+    const { harness, device, owner, other: participant } = await twoTabs({ transport });
     const clients = [owner.client, participant.client];
     const before = footprintOf(harness, clients);
     const outcomes: Promise<unknown>[] = [];
@@ -75,10 +65,11 @@ describe.each(TRANSPORT_MODES)('the browser lifecycle (%s)', (transport) => {
   });
 
   it('withdraws a write waiting at the port on schedule when the wall clock was set back an hour', async () => {
-    const { harness, device, participant } = await twoTabs({
-      ...READER_OPTIONS,
-      connection: { maxWriteChunkBytes: 1 },
-    });
+    const {
+      harness,
+      device,
+      other: participant,
+    } = await twoTabs({ transport }, { connection: { maxWriteChunkBytes: 1 } });
     device.pauseWrites();
     void outcomeOf(participant.client.send('Reader', 'AB'));
     await harness.settle();
@@ -102,10 +93,11 @@ describe.each(TRANSPORT_MODES)('the browser lifecycle (%s)', (transport) => {
   });
 
   it('writes a write waiting at the port when the wall clock is set forward, its time not being up', async () => {
-    const { harness, device, participant } = await twoTabs({
-      ...READER_OPTIONS,
-      connection: { maxWriteChunkBytes: 1 },
-    });
+    const {
+      harness,
+      device,
+      other: participant,
+    } = await twoTabs({ transport }, { connection: { maxWriteChunkBytes: 1 } });
     device.pauseWrites();
     void outcomeOf(participant.client.send('Reader', 'AB'));
     await harness.settle();
@@ -127,7 +119,7 @@ describe.each(TRANSPORT_MODES)('the browser lifecycle (%s)', (transport) => {
   });
 
   it('lets a frozen tab that is discarded leave the queue for the port, as a closed tab does', async () => {
-    const { harness, owner, participant } = await twoTabs();
+    const { harness, owner, other: participant } = await twoTabs({ transport });
     const frozen = harness.openTab();
     await frozen.client.setup('Reader', READER_OPTIONS);
     await harness.settle();

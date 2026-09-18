@@ -6,19 +6,16 @@
 
 [ADR-0009](./0009-encapsulation-boundary.md) keeps every trace of the coordination mechanism
 out of the public API: no owner identity, no participant count, no lock state, no transport.
-Its reasoning holds for **application code** — anything observable becomes load-bearing,
+Its reasoning holds for **application code** - anything observable becomes load-bearing,
 and code that branches on "am I the owner?" is a race.
 
-It leaves one audience unserved. An **operator** looking at a deployment — a support engineer, a
-developer on a shop floor, the person who owns the machine — has questions ADR-0009 makes
+It leaves one audience unserved. An **operator** looking at a deployment - a support engineer, a
+developer on a shop floor, the person who owns the machine - has questions ADR-0009 makes
 unanswerable: which tab holds the port, whether the owner is reconnecting and when it tries
 next, whether a tab is sitting on writes that never went out, whether every tab even runs the
 same settings. A logger has to be enabled in advance, in every tab, in the application's own code.
 
-The people running a deployment need a debugging surface shipped with the library that shows every
-setting and every piece of status.
-
-Three facts shape how that can be built:
+Three facts shape how they can be answered:
 
 - **The facade is a module-level singleton.** A second entry point that read its state would
   share nothing with it as soon as the two entry points were bundled separately.
@@ -37,18 +34,16 @@ up no configuration, requests no Web Lock, and never answers for a port.
 - **Collecting.** The observer broadcasts `diagnostics-request` to every context on the bus. Each
   context that has at least one configuration answers the observer with a `diagnostics-report`:
   its transport, and per configuration its role, status, effective settings, listener counts and
-  pending writes, plus — in the tab holding the port — the supervisor's connection state, attempt
+  pending writes, plus - in the tab holding the port - the supervisor's connection state, attempt
   count, next scheduled attempt, queued writes, a stalled write and byte counters. Nothing announces
   how many contexts exist, so a collection listens for a fixed window (500 ms by default). The
   observer also lists this library's Web Locks through `LockManager.query()` where the browser
   offers it.
-- **Watching.** The observer can join a configuration's broadcasts — and only its broadcasts —
+- **Watching.** The observer can join a configuration's broadcasts - and only its broadcasts -
   to stream traffic, status changes, errors and ownership changes as they cross the bus.
-- **Bounded.** A context answers `diagnostics-request` only within `DIAGNOSTICS_ANSWER_RATE`, and one
-  collection keeps at most `MAX_REPORTS_PER_COLLECTION` reports and
-  `MAX_REPORT_CHARACTERS_PER_COLLECTION` characters: the request id is broadcast, so anything on the
-  bus can answer it under as many identities as it invents. The values are in
-  [ADR-0019](./0019-bound-and-rate-limit-what-the-bus-can-cost-a-tab.md).
+- **Bounded.** How often a context answers `diagnostics-request`, and how much one collection keeps,
+  are limited, because the request id is broadcast and anything on the bus can answer it
+  ([ADR-0019](./0019-bound-and-rate-limit-what-the-bus-can-cost-a-tab.md)).
 - **A report is filed, not validated in full.** It is only ever displayed, and the decoder already
   holds it to its structure budget. Only what files it is checked - the sender, its transport,
   version and time, and that its configurations are a list of named entries. What displays a report

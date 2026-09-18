@@ -4,12 +4,11 @@
 
 ## Context
 
-Users of the library must not need to know which context owns the port. Beyond ergonomics, there
-is a hard engineering reason. Anything observable
-becomes load-bearing: if an application can ask "am I the owner?", some application will
-branch on it, and every future change to the election mechanism becomes a breaking change to
-that application. Worse, an application that believes it is the owner will be wrong
-microseconds later, and any code built on that belief is a race.
+Users of the library must not need to know which context owns the port. Beyond ergonomics, there is
+a hard engineering reason: anything observable becomes load-bearing. If an application can ask "am I
+the owner?", some application will branch on it, and every future change to the election mechanism
+becomes a breaking change to that application. Worse, an application that believes it is the owner
+will be wrong microseconds later, and any code built on that belief is a race.
 
 ## Decision
 
@@ -25,8 +24,8 @@ since, observedAt, lastErrorCode }` - the condition of the _connection_ and the 
 - The `status` union describes what an application can act on: `idle`, `queued`,
   `awaiting-permission`, `connecting`, `open`, `reconnecting`, `failed`, `released`. Whether the
   local context or a peer is doing the connecting is not represented, because it must not matter.
-  `queued` says that the tab limit the application itself set is reached, and nothing about which
-  tab holds the port ([ADR-0017](./0017-limit-the-tabs-using-a-configuration.md)).
+  `queued` is the one exception, and it reports a limit the application itself set
+  ([ADR-0017](./0017-limit-the-tabs-using-a-configuration.md)).
 - `onSend` carries `origin: 'local' | 'remote'` - whether _this_ context issued the write. That is
   information about the caller's own action, not about the topology, and the minimum needed for a
   tab to tell its own echo from a peer's traffic. No peer identifier is included.

@@ -1,4 +1,3 @@
-import type { NormalizedConfiguration } from './defaults.js';
 import type { SerialBrokerError } from './errors.js';
 import type {
   ConnectionSettings,
@@ -9,7 +8,6 @@ import type {
   SerialBrokerEventName,
   SerialBrokerStatus,
 } from './types.js';
-import { toSetupOptions } from './validation.js';
 
 /**
  * The shapes of a diagnostics report (ADR-0014).
@@ -281,18 +279,3 @@ export interface ObservedOwnership extends ObservedEventBase {
  */
 export type ObservedEvent =
   ObservedReceived | ObservedSent | ObservedStatus | ObservedError | ObservedOwnership;
-
-/**
- * Describes a normalised configuration as the settings it runs with.
- *
- * The settings a report shows are exactly the options `setup()` would accept, so this is the
- * same conversion as {@link toSetupOptions} - kept under its own name because it is what the
- * diagnostics view calls, and a report must never describe a configuration differently from how
- * it would be restored.
- *
- * @param configuration - A configuration that has passed validation.
- * @returns A plain, structurally cloneable description.
- */
-export function describeSettings(configuration: NormalizedConfiguration): EffectiveSettings {
-  return toSetupOptions(configuration);
-}

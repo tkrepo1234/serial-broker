@@ -215,25 +215,11 @@ export class ConfigurationDetail {
         next.focus();
       }
     });
-    const fromMenu = (action: () => void): (() => void) => {
-      return () => {
-        parts.menu.hidePopover();
-        this.#clearMessage();
-        action();
-      };
-    };
-    const edit = (): void => {
-      const settings = this.#view?.settings;
-      if (settings !== undefined) {
-        host.edit(name, settings);
-      }
-    };
-    parts.menuChooseAgain.addEventListener(
-      'click',
-      fromMenu(() => {
-        host.chooseDevice(name, true);
-      }),
-    );
+    parts.menuChooseAgain.addEventListener('click', () => {
+      parts.menu.hidePopover();
+      this.#clearMessage();
+      host.chooseDevice(name, true);
+    });
     // Stopping and forgetting are two decisions, so the button asks the second one rather than
     // offering a menu of combinations: the page opens a dialog, and what it answers is what
     // `release()` is given.
@@ -244,7 +230,10 @@ export class ConfigurationDetail {
     for (const button of [parts.edit, parts.editSettings]) {
       button.addEventListener('click', () => {
         this.#clearMessage();
-        edit();
+        const settings = this.#view?.settings;
+        if (settings !== undefined) {
+          host.edit(name, settings);
+        }
       });
     }
 
@@ -360,19 +349,11 @@ export class ConfigurationDetail {
         );
         break;
       case 'owner-claimed':
-        this.#log.add(
-          'ownership',
-          'port',
-          `now held by ${who(event.from)}`,
-          undefined,
-          event.timestamp,
-        );
-        break;
       case 'owner-released':
         this.#log.add(
           'ownership',
           'port',
-          `given up by ${who(event.from)}`,
+          `${event.kind === 'owner-claimed' ? 'now held by' : 'given up by'} ${who(event.from)}`,
           undefined,
           event.timestamp,
         );

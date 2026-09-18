@@ -77,9 +77,8 @@ export {
  * Also reachable as `SerialBroker.isSupported()`; exported separately so it can be called
  * without touching the singleton - for instance to decide whether to load a feature at all.
  *
- * Re-exported from the facade rather than from `environment/browser`: a re-export makes the
- * published declarations import that module's, and with them the injection seam this library
- * reserves the right to change (ADR-0012).
+ * Taken from the facade rather than from `environment/browser`, for the reason the facade's own
+ * declaration gives: the published declarations must not import the injection seam (ADR-0012).
  */
 export { isSupported } from './facade.js';
 

@@ -371,7 +371,7 @@ describe('FakeClock', () => {
     expect(clock.now()).toBe(startedAt - 3_600_000 + 1_000);
   });
 
-  it('keeps the monotonic reading out of the wall clock`s jumps', async () => {
+  it("keeps the monotonic reading out of the wall clock's jumps", async () => {
     const clock = new FakeClock();
     const startedAt = clock.monotonicNow();
 

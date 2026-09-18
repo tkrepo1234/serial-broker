@@ -11,7 +11,7 @@
  * does.
  */
 
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type BrowserContext, type Page } from '@playwright/test';
 
 import { GRANTED_DEVICE, installStandIn } from './support/tab.js';
 
@@ -19,32 +19,30 @@ import { GRANTED_DEVICE, installStandIn } from './support/tab.js';
 const SURFACE = '/dist/debug/index.html';
 
 /**
- * Opens the surface and waits until it has answered for this origin.
+ * Opens the surface on an origin that has the device, and creates one configuration through the
+ * page's own dialog.
  *
- * By id rather than by label: the page offers _New configuration_ twice - in the header, and again
- * in the empty state it shows when this origin has no configurations at all - so the label alone
- * names two buttons in a browser that has never seen this page.
+ * The page is reached by id rather than by label: it offers _New configuration_ twice - in the
+ * header, and again in the empty state it shows when this origin has no configurations at all - so
+ * the label alone names two buttons in a browser that has never seen this page.
  */
-async function openSurface(page: Page): Promise<void> {
+async function openSurfaceWith(context: BrowserContext, name: string): Promise<Page> {
+  await installStandIn(context, GRANTED_DEVICE);
+  const page = await context.newPage();
   await page.goto(SURFACE);
   await expect(page.locator('#newButton')).toBeVisible();
-}
 
-/** Creates a configuration through the dialog, as the page's own buttons do. */
-async function createConfiguration(page: Page, name: string): Promise<void> {
   await page.locator('#newButton').click();
   await page.locator('#name').fill(name);
   await page.locator('#setupDialog [data-part="submit"]').click();
+  return page;
 }
 
 test.describe('the debugging surface', () => {
   test('offers connecting, editing and disconnecting for the selected configuration', async ({
     context,
   }) => {
-    await installStandIn(context, GRANTED_DEVICE);
-    const page = await context.newPage();
-    await openSurface(page);
-    await createConfiguration(page, 'Scale');
+    const page = await openSurfaceWith(context, 'Scale');
 
     // Whatever the configuration is doing, what can be done with it is visible rather than folded
     // into a menu. Connect is the exception: there is nothing to connect to while it runs here.
@@ -57,10 +55,7 @@ test.describe('the debugging surface', () => {
   test('forgets a configuration it is not connected to, without connecting first', async ({
     context,
   }) => {
-    await installStandIn(context, GRANTED_DEVICE);
-    const page = await context.newPage();
-    await openSurface(page);
-    await createConfiguration(page, 'Scale');
+    const page = await openSurfaceWith(context, 'Scale');
 
     // Disconnect, forgetting nothing: the entry stays, which is the point of ADR-0020 - a
     // disconnect is not a deletion, and the operator can connect to it again.
@@ -85,13 +80,11 @@ test.describe('the debugging surface', () => {
     await expect(page.locator('#newButton')).toBeVisible();
     await expect(page.locator('#configurationRows')).not.toContainText('Scale');
   });
+
   test('sends hex bytes as typed and shows them as hex in the traffic (manual test plan, step 22)', async ({
     context,
   }) => {
-    await installStandIn(context, GRANTED_DEVICE);
-    const page = await context.newPage();
-    await openSurface(page);
-    await createConfiguration(page, 'Scale');
+    const page = await openSurfaceWith(context, 'Scale');
 
     const detail = page.locator('#detail');
     // A new configuration takes its device from the port the operator chooses; the stand-in's

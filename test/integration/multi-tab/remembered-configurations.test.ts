@@ -18,11 +18,6 @@ import { READER_OPTIONS, readerHarness } from '../../harness/devices.js';
 describe.each(TRANSPORT_MODES)(
   'a remembered configuration run in several tabs (%s)',
   (transport) => {
-    function harnessWithDevice(): BrowserHarness {
-      const { harness } = readerHarness({ transport });
-      return harness;
-    }
-
     /** What a tab opened now - a reload - restores. */
     async function restoredByANewTab(harness: BrowserHarness): Promise<readonly string[]> {
       const reloaded = harness.openTab();
@@ -32,7 +27,7 @@ describe.each(TRANSPORT_MODES)(
     }
 
     it('stays remembered when the only tab running it releases it, and comes back', async () => {
-      const harness = harnessWithDevice();
+      const { harness } = readerHarness({ transport });
       const only = harness.openTab();
       await only.setup('Reader', READER_OPTIONS);
 
@@ -49,7 +44,7 @@ describe.each(TRANSPORT_MODES)(
     });
 
     it('stays remembered when a tab asked to forget it while another still runs it', async () => {
-      const harness = harnessWithDevice();
+      const { harness } = readerHarness({ transport });
       const first = harness.openTab();
       await first.setup('Reader', READER_OPTIONS);
       const second = harness.openTab();
@@ -62,7 +57,7 @@ describe.each(TRANSPORT_MODES)(
     });
 
     it('is forgotten once the last tab running it is asked to forget it', async () => {
-      const harness = harnessWithDevice();
+      const { harness } = readerHarness({ transport });
       const first = harness.openTab();
       await first.setup('Reader', READER_OPTIONS);
       const second = harness.openTab();
@@ -76,7 +71,7 @@ describe.each(TRANSPORT_MODES)(
     });
 
     it('is forgotten by a tab whose hold a plain release let go of', async () => {
-      const harness = harnessWithDevice();
+      const { harness } = readerHarness({ transport });
       const first = harness.openTab();
       await first.setup('Reader', READER_OPTIONS);
       const second = harness.openTab();
@@ -95,7 +90,7 @@ describe.each(TRANSPORT_MODES)(
     });
 
     it('is forgotten by a release when the other tab running it was closed or crashed', async () => {
-      const harness = harnessWithDevice();
+      const { harness } = readerHarness({ transport });
       const first = harness.openTab();
       await first.setup('Reader', READER_OPTIONS);
       const closed = harness.openTab();
@@ -116,7 +111,7 @@ describe.each(TRANSPORT_MODES)(
     });
 
     it('stays remembered when the last tab running it is closed instead of releasing it', async () => {
-      const harness = harnessWithDevice();
+      const { harness } = readerHarness({ transport });
       const first = harness.openTab();
       await first.setup('Reader', READER_OPTIONS);
       const second = harness.openTab();
@@ -129,7 +124,7 @@ describe.each(TRANSPORT_MODES)(
     });
 
     it('is left alone by releaseAll(), and forgotten by the options it passes on', async () => {
-      const harness = harnessWithDevice();
+      const { harness } = readerHarness({ transport });
       const first = harness.openTab();
       await first.setup('Reader', READER_OPTIONS);
       await first.setup('Scale', { ...READER_OPTIONS, serial: { baudRate: 19_200 } });
@@ -151,7 +146,7 @@ describe.each(TRANSPORT_MODES)(
     });
 
     it('stays remembered when a tab running it forgets the device but not the configuration', async () => {
-      const harness = harnessWithDevice();
+      const { harness } = readerHarness({ transport });
       const first = harness.openTab();
       await first.setup('Reader', READER_OPTIONS);
       const second = harness.openTab();
@@ -166,7 +161,7 @@ describe.each(TRANSPORT_MODES)(
     });
 
     it('is not forgotten by a tab that runs the same name without remember', async () => {
-      const harness = harnessWithDevice();
+      const { harness } = readerHarness({ transport });
       const remembering = harness.openTab();
       await remembering.setup('Reader', READER_OPTIONS);
       const transient = harness.openTab();
@@ -185,7 +180,7 @@ describe.each(TRANSPORT_MODES)(
     });
 
     it('is remembered after a tab sets it up while another tab forgets it', async () => {
-      const harness = harnessWithDevice();
+      const { harness } = readerHarness({ transport });
       const releasing = harness.openTab();
       await releasing.setup('Reader', READER_OPTIONS);
 

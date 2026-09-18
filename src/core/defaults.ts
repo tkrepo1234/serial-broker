@@ -111,6 +111,8 @@ export const DEFAULT_REMEMBER = true;
 /** Default for {@link SerialBrokerOptions.maxTabs}: no limit. */
 export const DEFAULT_MAX_TABS = Number.POSITIVE_INFINITY;
 
-/** Longest accepted configuration name. Long enough for any real name, short enough to bound
- * the storage key and every log record. */
+/**
+ * Longest accepted configuration name. Long enough for any real name, short enough to bound the
+ * storage key and every log record.
+ */
 export const MAX_CONFIG_NAME_LENGTH = 128;

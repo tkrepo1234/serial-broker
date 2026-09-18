@@ -22,10 +22,9 @@ long as the window is the owner.
 
 - A window becomes the owner by being granted that lock, and holds it by keeping the lock
   callback's promise pending. Inside the callback it takes the lock of its term of holding the
-  port before it counts as the owner; a term lock the browser refuses lets the ownership lock go
-  too, and both are requested again
+  port before it counts as the owner
   ([ADR-0018](./0018-hold-a-web-lock-for-every-term-of-holding-the-port.md)).
-- A window relinquishes ownership by resolving that promise — after closing the port.
+- A window relinquishes ownership by resolving that promise - after closing the port.
 - When the owning window dies, **the browser releases the lock** as part of tearing down the
   context, and the longest-waiting window is granted it. Failover needs no timeout, no
   heartbeat, and no cooperation from the dying tab.
@@ -36,7 +35,7 @@ long as the window is the owner.
   ([ADR-0007](./0007-wire-protocol-and-versioning.md)).
 
 Web Locks are same-origin scoped and cover every window, tab, iframe and worker of that
-origin — the exact scope of the problem. The same property carries the tab limit
+origin - the exact scope of the problem. The same property carries the tab limit
 ([ADR-0017](./0017-limit-the-tabs-using-a-configuration.md)), the remembered configurations
 ([ADR-0020](./0020-one-storage-key-per-configuration.md)) and liveness on the bus
 ([ADR-0024](./0024-tell-liveness-through-web-locks.md)).

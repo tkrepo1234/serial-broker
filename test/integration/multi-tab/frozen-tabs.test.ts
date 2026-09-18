@@ -4,7 +4,7 @@ import { SerialBrokerErrorCode } from '../../../src/core/error-codes.js';
 import { SerialBrokerStatus } from '../../../src/core/types.js';
 import { ownerLockName } from '../../../src/protocol/version.js';
 import { TRANSPORT_MODES } from '../../harness/browser-harness.js';
-import { READER_OPTIONS, readerHarness } from '../../harness/devices.js';
+import { READER_OPTIONS, readerHarness, twoTabs } from '../../harness/devices.js';
 import { outcomeOf } from '../../harness/outcomes.js';
 
 /**
@@ -13,17 +13,8 @@ import { outcomeOf } from '../../harness/outcomes.js';
  * between them. What the tab decides on resume must not contradict what it has already been told.
  */
 describe.each(TRANSPORT_MODES)('a tab that was frozen (%s)', (transport) => {
-  async function twoTabs() {
-    const { harness, device } = readerHarness({ transport });
-    const owner = harness.openTab();
-    await owner.setup('Reader', READER_OPTIONS);
-    const participant = harness.openTab();
-    await participant.setup('Reader', READER_OPTIONS);
-    return { harness, device, owner, participant };
-  }
-
   it('resolves a write that succeeded while it was frozen, when its deadline runs before the result on resume', async () => {
-    const { harness, device, participant } = await twoTabs();
+    const { harness, device, other: participant } = await twoTabs({ transport });
 
     // Let begin before the freeze - a frozen tab lets nothing begin (ADR-0011) - and taken by the
     // device while it is frozen.
@@ -43,7 +34,7 @@ describe.each(TRANSPORT_MODES)('a tab that was frozen (%s)', (transport) => {
 
   for (const order of ['timers-first', 'tasks-first'] as const) {
     it(`begins nothing while the issuing tab is frozen, and says started: false on resume (${order})`, async () => {
-      const { harness, device, participant } = await twoTabs();
+      const { harness, device, other: participant } = await twoTabs({ transport });
 
       // Frozen before the tab holding the port could ask: nobody lets the write begin, and the
       // holder stops waiting for the answer at its own writeTimeoutMs.
@@ -65,7 +56,7 @@ describe.each(TRANSPORT_MODES)('a tab that was frozen (%s)', (transport) => {
   }
 
   it('still times a write out that no word of arrived while it was frozen', async () => {
-    const { harness, device, participant } = await twoTabs();
+    const { harness, device, other: participant } = await twoTabs({ transport });
     device.faults.hangOnWrite = true;
 
     const outcome = outcomeOf(participant.client.send('Reader', 'PING'));

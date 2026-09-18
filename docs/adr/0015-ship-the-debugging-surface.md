@@ -5,7 +5,7 @@
 ## Context
 
 The people running a deployment need a debugging surface that ships **with the library**, exposes
-**every** setting and **every** piece of status, and is **content only** — whether and how it is
+**every** setting and **every** piece of status, and is **content only** - whether and how it is
 reachable is the operator's decision.
 
 Four facts constrain it:
@@ -59,18 +59,15 @@ can resolve its files.
 
 ## Alternatives considered
 
-- **Keep it in the repository only.** Then the people it is for — operators of a deployment — do not have it. Rejected.
+- **Keep it in the repository only.** Then the people it is for - operators of a deployment - do not have it. Rejected.
 - **A separate package** (`serial-broker-debug`). Versioning it against the library adds a failure
-  mode — a debug page on another protocol version than the application sees nobody — for no
+  mode - a debug page on another protocol version than the application sees nobody - for no
   benefit, since the files are small and inert. Rejected.
 - **Serve it from the library**, for instance a route registered by a helper. The library runs in
   the browser and serves nothing; and choosing a route for an operator is exactly the decision that
   belongs to them. Rejected.
 - **Build it into the main bundle behind a call** (`SerialBroker.openDebugPage()`). Puts an
   operator tool one call away from application code and grows every application's bundle.
-- **Derive a configuration from the chosen port in the page itself.** Auto mode does it in the
-  library; in the page it helps this page only, and the configuration it produces is not shared with
-  other tabs.
 - **Keep the styles inline and allow `'unsafe-inline'`, or hash the block.** The allowance covers
   any inline style an injection places; a hash breaks on every edit, and `style` attributes would
   still need `'unsafe-hashes'`. A stylesheet file costs one request and needs neither.

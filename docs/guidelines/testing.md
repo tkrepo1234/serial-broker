@@ -101,9 +101,9 @@ later for a reason that is not the library's.
 ### Against real hardware
 
 `test/browser/hardware/` runs the same scenarios against a device that answers. It is skipped
-unless `SERIAL_BROKER_HARDWARE` names the target (`arduino`, `emulator` or `picker`), it never runs in CI, and it **works on Windows
-only**: the permission is seeded as a Windows device instance ID, read with
-`Get-CimInstance Win32_PnPEntity`, and elsewhere no port is found.
+unless `SERIAL_BROKER_HARDWARE` names the target (`arduino`, `emulator` or `picker`), it never runs
+in CI, and it **works on Windows only**: the permission is seeded as a Windows device instance ID,
+read with `Get-CimInstance Win32_PnPEntity`, and elsewhere no port is found.
 
 ```sh
 SERIAL_BROKER_HARDWARE=arduino npm run test:browser -- test/browser/hardware
@@ -120,7 +120,7 @@ touched. `SERIAL_BROKER_HARDWARE_PORT` picks the port when several boards are at
 documented command runs seven tests. No large payload is among them: a payload beyond one write chunk
 is the emulator's, below, which takes 64 KiB of every byte value in minutes and counts what reached
 the device. The board echoes at about 80 bytes a second and, without flow control, loses what
-arrives faster than its sketch reads - which says something about the board and nothing about the
+arrives faster than its sketch reads — which says something about the board and nothing about the
 library.
 
 `SERIAL_BROKER_HARDWARE=emulator` runs `emulator.spec.ts` instead, against the
@@ -134,7 +134,7 @@ rather than inferring them from the echo. It needs usbip-win2 (`SERIAL_BROKER_US
 `SERIAL_BROKER_HARDWARE=picker` runs `picker.spec.ts`: the first connection through Chromium's
 own port picker, against the Arduino, with a profile that has never been given the device. The
 picker is browser UI that neither a page nor the DevTools protocol can reach, so
-`support/port-picker.ps1` answers it through Windows UI Automation - it finds the picker by the
+`support/port-picker.ps1` answers it through Windows UI Automation — it finds the picker by the
 origin in its name and its buttons by their position, never by a label in the browser's language.
 It needs a desktop, because a headless browser has no picker to show.
 
@@ -164,7 +164,7 @@ $env:SERIAL_BROKER_BENCH_BROWSER='1'; npm run bench:browser
 ```
 
 The harness benchmark runs the production classes on `test/harness/` and reports the library's own
-cost: percentiles of wall-clock time over many samples, plus what the fake clock can say exactly -
+cost: percentiles of wall-clock time over many samples, plus what the fake clock can say exactly —
 simulated time, timers scheduled. The browser benchmark runs the built package in the installed
 Edge with the Web Serial stand-in, on port 8147 (`SERIAL_BROKER_BROWSER_TEST_PORT` moves it), and
 never in CI: its numbers depend on the machine and are recorded once, with the machine named.
@@ -172,7 +172,7 @@ never in CI: its numbers depend on the machine and are recorded once, with the m
 Both write `bench/results/*.json` and the fragments under `docs/site/_generated/` that the chapter
 includes; **commit what they wrote**. A result more than ten times worse than its expectation is
 printed at the end, and has to become either a fix in `src/` with a regression test or a limit
-recorded in the chapter - never an adjusted expectation.
+recorded in the chapter — never an adjusted expectation.
 
 A benchmark is not a test. It reads the wall clock, which a test may not; it asserts only that it
 did what it measures; and no number in it fails a build. A change to `src/client/`, `src/worker/`
@@ -200,7 +200,7 @@ support refuses to measure without one. Its scenarios, each on both transports:
 | ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `many-tabs`            | 100 tabs on one configuration; the tab holding the port closed ten times among them; 20 configurations shared by 10 tabs each, with no cross-talk.        |
 | `long-lived-owner`     | 50 000 writes accepted by one tab in one term of holding the port: the record of accepted writes stays within its bound.                                  |
-| `sustained-traffic`    | A simulated hour at 115 200 baud in chunks of 255 bytes - 41 MB, 162 000 chunks - to 10 tabs with text decoding on, characters split by chunk boundaries. |
+| `sustained-traffic`    | A simulated hour at 115 200 baud in chunks of 255 bytes — 41 MB, 162 000 chunks — to 10 tabs with text decoding on, characters split by chunk boundaries. |
 | `writes-under-crashes` | 10 000 writes from 20 tabs, the tab holding the port killed every 100 writes with the batch at its port; at-most-once checked from the device's side.     |
 | `largest-payloads`     | 16 MiB payloads back to back from a tab that does not hold the port, then as many at once as the port keeps waiting.                                      |
 | `setup-release-churn`  | 1 000 setup and release cycles in two tabs taking turns holding the port.                                                                                 |
@@ -211,18 +211,19 @@ support refuses to measure without one. Its scenarios, each on both transports:
 Every scenario measures the same **footprint** before and after its load (`support/extreme.ts`):
 heap and `ArrayBuffer` memory after a collection, timers on the library's clock and on the bus's,
 device listeners, application listeners, Web Locks held and pending, writes pending and queued at
-the port, participants the worker knows, and messages sent and delivered on the wire - handshakes
+the port, participants the worker knows, and messages sent and delivered on the wire — handshakes
 included, counted by `FakeBus.meter`. The bounds are that every count is the same before and after,
-memory grows by no more than a few MiB, the messages stay within the scenario's **budget** - a
+memory grows by no more than a few MiB, the messages stay within the scenario's **budget** — a
 formula of its load, written next to it, that an amplification would cross (the bus is
-deterministic, so the counts are the same on every run) - and, at the very end, **every tab still works**: a chunk
-reaches all of them and a write from the last of them reaches the device once. The sizes are
+deterministic, so the counts are the same on every run) — and, at the very end, **every tab still
+works**: a chunk reaches all of them and a write from the last of them reaches the device once.
+The sizes are
 `SIZES` in `support/extreme.ts`, each with a `SERIAL_BROKER_EXTREME_*` variable; the defaults keep a
 full run under a minute of measured load on a development machine, so a longer run is a variable
 away.
 
 Two things the simulated browser cannot do shape these scenarios. A killed tab's JavaScript runs
-on - only its timers, its messages and its locks stop - so the fake port refuses a write of a port
+on — only its timers, its messages and its locks stop — so the fake port refuses a write of a port
 the browser closed, and a scenario sets aside the writes the killed tab itself had outstanding:
 in a browser nobody is left to settle them. And the fake clock refuses more than ten thousand
 timers in one step, so a simulated week advances an hour at a time.
@@ -231,7 +232,7 @@ A memory bound measures the harness as much as the library, so the harness keeps
 that closed or was killed: its ports, listeners and bus connections are let go of, which
 `harness-conformance.test.ts` proves with a `WeakRef` and a collection. What the worker itself keeps
 of a killed tab is let go as soon as the browser lets go of the tab's lock (ADR-0024). Some state the library keeps is visible to no
-count - the record of writes accepted at the port, for one - and is bounded through the heap alone:
+count — the record of writes accepted at the port, for one — and is bounded through the heap alone:
 `long-lived-owner` fails when that record is unbounded.
 
 `npm run test:extreme` writes the run's numbers to `test/integration/extreme/RESULTS.md`, which is
@@ -241,7 +242,7 @@ The real-browser part, `test/browser/extreme/`, is one Playwright scenario, skip
 `SERIAL_BROKER_EXTREME=1`: twenty pages on one origin share the stand-in device for five minutes
 of loopback traffic, the page holding the port is closed every 30 seconds and replaced, and the
 heap, DOM nodes and event listeners of every page are read over CDP (`Performance.getMetrics`,
-after `HeapProfiler.collectGarbage`) at the start, the middle and the end - and the heap of the
+after `HeapProfiler.collectGarbage`) at the start, the middle and the end — and the heap of the
 `SharedWorker` too, through `Runtime.getHeapUsage`, since a worker answers no `Performance` domain.
 The bound is a few MiB of heap and a handful of nodes and
 listeners from a page's first reading to its last, and every page still receives at the end.
@@ -284,7 +285,7 @@ Enforced in CI; the build fails below them.
 
 The **branch** bars of `src/client/` and `src/owner/` are lower than the global one, which looks backwards
 and is not. Those modules are dense with guards against races that cannot be produced on
-demand - "the configuration was released while this message was in flight", "ownership moved
+demand — "the configuration was released while this message was in flight", "ownership moved
 between the send and the delivery". Each guard is correct, cheap, and load-bearing; but
 staging one from a test would mean reaching into private state to arrange an interleaving the
 public API cannot express, and a test that does that asserts an implementation rather than a

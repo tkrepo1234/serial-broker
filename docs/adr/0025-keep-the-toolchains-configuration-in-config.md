@@ -6,7 +6,7 @@
 
 A build, a formatter, a test runner, a browser test runner and a documentation generator each bring
 a configuration file, and each tool's documentation puts that file in the repository root. With all
-of them there, the library itself — `src/`, `test/`, the documentation, the examples — is a minority
+of them there, the library itself - `src/`, `test/`, the documentation, the examples - is a minority
 of what the root listing shows.
 
 The root is what a visitor sees first, on the repository page and in an editor's file tree, and a
@@ -16,7 +16,7 @@ _is_ must scroll past the answers to how it is built.
 Nothing about these files requires the root. Each of these tools is started by an npm script, and
 npm scripts run from the directory holding `package.json`, so a script can name a configuration
 anywhere with a path flag. The root is where each tool _discovers_ its configuration when told
-nothing — a default, not a requirement. The exceptions are the tools that are not started by our
+nothing - a default, not a requirement. The exceptions are the tools that are not started by our
 scripts at all: an editor's language server, or ESLint's own search.
 
 ## Decision
@@ -51,7 +51,7 @@ wrong are silent: they do not error, they quietly widen what Prettier rewrites.
    generated files that are written by tools and committed as records: `docs/site/_generated/`,
    `bench/results/` and both extreme-suite `RESULTS.md`. Each slash-bearing pattern therefore starts
    with `../`. `package-lock.json`, which has no slash and so matches at any depth, stays
-   unanchored, because anchoring it would catch every example's own lockfile — and because it
+   unanchored, because anchoring it would catch every example's own lockfile - and because it
    behaves differently, checking that one file says nothing about the others.
 
 **Relative paths inside a configuration do not all mean the same thing**, and this is the trap the
@@ -60,7 +60,7 @@ directory sets for whoever edits these files:
 - Playwright resolves `testDir`, `outputDir` and `webServer.cwd` against the **configuration
   file's** directory. Both Playwright configurations carry `../` on `testDir`, an explicit
   `outputDir: '../test-results'` so traces are where CI collects them and `.gitignore` expects
-  them, and — for the browser suite — `cwd: '..'` so the static server starts from the root.
+  them, and - for the browser suite - `cwd: '..'` so the static server starts from the root.
   `playwright.examples.config.ts` builds its list of examples from `import.meta.dirname` and `'..'`.
 - TypeDoc resolves `entryPoints` and `out` against the **options file's** directory, so both
   carry `../`.
@@ -75,35 +75,33 @@ toolchain's: it sits with the scenarios it runs and is named by its script.
 
 ### What is in the root, and why each has to be
 
-- **`package.json`, `package-lock.json`** — npm reads them from the root and accepts no other
+- **`package.json`, `package-lock.json`** - npm reads them from the root and accepts no other
   location. Everything else in this decision depends on that being true.
-- **`tsconfig.json`** — an editor's TypeScript language server finds a project by walking _up_ from
+- **`tsconfig.json`** - an editor's TypeScript language server finds a project by walking _up_ from
   the file being edited; a root project elsewhere would leave every file in `src/` without one until
   each editor was configured by hand. `bench/tsconfig.json`, `emulator/tsconfig.json` and
   `docs/site/examples/code/tsconfig.json` extend it by relative path, and `tsc -p` is handed it by
   name. `tsconfig.build.json`, which only the build's `tsc -p` reads, is in `config/` with the rest.
   The root project's `include` names `config/*.ts`, so the TypeScript configurations are
   type-checked and type-aware linting resolves them.
-- **`eslint.config.js`** — ESLint 10 searches for `eslint.config.*` from the working directory
+- **`eslint.config.js`** - ESLint 10 searches for `eslint.config.*` from the working directory
   upwards. There is no flag that makes that search look in a subdirectory, and `--config` would
   have to be repeated on every invocation including every editor integration's.
-- **`.editorconfig`** — editors look up the directory tree from the open file, as with tsconfig.
-- **`.gitattributes`, `.gitignore`** — Git's own, and Git looks in the root.
+- **`.editorconfig`** - editors look up the directory tree from the open file, as with tsconfig.
+- **`.gitattributes`, `.gitignore`** - Git's own, and Git looks in the root.
 - **`LICENSE`, `README.md`, `CHANGELOG.md`, `CONTRIBUTING.md`, `SECURITY.md`, `BACKLOG.md`,
-  `llms.txt`** — these are the point. They are what the root should be showing.
+  `llms.txt`** - these are the point. They are what the root should be showing.
 
 ## Alternatives considered
 
 - **Every configuration in the root.** The root is conventional: every tool's documentation shows
   its configuration there, and a contributor finds `vitest.config.ts` without being told. Rejected
-  because the convention is a default rather than a requirement, and because the cost it imposes —
-  the project's own files outnumbered by its toolchain's, on the first screen every visitor sees —
-  is paid by many readers while the benefit accrues to the few who edit a tool's settings. Those
-  few find a directory named for exactly what it holds.
+  because the cost of that convention is paid by many readers while its benefit accrues to the few
+  who edit a tool's settings, and those few find a directory named for exactly what it holds.
 - **Settings in `package.json` keys.** Prettier, and several of the others, read configuration from
   a key in `package.json`, which takes files out of the root outright. Rejected on three counts:
   tsup, Vitest and Playwright configurations are TypeScript with imports, comments and computed
-  values — `playwright.examples.config.ts` reads the filesystem — and cannot become JSON at all; the
+  values - `playwright.examples.config.ts` reads the filesystem - and cannot become JSON at all; the
   long explanatory comments in `vitest.config.ts` and `playwright.config.ts`, which are the reason
   those thresholds and timeouts can be reviewed, have nowhere to live in JSON; and it would grow
   `package.json` into the single file every change touches.
@@ -111,7 +109,7 @@ toolchain's: it sits with the scenarios it runs and is named by its script.
   Rejected: a directory a contributor has to know about before they can see it is worse than one
   named in the README's layout table, and dotfiles are the part of a root that reads as clutter.
 - **`tsconfig.json` in `config/` too, with a root stub that extends it.** The stub would be a root
-  file that exists only to point elsewhere — the count unchanged and a layer of indirection added.
+  file that exists only to point elsewhere - the count unchanged and a layer of indirection added.
 - **`eslint.config.js` in `config/`, with `--config` in the lint script.** The script would work;
   every editor's ESLint integration, which runs its own search, would silently stop finding the
   rules. A lint that passes in the editor and fails in CI is worse than a file in the root.
@@ -120,8 +118,7 @@ toolchain's: it sits with the scenarios it runs and is named by its script.
 
 ### Positive
 
-- The root lists the documents a reader wants (`README.md`, `CHANGELOG.md`, `CONTRIBUTING.md`,
-  `SECURITY.md`, `BACKLOG.md`, `LICENSE`, `llms.txt`) and the files a tool requires there.
+- The root lists the documents a reader wants, and the files a tool requires there.
 - A tool's configuration is found by looking in one named place, instead of by knowing which
   dotfile belongs to which tool.
 - `config/README.md` gives the toolchain a single description.
@@ -130,7 +127,7 @@ toolchain's: it sits with the scenarios it runs and is named by its script.
 
 - **Every tool needs its path flag.** `tsup`, `vitest`, `playwright` and `prettier` all discover a
   root configuration on their own, and each will run with _defaults_ rather than fail if its flag is
-  missing. A script, or a tool invoked by hand, that forgets the flag does not error — it quietly
+  missing. A script, or a tool invoked by hand, that forgets the flag does not error - it quietly
   does the wrong thing. `scripts/test-extreme.mjs`, which spawns Vitest itself, carries the flag for
   exactly this reason.
 - Running a tool ad hoc is longer to type: `npx vitest run` is not enough.

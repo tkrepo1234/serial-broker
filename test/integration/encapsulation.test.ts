@@ -5,7 +5,7 @@ import type { SerialBrokerError } from '../../src/core/errors.js';
 import { SerialBrokerStatus } from '../../src/core/types.js';
 import * as publicApi from '../../src/index.js';
 import { BrowserHarness } from '../harness/browser-harness.js';
-import { connectedTab, READER_OPTIONS, readerHarness } from '../harness/devices.js';
+import { connectedTab, READER_OPTIONS, readerHarness, twoTabs } from '../harness/devices.js';
 
 /**
  * The encapsulation boundary, asserted rather than trusted.
@@ -16,23 +16,10 @@ import { connectedTab, READER_OPTIONS, readerHarness } from '../harness/devices.
  * the suite rather than shipping and becoming load-bearing for somebody.
  */
 describe('encapsulation', () => {
-  async function twoTabs(): Promise<{
-    harness: BrowserHarness;
-    owner: ReturnType<BrowserHarness['openTab']>;
-    peer: ReturnType<BrowserHarness['openTab']>;
-  }> {
-    const { harness } = readerHarness();
-    const owner = harness.openTab();
-    await owner.setup('Reader', READER_OPTIONS);
-    const peer = harness.openTab();
-    await peer.setup('Reader', READER_OPTIONS);
-    return { harness, owner, peer };
-  }
-
   it('exposes exactly the documented status fields, the same in the owning tab and a peer', async () => {
-    const { owner, peer } = await twoTabs();
+    const { owner, other } = await twoTabs();
     const ownerView = owner.client.getStatus('Reader');
-    const peerView = peer.client.getStatus('Reader');
+    const peerView = other.client.getStatus('Reader');
 
     expect(Object.keys(ownerView).sort()).toEqual([
       'deviceKind',
@@ -55,9 +42,7 @@ describe('encapsulation', () => {
   });
 
   it('exposes exactly the documented receive payload', async () => {
-    const { harness, device } = readerHarness();
-    const tab = harness.openTab();
-    await tab.setup('Reader', READER_OPTIONS);
+    const { harness, device, tab } = await connectedTab();
 
     device.emit('x');
     await harness.settle();
@@ -71,9 +56,9 @@ describe('encapsulation', () => {
   });
 
   it('exposes exactly the documented send payload, with no peer identity', async () => {
-    const { harness, owner, peer } = await twoTabs();
+    const { harness, owner, other } = await twoTabs();
 
-    await peer.client.send('Reader', 'x');
+    await other.client.send('Reader', 'x');
     await harness.settle();
 
     const event = owner.recordFor('Reader').sent[0];
@@ -84,9 +69,9 @@ describe('encapsulation', () => {
   });
 
   it('exposes exactly the documented status-change payload', async () => {
-    const { owner } = await twoTabs();
+    const { tab } = await connectedTab();
 
-    expect(Object.keys(owner.recordFor('Reader').statuses[0] ?? {}).sort()).toEqual([
+    expect(Object.keys(tab.recordFor('Reader').statuses[0] ?? {}).sort()).toEqual([
       'name',
       'previousStatus',
       'status',
@@ -181,16 +166,7 @@ describe('argument handling at the public surface', () => {
   });
 
   it('refuses a payload larger than the bus carries in every tab, the one holding the port included', async () => {
-    const { harness, owner, peer } = await (async () => {
-      const { harness } = readerHarness();
-      const owner = harness.openTab();
-      await owner.client.setup('Reader', READER_OPTIONS);
-      await harness.settle();
-      const peer = harness.openTab();
-      await peer.client.setup('Reader', READER_OPTIONS);
-      await harness.settle();
-      return { harness, owner, peer };
-    })();
+    const { harness, owner, other } = await twoTabs();
     const tooLarge = new Uint8Array(16 * 1024 * 1024 + 1);
     const refused = expect.objectContaining({
       code: SerialBrokerErrorCode.INVALID_ARGUMENT,
@@ -203,9 +179,9 @@ describe('argument handling at the public surface', () => {
     // Otherwise the tab holding the port would write it, and another tab's request would be dropped
     // on the bus and time out: whether it works would depend on which tab holds the port.
     await expect(owner.client.send('Reader', tooLarge)).rejects.toThrow(refused);
-    await expect(peer.client.send('Reader', tooLarge)).rejects.toThrow(refused);
+    await expect(other.client.send('Reader', tooLarge)).rejects.toThrow(refused);
     await expect(
-      peer.client.send('Reader', new Uint8Array(16 * 1024 * 1024)),
+      other.client.send('Reader', new Uint8Array(16 * 1024 * 1024)),
     ).resolves.toBeUndefined();
     await harness.settle();
   });

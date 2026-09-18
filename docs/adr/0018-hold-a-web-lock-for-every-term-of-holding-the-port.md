@@ -18,11 +18,12 @@ thread. Taking the claim for the end of the former term has two defects: a write
 `OWNER_LOST_DURING_WRITE`, and a write reaches the device twice, handed to the new owner before the
 former owner's last word about it arrives.
 
-The bus is also open to every script of the origin (SECURITY.md). Believed on its word, a message could invent a term,
-end a live one, state another tab limit, resolve a write whose bytes were still queued, or deliver
-device data that never arrived. What is needed is a statement about a term that a message cannot
-make. The browser makes one about Web Locks: a lock is held or it is not, every context sees the
-same answer, and the browser frees it when the holder dies.
+The bus is also open to every script of the origin (SECURITY.md). Believed on its word, a message
+could invent a term, end a live one, state another tab limit, resolve a write whose bytes were still
+queued, or deliver device data that never arrived. What is needed is a statement about a term that a
+message cannot make. A Web Lock is one: it is held or it is not, every context sees the same answer,
+and the browser frees it when the holder dies
+([ADR-0005](./0005-owner-election-via-web-locks.md)).
 
 ## Decision
 

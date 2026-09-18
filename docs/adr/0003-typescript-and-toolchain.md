@@ -19,11 +19,9 @@ model is "one global environment per file" unless that environment is fully inje
   ([ADR-0026](./0026-a-classic-script-build-and-published-names.md)); the worker script
   (`src/worker/serial-broker.worker.ts`) is built as a minified ES module only. **Every published
   file is minified except the readable ES module and CommonJS builds and the debugging surface's
-  bundle (ADR-0015)** — the worker included: it
-  is served to every tab of every installation and nothing reads it, and its source map is
-  published beside it. Every published file is named after the package rather than after its entry
-  file (ADR-0026). Declarations are emitted by `tsc`, so the published types are the ones the test
-  suite type-checks against.
+  bundle (ADR-0015)** - the worker included: it is served to every tab of every installation and
+  nothing reads it, and its source map is published beside it. Declarations are emitted by `tsc`,
+  so the published types are the ones the test suite type-checks against.
 - **Vitest** as the test runner, in the `node` environment. The library never touches the DOM;
   every browser API it uses is injected (see
   [ADR-0012](./0012-dependency-injection-of-the-environment.md)), so a DOM emulator would add
@@ -46,7 +44,7 @@ model is "one global environment per file" unless that environment is fully inje
   scenario-shaped browser suite runs in CI on top of it
   ([ADR-0021](./0021-browser-tests-with-playwright.md)).
 - **`happy-dom`/`jsdom` environment**: neither implements `SharedWorker`, Web Locks or Web
-  Serial, so the fakes would be needed anyway — the emulator would only hide which globals
+  Serial, so the fakes would be needed anyway - the emulator would only hide which globals
   the code actually depends on.
 
 ## Consequences

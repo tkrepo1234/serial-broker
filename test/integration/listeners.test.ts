@@ -6,22 +6,14 @@ import type { ErrorEvent } from '../../src/core/types.js';
 import { ANNOUNCEMENT_CHANNEL_NAME, versionAnnouncement } from '../../src/protocol/announcement.js';
 import { PROTOCOL_VERSION } from '../../src/protocol/version.js';
 import { BrowserHarness, TRANSPORT_MODES } from '../harness/browser-harness.js';
-import { READER, READER_OPTIONS, readerHarness, twoTabs } from '../harness/devices.js';
+import { connectedTab, READER, READER_OPTIONS, twoTabs } from '../harness/devices.js';
 import { remember } from '../harness/stored-configurations.js';
 
 /** A new `onStatusChange` listener is told the current status once. */
 
-async function openTab() {
-  const { harness } = readerHarness();
-  const tab = harness.openTab();
-  await tab.client.setup('Reader', READER_OPTIONS);
-  await harness.settle();
-  return { harness, tab };
-}
-
 describe('a new status listener', () => {
   it('is told the current status once, after subscribe() has returned', async () => {
-    const { harness, tab } = await openTab();
+    const { harness, tab } = await connectedTab();
     const listener = vi.fn();
 
     tab.client.subscribe('Reader', 'onStatusChange', listener);
@@ -39,7 +31,7 @@ describe('a new status listener', () => {
   });
 
   it('is not told when it unsubscribed before the status was delivered', async () => {
-    const { harness, tab } = await openTab();
+    const { harness, tab } = await connectedTab();
     const listener = vi.fn();
 
     const unsubscribe = tab.client.subscribe('Reader', 'onStatusChange', listener);
@@ -50,7 +42,7 @@ describe('a new status listener', () => {
   });
 
   it('keeps a throwing listener from stopping the others', async () => {
-    const { harness, tab } = await openTab();
+    const { harness, tab } = await connectedTab();
     const good = vi.fn();
 
     tab.client.subscribe('Reader', 'onStatusChange', () => {

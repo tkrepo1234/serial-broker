@@ -7,7 +7,7 @@ import { UsbipServer } from '../src/usbip-server.ts';
 import type { ServerEvent } from '../src/usbip-server.ts';
 
 /**
- * A server error after listening has started — a failed accept, say — cannot be produced on
+ * A server error after listening has started - a failed accept, say - cannot be produced on
  * demand from outside. This file therefore records the net.Server the UsbipServer creates, so a
  * test can make it emit one; everything asserted is still what the UsbipServer does in response.
  * It is a file of its own so that the module mock touches no other test.

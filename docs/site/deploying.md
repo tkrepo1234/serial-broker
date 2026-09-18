@@ -68,12 +68,10 @@ SerialBroker.configure({
 });
 ```
 
-The specifier is `serial-broker/min`, the package's export for the minified build, so the same
-import resolves to the same file under a bundler and to its type definitions in an editor. Any
-specifier works as long as the script imports the one the map names.
-
 Without `configure()`, the library looks for `serial-broker.worker.js` next to its own file, which
-gives the same URL for this layout. Naming it keeps the one URL every tab must share visible.
+gives the same URL for this layout; naming it keeps the one URL every tab must share visible.
+[Installing](installing.md#minified-build) explains the specifier and what to do without an import
+map.
 
 A `SharedWorker` is identified by its **resolved** URL. Two pages whose relative `workerUrl` strings
 resolve to the same address share one worker; a relative string such as
@@ -98,18 +96,16 @@ that was never given a toolchain — copy `serial-broker.global.js` instead of
 ```
 
 The build leaves one global, `SerialBroker`, which is the library's facade and carries the rest of
-its surface as properties — `SerialBroker.SerialBrokerErrorCode`, `SerialBroker.REMEDIATION`, and
-so on; [Installing](installing.md#classic-script-build) lists them. A support page uses
-`serial-broker.diagnostics.global.js` and the global `SerialBrokerDiagnostics` in the same way.
+its surface as properties; [Installing](installing.md#classic-script-build) lists them. A support
+page uses `serial-broker.diagnostics.global.js` and the global `SerialBrokerDiagnostics` in the same
+way.
 
 Two things differ from the import-map deployment above:
 
-- **`configure({ workerUrl })` is required, and must run before the first `setup()`.** A classic
-  script has no `import.meta.url`, so the library cannot find the worker next to itself, and it
-  does not guess — a guess would resolve against each page's own address, and two pages of one
-  application would end up on two workers. Without it, tabs fall back to a `BroadcastChannel` and
-  log `environment.transport-fallback` with a reason naming `workerUrl`. Write the **absolute**
-  path, as above: a relative one resolves against the page.
+- **`configure({ workerUrl })` is required, and must run before the first `setup()`**, because a
+  classic script cannot find the worker next to itself and the library does not guess; see
+  [Classic script build](installing.md#classic-script-build). Write the **absolute** path, as
+  above: a relative one resolves against the page.
 - **There is no inline import map, so nothing needs a hash.** `script-src 'self'` covers a script
   loaded from a `src` attribute. If the `configure()` call above is inline, as it is here, that
   block needs a hash — or put it in your own `app.js` and keep `script-src 'self'` alone.
@@ -194,8 +190,8 @@ reports `PROTOCOL_VERSION_MISMATCH`, and with `transport: 'auto'` moves to a `Br
   every release — and tabs still open from before the deploy keep the old worker. If the release
   did not change the protocol version, the old tabs and the new ones wait for the same port but
   are on different workers, and do not see each other; see
-  [Tabs on different message buses](known-limits.md#tabs-on-different-message-buses-do-not-see-each-other). Reload every
-  tab after each deploy.
+  [Tabs on different message buses](known-limits.md#tabs-on-different-message-buses-do-not-see-each-other).
+  Reload every tab after each deploy.
 
 Either way, reload the open tabs after deploying a release that changes the protocol; the
 changelog says when.

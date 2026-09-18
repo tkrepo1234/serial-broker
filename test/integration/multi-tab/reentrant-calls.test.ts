@@ -4,7 +4,7 @@ import { SerialBrokerErrorCode } from '../../../src/core/error-codes.js';
 import { ownerLockName } from '../../../src/protocol/version.js';
 import { persistenceLockName } from '../../../src/storage/persistence-hold.js';
 import { BrowserHarness, TRANSPORT_MODES, type VirtualTab } from '../../harness/browser-harness.js';
-import { READER, READER_OPTIONS, readerHarness } from '../../harness/devices.js';
+import { connectedTab, READER, READER_OPTIONS, readerHarness } from '../../harness/devices.js';
 import { outcomeOf } from '../../harness/outcomes.js';
 
 const SCALE_OPTIONS = {
@@ -103,12 +103,10 @@ describe('a listener that releases a configuration while it is being set up', ()
 });
 
 describe.each(TRANSPORT_MODES)('a diagnostics watcher calling the observer (%s)', (transport) => {
+  /** A connected tab and an observer watching it from the same origin. */
   async function watchedDevice() {
-    const { harness, device } = readerHarness({ transport });
-    const tab = harness.openTab();
-    await tab.setup('Reader', READER_OPTIONS);
-    const observer = harness.openObserver();
-    return { harness, device, observer };
+    const { harness, device } = await connectedTab({ transport });
+    return { harness, device, observer: harness.openObserver() };
   }
 
   it('stops another watcher it removes from hearing the event being delivered', async () => {

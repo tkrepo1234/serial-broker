@@ -27,7 +27,7 @@ Three kinds of branch come and go:
 ## Commits
 
 The subject is one imperative sentence saying what the commit does for the library, in plain
-words - "Keep writes at most once at the port", not "fix(client): dedupe". The changelog is written
+words — "Keep writes at most once at the port", not "fix(client): dedupe". The changelog is written
 by hand, from what changed for users, so nothing is derived from a prefix:
 
 ```

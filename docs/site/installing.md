@@ -8,7 +8,7 @@ Serial. Chrome for Android is [not a target](known-limits.md#chrome-for-android-
 `isSupported()`, [below](#checking-support-at-run-time), tells at run time.
 
 **A secure context.** Browsers offer Web Serial and Web Locks only on pages served over HTTPS, from
-`localhost` during development - or [opened from a file](#a-page-opened-from-a-file), which needs
+`localhost` during development — or [opened from a file](#a-page-opened-from-a-file), which needs
 no server at all.
 
 **One origin.** Tabs share a port only with tabs of the same origin — scheme, host and port. Tabs of
@@ -77,7 +77,7 @@ a served page:
   </script>
   ```
 
-- **No `SharedWorker` is started** - the browser refuses one there - so the tabs coordinate over the
+- **No `SharedWorker` is started** — the browser refuses one there — so the tabs coordinate over the
   `BroadcastChannel` and log `environment.transport-fallback` once. Naming the worker URL is still
   right: the same folder then works unchanged when it is served.
 
@@ -126,7 +126,7 @@ the file by its URL: `import { SerialBroker } from '/assets/serial-broker/serial
 import map, and what to check afterwards.
 
 **Not from a CDN.** A `SharedWorker` script has to be same-origin, so `serial-broker.worker.js` must
-be a file the application's own server answers for - and it is the worker that makes the tabs share
+be a file the application's own server answers for — and it is the worker that makes the tabs share
 one port. Loading the library itself from a CDN while the worker comes from the origin only splits
 what has to be deployed together. Copy both files instead; every release attaches them as
 `serial-broker-<version>-browser.zip`.
@@ -176,7 +176,7 @@ with a plain `<script src>`:
 </script>
 ```
 
-Name the device instead - `device: { vendorId: 0x0403, productId: 0x6001 }` - and the button is
+Name the device instead — `device: { vendorId: 0x0403, productId: 0x6001 }` — and the button is
 needed only until the browser has been given the permission once; the page then opens the port on
 every later visit by itself. [First connection](first-connection.md#3-ask-for-permission-once) has
 both ways in full.
@@ -248,7 +248,7 @@ it was not deployed, or is served from another path — serial-broker uses a `Br
 instead and keeps working; see [The message bus](shared-ports.md#the-message-bus). It logs
 `environment.transport-fallback` at `warn` level. Check the log once after deploying: the fallback
 works, but a missing script is usually a mistake. **The library writes nothing anywhere on its
-own** - pass a logger first, with `SerialBroker.configure({ logger })`; see
+own** — pass a logger first, with `SerialBroker.configure({ logger })`; see
 [Logging](diagnostics.md#logging). `transport: 'sharedworker'` turns it into an error
 instead; see [`configure()`](configuration.md#configure).
 
@@ -257,16 +257,11 @@ from an earlier release is reported as `PROTOCOL_VERSION_MISMATCH`.
 
 ### CommonJS and the classic script build
 
-The CommonJS build, which `require('serial-broker')` loads, cannot find the script by itself:
-CommonJS has no `import.meta.url` to resolve it against, and no bundler emits the script for it.
-The classic script build has the same gap, for the same reason. An application that loads either
-one **must** copy the script as described above and set `workerUrl`, and pass the same URL to
-`openDiagnostics()`.
-
-Neither build guesses a location. Both create no `SharedWorker` without `workerUrl`: with the
-default `transport: 'auto'` they use a `BroadcastChannel` and log
-`environment.transport-fallback` with a `reason` that names `workerUrl`, and with
-`transport: 'sharedworker'`, `setup()` fails with `BROKER_UNAVAILABLE`.
+Neither build can find the script by itself: CommonJS has no `import.meta.url` to resolve it
+against, and no bundler emits the script for it; a classic script has neither. An application that
+loads either one **must** copy the script as described above and set `workerUrl`, and pass the same
+URL to `openDiagnostics()`. Without it, both fall back to a `BroadcastChannel`, as
+[Classic script build](#classic-script-build) describes.
 
 ## Content security policy
 
@@ -276,14 +271,13 @@ A strict policy has to allow the worker script:
 worker-src 'self';
 ```
 
-Without it, the browser blocks the worker, and serial-broker falls back to a `BroadcastChannel`,
+Without it the browser blocks the worker, and serial-broker falls back to a `BroadcastChannel`,
 logged as `environment.transport-fallback`. That works, but it is probably not what you intended.
 serial-broker makes no network requests and loads nothing else, so it needs no `connect-src`. An
-inline import map counts as an inline script under `script-src` and needs its hash — which is one
+inline import map counts as an inline script under `script-src` and needs its hash, which is one
 reason to prefer the [classic script build](#classic-script-build) where the policy is strict and
-static: it is loaded from a `src` attribute, so `script-src 'self'` covers it and nothing has to be
-hashed. The complete policy, the hash and the other headers are in
-[Deploying to a web server](deploying.md). The debugging surface brings a policy of its own; see
+static. The complete policy, the hash and the other headers are in
+[Deploying to a web server](deploying.md); the debugging surface brings a policy of its own, see
 [Whether to serve it](diagnostics.md#whether-to-serve-it).
 
 ## Checking support at run time

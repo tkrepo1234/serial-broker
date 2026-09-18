@@ -31,8 +31,8 @@ validation on read cannot absorb.
 
 **One key per configuration, with an index:**
 
-- `serial-broker/configurations/v<storage version>/index` — a JSON array of the remembered names.
-- `serial-broker/configurations/v<storage version>/entry/<name>` — the options of that one
+- `serial-broker/configurations/v<storage version>/index` - a JSON array of the remembered names.
+- `serial-broker/configurations/v<storage version>/entry/<name>` - the options of that one
   configuration, exactly what `setup()` accepts. For an auto-mode configuration the `device`
   carries its resolution (ADR-0022).
 

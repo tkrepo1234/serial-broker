@@ -11,9 +11,9 @@
  */
 
 import { SerialBrokerClient } from '../../src/client/serial-broker-client.js';
-import { describeSettings } from '../../src/core/diagnostics.js';
 import { SerialBrokerError } from '../../src/core/errors.js';
 import type { Logger, LogLevel, TransportKind, Unsubscribe } from '../../src/core/types.js';
+import { toSetupOptions } from '../../src/core/validation.js';
 import { normalizeConfiguration } from '../../src/core/validation.js';
 import { openDiagnostics } from '../../src/diagnostics.js';
 import type { DiagnosticsSnapshot, SerialBrokerDiagnostics } from '../../src/diagnostics.js';
@@ -101,11 +101,9 @@ let diagnostics: SerialBrokerDiagnostics | undefined;
 if (isFramedElsewhere) {
   // A page of another origin could lay its own content over the buttons that send to devices and
   // forget them. The page starts nothing there, so nothing can be clicked into acting.
-  const banner = byId('banner');
-  banner.textContent =
-    'serial-broker does not start inside a page of another origin. Open this page on its own.';
-  banner.hidden = false;
-  hideSetupActions();
+  stopWithBanner(
+    'serial-broker does not start inside a page of another origin. Open this page on its own.',
+  );
 } else {
   try {
     environment = createBrowserEnvironment({
@@ -122,16 +120,16 @@ if (isFramedElsewhere) {
       logger: pageLogger,
     });
   } catch (error) {
-    const banner = byId('banner');
     // Not always the browser: a transport forced under Settings that this browser lacks fails too.
-    banner.textContent = `serial-broker could not start on this page: ${describeError(error).text}`;
-    banner.hidden = false;
-    hideSetupActions();
+    stopWithBanner(`serial-broker could not start on this page: ${describeError(error).text}`);
   }
 }
 
-/** Hides everything that would set a configuration up, where this page cannot run one. */
-function hideSetupActions(): void {
+/** Says why the page runs nothing, and takes away everything that would set a configuration up. */
+function stopWithBanner(text: string): void {
+  const banner = byId('banner');
+  banner.textContent = text;
+  banner.hidden = false;
   for (const id of SETUP_ACTION_IDS) {
     byId(id).hidden = true;
   }
@@ -547,7 +545,7 @@ function readRemembered(): RememberedConfiguration[] {
   });
   return store.load().map((configuration) => ({
     name: configuration.name,
-    settings: describeSettings(configuration),
+    settings: toSetupOptions(configuration),
   }));
 }
 

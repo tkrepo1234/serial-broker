@@ -451,14 +451,10 @@ export class PortSupervisor {
         maxWaitingBytes: MAX_WAITING_WRITE_BYTES,
       },
     );
-    return new SerialBrokerError(
+    return this.#error(
       SerialBrokerErrorCode.WRITE_QUEUE_FULL,
       'The tab holding the port already has as many writes waiting as it keeps',
-      {
-        configName: this.configuration.name,
-        context: { requestId, byteLength, waiting, waitingBytes },
-        timestamp: this.environment.clock.now(),
-      },
+      { context: { requestId, byteLength, waiting, waitingBytes } },
     );
   }
 
@@ -505,7 +501,7 @@ export class PortSupervisor {
         const written = Promise.resolve(state.writer.write(chunk));
         try {
           await withDeadline(written, this.environment.clock, {
-            timeoutMs: this.configuration.connection.writeTimeoutMs,
+            timeoutMs: writeTimeoutMs,
             code: SerialBrokerErrorCode.WRITE_TIMEOUT,
             message: 'The device did not accept the write in time',
             configName: this.configuration.name,
@@ -531,15 +527,10 @@ export class PortSupervisor {
           const failure =
             error instanceof SerialBrokerError
               ? error
-              : new SerialBrokerError(
+              : this.#error(
                   SerialBrokerErrorCode.WRITE_FAILED,
                   `The device rejected the write: ${describeUnknown(error)}`,
-                  {
-                    configName: this.configuration.name,
-                    context: { bytesWritten, byteLength: payload.byteLength },
-                    timestamp: this.environment.clock.now(),
-                    cause: error,
-                  },
+                  { context: { bytesWritten, byteLength: payload.byteLength }, cause: error },
                 );
 
           // Only while this is still the connection the write started on: a write that outlived
@@ -632,15 +623,10 @@ export class PortSupervisor {
     if (this.#state === state) {
       this.#handleConnectionLoss(
         'write-failed',
-        new SerialBrokerError(
+        this.#error(
           SerialBrokerErrorCode.WRITE_FAILED,
           `The device rejected the write: ${describeUnknown(outcome.rejected)}`,
-          {
-            configName: this.configuration.name,
-            context: { chunkBytes },
-            timestamp: this.environment.clock.now(),
-            cause: outcome.rejected,
-          },
+          { context: { chunkBytes }, cause: outcome.rejected },
         ),
       );
     }
@@ -650,10 +636,8 @@ export class PortSupervisor {
   #openConnection(byteLength: number): Extract<ConnectionState, { kind: 'open' }> {
     const state = this.#state;
     if (state.kind !== 'open') {
-      throw new SerialBrokerError(SerialBrokerErrorCode.NOT_CONNECTED, 'The port is not open', {
-        configName: this.configuration.name,
+      throw this.#error(SerialBrokerErrorCode.NOT_CONNECTED, 'The port is not open', {
         context: { status: this.#status, byteLength },
-        timestamp: this.environment.clock.now(),
       });
     }
     return state;
@@ -723,16 +707,12 @@ export class PortSupervisor {
         queuedWrites: this.#writes.depth,
       },
     );
-    return new SerialBrokerError(
+    return this.#error(
       SerialBrokerErrorCode.WRITE_TIMEOUT,
       isExpired
         ? 'The write waited at the port until its writeTimeoutMs ran out and was not begun'
         : 'The tab that issued the write did not let it begin within writeTimeoutMs, and it was not begun',
-      {
-        configName: this.configuration.name,
-        context: { started: false, byteLength, waitedMs },
-        timestamp: this.environment.clock.now(),
-      },
+      { context: { started: false, byteLength, waitedMs } },
     );
   }
 
@@ -798,10 +778,9 @@ export class PortSupervisor {
     this.#foundPortDetached = true;
 
     const state = this.#state;
-    const error = new SerialBrokerError(
+    const error = this.#error(
       SerialBrokerErrorCode.DEVICE_DISCONNECTED,
       'The device was disconnected',
-      { configName: this.configuration.name, timestamp: this.environment.clock.now() },
     );
 
     if (state.kind === 'open' || state.kind === 'opening') {
@@ -884,20 +863,14 @@ export class PortSupervisor {
     do {
       this.#deviceConnectedWhileListing = false;
       try {
-        port = await withDeadline(
+        port = await this.#withOpenTimeout(
           findGrantedPort(
             this.environment.serial,
             { name: this.configuration.name, device: this.callbacks.device() },
             this.logger,
           ),
-          this.environment.clock,
-          {
-            timeoutMs: this.configuration.connection.openTimeoutMs,
-            code: SerialBrokerErrorCode.OPEN_TIMEOUT,
-            message: 'Listing the granted ports did not complete in time',
-            configName: this.configuration.name,
-            context: { attempt },
-          },
+          'Listing the granted ports did not complete in time',
+          { attempt },
         );
       } catch (error) {
         if (!this.#isStale(generation)) {
@@ -914,19 +887,15 @@ export class PortSupervisor {
       // wait for a connect event that has already happened.
     } while (port === undefined && this.#takeDeviceConnectedWhileListing());
 
-    if (port === undefined && this.#isFoundPortDetached()) {
+    if (port === undefined && this.#foundPortDetached) {
       // The browser does not list a detached port. The device is away, not the permission, so
       // this is a failed attempt like any other and backoff continues (ADR-0008).
       this.#recordFailedAttempt(
         'device-absent',
-        new SerialBrokerError(
+        this.#error(
           SerialBrokerErrorCode.DEVICE_DISCONNECTED,
           'The device has not been plugged in again',
-          {
-            configName: this.configuration.name,
-            context: { attempt },
-            timestamp: this.environment.clock.now(),
-          },
+          { context: { attempt } },
         ),
       );
       return undefined;
@@ -952,15 +921,10 @@ export class PortSupervisor {
     // The browser refuses to list the ports at all - a permissions policy, for instance. That
     // is not retryable, and another attempt would meet the same refusal (see `#giveUp`).
     this.#report(
-      new SerialBrokerError(
+      this.#error(
         SerialBrokerErrorCode.WEB_SERIAL_UNAVAILABLE,
         `Could not enumerate serial ports: ${describeUnknown(error)}`,
-        {
-          configName: this.configuration.name,
-          context: { attempt },
-          timestamp: this.environment.clock.now(),
-          cause: error,
-        },
+        { context: { attempt }, cause: error },
       ),
     );
     this.#giveUp('listing-refused');
@@ -980,13 +944,7 @@ export class PortSupervisor {
     try {
       // An open that outlives its deadline is closed by the loss handler, or by `stop()`, once it
       // settles - closing while it is pending does not stop it opening.
-      await withDeadline(opened, this.environment.clock, {
-        timeoutMs: this.configuration.connection.openTimeoutMs,
-        code: SerialBrokerErrorCode.OPEN_TIMEOUT,
-        message: 'Opening the port did not complete in time',
-        configName: this.configuration.name,
-        context: { attempt },
-      });
+      await this.#withOpenTimeout(opened, 'Opening the port did not complete in time', { attempt });
     } catch (error) {
       if (this.#isStale(generation)) {
         return false;
@@ -1015,14 +973,10 @@ export class PortSupervisor {
     if (readable === null || writable === null) {
       this.#handleConnectionLoss(
         'streams-missing',
-        new SerialBrokerError(
+        this.#error(
           SerialBrokerErrorCode.OPEN_FAILED,
           'The port opened but exposes no readable or writable stream',
-          {
-            configName: this.configuration.name,
-            context: { hasReadable: readable !== null, hasWritable: writable !== null },
-            timestamp: this.environment.clock.now(),
-          },
+          { context: { hasReadable: readable !== null, hasWritable: writable !== null } },
         ),
       );
       return;
@@ -1073,11 +1027,6 @@ export class PortSupervisor {
     return connected;
   }
 
-  /** {@link #foundPortDetached}, read through a method for the same reason as above. */
-  #isFoundPortDetached(): boolean {
-    return this.#foundPortDetached;
-  }
-
   #openOptions(): SerialOptionsLike {
     const serial = this.configuration.serial;
     return {
@@ -1111,10 +1060,9 @@ export class PortSupervisor {
         if (done) {
           this.#handleConnectionLoss(
             'stream-ended',
-            new SerialBrokerError(
+            this.#error(
               SerialBrokerErrorCode.DEVICE_DISCONNECTED,
               'The device closed the connection',
-              { configName: this.configuration.name, timestamp: this.environment.clock.now() },
             ),
           );
           return;
@@ -1149,12 +1097,9 @@ export class PortSupervisor {
   }
 
   /**
-   * Records traffic at `debug` level.
-   *
-   * The byte count is always logged; the bytes themselves only when the application has asked
-   * for them. Serial traffic routinely carries card numbers and PINs, and a support engineer
-   * reading a console dump must not be reading those by accident. See
-   * docs/guidelines/error-handling.md.
+   * Records traffic at `debug` level: always the byte count, and the bytes themselves only where
+   * the application has asked for them ({@link SerialBrokerEnvironment.logPayloads} says why they
+   * are gated).
    */
   #traceTraffic(direction: 'received' | 'sent', data: Uint8Array): void {
     this.logger.debug(direction, {
@@ -1250,15 +1195,10 @@ export class PortSupervisor {
       this.#enterState({ kind: 'failed' });
       this.#setStatus(SerialBrokerStatus.Failed);
       this.#report(
-        new SerialBrokerError(
+        this.#error(
           SerialBrokerErrorCode.RECONNECT_EXHAUSTED,
           `Gave up reconnecting after ${String(this.#backoff.attempt)} attempts`,
-          {
-            configName: this.configuration.name,
-            context: { attempts: this.#backoff.attempt, reason },
-            timestamp: this.environment.clock.now(),
-            cause,
-          },
+          { context: { attempts: this.#backoff.attempt, reason }, cause },
         ),
       );
       return;
@@ -1319,12 +1259,7 @@ export class PortSupervisor {
    */
   async #closeWhenOpened(state: Extract<ConnectionState, { kind: 'opening' }>): Promise<void> {
     try {
-      await withDeadline(state.opened, this.environment.clock, {
-        timeoutMs: this.configuration.connection.openTimeoutMs,
-        code: SerialBrokerErrorCode.OPEN_TIMEOUT,
-        message: 'Timed out while waiting for the port to open',
-        configName: this.configuration.name,
-      });
+      await this.#withOpenTimeout(state.opened, 'Timed out while waiting for the port to open');
     } catch (error) {
       const isStillPending =
         error instanceof SerialBrokerError && error.code === SerialBrokerErrorCode.OPEN_TIMEOUT;
@@ -1339,8 +1274,7 @@ export class PortSupervisor {
   /**
    * Releases everything a connection holds, in the order the streams require.
    *
-   * Never throws. Teardown runs on paths where something has already gone wrong, and a
-   * disposal that fails must not prevent the rest of it.
+   * Never throws: every step goes through {@link #closeStep}.
    */
   async #closeConnection(state: Extract<ConnectionState, { kind: 'open' }>): Promise<void> {
     // Every one of these is bounded, including the two that look like pure local cleanup.
@@ -1363,17 +1297,10 @@ export class PortSupervisor {
    *
    * Teardown runs on paths where something has already gone wrong; a step that fails or hangs
    * must not prevent the remaining steps or the caller that is waiting for all of them.
-   *
-   * The deadline is `openTimeoutMs`, so its error carries `OPEN_TIMEOUT`; it is only ever logged.
    */
   async #closeStep(operation: Promise<unknown>, step: string): Promise<void> {
     try {
-      await withDeadline(operation, this.environment.clock, {
-        timeoutMs: this.configuration.connection.openTimeoutMs,
-        code: SerialBrokerErrorCode.OPEN_TIMEOUT,
-        message: `Timed out while ${step}`,
-        configName: this.configuration.name,
-      });
+      await this.#withOpenTimeout(operation, `Timed out while ${step}`);
     } catch (error) {
       // Not reported: expected when the device has already gone, and the caller is tearing down
       // precisely because something is wrong and is already reporting why. But a close that
@@ -1389,6 +1316,56 @@ export class PortSupervisor {
   }
 
   // --- Plumbing ---------------------------------------------------------------------------
+
+  /**
+   * An error of this configuration, stamped with the moment it arose.
+   *
+   * Every failure the supervisor builds names the configuration it belongs to and the time on the
+   * injected clock (ADR-0012), so both are filled in here rather than at each of the places that
+   * build one.
+   */
+  #error(
+    code: SerialBrokerErrorCode,
+    message: string,
+    options: {
+      readonly context?: Readonly<Record<string, unknown>>;
+      readonly cause?: unknown;
+    } = {},
+  ): SerialBrokerError {
+    return new SerialBrokerError(code, message, {
+      configName: this.configuration.name,
+      context: options.context,
+      timestamp: this.environment.clock.now(),
+      cause: options.cause,
+    });
+  }
+
+  /**
+   * Bounds a call into Web Serial that has to finish, by `openTimeoutMs`.
+   *
+   * Listing the granted ports, opening one and every teardown step go through here: a yanked
+   * device can leave any of them pending forever (docs/guidelines/defensive-programming.md). The
+   * deadline's error carries `OPEN_TIMEOUT`, which is what the callers recognise it by.
+   *
+   * **Not `async`.** It hands the deadline's own promise back, so awaiting this is awaiting what
+   * the caller would have awaited. An `async` wrapper would add two turns of the microtask queue
+   * to every one of these waits, and the tab taking the port over would open it while the tab
+   * letting it go was still closing - measured: it opened, and was knocked straight back to
+   * `connecting`.
+   */
+  #withOpenTimeout<T>(
+    operation: Promise<T>,
+    message: string,
+    context?: Readonly<Record<string, unknown>>,
+  ): Promise<T> {
+    return withDeadline(operation, this.environment.clock, {
+      timeoutMs: this.configuration.connection.openTimeoutMs,
+      code: SerialBrokerErrorCode.OPEN_TIMEOUT,
+      message,
+      configName: this.configuration.name,
+      context,
+    });
+  }
 
   /**
    * `true` if the world moved on while an `await` was pending.

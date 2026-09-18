@@ -51,9 +51,8 @@ provides:
   from the loopback device. It imports the stand-in and its helpers with relative paths
   (`../../test/browser/...`), uses the ids above, and passes when run through the root. The steps
   every example shares - connecting with a click, sending a line and seeing it echoed, living
-  through an unplugged device - live in `examples/smoke-support.ts`: a spec
-  names its elements once and composes its tests from those steps, keeping only what its example
-  alone does:
+  through an unplugged device - live in `examples/smoke-support.ts`: a spec names its elements once
+  and composes its tests from those steps, keeping only what its example alone does:
 
   ```sh
   npm run build            # once, at the repository root
@@ -61,9 +60,9 @@ provides:
   npm run test:examples -- examples/minimal-js/smoke.spec.ts
   ```
 
-  The root configuration (`config/playwright.examples.config.ts`) reads every `example.json`, starts each
-  example with its `start` command on its port, and runs the `smoke.spec.ts` files. CI does the same
-  with Chromium, after `npm ci` in every example directory.
+  The root configuration (`config/playwright.examples.config.ts`) reads every `example.json`,
+  starts each example with its `start` command on its port, and runs the `smoke.spec.ts` files. CI
+  does the same with Chromium, after `npm ci` in every example directory.
 
   Unlike the rest of the example, `smoke.spec.ts` is type-checked by the root (`npm run typecheck`
   at the repository root), because it is written against the root's dependencies and would otherwise

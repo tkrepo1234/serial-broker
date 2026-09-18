@@ -68,17 +68,8 @@ export interface MappingContext {
   readonly extra?: Readonly<Record<string, unknown>> | undefined;
 }
 
-/**
- * Maps a `port.open()` failure.
- *
- * A {@link SerialBrokerError} passes through unchanged: a deadline that already expired has
- * said something more specific than this table could.
- */
+/** Maps a `port.open()` failure. */
 export function mapOpenError(error: unknown, context: MappingContext): SerialBrokerError {
-  if (error instanceof SerialBrokerError) {
-    return error;
-  }
-
   return build(
     error,
     OPEN_FAILURES,
@@ -96,10 +87,6 @@ export function mapOpenError(error: unknown, context: MappingContext): SerialBro
  * about cables and line settings that a genuine read failure deserves.
  */
 export function mapReadError(error: unknown, context: MappingContext): SerialBrokerError {
-  if (error instanceof SerialBrokerError) {
-    return error;
-  }
-
   return build(
     error,
     READ_FAILURES,
@@ -111,10 +98,6 @@ export function mapReadError(error: unknown, context: MappingContext): SerialBro
 
 /** Maps a `requestPort()` failure. */
 export function mapRequestPortError(error: unknown, context: MappingContext): SerialBrokerError {
-  if (error instanceof SerialBrokerError) {
-    return error;
-  }
-
   return build(
     error,
     REQUEST_PORT_FAILURES,
@@ -131,6 +114,12 @@ function build(
   context: MappingContext,
   message: (detail: string) => string,
 ): SerialBrokerError {
+  if (error instanceof SerialBrokerError) {
+    // Already one of ours: a deadline that expired has said something more specific than any
+    // table could.
+    return error;
+  }
+
   const name = domExceptionName(error);
   // Own entries only: the tables are plain objects, and a name such as `constructor` would
   // otherwise find what every object inherits and become the error's code.
