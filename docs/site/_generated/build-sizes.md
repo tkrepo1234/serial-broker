@@ -2,10 +2,10 @@
 
 | File | Built | Gzipped |
 | --- | --- | --- |
-| `dist/serial-broker.js` | 248.5 KB | 61.3 KB |
-| `dist/serial-broker.min.js` | 94.9 KB | 27.9 KB |
-| `dist/serial-broker.global.js` | 95.3 KB | 28.0 KB |
-| `dist/serial-broker.diagnostics.js` | 77.7 KB | 19.8 KB |
+| `dist/serial-broker.js` | 248.6 KB | 62.1 KB |
+| `dist/serial-broker.min.js` | 94.0 KB | 28.1 KB |
+| `dist/serial-broker.global.js` | 94.4 KB | 28.2 KB |
+| `dist/serial-broker.diagnostics.js` | 77.6 KB | 19.8 KB |
 | `dist/serial-broker.diagnostics.min.js` | 35.0 KB | 11.4 KB |
 | `dist/serial-broker.diagnostics.global.js` | 35.4 KB | 11.5 KB |
-| `dist/serial-broker.worker.js` | 23.0 KB | 8.0 KB |
+| `dist/serial-broker.worker.js` | 23.0 KB | 8.1 KB |
