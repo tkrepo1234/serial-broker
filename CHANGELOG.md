@@ -18,7 +18,7 @@ different protocol versions do not coordinate with each other. It is noted whene
   assembling lines or frames drops the one in progress; the examples do so instead of watching the
   status.
 - **`VERSION`**, the release of the package, exported beside `PROTOCOL_VERSION` and on the classic
-  script's global. Every published file names the same release in a comment on its first line, so
+  script's global. Every published script names the same release in a comment on its first line, so
   a worker script left on a server from an earlier release can be recognised without loading it,
   and the debugging surface shows the release it was built from.
 
@@ -33,6 +33,10 @@ different protocol versions do not coordinate with each other. It is noted whene
 
 ### Fixed
 
+- **Device data a script of the origin made up is not delivered**, even when it claims a term
+  first and sends the data before the tabs have checked that claim's lock. Data from a sender whose
+  term is being checked waits for the answer, behind the claim, and goes with it when nobody holds
+  the lock. A new holder's bytes no longer reach a tab before the status that says the port moved.
 - **A port another program holds is reported as `OPEN_FAILED`**, not as `DEVICE_DISCONNECTED`.
   Chromium answers every refusal of `open()` with a `NetworkError`, and the commonest one by far is
   a terminal program or driver tool holding the port; the operator now reads "Another application

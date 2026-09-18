@@ -254,7 +254,7 @@ own** — pass a logger first, with `SerialBroker.configure({ logger })`; see
 instead; see [`configure()`](configuration.md#configure).
 
 After deploying a new release, serve its worker script under the URL the pages use; a copy left over
-from an earlier release is reported as `PROTOCOL_VERSION_MISMATCH`. Every published file names its
+from an earlier release is reported as `PROTOCOL_VERSION_MISMATCH`. Every published script names its
 release on its first line, `/*! serial-broker <version> | MIT */`, so a look at the served file
 says which one it is.
 

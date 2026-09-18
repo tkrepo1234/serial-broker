@@ -319,6 +319,35 @@ describe('a script of the origin that forges messages about the port', () => {
 
     expect(other.receivedText('Reader')).toBe('REAL');
   });
+
+  it('cannot deliver device data it made up while the term it claims is being checked', async () => {
+    const { harness, device, owner, other } = await twoLoggedTabs('broadcastchannel');
+    const mallory = eavesdrop(harness);
+
+    // The claim makes the tabs ask the browser about a lock nobody holds; the data follows at once,
+    // before the answer. It waits for that answer, and goes with the claim.
+    mallory.post({
+      ...FORGED,
+      type: 'owner-claimed',
+      configName: 'Reader',
+      term: 't-invented',
+      maxTabs: Number.POSITIVE_INFINITY,
+    });
+    mallory.post({
+      ...FORGED,
+      type: 'data-received',
+      configName: 'Reader',
+      payload: new Uint8Array([0x46, 0x41, 0x4b, 0x45]),
+      text: 'FAKE',
+      timestamp: 1,
+    });
+    await harness.settle();
+    device.emit('REAL');
+    await harness.settle();
+
+    expect(owner.receivedText('Reader')).toBe('REAL');
+    expect(other.receivedText('Reader')).toBe('REAL');
+  });
 });
 
 describe('a script of the origin that floods the bus with well-formed messages', () => {

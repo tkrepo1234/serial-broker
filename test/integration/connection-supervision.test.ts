@@ -356,6 +356,22 @@ describe('an unplugged device', () => {
     expect(tab.client.getStatus('Reader').status).toBe(SerialBrokerStatus.Open);
   });
 
+  it('takes the disconnect event alone as the loss, when the read does not fail', async () => {
+    const { harness, device, tab } = await connectedTab();
+
+    // Edge on Windows fails the read first. Another adapter or system may give no sign but the
+    // event, with the read still pending: the connection is lost all the same, and said so once.
+    harness.serial.unplug(device, 'event-only');
+    await harness.advance(1_000);
+
+    expect(tab.client.getStatus('Reader').status).toBe(SerialBrokerStatus.Reconnecting);
+    expect(tab.errorCodes('Reader')).toEqual([SerialBrokerErrorCode.DEVICE_DISCONNECTED]);
+
+    harness.serial.plug(device);
+    await harness.settle();
+    expect(tab.client.getStatus('Reader').status).toBe(SerialBrokerStatus.Open);
+  });
+
   it('backs off while it is away, and gives up after maxAttempts', async () => {
     const { harness, device, tab } = await connectedTab({}, { connection: { maxAttempts: 4 } });
 

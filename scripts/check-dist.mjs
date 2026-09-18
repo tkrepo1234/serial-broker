@@ -114,12 +114,12 @@ for (const entry of ENTRY_POINTS) {
 }
 
 const banner = `/*! serial-broker ${packageJson.version} | MIT */`;
-for (const file of readdirSync(join(root, 'dist'))) {
+for (const file of readdirSync(join(root, 'dist'), { recursive: true })) {
   if (
     /\.(js|cjs)$/.test(file) &&
     !readFileSync(join(root, 'dist', file), 'utf8').startsWith(banner)
   ) {
-    problems.push(`dist/${file} does not begin with ${banner}`);
+    problems.push(`dist/${file.replaceAll('\\', '/')} does not begin with ${banner}`);
   }
 }
 

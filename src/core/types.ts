@@ -145,9 +145,10 @@ export type DeviceKind = 'usb' | 'non-usb' | 'any' | 'auto';
  * applied for everything except `baudRate`. The defaults are the common 8N1 frame: eight data
  * bits, no parity, one stop bit.
  *
- * The port can be opened only one way, so every tab using a configuration has to pass the same
- * line settings. A tab that passes different ones reports `CONFIGURATION_CONFLICT` and shows the
- * status `failed`.
+ * The tab holding the port opens it with its own line settings, and a tab that takes the port over
+ * opens it with its own; settings are not compared between tabs. So pass the same ones for a name
+ * in every tab. A second `setup()` in the same tab with different ones is refused with
+ * `CONFIGURATION_CONFLICT`.
  */
 export interface SerialSettings {
   /** Bits per second: an integer from 1 to 20,000,000. Required; there is no sensible default. */

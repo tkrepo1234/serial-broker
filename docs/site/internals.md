@@ -125,7 +125,8 @@ of a term and queues for it in `shared` mode, so:
 
 `OwnerTerms.authorize()` is the one table of who may say what: claims and statuses once their term's
 lock is held, a write's progress and result from the context speaking for its term, device data and
-errors from a context speaking for a term the tab knows of.
+errors from a context speaking for a term whose lock is held — what arrives while that is being
+checked waits for the answer, in order behind the claim.
 
 ## The message bus
 
