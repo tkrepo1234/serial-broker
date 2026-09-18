@@ -45,8 +45,7 @@ cannot tell that from the bytes. Each tab decides it from what it saw itself, so
 travels on the wire and nothing reveals which tab holds the port: `true` on the tab's first
 delivery, and on the first after its status left `open` or after its message bus replaced a worker
 that died. The last is the one gap the status does not show - the port stays open while what was
-broadcast into the dead worker is lost. Watching the status alone, as an application could before,
-misses it.
+broadcast into the dead worker is lost, so watching the status alone misses it.
 
 The settings of the tab holding the port apply, because that tab reads the device. They are not
 part of the comparison that decides a `CONFIGURATION_CONFLICT`: two tabs disagreeing about `idleMs`
@@ -64,6 +63,10 @@ decoder, so a character split across reads is decoded intact ([ADR-0013](./0013-
   can stall the port. The same composition is achievable outside the library with less coupling.
 - **Optional "line mode".** The 80% case, but it splits the delivery semantics in two and doubles
   the test matrix for every failover scenario; a ten-line helper on top of `onReceive` does it.
+- **A request/answer helper**, `request(name, data, { answer, timeoutMs })`, holding a lock across
+  tabs from the command until its answer. It is correlation, which this decision leaves to the layer
+  above, and an answer predicate would run application code on every delivery. The documentation's
+  `LineChannel` example does the same on the public API, with a Web Lock of the application's own.
 - **Deliver every chunk exactly as read.** Every application would write the same timer, a terminal
   would show one line per byte, and every tab would receive one bus message per byte. An
   application that wants it sets `idleMs: 0`.

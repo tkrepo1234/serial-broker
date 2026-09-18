@@ -35,8 +35,6 @@ Not derivable from the code:
 
 None is scheduled.
 
-- A request/answer helper, `request(name, data, { answer, timeoutMs })`, with cross-tab
-  exclusivity, and a bounded line splitter as an export instead of example code.
 - Diagnostics that name a tab in human terms (path, title, visibility, an application label) and
   keep a short error history per configuration.
 - `logPayloads` switchable at run time, applied by whichever tab holds the port.
