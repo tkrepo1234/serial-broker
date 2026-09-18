@@ -142,11 +142,11 @@ the first to hold the port. The worker holds a Web Lock for its lifetime, which 
 
 ### Over the expectation, by less than ten times
 
-- **A handover after a crash** (`wall` and `everyTab`): 349.3 ms at the median on the
-  `SharedWorker` transport and 388.5 ms on `BroadcastChannel`, against 250 ms, with a 95th
-  percentile of 676.5 ms and 854.8 ms. Almost none of it is the library's: `library` — the same
+- **A handover after a crash** (`wall` and `everyTab`): 375.3 ms at the median on the
+  `SharedWorker` transport and 348.5 ms on `BroadcastChannel`, against 250 ms, with a 95th
+  percentile of 678.4 ms and 661.7 ms. Almost none of it is the library's: `library` — the same
   moment against a plain Web Lock the crashed page held, freed by the browser in the same crash —
-  is 6.500 ms and 6.100 ms at the median. The rest is Chromium noticing that the renderer is gone,
+  is 8.300 ms and 6.500 ms at the median. The rest is Chromium noticing that the renderer is gone,
   plus the DevTools round trip that orders the crash. The first crash after the browser starts
   takes about twice as long as the ones after it. The expectation stays at 250 ms, so that the
   next run is judged against the same line.
@@ -169,7 +169,7 @@ the first to hold the port. The worker holds a Web Lock for its lifetime, which 
   reasoned from the echo, was wrong in the safe direction. Against a real device the write itself
   takes as long as the line rate says — about eighteen minutes at 9600 baud — and the library's
   part of it is the harness number.
-- **The harness results are 6 to 110 times under their expectations**, with the writes from a tab
+- **The harness results are 5 to 100 times under their expectations**, with the writes from a tab
   that does not hold the port on the `SharedWorker` transport closest to the line. The expectations
   reasoned from tens of microseconds a hop where the process spends a few; they stand as written,
   and a result is compared with them, not with the last run.
