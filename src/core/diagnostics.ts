@@ -99,7 +99,7 @@ export interface ConnectionDiagnostics {
 
 /** Writes a context has issued and that have not settled yet. */
 export interface PendingWritesDiagnostics {
-  /** All of them. */
+  /** Every write not settled yet. `dispatched` and `started` count some of the same writes again. */
   readonly total: number;
   /** Handed to an owner that has not answered yet. The rest are waiting for a connection. */
   readonly dispatched: number;
