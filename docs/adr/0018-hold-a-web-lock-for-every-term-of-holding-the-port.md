@@ -70,7 +70,11 @@ From that, four rules:
 **One table decides who may say what** (`OwnerTerms.authorize()`): claims and statuses once their
 term's lock is held; `write-ready` and `write-result` only from the term the write was addressed to
 and the context speaking for it; `data-received`, `data-sent` and `error` only from a context
-speaking for a term this tab knows of. A tab that has just joined knows no term until the status it
+speaking for a term whose lock is held. What such a context sends while its term's lock is being
+checked waits for the answer, behind the claim and the status it sent first, so a claim a script
+of the origin invents carries no device data through the check, and a tab never delivers a new
+holder's bytes before the status that says the port moved. A tab that has taken the port claims it
+before it opens it, so its first bytes do not wait in practice. A tab that has just joined knows no term until the status it
 asked for arrives, so device data reaching it in that window is dropped, logged once per
 configuration (`session.data-without-a-term`).
 

@@ -373,14 +373,18 @@ export class FakeSerialRegistry {
   /**
    * Unplugs a device: `getPorts()` stops listing it, its streams break, and opening fails.
    *
-   * The order is the browser's: the read of an open port rejects first, and `disconnect` follows
-   * in a later task. A test sees both once it settles or advances the clock.
+   * By default as measured in Edge against the USB/IP emulator: the read of an open port rejects
+   * first, and `disconnect` follows in a later task. With `'event-only'`, as another adapter or
+   * operating system may behave, `disconnect` is the only sign: the read of an open port stays
+   * pending until the port is closed. A test sees the event once it settles.
    */
-  unplug(device: FakeDevice): void {
+  unplug(device: FakeDevice, signs: 'read-first' | 'event-only' = 'read-first'): void {
     device.isAttached = false;
     device.isOpen = false;
     device.holder = undefined;
-    device.breakStream(domException('NetworkError', 'The device has been lost'));
+    if (signs === 'read-first') {
+      device.breakStream(domException('NetworkError', 'The device has been lost'));
+    }
     this.#dispatchLater('disconnect', device);
   }
 

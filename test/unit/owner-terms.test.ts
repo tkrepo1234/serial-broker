@@ -288,7 +288,7 @@ describe('OwnerTerms', () => {
     expect(ended).toEqual([{ term: 't1', wasCurrent: true }]);
   });
 
-  it('knows the senders of the term holding the port and of one still being waited for', async () => {
+  it('knows the senders of the terms whose locks are held', async () => {
     const { terms, locks } = createTerms();
     await holdTerm(locks, 'owner', FIRST);
     const second = claimOf('t2', 'c-second' as ClientId);
@@ -303,6 +303,42 @@ describe('OwnerTerms', () => {
     expect(speaksForATerm(terms, 'c-mallory' as ClientId)).toBe(false);
     expect(speaksFor(terms, FIRST.term, HOLDER)).toBe(true);
     expect(speaksFor(terms, FIRST.term, 'c-mallory' as ClientId)).toBe(false);
+  });
+
+  it('holds what the sender of a term being checked says about the device until the lock is held', async () => {
+    const { terms, locks } = createTerms();
+    await holdTerm(locks, 'owner', FIRST);
+    const applied: string[] = [];
+
+    observe(terms, FIRST, () => applied.push('claim'));
+    const believedAtOnce = speaksForATerm(terms, HOLDER);
+    await flushMicrotasks();
+
+    expect(believedAtOnce).toBe(false);
+    expect(applied).toEqual(['claim']);
+    expect(speaksForATerm(terms, HOLDER)).toBe(true);
+  });
+
+  it('drops what the sender of an invented term says about the device, once the lock is found free', async () => {
+    const { terms, records } = createTerms();
+    const heard: string[] = [];
+
+    observe(terms, FIRST, () => heard.push('claim'));
+    terms.authorize(
+      {
+        ...ENVELOPE,
+        type: 'data-received',
+        from: HOLDER,
+        payload: new Uint8Array([0x46]),
+        text: 'F',
+        timestamp: 0,
+      } as ProtocolMessage,
+      () => heard.push('data'),
+    );
+    await flushMicrotasks();
+
+    expect(heard).toEqual([]);
+    expect(fieldsOfEvent(records, 'session.term-not-held')).toHaveLength(1);
   });
 
   it('forgets the sender of a term that has ended', async () => {
