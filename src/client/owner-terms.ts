@@ -115,7 +115,7 @@ export class OwnerTerms {
    * | `owner-claimed`, `status` | its term's lock is held, and no later term has been heard of - which may be only after the lock has been checked |
    * | `owner-released` | never on its own: noted, and it ends the term once its lock is free (`apply` is not run) |
    * | `write-ready`, `write-result` | it comes from the context that speaks for the term it names |
-   * | `data-received`, `data-sent`, `error` | its sender speaks for a term that holds the port or is still being waited for |
+   * | `data-received`, `data-sent`, `error` | its sender speaks for a term whose lock is held - which may be only after the lock has been checked |
    * | `write-request`, `write-approval` | always: they speak for the tab that issued a write, not for a term. The tab holding the port takes an approval only from the context that issued the write, which it knows and the terms do not (ADR-0011) |
    * | anything else | always: it says nothing about the port |
    */
@@ -142,9 +142,20 @@ export class OwnerTerms {
 
       case 'data-received':
       case 'data-sent':
-      case 'error':
-        if (this.#isKnownSender(message.from)) {
+      case 'error': {
+        if (this.#speaksForLiveTerm(message.from)) {
           apply();
+          return;
+        }
+        // Held until the lock is known to be held, and dropped if it is not: a claim a script of
+        // the origin invented must not carry device data through the moment it is being checked.
+        // A tab that has taken the port claims it before it opens it, so its first bytes do not
+        // wait in practice.
+        const checking = this.#checkedTermOf(message.from);
+        if (checking !== undefined) {
+          this.#waitFor(checking, () => {
+            this.authorize(message, apply);
+          });
           return;
         }
         // The sender may be a script of the origin making things up - which is why the check exists
@@ -160,6 +171,7 @@ export class OwnerTerms {
           },
         );
         return;
+      }
 
       default:
         apply();
@@ -198,14 +210,19 @@ export class OwnerTerms {
     return entry !== undefined && entry.phase !== 'refused' && entry.claim.from === from;
   }
 
-  /** `true` if `from` speaks for a term that holds the port or is still being waited for. */
-  #isKnownSender(from: ClientId): boolean {
+  /** `true` if `from` speaks for a term whose lock is known to be held. */
+  #speaksForLiveTerm(from: ClientId): boolean {
     for (const entry of this.#terms.values()) {
-      if (entry.claim.from === from && (entry.phase === 'checking' || entry.phase === 'live')) {
+      if (entry.claim.from === from && entry.phase === 'live') {
         return true;
       }
     }
     return false;
+  }
+
+  /** The term `from` speaks for whose lock is still being checked, if there is one. */
+  #checkedTermOf(from: ClientId): KnownTerm | undefined {
+    return this.#firstMatching((entry) => entry.claim.from === from && entry.phase === 'checking');
   }
 
   /** A claim or a status arrived; `apply` runs once the term is known to be live and not stale. */

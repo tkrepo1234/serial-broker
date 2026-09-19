@@ -33,9 +33,9 @@ The panel never asks which window it is.
 everywhere, and `onSend` reports every command the browser took for the port, with `origin` telling
 this window's commands from the others'. An answer usually arrives in one delivery, but the panel
 still assembles lines, because nothing guarantees it. It uses the bounded `LineSplitter` from
-[Reading lines](all-features.md#reading-lines), and empties it whenever the status leaves `open`:
-what the scale sends during a reconnect or a handover is lost, and the halves of a line from either
-side of that gap must not be joined.
+[Reading lines](all-features.md#reading-lines), and empties it before every delivery marked
+`afterGap`: what the scale sends during a reconnect or a handover is lost, and the halves of a line
+from either side of that gap must not be joined.
 
 **Line settings are the application's to keep consistent.** The window that holds the port opens
 it with its own settings, and serial-broker does not compare settings between windows. The panel

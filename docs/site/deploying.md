@@ -8,11 +8,13 @@ copied as described in [The worker script](installing.md#the-worker-script).
 
 ## Which files to copy
 
-On a machine with npm, `npm install serial-broker` and take the files from
-`node_modules/serial-broker/dist/`. Without npm anywhere, every release attaches
-`serial-broker-<version>-browser.zip`: the minified and the classic builds, the worker script, their
-source maps and the type declarations, under `serial-broker/`, with a short `README.txt`. The
-readable build and the debugging surface are in the package only. The files are these:
+On a machine with npm, install the package and take the files from
+`node_modules/serial-broker/dist/`. It is not on the npm registry before 1.0, so that is
+`npm install ./serial-broker-<version>.tgz` from the release; see [Installing](installing.md).
+Without npm anywhere, every release attaches `serial-broker-<version>-browser.zip`: the minified
+and the classic builds, the worker script and their source maps, under `serial-broker/`, with a
+short `README.txt` beside it. The readable build, the type definitions and the debugging surface
+are in the package only. The files are these:
 
 | File                                          | Needed                                                                                                         |
 | --------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
@@ -66,12 +68,10 @@ SerialBroker.configure({
 });
 ```
 
-The specifier is `serial-broker/min`, the package's export for the minified build, so the same
-import resolves to the same file under a bundler and to its type definitions in an editor. Any
-specifier works as long as the script imports the one the map names.
-
 Without `configure()`, the library looks for `serial-broker.worker.js` next to its own file, which
-gives the same URL for this layout. Naming it keeps the one URL every tab must share visible.
+gives the same URL for this layout; naming it keeps the one URL every tab must share visible.
+[Installing](installing.md#minified-build) explains the specifier and what to do without an import
+map.
 
 A `SharedWorker` is identified by its **resolved** URL. Two pages whose relative `workerUrl` strings
 resolve to the same address share one worker; a relative string such as
@@ -96,18 +96,16 @@ that was never given a toolchain — copy `serial-broker.global.js` instead of
 ```
 
 The build leaves one global, `SerialBroker`, which is the library's facade and carries the rest of
-its surface as properties — `SerialBroker.SerialBrokerErrorCode`, `SerialBroker.REMEDIATION`, and
-so on; [Installing](installing.md#classic-script-build) lists them. A support page uses
-`serial-broker.diagnostics.global.js` and the global `SerialBrokerDiagnostics` in the same way.
+its surface as properties; [Installing](installing.md#classic-script-build) lists them. A support
+page uses `serial-broker.diagnostics.global.js` and the global `SerialBrokerDiagnostics` in the same
+way.
 
 Two things differ from the import-map deployment above:
 
-- **`configure({ workerUrl })` is required, and must run before the first `setup()`.** A classic
-  script has no `import.meta.url`, so the library cannot find the worker next to itself, and it
-  does not guess — a guess would resolve against each page's own address, and two pages of one
-  application would end up on two workers. Without it, tabs fall back to a `BroadcastChannel` and
-  log `environment.transport-fallback` with a reason naming `workerUrl`. Write the **absolute**
-  path, as above: a relative one resolves against the page.
+- **`configure({ workerUrl })` is required, and must run before the first `setup()`**, because a
+  classic script cannot find the worker next to itself and the library does not guess; see
+  [Classic script build](installing.md#classic-script-build). Write the **absolute** path, as
+  above: a relative one resolves against the page.
 - **There is no inline import map, so nothing needs a hash.** `script-src 'self'` covers a script
   loaded from a `src` attribute. If the `configure()` call above is inline, as it is here, that
   block needs a hash — or put it in your own `app.js` and keep `script-src 'self'` alone.
@@ -118,11 +116,15 @@ A policy that allows only what such a page needs:
 
 ```text
 Content-Security-Policy: default-src 'none'; script-src 'self' 'sha256-…'; worker-src 'self';
-  style-src 'self'; img-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'
+  style-src 'self'; img-src 'self' data:; base-uri 'none'; form-action 'self'; frame-ancestors 'none'
 ```
 
 `script-src 'self'`
 : The page's scripts and `serial-broker.min.js` (or `serial-broker.global.js`).
+
+`img-src 'self' data:`
+: The page's own images. `data:` is there for the empty icon a page can declare to keep the
+browser from asking for `/favicon.ico`; leave it out if the page declares a real one.
 
 `'sha256-…'` in `script-src`
 : The inline import map. Under `script-src` an import map is an inline script, and browsers do not
@@ -132,8 +134,11 @@ spaces and line breaks included, so hash the file as the server delivers it — 
 has run. Compute it wherever the page is built, and again whenever the map changes:
 
 ```sh
-node -e "const html = require('fs').readFileSync('index.html', 'utf8'); const map = /<script type=\"importmap\">([\s\S]*?)<\/script>/.exec(html)[1]; console.log(\"'sha256-\" + require('crypto').createHash('sha256').update(map, 'utf8').digest('base64') + \"'\")"
+node scripts/importmap-hash.mjs index.html
 ```
+
+The script is in the repository and is twenty lines; a page built elsewhere can copy it. It takes
+the path of the page and prints the `'sha256-…'` to paste into the policy.
 
 A blocked import map is reported on the console, and the report names the hash it expected. A page
 that imports the library by its URL instead —
@@ -185,8 +190,8 @@ reports `PROTOCOL_VERSION_MISMATCH`, and with `transport: 'auto'` moves to a `Br
   every release — and tabs still open from before the deploy keep the old worker. If the release
   did not change the protocol version, the old tabs and the new ones wait for the same port but
   are on different workers, and do not see each other; see
-  [Tabs on different message buses](known-limits.md#tabs-on-different-message-buses-do-not-see-each-other). Reload every
-  tab after each deploy.
+  [Tabs on different message buses](known-limits.md#tabs-on-different-message-buses-do-not-see-each-other).
+  Reload every tab after each deploy.
 
 Either way, reload the open tabs after deploying a release that changes the protocol; the
 changelog says when.

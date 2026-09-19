@@ -99,7 +99,7 @@ coordinates tabs over a BroadcastChannel by itself.
   });
   // SerialBroker.setup(...), .subscribe(...), .send(...) as above.
   // Also on the global: isSupported, isSerialBrokerError, hasCode, SerialBrokerStatus,
-  // SerialBrokerErrorCode, SerialBrokerError, REMEDIATION, PROTOCOL_VERSION.
+  // SerialBrokerErrorCode, SerialBrokerError, REMEDIATION, PROTOCOL_VERSION, VERSION.
 </script>
 ```
 
@@ -153,7 +153,9 @@ status once, immediately.
 
 ### Events
 
-- `onReceive`: `{ name, data: Uint8Array, text: string | undefined, timestamp }` - the same in every tab.
+- `onReceive`: `{ name, data: Uint8Array, text: string | undefined, timestamp, afterGap: boolean }` -
+  the same bytes in every tab. `afterGap`: bytes may be missing before this delivery in this tab
+  (first delivery, status left `open`, bus replaced) - drop a partial line/frame.
 - `onSend`: `{ name, data, origin: 'local' | 'remote', timestamp }` - every tab's writes, this one's included.
 - `onStatusChange`: `{ name, status, previousStatus, timestamp }`.
 - `onError`: `{ name, error: SerialBrokerError, timestamp }`.
@@ -216,7 +218,7 @@ Codes: `INVALID_ARGUMENT`, `UNKNOWN_CONFIGURATION`, `CONFIGURATION_CONFLICT`,
 ## Where things are
 
 In the repository (https://github.com/tkrepo1234/serial-broker); the package itself holds `dist/`,
-`README.md`, `CHANGELOG.md` and this file.
+`README.md`, `CHANGELOG.md`, `LICENSE` and this file.
 
 - `README.md` - overview. `docs/site/` - the documentation (Sphinx, Markdown): `installing.md`,
   `first-connection.md`, `configuration.md`, `errors.md`, `shared-ports.md`, `guarantees.md`,

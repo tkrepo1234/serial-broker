@@ -10,7 +10,7 @@ export interface LineOptions {
    */
   readonly maxLineLength?: number;
   /** Told how many characters were discarded, and why. */
-  readonly onDiscarded?: (length: number, reason: 'too-long' | 'connection-changed') => void;
+  readonly onDiscarded?: (length: number, reason: 'too-long' | 'after-gap') => void;
 }
 
 /**
@@ -58,7 +58,7 @@ export class LineSplitter {
   /** Drops an unfinished line, which must not be joined to text from after a gap. */
   reset(): void {
     if (this.#pending.length > 0) {
-      this.#onDiscarded(this.#pending.length, 'connection-changed');
+      this.#onDiscarded(this.#pending.length, 'after-gap');
       this.#pending = '';
     }
   }
@@ -70,9 +70,9 @@ export class LineSplitter {
  * The configuration needs `encoding: { decodeText: true }`. The decoder keeps a multi-byte
  * character that is split across two reads intact; this function only has to join the text.
  *
- * What the device sends while the port changes tabs or reconnects is lost, so an unfinished line is
- * dropped whenever the status leaves `open`. A tab that has just joined starts receiving mid-stream:
- * its first line can be the tail of one, so check lines against the device's format.
+ * A delivery with `afterGap` may follow lost bytes - the port changed tabs or reconnected - so an
+ * unfinished line is dropped before it. The first delivery of a tab is one too: the tab joins
+ * mid-stream, and its first line can be the tail of one, so check lines against the device's format.
  *
  * @returns A function that stops listening.
  */
@@ -82,18 +82,12 @@ export function onLines(
   options: LineOptions = {},
 ): Unsubscribe {
   const splitter = new LineSplitter(options);
-  const stopReceiving = SerialBroker.subscribe(name, 'onReceive', (event) => {
+  return SerialBroker.subscribe(name, 'onReceive', (event) => {
+    if (event.afterGap) {
+      splitter.reset();
+    }
     for (const line of splitter.push(event.text ?? '')) {
       onLine(line);
     }
   });
-  const stopWatching = SerialBroker.subscribe(name, 'onStatusChange', (event) => {
-    if (event.status !== 'open') {
-      splitter.reset();
-    }
-  });
-  return () => {
-    stopReceiving();
-    stopWatching();
-  };
 }

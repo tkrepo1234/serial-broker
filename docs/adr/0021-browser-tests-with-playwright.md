@@ -7,7 +7,7 @@
 The test suite runs in Node against a simulated browser
 ([ADR-0012](./0012-dependency-injection-of-the-environment.md)). That is what makes the hard parts
 testable at all: a dozen tabs in one process, a tab killed at a chosen instruction boundary, every
-delay controlled. It is also the suite's one weakness — a fake that is wrong in the same way as the
+delay controlled. It is also the suite's one weakness - a fake that is wrong in the same way as the
 code passes every test, and nothing in it ever loads the files that are published.
 
 Four claims are outside its reach:
@@ -23,15 +23,15 @@ Four claims are outside its reach:
 4. **Real bytes go through a real serial stack.** Everything else is something we wrote.
 
 Two constraints shape any answer. A browser only shows the serial port picker to a user, and a
-test may not click a native permission dialogue — nor change a machine-wide setting or an
+test may not click a native permission dialogue - nor change a machine-wide setting or an
 enterprise policy to get around that. And a real device is attached to one machine: CI has none.
 
 A device is also needed to exercise the cases hardware produces worst - a device unplugged
 mid-write, a device that stops answering while its port stays open - and a bench produces those by
 luck, not on command. A virtual COM port cannot be had cheaply on current Windows:
 Windows 11 24H2 and later load only kernel drivers signed through the Windows Hardware Compatibility
-Program, so com0com's cross-signed builds do not load, and
-a virtual COM port has no USB identity anyway. USB/IP sidesteps both: it is a TCP protocol for
+Program, so com0com's cross-signed builds do not load, and a virtual COM port has no USB identity
+anyway. USB/IP sidesteps both: it is a TCP protocol for
 attaching a USB device to a host, [usbip-win2](https://github.com/vadimgrn/usbip-win2) is a Windows
 client whose drivers are attestation-signed, and a USB/IP server may answer the protocol itself.
 
@@ -48,7 +48,8 @@ a job of its own.
 Web Serial is replaced in the page, not in the library: `page.addInitScript()` installs
 `test/browser/stand-in/web-serial-stand-in.ts`, a `navigator.serial` whose permission is per origin,
 whose device can be open in one page only (a Web Lock the browser releases when a page dies), and
-whose device is a loopback that can also speak first. Everything else - worker, channel, locks,
+whose device is a loopback that can also speak first, and that can be made to fail `open()`, to
+refuse writes or to hold them. Everything else - worker, channel, locks,
 streams - is the browser's own. How many `SharedWorker`s an origin has, and when one ends, are taken
 from Chromium's target list over CDP, and the broker is terminated through it.
 

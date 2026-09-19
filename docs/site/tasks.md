@@ -85,8 +85,9 @@ write has no deadline, and one that the device never accepts waits forever.
 sent back. When that tab dies during a write, nobody can tell whether the device received it.
 
 Awaiting the device's _answer_ is the same work either way: the answer arrives as chunks, and with
-several tabs every tab receives it. [Request and response across tabs](examples/advanced.md#request-and-response-across-tabs)
-shows a channel that serialises commands.
+several tabs every tab receives it.
+[Request and response across tabs](examples/advanced.md#request-and-response-across-tabs) shows a
+channel that serialises commands.
 
 ## Show the status
 
@@ -96,7 +97,8 @@ shows a channel that serialises commands.
 :end-before: // [/status]
 ```
 
-**Concepts:** eight statuses, listed in [Interface](api/index.md); the list may grow, so an
+**Concepts:** eight statuses, listed under `SerialBrokerStatus` in the [Interface](api/index.md);
+the list may grow, so an
 unknown value is shown, not thrown on. A new listener is told the current status once, so nothing
 has to read it separately.
 

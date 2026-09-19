@@ -23,6 +23,8 @@
  *   whichever page holds it, with a `NetworkError`, as a yanked adapter does.
  * - **`requestPort()` needs transient activation**, so a test that forgets the click gets the
  *   `SecurityError` a real integration mistake produces.
+ * - **A device can misbehave** ({@link StandInFaults}): `open()` fails, a write fails, or writes
+ *   hang until the device takes data again. Like the device state, a fault holds for every page.
  *
  * The device itself is a loopback: everything written to it comes back on the read stream, cut
  * into `bufferSize` pieces the way a real read loop delivers it. That is the same electrical
@@ -70,6 +72,19 @@ export interface StandInDeviceOptions {
   readonly attached?: boolean | undefined;
 }
 
+/** How a device misbehaves, for every page of the origin. Each fault holds until it is lifted. */
+export interface StandInFaults {
+  /**
+   * `open()` rejects with a `DOMException` of this name. `NetworkError` is what Edge reports while
+   * another program holds the COM port.
+   */
+  readonly openFailsWith?: string | undefined;
+  /** Every write rejects with a `DOMException` of this name, which errors the writable stream. */
+  readonly writesFailWith?: string | undefined;
+  /** Writes are held, as by a device that takes no data, and complete once the fault is lifted. */
+  readonly writesHang?: boolean | undefined;
+}
+
 /** What {@link installWebSerialStandIn} installs. */
 export interface WebSerialStandInOptions {
   readonly devices: readonly StandInDeviceOptions[];
@@ -102,6 +117,8 @@ export interface WebSerialStandInControl {
   plug(deviceId?: string): void;
   /** Whether the origin has permission for the device. */
   isGranted(deviceId?: string): boolean;
+  /** Makes the device misbehave from now on, in every page; `{}` lifts every fault. */
+  setFaults(faults: StandInFaults, deviceId?: string): void;
 }
 
 /**
@@ -119,6 +136,7 @@ export function installWebSerialStandIn(options: WebSerialStandInOptions): void 
   interface DeviceState {
     granted: boolean;
     attached: boolean;
+    faults?: StandInFaults;
   }
 
   /** A device, as this page was told to offer it. */
@@ -144,6 +162,8 @@ export function installWebSerialStandIn(options: WebSerialStandInOptions): void 
     lose(): void;
     /** The device says `bytes` on its own. `false` if this page does not hold it open. */
     emit(bytes: Uint8Array): boolean;
+    /** The faults changed: writes held here go on if writes no longer hang. */
+    faultsChanged(): void;
   }
 
   const devices: Device[] = options.devices.map((device) => ({
@@ -223,6 +243,8 @@ export function installWebSerialStandIn(options: WebSerialStandInOptions): void 
     let controller: ReadableStreamDefaultController<Uint8Array> | undefined;
     let releaseDevice: (() => void) | undefined;
     let bufferSize = DEFAULT_BUFFER_SIZE;
+    /** Writes held by `writesHang`, each waiting for the fault to be lifted. */
+    let heldWrites: (() => void)[] = [];
 
     /**
      * Takes the device, if no other page holds it.
@@ -321,6 +343,10 @@ export function installWebSerialStandIn(options: WebSerialStandInOptions): void 
           if (!stateOf(device.id).attached) {
             throw new DOMException('Failed to open serial port.', 'NetworkError');
           }
+          const openFault = stateOf(device.id).faults?.openFailsWith;
+          if (openFault !== undefined) {
+            throw new DOMException('Failed to open serial port.', openFault);
+          }
 
           const holdsDevice = await takeDevice();
           if (!holdsDevice) {
@@ -342,7 +368,16 @@ export function installWebSerialStandIn(options: WebSerialStandInOptions): void 
             },
           });
           writable = new WritableStream<Uint8Array>({
-            write: (chunk) => {
+            write: async (chunk) => {
+              const faults = stateOf(device.id).faults;
+              if (faults?.writesFailWith !== undefined) {
+                throw new DOMException('Failed to write to serial port.', faults.writesFailWith);
+              }
+              if (faults?.writesHang === true) {
+                await new Promise<void>((resume) => {
+                  heldWrites.push(resume);
+                });
+              }
               echo(chunk);
             },
           });
@@ -385,6 +420,19 @@ export function installWebSerialStandIn(options: WebSerialStandInOptions): void 
           }
           say(bytes);
           return true;
+        },
+      },
+
+      faultsChanged: {
+        value: (): void => {
+          if (stateOf(device.id).faults?.writesHang === true) {
+            return;
+          }
+          const resumed = heldWrites;
+          heldWrites = [];
+          for (const resume of resumed) {
+            resume();
+          }
         },
       },
 
@@ -513,14 +561,21 @@ export function installWebSerialStandIn(options: WebSerialStandInOptions): void 
     }
   }
 
+  // Measured in Edge 153 against the USB/IP emulator: the read of an open port fails first, and
+  // `disconnect` follows in a later task. `connect` keeps its place behind it.
   function applyUnplug(deviceId: string): void {
     const device = deviceOf(deviceId);
     ports.get(device.id)?.lose();
-    fireDeviceEvent('disconnect', portFor(device));
+    setTimeout(() => {
+      fireDeviceEvent('disconnect', portFor(device));
+    }, 0);
   }
 
   function applyPlug(deviceId: string): void {
-    fireDeviceEvent('connect', portFor(deviceOf(deviceId)));
+    const device = deviceOf(deviceId);
+    setTimeout(() => {
+      fireDeviceEvent('connect', portFor(device));
+    }, 0);
   }
 
   // The pages of the origin share the device, so an unplug in one is an unplug in all, and so is a
@@ -535,6 +590,8 @@ export function installWebSerialStandIn(options: WebSerialStandInOptions): void 
       applyUnplug(message.deviceId);
     } else if (message.type === 'plug') {
       applyPlug(message.deviceId);
+    } else if (message.type === 'faults') {
+      portFor(deviceOf(message.deviceId)).faultsChanged();
     } else if (message.type === 'forget') {
       // Measured in Edge 153 against a real port: the page that has it open sees its read fail
       // with a NetworkError, and no `disconnect` event.
@@ -557,6 +614,12 @@ export function installWebSerialStandIn(options: WebSerialStandInOptions): void 
       updateState(device.id, { attached: true });
       channel.postMessage({ type: 'plug', deviceId: device.id });
       applyPlug(device.id);
+    },
+    setFaults: (faults, deviceId) => {
+      const device = deviceOf(deviceId);
+      updateState(device.id, { faults });
+      channel.postMessage({ type: 'faults', deviceId: device.id });
+      portFor(device).faultsChanged();
     },
   };
 

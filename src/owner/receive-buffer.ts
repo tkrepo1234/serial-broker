@@ -1,4 +1,5 @@
 import type { Clock, TimerHandle } from '../core/clock.js';
+import type { NormalizedReceiveSettings } from '../core/defaults.js';
 
 /**
  * Collected bytes are delivered as soon as there are this many, so a delivery exceeds it by at
@@ -6,14 +7,6 @@ import type { Clock, TimerHandle } from '../core/clock.js';
  * transport carries at once.
  */
 export const MAX_RECEIVE_DELIVERY_BYTES = 64 * 1024;
-
-/** When collected bytes are delivered; see `ReceiveSettings`. */
-export interface ReceiveBufferSettings {
-  /** Silence after the last chunk that ends a delivery. `0` delivers every chunk as it is read. */
-  readonly idleMs: number;
-  /** Longest a delivery waits after its first chunk, however busy the line stays. */
-  readonly maxWaitMs: number;
-}
 
 /**
  * Collects the chunks read from the device into fewer, larger deliveries (ADR-0002).
@@ -33,7 +26,7 @@ export class ReceiveBuffer {
 
   constructor(
     private readonly clock: Clock,
-    private readonly settings: ReceiveBufferSettings,
+    private readonly settings: NormalizedReceiveSettings,
     private readonly deliver: (data: Uint8Array) => void,
   ) {}
 

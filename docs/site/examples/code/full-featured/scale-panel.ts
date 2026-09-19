@@ -38,7 +38,7 @@ const MAX_LOG_LINES = 200;
 export class ScalePanel {
   readonly #elements: PanelElements;
   #listeners: Unsubscribe[] = [];
-  /** Bounded, and emptied whenever the status leaves `open`: a line torn by a gap is not joined. */
+  /** Bounded, and emptied before a delivery marked `afterGap`: a line torn by a gap is not joined. */
   readonly #lines = new LineSplitter();
   /** Set once the user disconnected this window: a change made elsewhere must not reconnect it. */
   #isStopped = false;
@@ -115,12 +115,12 @@ export class ScalePanel {
 
     this.#listeners = [
       SerialBroker.subscribe(NAME, 'onStatusChange', (event) => {
-        if (event.status !== 'open') {
-          this.#lines.reset();
-        }
         this.#renderStatus(event.status);
       }),
       SerialBroker.subscribe(NAME, 'onReceive', (event) => {
+        if (event.afterGap) {
+          this.#lines.reset();
+        }
         this.#receive(event.text ?? '');
       }),
       SerialBroker.subscribe(NAME, 'onSend', (event) => {

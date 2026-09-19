@@ -13,10 +13,10 @@ import { OwnershipElection } from '../../src/owner/election.js';
 import type { TermId } from '../../src/protocol/messages.js';
 import { ownerLockName } from '../../src/protocol/version.js';
 import { BrowserHarness, VirtualTab } from '../harness/browser-harness.js';
-import { READER, READER_OPTIONS, readerHarness } from '../harness/devices.js';
+import { connectedTab, READER, READER_OPTIONS, readerHarness } from '../harness/devices.js';
 import { FakeClock, flushMicrotasks } from '../harness/fake-clock.js';
 import { FakeLockManager } from '../harness/fake-locks.js';
-import { domException } from '../harness/fake-serial.js';
+import { domException, type FakeDevice } from '../harness/fake-serial.js';
 import { fieldsOfEvent, recordingLogger } from '../harness/recording-logger.js';
 
 /**
@@ -176,6 +176,7 @@ describe('an attempt to connect', () => {
   it('looks again for a device plugged in during the listing as part of the same attempt', async () => {
     const { harness, device } = readerHarness();
     harness.serial.unplug(device);
+    await harness.settle();
     harness.serial.onListingPorts = () => {
       harness.serial.onListingPorts = undefined;
       harness.serial.plug(device);
@@ -339,17 +340,6 @@ describe('handing the port over', () => {
 });
 
 describe('an unplugged device', () => {
-  async function connectedTab(connection = {}): Promise<{
-    harness: BrowserHarness;
-    device: ReturnType<BrowserHarness['serial']['addDevice']>;
-    tab: VirtualTab;
-  }> {
-    const { harness, device } = readerHarness();
-    const tab = harness.openTab();
-    await tab.setup('Reader', { ...READER_OPTIONS, connection });
-    return { harness, device, tab };
-  }
-
   it('stays reconnecting, not awaiting permission, while it is away', async () => {
     const { harness, device, tab } = await connectedTab();
 
@@ -366,8 +356,24 @@ describe('an unplugged device', () => {
     expect(tab.client.getStatus('Reader').status).toBe(SerialBrokerStatus.Open);
   });
 
+  it('takes the disconnect event alone as the loss, when the read does not fail', async () => {
+    const { harness, device, tab } = await connectedTab();
+
+    // Edge on Windows fails the read first. Another adapter or system may give no sign but the
+    // event, with the read still pending: the connection is lost all the same, and said so once.
+    harness.serial.unplug(device, 'event-only');
+    await harness.advance(1_000);
+
+    expect(tab.client.getStatus('Reader').status).toBe(SerialBrokerStatus.Reconnecting);
+    expect(tab.errorCodes('Reader')).toEqual([SerialBrokerErrorCode.DEVICE_DISCONNECTED]);
+
+    harness.serial.plug(device);
+    await harness.settle();
+    expect(tab.client.getStatus('Reader').status).toBe(SerialBrokerStatus.Open);
+  });
+
   it('backs off while it is away, and gives up after maxAttempts', async () => {
-    const { harness, device, tab } = await connectedTab({ maxAttempts: 4 });
+    const { harness, device, tab } = await connectedTab({}, { connection: { maxAttempts: 4 } });
 
     harness.serial.unplug(device);
     await harness.settle();
@@ -428,21 +434,20 @@ describe('a device that stops taking writes', () => {
   /** Past the deadline of the tab holding the port, which starts the write a little after `send()`. */
   const PAST_THE_DEADLINE_MS = 2_000;
 
-  async function connectedTab(): Promise<{
+  /** A connected tab with a one-second write deadline, and what it logged. */
+  async function watchedTab(): Promise<{
     harness: BrowserHarness;
-    device: ReturnType<BrowserHarness['serial']['addDevice']>;
+    device: FakeDevice;
     tab: VirtualTab;
     records: ReturnType<typeof recordingLogger>['records'];
   }> {
     const { logger, records } = recordingLogger();
-    const { harness, device } = readerHarness({ logger });
-    const tab = harness.openTab();
-    await tab.setup('Reader', { ...READER_OPTIONS, connection: { writeTimeoutMs: 1_000 } });
-    return { harness, device, tab, records };
+    const connected = await connectedTab({ logger }, { connection: { writeTimeoutMs: 1_000 } });
+    return { ...connected, records };
   }
 
   it('fails the write with WRITE_TIMEOUT and keeps the connection', async () => {
-    const { harness, device, tab, records } = await connectedTab();
+    const { harness, device, tab, records } = await watchedTab();
 
     device.pauseWrites();
     const outcome = tab.client.send('Reader', 'HELD').catch((reason: unknown) => reason);
@@ -457,8 +462,35 @@ describe('a device that stops taking writes', () => {
     expect(tab.statusTrail('Reader')).not.toContain(SerialBrokerStatus.Reconnecting);
   });
 
+  it('takes writes again once the connection it stalled on has been replaced', async () => {
+    const { harness, device, tab } = await watchedTab();
+
+    // A chunk the device never takes: unlike `pauseWrites()`, this one is never completed, which
+    // is what an operating system holding a write looks like.
+    device.faults.hangOnWrite = true;
+    const held = tab.client.send('Reader', 'HELD').catch((reason: unknown) => reason);
+    await harness.settle();
+    await harness.advance(PAST_THE_DEADLINE_MS);
+    expect(await held).toMatchObject({ code: SerialBrokerErrorCode.WRITE_TIMEOUT });
+
+    // The connection is lost for a reason of its own while that chunk is still out there.
+    device.faults.hangOnWrite = false;
+    device.breakStream(domException('NetworkError', 'The device has been lost'));
+    await harness.settle();
+    await harness.advance(10_000);
+    await harness.settle();
+    expect(tab.client.getStatus('Reader').status).toBe(SerialBrokerStatus.Open);
+
+    // The chunk stays with the operating system, but the queue it held is not held across the
+    // reconnect: a write to the new connection is a write like any other.
+    await expect(tab.client.send('Reader', 'AGAIN')).resolves.toBeUndefined();
+    expect(
+      tab.client.diagnostics()?.configurations[0]?.connection?.stalledWriteSince,
+    ).toBeUndefined();
+  });
+
   it('reports stalledWriteSince while the write is stalled, and not once the device takes it', async () => {
-    const { harness, device, tab } = await connectedTab();
+    const { harness, device, tab } = await watchedTab();
     const stalledWriteSince = () =>
       tab.client.diagnostics()?.configurations[0]?.connection?.stalledWriteSince;
     await harness.settle();
@@ -481,7 +513,7 @@ describe('a device that stops taking writes', () => {
   });
 
   it('begins nothing behind the write, and carries on once the device takes it', async () => {
-    const { harness, device, tab, records } = await connectedTab();
+    const { harness, device, tab, records } = await watchedTab();
 
     device.pauseWrites();
     const first = tab.client.send('Reader', 'FIRST').catch((reason: unknown) => reason);
@@ -506,7 +538,7 @@ describe('a device that stops taking writes', () => {
   });
 
   it('reconnects when the write it gave up on fails afterwards', async () => {
-    const { harness, device, tab, records } = await connectedTab();
+    const { harness, device, tab, records } = await watchedTab();
 
     device.pauseWrites();
     const outcome = tab.client.send('Reader', 'HELD').catch((reason: unknown) => reason);

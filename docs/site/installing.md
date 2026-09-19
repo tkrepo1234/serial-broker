@@ -8,7 +8,7 @@ Serial. Chrome for Android is [not a target](known-limits.md#chrome-for-android-
 `isSupported()`, [below](#checking-support-at-run-time), tells at run time.
 
 **A secure context.** Browsers offer Web Serial and Web Locks only on pages served over HTTPS, from
-`localhost` during development - or [opened from a file](#a-page-opened-from-a-file), which needs
+`localhost` during development — or [opened from a file](#a-page-opened-from-a-file), which needs
 no server at all.
 
 **One origin.** Tabs share a port only with tabs of the same origin — scheme, host and port. Tabs of
@@ -50,7 +50,7 @@ The package contains:
 | `serial-broker/diagnostics/global` | `serial-broker.diagnostics.global.js`   | The diagnostics entry point as a classic script, on `SerialBrokerDiagnostics`.   |
 
 Every published file is named after the package rather than after the file it was built from, so
-that a file copied onto a web server says what it is ([ADR-0026][adr-0043]). Each build has a
+that a file copied onto a web server says what it is ([ADR-0026][adr-0026]). Each build has a
 source map beside it.
 
 It also ships a debugging surface under `dist/debug/`, as static files that nothing serves unless
@@ -64,8 +64,20 @@ opened from files share Web Locks, a `BroadcastChannel` and `localStorage`. Two 
 a served page:
 
 - **Use the classic script build**, `serial-broker.global.js`, with relative paths. A page opened
-  from a file may load neither an ES module nor an import map.
-- **No `SharedWorker` is started** - the browser refuses one there - so the tabs coordinate over the
+  from a file may load neither an ES module nor an import map. An absolute path such as
+  `/assets/…` resolves against the root of the drive there, so both paths are relative and the
+  worker URL is resolved against the page:
+
+  ```html
+  <script src="./serial-broker/serial-broker.global.js"></script>
+  <script>
+    SerialBroker.configure({
+      workerUrl: new URL('./serial-broker/serial-broker.worker.js', document.baseURI).href,
+    });
+  </script>
+  ```
+
+- **No `SharedWorker` is started** — the browser refuses one there — so the tabs coordinate over the
   `BroadcastChannel` and log `environment.transport-fallback` once. Naming the worker URL is still
   right: the same folder then works unchanged when it is served.
 
@@ -114,7 +126,7 @@ the file by its URL: `import { SerialBroker } from '/assets/serial-broker/serial
 import map, and what to check afterwards.
 
 **Not from a CDN.** A `SharedWorker` script has to be same-origin, so `serial-broker.worker.js` must
-be a file the application's own server answers for - and it is the worker that makes the tabs share
+be a file the application's own server answers for — and it is the worker that makes the tabs share
 one port. Loading the library itself from a CDN while the worker comes from the origin only splits
 what has to be deployed together. Copy both files instead; every release attaches them as
 `serial-broker-<version>-browser.zip`.
@@ -126,26 +138,48 @@ Copy `serial-broker.global.js` and `serial-broker.worker.js` into one directory 
 with a plain `<script src>`:
 
 ```html
+<button id="choose" hidden>Choose the scale</button>
+
 <script src="/assets/serial-broker/serial-broker.global.js"></script>
 <script>
   // Required, and before the first setup(): see below.
   SerialBroker.configure({ workerUrl: '/assets/serial-broker/serial-broker.worker.js' });
+
+  const weight = document.querySelector('#weight');
+  const choose = document.querySelector('#choose');
 
   // subscribe() after setup() resolves: a name is only known once it is set up, and a setup that
   // waits for an earlier release of the same name resolves a moment later than it is called.
   SerialBroker.setup('Scale', { serial: { baudRate: 19200 }, encoding: { decodeText: true } })
     .then(() => {
       SerialBroker.subscribe('Scale', 'onReceive', (event) => {
-        document.querySelector('#weight').textContent = event.text;
+        weight.textContent = event.text;
+      });
+      // No device is named above, so the configuration takes it from the port the user picks, and
+      // waits with `awaiting-permission` until someone does. The browser shows its picker only
+      // during a click, so the page needs one button - shown exactly while it is wanted, and never
+      // again once the browser remembers the port.
+      SerialBroker.subscribe('Scale', 'onStatusChange', (event) => {
+        choose.hidden = event.status !== 'awaiting-permission';
+      });
+      choose.addEventListener('click', () => {
+        SerialBroker.requestAccess('Scale').catch((error) => {
+          weight.textContent = error.message;
+        });
       });
     })
     .catch((error) => {
       // A page with no build step has no other place for this: an unhandled rejection here is
       // invisible, and setup() is where a wrong option or a missing worker shows up.
-      document.querySelector('#weight').textContent = error.message;
+      weight.textContent = error.message;
     });
 </script>
 ```
+
+Name the device instead — `device: { vendorId: 0x0403, productId: 0x6001 }` — and the button is
+needed only until the browser has been given the permission once; the page then opens the port on
+every later visit by itself. [First connection](first-connection.md#3-ask-for-permission-once) has
+both ways in full.
 
 The build leaves **one global, `SerialBroker`**. It is the same facade a module imports —
 `setup()`, `subscribe()`, `send()`, `requestAccess()`, `release()`, `configure()` and the rest —
@@ -163,6 +197,7 @@ needs:
 | `SerialBroker.REMEDIATION`           | `REMEDIATION`           |
 | `SerialBroker.isSupported()`         | `isSupported`           |
 | `SerialBroker.PROTOCOL_VERSION`      | `PROTOCOL_VERSION`      |
+| `SerialBroker.VERSION`               | `VERSION`               |
 
 `serial-broker.diagnostics.global.js` is the diagnostics entry point in the same form, on the
 global `SerialBrokerDiagnostics`, carrying `openDiagnostics()`, `CONNECTION_STATES` and
@@ -213,24 +248,23 @@ Where the browser has no `SharedWorker`, refuses to create one, or cannot load t
 it was not deployed, or is served from another path — serial-broker uses a `BroadcastChannel`
 instead and keeps working; see [The message bus](shared-ports.md#the-message-bus). It logs
 `environment.transport-fallback` at `warn` level. Check the log once after deploying: the fallback
-works, but a missing script is usually a mistake. `transport: 'sharedworker'` turns it into an error
+works, but a missing script is usually a mistake. **The library writes nothing anywhere on its
+own** — pass a logger first, with `SerialBroker.configure({ logger })`; see
+[Logging](diagnostics.md#logging). `transport: 'sharedworker'` turns it into an error
 instead; see [`configure()`](configuration.md#configure).
 
 After deploying a new release, serve its worker script under the URL the pages use; a copy left over
-from an earlier release is reported as `PROTOCOL_VERSION_MISMATCH`.
+from an earlier release is reported as `PROTOCOL_VERSION_MISMATCH`. Every published script names its
+release on its first line, `/*! serial-broker <version> | MIT */`, so a look at the served file
+says which one it is.
 
 ### CommonJS and the classic script build
 
-The CommonJS build, which `require('serial-broker')` loads, cannot find the script by itself:
-CommonJS has no `import.meta.url` to resolve it against, and no bundler emits the script for it.
-The classic script build has the same gap, for the same reason. An application that loads either
-one **must** copy the script as described above and set `workerUrl`, and pass the same URL to
-`openDiagnostics()`.
-
-Neither build guesses a location. Both create no `SharedWorker` without `workerUrl`: with the
-default `transport: 'auto'` they use a `BroadcastChannel` and log
-`environment.transport-fallback` with a `reason` that names `workerUrl`, and with
-`transport: 'sharedworker'`, `setup()` fails with `BROKER_UNAVAILABLE`.
+Neither build can find the script by itself: CommonJS has no `import.meta.url` to resolve it
+against, and no bundler emits the script for it; a classic script has neither. An application that
+loads either one **must** copy the script as described above and set `workerUrl`, and pass the same
+URL to `openDiagnostics()`. Without it, both fall back to a `BroadcastChannel`, as
+[Classic script build](#classic-script-build) describes.
 
 ## Content security policy
 
@@ -240,14 +274,13 @@ A strict policy has to allow the worker script:
 worker-src 'self';
 ```
 
-Without it, the browser blocks the worker, and serial-broker falls back to a `BroadcastChannel`,
+Without it the browser blocks the worker, and serial-broker falls back to a `BroadcastChannel`,
 logged as `environment.transport-fallback`. That works, but it is probably not what you intended.
 serial-broker makes no network requests and loads nothing else, so it needs no `connect-src`. An
-inline import map counts as an inline script under `script-src` and needs its hash — which is one
+inline import map counts as an inline script under `script-src` and needs its hash, which is one
 reason to prefer the [classic script build](#classic-script-build) where the policy is strict and
-static: it is loaded from a `src` attribute, so `script-src 'self'` covers it and nothing has to be
-hashed. The complete policy, the hash and the other headers are in
-[Deploying to a web server](deploying.md). The debugging surface brings a policy of its own; see
+static. The complete policy, the hash and the other headers are in
+[Deploying to a web server](deploying.md); the debugging surface brings a policy of its own, see
 [Whether to serve it](diagnostics.md#whether-to-serve-it).
 
 ## Checking support at run time
@@ -267,4 +300,4 @@ browser that has no Web Serial at all, and during server-side rendering. It is a
 `SerialBroker.isSupported()`.
 
 [shared-worker]: https://developer.mozilla.org/en-US/docs/Web/API/SharedWorker
-[adr-0043]: https://github.com/tkrepo1234/serial-broker/blob/main/docs/adr/0026-a-classic-script-build-and-published-names.md
+[adr-0026]: https://github.com/tkrepo1234/serial-broker/blob/main/docs/adr/0026-a-classic-script-build-and-published-names.md

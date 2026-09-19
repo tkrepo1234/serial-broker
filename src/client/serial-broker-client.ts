@@ -535,24 +535,7 @@ export class SerialBrokerClient {
   ): Unsubscribe {
     const validName = this.#validName(name);
     const session = this.#requireSession(validName);
-
-    if (typeof event !== 'string' || !Object.hasOwn(EVENT_NAMES, event)) {
-      // A misspelt event name would otherwise register a listener that is never called, and
-      // nothing would ever say so.
-      throw withTimestamp(
-        invalidArgument('event', `one of ${Object.keys(EVENT_NAMES).join(', ')}`, event, {
-          configName: validName,
-        }),
-        this.environment.clock.now(),
-      );
-    }
-
-    if (typeof listener !== 'function') {
-      throw withTimestamp(
-        invalidArgument('listener', 'a function', listener, { configName: validName }),
-        this.environment.clock.now(),
-      );
-    }
+    this.#validListener(validName, event, listener);
 
     const remove = session.subscribe(event, listener);
 
@@ -577,7 +560,32 @@ export class SerialBrokerClient {
     event: TEvent,
     listener: SerialBrokerListener<TEvent>,
   ): void {
-    this.#sessions.get(this.#validName(name))?.unsubscribe(event, listener);
+    const validName = this.#validName(name);
+    // Checked here as in `subscribe()`: a misspelt name removes nothing, and a caller that is
+    // told nothing looks for the leak somewhere else entirely.
+    this.#validListener(validName, event, listener);
+    this.#sessions.get(validName)?.unsubscribe(event, listener);
+  }
+
+  /** Refuses an event name that is not one, and a listener that is not a function. */
+  #validListener(configName: string, event: unknown, listener: unknown): void {
+    if (typeof event !== 'string' || !Object.hasOwn(EVENT_NAMES, event)) {
+      // A misspelt event name would otherwise register a listener that is never called, or remove
+      // none, and nothing would ever say so.
+      throw withTimestamp(
+        invalidArgument('event', `one of ${Object.keys(EVENT_NAMES).join(', ')}`, event, {
+          configName,
+        }),
+        this.environment.clock.now(),
+      );
+    }
+
+    if (typeof listener !== 'function') {
+      throw withTimestamp(
+        invalidArgument('listener', 'a function', listener, { configName }),
+        this.environment.clock.now(),
+      );
+    }
   }
 
   /** A point-in-time view of a configuration. */

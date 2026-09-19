@@ -16,7 +16,7 @@ holding that lock is waiting for an answer at any moment:
 ```
 
 It splits lines with `onLines` from [Reading lines](all-features.md#reading-lines), which keeps at
-most one line's worth of unfinished text and drops it whenever the status leaves `open`.
+most one line's worth of unfinished text and drops it before every delivery marked `afterGap`.
 
 This lock is the application's and has nothing to do with serial-broker's ownership lock: the tab
 holding it need not be the tab holding the port. If the device protocol carries a request
@@ -78,9 +78,10 @@ has to cope with all of it:
 The parser copies each delivery into a buffer the size of the longest frame. A delivery of up to
 64 KiB is neither spread into a function call nor copied again for every frame taken out of it, and
 a frame start with no end within that size is discarded and reported instead of growing the buffer.
-An unfinished frame is also dropped when the status leaves `open`: what the device sent in the gap
-is lost, and the halves from either side would make a frame the device never sent. A tab that has
-just joined starts mid-stream as well; the checksum catches most false frame starts there.
+An unfinished frame is also dropped before a delivery marked `afterGap`: what the device sent in the
+gap is lost, and the halves from either side would make a frame the device never sent. A tab's first
+delivery is marked too, because the tab starts mid-stream; the checksum catches most false frame
+starts there.
 
 Send each frame with one `send()`. The bytes of one call are never interleaved with another tab's
 write; the bytes of separate calls can be.

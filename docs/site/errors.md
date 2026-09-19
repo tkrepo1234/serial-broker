@@ -8,8 +8,9 @@ carries at run time.
 ## How errors reach the application
 
 **As the result of a call.** A call that fails rejects its promise — or, for the synchronous methods
-`configure()`, `subscribe()`, `unsubscribe()`, `getStatus()` and `exists()`, throws. These are failures of that
-call: an invalid argument, a name that is not set up, a write that did not complete.
+`configure()`, `subscribe()`, `unsubscribe()`, `getStatus()` and `exists()`, throws. These are
+failures of that call: an invalid argument, a name that is not set up, a write that did not
+complete.
 
 **Through `onError`.** Everything that goes wrong without a call to answer for it — the device was
 unplugged, the port did not open, a listener threw — is delivered as an `onError` event:
@@ -60,7 +61,7 @@ failed attempt carry `false`, in every tab, because nothing retries them. See
 : Structured detail specific to the code, such as `argumentName` or `bytesWritten`. The fields for
 each code are listed below, and each is typed: `context.started` is a boolean or absent, never a
 string, so a misspelt field name is a compile error rather than a silent `undefined`. What is
-**not** promised is that a field is there - which of them an error carries depends on where it
+**not** promised is that a field is there — which of them an error carries depends on where it
 arose, several codes arise in more than one place, and an error from another tab may come from a
 later version of the library carrying fields this one has never heard of. Check for `undefined`
 before acting on one.
@@ -106,7 +107,8 @@ try {
 
 ## Retryable errors
 
-Four codes are retryable: `DEVICE_DISCONNECTED`, `OPEN_FAILED`, `OPEN_TIMEOUT` and `READ_FAILED`.
+Four codes are always retryable: `DEVICE_DISCONNECTED`, `OPEN_FAILED`, `OPEN_TIMEOUT` and
+`READ_FAILED`; `BROKER_UNAVAILABLE` is when it reports a lost worker (see its entry).
 Each ends a connection attempt or a connection, and the tab holding the port schedules the next
 attempt as described in [Reconnecting](guarantees.md#reconnecting). Only when the attempts are used
 up does a non-retryable error follow: `RECONNECT_EXHAUSTED`.
@@ -165,9 +167,10 @@ for a remembered configuration from an older version of the application.
 
 `CONFIGURATION_RELEASED`
 : **Raised** for writes still pending when their configuration is released in this tab, by
-`release()`, `releaseAll()` or `dispose()`, and by a diagnostics observer after `close()`. Calls made
-after `dispose()` do not raise it: they start afresh, so a name raises `UNKNOWN_CONFIGURATION` until
-it is set up again.
+`release()`, `releaseAll()` or `dispose()`, and by a diagnostics observer after `close()`. Also by
+`requestAccess()` when the configuration is released while the port picker is open, and by `setup()`
+and `restore()` when `dispose()` is called while they run. Calls made after `dispose()` do not raise
+it: they start afresh, so a name raises `UNKNOWN_CONFIGURATION` until it is set up again.
 **Do:** nothing, if the release was intended. Otherwise set the configuration up again.
 
 ### The browser environment
@@ -204,9 +207,10 @@ created. **Delivered through `onError`** when the message bus reports a failure 
 with `transport: 'sharedworker'`, also when the worker script fails to load. With the default
 `'auto'`, a script that fails to load is replaced by a `BroadcastChannel` and raises nothing.
 Also delivered when the worker crashed or was ended, which the browser tells every tab by letting
-go of the worker's Web Lock, once in every tab for each such loss; the tabs then connect to a new worker on their own,
-unless it runs another protocol version, which is reported as `PROTOCOL_VERSION_MISMATCH`. Only
-this case has `isRetryable: true`: the library is already putting it right.
+go of the worker's Web Lock, once in every tab for each such loss; the tabs then connect to a new
+worker on their own, unless it runs another protocol version, which is reported as
+`PROTOCOL_VERSION_MISMATCH`. Only this case has `isRetryable: true`: the library is already putting
+it right.
 **Do:** check that `serial-broker.worker.js` is served from the application's origin, at the URL
 every tab uses; see [The worker script](installing.md#the-worker-script).
 
@@ -295,9 +299,9 @@ bytes is summarised in [Write outcomes](guarantees.md#write-outcomes).
 - The whole `send()` — waiting for a connection, reaching the tab holding the port, waiting there
   behind other writes, and the device taking the bytes — took longer than the issuing tab's
   `connection.writeTimeoutMs`. **Context:** `started`: `false` if the write had not begun, so the
-  device received nothing and never will — the tab holding the port begins no write without the
-  issuing tab's approval, which that tab no longer gives; `true` if the issuing tab had let it
-  begin, so it may still complete after the rejection.
+  device received nothing and never will; `true` if the issuing tab had let it begin, so it may
+  still complete after the rejection. [Write outcomes](guarantees.md#write-outcomes) says why
+  `started: false` is exact.
 - The device did not take a chunk within `connection.writeTimeoutMs`, typically because of flow
   control or a device that has stopped answering. **Context:** `bytesWritten` of `byteLength`. The
   connection stays open and the chunk stays in flight (ADR-0011); the writes behind it are not begun
@@ -329,9 +333,9 @@ port, does.
 `NOT_CONNECTED`
 : **Not delivered to the application.** It is how the tab holding the port hands a write back when
 its connection was lost, or it let go of the port, between accepting the write and handing it to the
-device: nothing was written, and the tab that issued the write sends it again once the port is open. A write that finds
-no connection until its deadline fails with `WRITE_TIMEOUT` instead. The code appears in logs and in
-diagnostics only.
+device: nothing was written, and the tab that issued the write sends it again once the port is open.
+A write that finds no connection until its deadline fails with `WRITE_TIMEOUT` instead. The code
+appears in logs and in diagnostics only.
 **Do:** nothing.
 
 `OWNER_LOST_DURING_WRITE`

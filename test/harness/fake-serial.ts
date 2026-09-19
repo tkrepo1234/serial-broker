@@ -370,19 +370,28 @@ export class FakeSerialRegistry {
     this.#granted.delete(device);
   }
 
-  /** Unplugs a device: `getPorts()` stops listing it, its streams break, and opening fails. */
-  unplug(device: FakeDevice): void {
+  /**
+   * Unplugs a device: `getPorts()` stops listing it, its streams break, and opening fails.
+   *
+   * By default as measured in Edge against the USB/IP emulator: the read of an open port rejects
+   * first, and `disconnect` follows in a later task. With `'event-only'`, as another adapter or
+   * operating system may behave, `disconnect` is the only sign: the read of an open port stays
+   * pending until the port is closed. A test sees the event once it settles.
+   */
+  unplug(device: FakeDevice, signs: 'read-first' | 'event-only' = 'read-first'): void {
     device.isAttached = false;
     device.isOpen = false;
     device.holder = undefined;
-    device.breakStream(domException('NetworkError', 'The device has been lost'));
-    this.#dispatch('disconnect', device);
+    if (signs === 'read-first') {
+      device.breakStream(domException('NetworkError', 'The device has been lost'));
+    }
+    this.#dispatchLater('disconnect', device);
   }
 
-  /** Plugs a device back in. */
+  /** Plugs a device back in. Its `connect` event follows in a later task, after any earlier event. */
   plug(device: FakeDevice): void {
     device.isAttached = true;
-    this.#dispatch('connect', device);
+    this.#dispatchLater('connect', device);
   }
 
   /** How many `connect` and `disconnect` listeners are registered, in every context. Assertions only. */
@@ -473,6 +482,13 @@ export class FakeSerialRegistry {
       ports.set(device, port);
     }
     return port;
+  }
+
+  /** Dispatches in a task of its own, as the browser does; tasks run in the order they were queued. */
+  #dispatchLater(type: 'connect' | 'disconnect', device: FakeDevice): void {
+    setImmediate(() => {
+      this.#dispatch(type, device);
+    });
   }
 
   #dispatch(type: 'connect' | 'disconnect', device: FakeDevice): void {

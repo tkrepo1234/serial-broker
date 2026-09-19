@@ -5,8 +5,8 @@
 imported from a folder of the example's own, and there is no build step. Read the file top to
 bottom and you have seen everything the page does.
 
-It is deliberately small - the way in for a developer
-who writes plain JavaScript and wants to see the library work before reading anything else.
+It is deliberately small - the way in for a developer who writes plain JavaScript and wants to
+see the library work before reading anything else.
 
 Everything the page does, in the order the file does it:
 
@@ -47,8 +47,7 @@ holds the port; close it, and the other takes over. Nothing in the script refers
 ## What it shows
 
 - **The library from an import map.** `"serial-broker": "/serial-broker/serial-broker.js"` in the
-  HTML, a
-  bare `import` in the script - the same specifier a bundled application writes.
+  HTML, a bare `import` in the script - the same specifier a bundled application writes.
 - **`configure({ workerUrl })` before `setup()`**, spelled out, because the worker script is the
   one thing about deploying this library that is easy to get wrong.
 - **The connect button only where a click is needed.** It appears with `awaiting-permission` and
@@ -138,19 +137,19 @@ and `index.html` still works, served by any web server that can reach the librar
 into `.typecheck/`, keeping its line numbers, and runs `tsc` with `allowJs` and `checkJs` over the
 copy: the JSDoc annotations in the script are checked against the library's published `.d.ts`
 files, so a misspelt option or event name fails the check the way it would in a TypeScript
-application, and CI runs it. An example that is one HTML file and therefore checked by
-nothing would make the plainest integration the only unchecked one.
+application, and CI runs it. An example that is one HTML file and therefore checked by nothing
+would make the plainest integration the only unchecked one.
 
 **`el(id)` is typed as an `HTMLInputElement`.** One helper, deliberately over-specific, so that
 `value`, `disabled`, `hidden` and `textContent` all need no annotation at their call sites. Naming
-each element with its own type would be seven lines of casts in a page whose point is that
-there is nothing to wade through.
+each element with its own type would be seven lines of casts in a page whose point is that there is
+nothing to wade through.
 
 **`device: { any: true }`.** The page cannot know the reader's device, and a first page should
 connect to whatever the user picks. It also means the smoke test's loopback device needs no ids.
 
-**No status table, no error box.** The page shows the status word, one error
-line, the data and a send box. The documentation site shows the rest, under Examples.
+**No status table, no error box.** The page shows the status word, one error line, the data and a
+send box. The documentation site shows the rest, under Examples.
 
 **`<link rel="icon" href="data:,">`.** Without it the browser requests `/favicon.ico`, the server
 answers 404, and the console shows an error that is not the page's. The smoke test fails on any

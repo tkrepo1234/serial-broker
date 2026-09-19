@@ -41,6 +41,9 @@ const manifest = JSON.parse(
 /** The DOM ids README.md documents: `<container id>-<component id>---<view id>--<control id>`. */
 const ID = '#container-terminal---app--';
 
+/** The stand-in's controls, as the page sees them; `page.evaluate` cannot import the type. */
+type StandInWindow = { readonly webSerialStandIn: WebSerialStandInControl };
+
 const UI: ExampleUi = {
   url: urlOfExample(manifest),
   // The text inside the status badge: the badge itself also carries its state for screen readers.
@@ -74,11 +77,20 @@ async function connect(tab: ExampleTab): Promise<void> {
 }
 
 function isGranted(tab: ExampleTab): Promise<boolean> {
-  return tab.page.evaluate(() =>
-    (
-      window as unknown as { webSerialStandIn: WebSerialStandInControl }
-    ).webSerialStandIn.isGranted(),
-  );
+  return tab.page.evaluate(() => (window as unknown as StandInWindow).webSerialStandIn.isGranted());
+}
+
+/** Opens the display popover, turns one option on or off, and closes it again. */
+async function toggleDisplayOption(tab: ExampleTab, option: string): Promise<void> {
+  await tab.locator(`${ID}display`).click();
+  await tab.locator(`${ID}${option}`).click();
+  await tab.page.keyboard.press('Escape');
+}
+
+/** Switches the composer to hex, which is a select with the modes as its options. */
+async function chooseHexMode(tab: ExampleTab): Promise<void> {
+  await tab.locator(`${ID}sendMode`).click();
+  await tab.page.getByRole('option', { name: 'Hex' }).click();
 }
 
 test('connects through the settings dialog, sends a line and sees it echoed', async ({
@@ -99,6 +111,65 @@ test('connects through the settings dialog, sends a line and sees it echoed', as
   await expect(tab.locator('#received')).toContainText('» HELLO FROM OPENUI5');
 
   tab.expectQuiet();
+});
+
+test('keeps line settings the library refused out of the summary and out of the next visit', async ({
+  context,
+}) => {
+  const tab = await open(context);
+
+  await tab.locator(UI.connect).click();
+  await tab.locator(`${ID}baudRate-inner`).fill('99999999');
+  await tab.locator(`${ID}connectConfirm`).click();
+
+  // The library has the verdict on the settings, and says why in the dialog, which stays open.
+  await expect(tab.locator(`${ID}connectMessage`)).toContainText('INVALID_ARGUMENT');
+  await expect(tab.locator(`${ID}settingsDialog`)).toBeVisible();
+  await tab.locator(`${ID}settingsCancel`).click();
+
+  // Nothing about that attempt is kept: the summary describes no connection it has not made, and
+  // the rate is not offered again - it would fail the same way on every visit from now on.
+  await expect(tab.locator(`${ID}displaySummary`)).toContainText('9600 baud');
+  await expect(tab.locator(`${ID}displaySummary`)).not.toContainText('99999999');
+  await tab.locator(UI.connect).click();
+  await expect(tab.locator(`${ID}baudRate-inner`)).toHaveValue('9600');
+});
+
+test('says that hex the composer cannot read is the line, not the page', async ({ context }) => {
+  const tab = await open(context);
+  await connect(tab);
+
+  await chooseHexMode(tab);
+  await tab.locator(UI.sendInput).fill('zz');
+  await tab.locator(UI.sendButton).click();
+
+  await expect(tab.locator(`${ID}errorCode`)).toHaveText('Invalid input');
+  await expect(tab.locator(`${ID}errorMessage`)).toContainText('even number of digits');
+  await expect(tab.locator(`${ID}errorRemediation`)).toContainText('Correct the line');
+});
+
+test('offers the file dialog again after it has been used once', async ({ context }) => {
+  const tab = await open(context);
+  await connect(tab);
+  const file = { name: 'payload.txt', mimeType: 'text/plain', buffer: Buffer.from('one line\n') };
+
+  const openDialog = async (): Promise<void> => {
+    await tab.locator(`${ID}more`).click();
+    await tab.locator(`${ID}fileTransfer`).click();
+    await expect(tab.locator(`${ID}fileDialog`)).toBeVisible();
+  };
+
+  await openDialog();
+  await tab.locator(`${ID}fileInput`).locator('input[type="file"]').setInputFiles(file);
+  await expect(tab.locator(`${ID}fileSend`)).toBeEnabled();
+  await tab.locator(`${ID}fileClose`).click();
+
+  // The control keeps what it was given, so choosing the same file again fires no event of its
+  // own: the dialog has to start from nothing, or Send never becomes available again.
+  await openDialog();
+  await expect(tab.locator(`${ID}fileSend`)).toBeDisabled();
+  await tab.locator(`${ID}fileInput`).locator('input[type="file"]').setInputFiles(file);
+  await expect(tab.locator(`${ID}fileSend`)).toBeEnabled();
 });
 
 test('offers the usual baud rates, takes any other, and shows the last settings next time', async ({
@@ -166,7 +237,7 @@ test('keeps the dialog open when no port is chosen, and connects from it once on
   const tab = await open(context);
   // Nothing to choose from: the picker has no port to offer, as when the user dismisses it.
   await tab.page.evaluate(() => {
-    (window as unknown as { webSerialStandIn: WebSerialStandInControl }).webSerialStandIn.unplug();
+    (window as unknown as StandInWindow).webSerialStandIn.unplug();
   });
 
   await tab.locator(UI.connect).click();
@@ -182,7 +253,7 @@ test('keeps the dialog open when no port is chosen, and connects from it once on
 
   // Asked again from the same dialog, with a port to choose this time.
   await tab.page.evaluate(() => {
-    (window as unknown as { webSerialStandIn: WebSerialStandInControl }).webSerialStandIn.plug();
+    (window as unknown as StandInWindow).webSerialStandIn.plug();
   });
   await tab.locator(`${ID}connectConfirm`).click();
   await tab.expectStatus('open');
@@ -203,11 +274,8 @@ test('reads and writes hex, and keeps the display options between visits', async
   await connect(tab);
 
   // Hex in, hex out: the input is read as bytes and the log shows a dump of what comes back.
-  await tab.locator(`${ID}display`).click();
-  await tab.locator(`${ID}optHex`).click();
-  await tab.page.keyboard.press('Escape');
-  await tab.locator(`${ID}sendMode`).click();
-  await tab.page.getByRole('option', { name: 'Hex' }).click();
+  await toggleDisplayOption(tab, 'optHex');
+  await chooseHexMode(tab);
   // Hex input is the bytes and nothing else, so the line ending cannot be chosen.
   await expect(tab.locator(`${ID}sendEnding`)).toHaveClass(/sapMSltDisabled/);
   await tab.locator(UI.sendInput).fill('41 42 43');
@@ -231,8 +299,7 @@ test('walks what was sent with the arrow keys, each entry in its mode, and keeps
   const input = tab.locator(UI.sendInput);
 
   await tab.sendLine('AS TEXT');
-  await tab.locator(`${ID}sendMode`).click();
-  await tab.page.getByRole('option', { name: 'Hex' }).click();
+  await chooseHexMode(tab);
   await input.fill('41 42');
   await tab.locator(UI.sendButton).click();
   await expect(tab.locator('#received')).toContainText('AB');
@@ -305,9 +372,7 @@ test('leaves the log where the reader put it while auto-scroll is off', async ({
   expect(await fromTheEnd()).toBeLessThan(4);
 
   // Off means off, at the end of the log as much as in the middle of it: the reader is reading.
-  await tab.locator(`${ID}display`).click();
-  await tab.locator(`${ID}optAutoscroll`).click();
-  await tab.page.keyboard.press('Escape');
+  await toggleDisplayOption(tab, 'optAutoscroll');
   const at = await log.evaluate((element) => element.scrollTop);
   await send(5);
   expect(await log.evaluate((element) => element.scrollTop)).toBe(at);
@@ -317,9 +382,7 @@ test('leaves the log where the reader put it while auto-scroll is off', async ({
   await log.evaluate((element) => {
     element.scrollTop = 0;
   });
-  await tab.locator(`${ID}display`).click();
-  await tab.locator(`${ID}optAutoscroll`).click();
-  await tab.page.keyboard.press('Escape');
+  await toggleDisplayOption(tab, 'optAutoscroll');
   await send(1);
   expect(await fromTheEnd()).toBeLessThan(4);
 });
@@ -372,9 +435,7 @@ test('the built folder runs when opened as a file, with no web server, and share
   // The build keeps six of the framework's modules and the two themes, and nothing else of its
   // 2 600 files (scripts/finish-build.mjs). So every part of the page is opened once: a module the
   // framework asks for and does not find shows here, as a request the browser refused.
-  await first.locator(`${ID}display`).click();
-  await first.locator(`${ID}optTimestamps`).click();
-  await first.page.keyboard.press('Escape');
+  await toggleDisplayOption(first, 'optTimestamps');
   await first.locator(`${ID}sendMode`).click();
   await first.page.keyboard.press('Escape');
   await first.locator(`${ID}more`).click();

@@ -123,7 +123,6 @@ and immediately drops does not produce a tight loop.
 ## Verification
 
 Scenario matrix rows 8 and 9; `test/unit/backoff.test.ts` asserts schedules exactly with a seeded
-random source and fake timers; `test/integration/reconnect.test.ts`, `auto-reconnect.test.ts`,
-`non-retryable-failures.test.ts` and `connection-supervision.test.ts`;
-`test/integration/auto-reconnect.test.ts` also for `setup()` retrying from any tab, in both
-transport modes.
+random source and fake timers; `test/integration/reconnect.test.ts`, `auto-reconnect.test.ts` (also
+`setup()` retrying from any tab, in both transport modes), `non-retryable-failures.test.ts` and
+`connection-supervision.test.ts`.

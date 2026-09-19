@@ -23,10 +23,9 @@ export async function tare(): Promise<void> {
 
 // [status]
 export function showStatus(label: HTMLElement): Unsubscribe {
-  const stop = SerialBroker.subscribe('Scale', 'onStatusChange', (event) => {
+  return SerialBroker.subscribe('Scale', 'onStatusChange', (event) => {
     label.textContent = event.status;
   });
-  return stop;
 }
 // [/status]
 

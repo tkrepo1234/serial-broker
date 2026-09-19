@@ -22,12 +22,12 @@ Two things shape such a build.
 ([ADR-0006](./0006-sharedworker-as-message-broker.md)). Every build of this library has to look
 for the same `serial-broker.worker.js`, or its tabs coordinate with nobody. The library finds it
 with `new URL('./serial-broker.worker.js', import.meta.url)`, and **a classic script has no
-`import.meta`** — exactly the CommonJS build's problem, for which
+`import.meta`** - exactly the CommonJS build's problem, for which
 `scripts/import-meta-stand-in.mjs` refuses to guess.
 
 **The names.** A bundler names its output after the entry file it is built from: `index.js`,
 `index.min.js`, `index.cjs`, `index.d.ts`, `diagnostics.min.js`. Someone copying `index.min.js` onto
-a web server, next to their own `index.html`, cannot tell what it is — and `index` is not the name
+a web server, next to their own `index.html`, cannot tell what it is - and `index` is not the name
 of anything a reader of this project knows.
 
 ## Decision
@@ -50,7 +50,7 @@ do in a module, and the package's other exports are properties of that same obje
 `.isSerialBrokerError()`, `.hasCode()`, `.isSupported()`, `.PROTOCOL_VERSION`. A page needs exactly one name,
 and can say what it took from this library.
 
-`SerialBrokerDiagnostics` is the other way round — a namespace object carrying
+`SerialBrokerDiagnostics` is the other way round - a namespace object carrying
 `openDiagnostics()`, `CONNECTION_STATES` and `DEFAULT_COLLECT_WINDOW_MS`. The diagnostics entry
 point has three exports and no facade to be, and `SerialBrokerDiagnostics(...)` would say less
 than the call it stands for.
@@ -59,8 +59,8 @@ than the call it stands for.
 page on a station, opened by a technician, served next to the application by the same web server
 that cannot be given a toolchain. Without it `SerialBroker` would be the only surface such a
 deployment can reach, so a support page would need exactly the toolchain the deployment does not
-have.
-It costs one more entry in the same bundler configuration and one more row in the parity check.
+have. It costs one more entry in the same bundler configuration and one more row in the parity
+check.
 
 **`src/global.ts` takes its surface from `src/index.ts`**, which is the one place in the library
 that imports through an entry point (`docs/guidelines/coding-style.md`). Taking the surface from
@@ -79,7 +79,7 @@ the classic build and a tab on the ES module build share one port and one `Share
 Reading `import.meta.url` in this build throws a sentence that names the fix
 (`scripts/import-meta-stand-in.mjs`), exactly as in the CommonJS build. Nothing is guessed: a URL
 derived from `document.currentScript` or `document.baseURI` would resolve next to the _page_, so
-two pages at different paths would name different URLs and each get a `SharedWorker` of its own —
+two pages at different paths would name different URLs and each get a `SharedWorker` of its own -
 a silent split, which is worse than an explicit requirement. Without `workerUrl` the library falls
 back to a `BroadcastChannel` and logs `environment.transport-fallback` with a reason naming
 `workerUrl`, or fails with `BROKER_UNAVAILABLE` under `transport: 'sharedworker'`.
@@ -101,8 +101,16 @@ and the documentation use; the facade is `src/facade.ts`, which leaves the publi
 The package's subpaths are `serial-broker`, `serial-broker/min`, `serial-broker/diagnostics`,
 `serial-broker/diagnostics/min`, `serial-broker/worker`, `serial-broker/global` and
 `serial-broker/diagnostics/global`. An application that imports by package name never sees a file
-name; a path written to a file inside the package — a deployment's copy step, an import map, a
-server's existence check — names a file that says what it is.
+name; a path written to a file inside the package - a deployment's copy step, an import map, a
+server's existence check - names a file that says what it is.
+
+**Every published script names its release on its first line**, `/*! serial-broker <version> | MIT */`,
+and the package exports the same release as `VERSION`. A file on a web server is often all a
+support engineer can see of an installation; the comment says which release it is without loading
+it, and finds the worker script left over from an earlier release that causes
+`PROTOCOL_VERSION_MISMATCH`. `VERSION` is a constant in `src/core/version.ts`, held to
+`package.json` by a unit test, rather than a value the bundler substitutes: the source then reads
+as what it is, and a test that runs from the source sees the same value.
 
 The worker script's minification belongs to the build outputs and is recorded in
 [ADR-0003](./0003-typescript-and-toolchain.md).
@@ -112,7 +120,7 @@ The worker script's minification belongs to the build outputs and is recorded in
 - **No classic build; tell people to use an import map.** It works.
   Rejected because the import map is one more thing to get right for an audience whose whole
   problem is that they own no toolchain, and because it is the part of such a page that most often
-  needs a content security policy changed — an inline import map
+  needs a content security policy changed - an inline import map
   needs its hash in `script-src`, which a static server cannot generate and a formatter can
   invalidate.
 - **A UMD build.** One file that works as CommonJS, AMD and a global. Rejected: the CommonJS build
@@ -121,7 +129,7 @@ The worker script's minification belongs to the build outputs and is recorded in
   does one thing.
 - **`globalName` in the bundler, giving the module namespace as the global.** The natural IIFE
   output: `SerialBroker.SerialBroker.setup()`, because the facade is one of the module's exports.
-  Rejected — a page would either write that, or start with a line of unpacking. The global is the
+  Rejected - a page would either write that, or start with a line of unpacking. The global is the
   facade instead, and the other exports hang off it.
 - **Several globals: `SerialBroker`, `SerialBrokerError`, `SerialBrokerStatus`, …** Closer to what
   the module exports look like. Rejected: a build that takes nine names off a page cannot be
@@ -129,13 +137,11 @@ The worker script's minification belongs to the build outputs and is recorded in
   browser, on one station.
 - **A `SerialBroker.default` or `SerialBroker.SerialBroker` alias for symmetry with the module.**
   Rejected as a second spelling of one thing; `check-dist` pins the surface instead.
-- **Let the classic build guess the worker URL** from `document.currentScript.src`. Plausible, and
-  it would work for a single page. Rejected for the reason under Decision: it resolves per page,
-  so two pages of one application would silently get two workers — the failure this library exists
-  to prevent, arriving without a message.
+- **Let the classic build guess the worker URL** from `document.currentScript.src`. It would work
+  for a single page, and silently give two pages of one application two workers - the failure this
+  library exists to prevent, arriving without a message.
 - **A second worker file for the classic build**, resolved relative to something it can see.
   Rejected outright: it is the same decision as a `Blob` URL, and ADR-0006 rules it out.
-- **Leave the diagnostics entry point without a classic build.** See Decision.
 - **`index.*` as the published names.** Conventional for a bundle, and it changes nothing for
   an application that imports by package name. Rejected because the audience that copies these
   files by hand is the audience this library is for, and for them `index.min.js` in a folder of
@@ -150,7 +156,7 @@ The worker script's minification belongs to the build outputs and is recorded in
 
 ### Positive
 
-- A page can use the library with one `<script src>` and one name, and no import map — and so
+- A page can use the library with one `<script src>` and one name, and no import map - and so
   without the one inline script a strict `script-src` has to be given a hash for.
 - Every published file says what it is when it is sitting in a folder on a web server.
 - The classic and module builds cannot drift: `check-dist` runs the classic build in a context
@@ -180,7 +186,8 @@ The worker script's minification belongs to the build outputs and is recorded in
 `scripts/check-dist.mjs` after every build: every `exports` target exists; the minified and classic
 builds expose what the readable build exports; every published entry-point file names
 `serial-broker.worker.js`; each classic build loads outside a browser without throwing and leaves
-exactly one global, and `SerialBroker.isSupported()` is `false` there.
+exactly one global, and `SerialBroker.isSupported()` is `false` there; every published script
+begins with the release comment of the `version` in `package.json`.
 
 `test/browser/entry-points.spec.ts` in a real browser: a tab on `dist/serial-broker.global.js` and
 a tab on `dist/serial-broker.js` set up the same configuration, see each other's traffic, hold one

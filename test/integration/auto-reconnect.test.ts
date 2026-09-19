@@ -4,7 +4,13 @@ import { SerialBrokerErrorCode } from '../../src/core/error-codes.js';
 import { SerialBrokerStatus } from '../../src/core/types.js';
 import type { SerialBrokerOptions } from '../../src/core/types.js';
 import { TRANSPORT_MODES } from '../harness/browser-harness.js';
-import { READER_OPTIONS, readerHarness } from '../harness/devices.js';
+import {
+  connectedTab,
+  connectedTabs,
+  READER_OPTIONS,
+  readerHarness,
+  twoTabs,
+} from '../harness/devices.js';
 
 /**
  * `connection.autoReconnect: false`: the application reconnects, the library does not (ADR-0008).
@@ -13,17 +19,9 @@ import { READER_OPTIONS, readerHarness } from '../harness/devices.js';
 
 const MANUAL: SerialBrokerOptions = { ...READER_OPTIONS, connection: { autoReconnect: false } };
 
-async function connectedTab() {
-  const { harness, device } = readerHarness();
-  const tab = harness.openTab();
-  await tab.setup('Reader', MANUAL);
-  await harness.settle();
-  return { harness, device, tab };
-}
-
 describe('a configuration that does not reconnect by itself', () => {
   it('ends in failed when the connection is lost, and stays there when the device comes back', async () => {
-    const { harness, device, tab } = await connectedTab();
+    const { harness, device, tab } = await connectedTab({}, MANUAL);
     expect(tab.client.getStatus('Reader').status).toBe(SerialBrokerStatus.Open);
 
     harness.serial.unplug(device);
@@ -39,7 +37,7 @@ describe('a configuration that does not reconnect by itself', () => {
   });
 
   it('connects again when the application sets it up again, and leaves a working one alone', async () => {
-    const { harness, device, tab } = await connectedTab();
+    const { harness, device, tab } = await connectedTab({}, MANUAL);
 
     harness.serial.unplug(device);
     await harness.settle();
@@ -92,27 +90,10 @@ describe('a configuration that does not reconnect by itself', () => {
   });
 });
 
-/** Tabs of one configuration, each connected to the device; the first holds the port. */
-async function connectedTabs(
-  count: number,
-  options: SerialBrokerOptions,
-  transport: (typeof TRANSPORT_MODES)[number],
-) {
-  const { harness, device } = readerHarness({ transport });
-  const tabs = [];
-  for (let index = 0; index < count; index += 1) {
-    const tab = harness.openTab();
-    await tab.setup('Reader', options);
-    tabs.push(tab);
-  }
-  await harness.settle();
-  return { harness, device, tabs };
-}
-
 describe.each(TRANSPORT_MODES)('a failed configuration handed over (%s)', (transport) => {
   describe.each(['closes', 'crashes'] as const)('when the tab holding the port %s', (ending) => {
     it.each([2, 3])('stays failed in every tab of %i, and connects nothing', async (count) => {
-      const { harness, device, tabs } = await connectedTabs(count, MANUAL, transport);
+      const { harness, device, tabs } = await connectedTabs(count, { transport }, MANUAL);
       const [holder, ...others] = tabs;
       harness.serial.unplug(device);
       await harness.settle();
@@ -141,7 +122,7 @@ describe.each(TRANSPORT_MODES)('a failed configuration handed over (%s)', (trans
   });
 
   it('connects when a tab that does not hold the port sets it up again after the handover', async () => {
-    const { harness, device, tabs } = await connectedTabs(3, MANUAL, transport);
+    const { harness, device, tabs } = await connectedTabs(3, { transport }, MANUAL);
     const [holder, next, last] = tabs;
     harness.serial.unplug(device);
     await harness.settle();
@@ -160,7 +141,7 @@ describe.each(TRANSPORT_MODES)('a failed configuration handed over (%s)', (trans
   });
 
   it('tells a tab that joins after the handover that it failed', async () => {
-    const { harness, device, tabs } = await connectedTabs(2, MANUAL, transport);
+    const { harness, device, tabs } = await connectedTabs(2, { transport }, MANUAL);
     harness.serial.unplug(device);
     await harness.settle();
     harness.serial.plug(device);
@@ -177,7 +158,7 @@ describe.each(TRANSPORT_MODES)('a failed configuration handed over (%s)', (trans
 
   it('still reconnects through a handover with autoReconnect on', async () => {
     const options: SerialBrokerOptions = { ...READER_OPTIONS, connection: { maxAttempts: 1 } };
-    const { harness, device, tabs } = await connectedTabs(2, options, transport);
+    const { harness, device, tabs } = await connectedTabs(2, { transport }, options);
     harness.serial.unplug(device);
     await harness.advance(60_000);
     expect(tabs[1]?.client.getStatus('Reader').status).toBe(SerialBrokerStatus.Failed);
@@ -199,7 +180,7 @@ describe.each(TRANSPORT_MODES)('whether an error says the library recovers (%s)'
   ] as const)(
     'follows autoReconnect %s for a lost connection, in every tab',
     async (_label, options, recovering) => {
-      const { harness, device, tabs } = await connectedTabs(2, options, transport);
+      const { harness, device, tabs } = await connectedTabs(2, { transport }, options);
 
       harness.serial.unplug(device);
       await harness.settle();
@@ -240,12 +221,7 @@ describe.each(TRANSPORT_MODES)('whether an error says the library recovers (%s)'
 
 describe.each(TRANSPORT_MODES)('a configuration that failed (%s)', (transport) => {
   it('connects again when a tab that does not hold the port sets it up again', async () => {
-    const { harness, device } = readerHarness({ transport });
-    const manual = { ...READER_OPTIONS, connection: { autoReconnect: false } };
-    const holder = harness.openTab();
-    await holder.setup('Reader', manual);
-    const other = harness.openTab();
-    await other.setup('Reader', manual);
+    const { harness, device, owner: holder, other } = await twoTabs({ transport }, MANUAL);
 
     harness.serial.unplug(device);
     await harness.settle();
@@ -255,7 +231,7 @@ describe.each(TRANSPORT_MODES)('a configuration that failed (%s)', (transport) =
 
     // Setting a configuration up again is how an application says "try again" (ADR-0008), in
     // whichever tab it happens.
-    await other.client.setup('Reader', manual);
+    await other.client.setup('Reader', MANUAL);
     await harness.settle();
 
     expect(holder.client.getStatus('Reader').status).toBe('open');

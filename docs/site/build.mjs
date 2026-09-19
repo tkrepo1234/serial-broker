@@ -184,26 +184,28 @@ function addMethodOverview(path) {
 
   const listed = new Set();
   const overview = ['## The methods', ''];
-  for (const [heading, names] of METHOD_GROUPS) {
-    const rows = names.filter((name) => summaries.has(name));
-    if (rows.length === 0) {
-      continue;
+  const addGroup = (heading, names) => {
+    if (names.length === 0) {
+      return;
     }
     overview.push(`**${heading}**`, '', '| Method | What it does |', '| ------ | ------ |');
-    for (const name of rows) {
+    for (const name of names) {
       listed.add(name);
       overview.push(`| [\`${name}()\`](#${name.toLowerCase()}) | ${summaries.get(name)} |`);
     }
     overview.push('');
+  };
+
+  for (const [heading, names] of METHOD_GROUPS) {
+    addGroup(
+      heading,
+      names.filter((name) => summaries.has(name)),
+    );
   }
-  const rest = [...summaries.keys()].filter((name) => !listed.has(name));
-  if (rest.length > 0) {
-    overview.push('**More**', '', '| Method | What it does |', '| ------ | ------ |');
-    for (const name of rest) {
-      overview.push(`| [\`${name}()\`](#${name.toLowerCase()}) | ${summaries.get(name)} |`);
-    }
-    overview.push('');
-  }
+  addGroup(
+    'More',
+    [...summaries.keys()].filter((name) => !listed.has(name)),
+  );
 
   lines.splice(start, 0, ...overview);
   writeFileSync(file, lines.join('\n'));

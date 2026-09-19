@@ -12,7 +12,7 @@ export interface FrameHandlers {
   /** A frame whose checksum did not match. */
   readonly onCorrupt: (payload: Uint8Array) => void;
   /** Bytes thrown away: a frame start with no end in sight, or an unfinished frame at a gap. */
-  readonly onDiscarded: (byteLength: number, reason: 'too-long' | 'connection-changed') => void;
+  readonly onDiscarded: (byteLength: number, reason: 'too-long' | 'after-gap') => void;
 }
 
 /**
@@ -73,7 +73,7 @@ export class FrameParser {
   /** Drops an unfinished frame. Call it when bytes may have been lost, as `receiveFrames` does. */
   reset(): void {
     if (this.#end > this.#start) {
-      this.#handlers.onDiscarded(this.#end - this.#start, 'connection-changed');
+      this.#handlers.onDiscarded(this.#end - this.#start, 'after-gap');
     }
     this.#start = 0;
     this.#end = 0;
@@ -135,23 +135,17 @@ export function encodeFrame(payload: Uint8Array): Uint8Array<ArrayBuffer> {
 /**
  * Feeds a configuration's traffic through a frame parser.
  *
- * What the device sends while the port changes tabs or reconnects is lost, so the parser drops an
- * unfinished frame whenever the status leaves `open`: joined to bytes from after the gap, it would
- * be a frame the device never sent.
+ * A delivery with `afterGap` may follow lost bytes - the port changed tabs or reconnected - so the
+ * parser drops an unfinished frame before it: joined to bytes from after the gap, it would be a frame
+ * the device never sent.
  */
 export function receiveFrames(name: string, parser: FrameParser): Unsubscribe {
-  const stopReceiving = SerialBroker.subscribe(name, 'onReceive', (event) => {
-    parser.push(event.data);
-  });
-  const stopWatching = SerialBroker.subscribe(name, 'onStatusChange', (event) => {
-    if (event.status !== 'open') {
+  return SerialBroker.subscribe(name, 'onReceive', (event) => {
+    if (event.afterGap) {
       parser.reset();
     }
+    parser.push(event.data);
   });
-  return () => {
-    stopReceiving();
-    stopWatching();
-  };
 }
 
 function xor(bytes: Uint8Array): number {

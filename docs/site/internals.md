@@ -35,7 +35,7 @@ answer to what happens to work in progress when the tab holding the port goes aw
 Two mechanisms, deliberately separate:
 
 - **Web Locks decide.** Who holds the port, for which term, whether a tab or the worker is still
-  there - every question whose wrong answer would corrupt device traffic is a lock the browser
+  there — every question whose wrong answer would corrupt device traffic is a lock the browser
   enforces and frees when a context dies.
 - **The bus carries.** The broker routes messages and believes nothing it is told; a message is
   acted on only when a lock backs it.
@@ -76,8 +76,8 @@ everything uses core. `environment/` is the exception: client, owner and storage
 interfaces, and its composition root, `browser.ts`, builds the client's transports. An import cycle
 fails the lint.
 
-No module outside the two composition roots - `src/environment/browser.ts` and the worker's entry
-point, `src/worker/serial-broker.worker.ts` - reaches `navigator`, `window`, `localStorage` or the
+No module outside the two composition roots — `src/environment/browser.ts` and the worker's entry
+point, `src/worker/serial-broker.worker.ts` — reaches `navigator`, `window`, `localStorage` or the
 timer functions; a lint rule enforces it, and time and randomness come from the environment too
 [ADR-0012]. It is what lets the test suite run many simulated tabs in one process. Durations are
 measured on the environment's monotonic clock, and only moments that are shown or sent on the wall
@@ -99,13 +99,13 @@ a `PortSupervisor` and announces `owner-claimed` on the bus. When it stops, it c
 until every write it performed has been answered, and sends `owner-released` as the last message of
 its term.
 
-With a tab limit, a tab requests the ownership lock - and joins the bus - only while it holds one
+With a tab limit, a tab requests the ownership lock — and joins the bus — only while it holds one
 of `maxTabs` places, each the Web Lock `serial-broker/tab-slot/v<protocol>/<maxTabs>/<place>/<name>`.
 Waiting tabs queue at a gate lock and, holding it, request every place at once; the first granted is
 kept [ADR-0017].
 
 When a tab dies, the browser releases its locks and grants the ownership lock to the longest-waiting
-request. The successor's `owner-claimed` proves that the previous owner let go of the lock - but not
+request. The successor's `owner-claimed` proves that the previous owner let go of the lock — but not
 that its last messages have arrived, since they come from another sender. So every time of holding
 the port is a term, a Web Lock of its own,
 `serial-broker/term/v<protocol>/<maxTabs>/<term>/<clientId>/<name>`, held by the tab holding the
@@ -114,18 +114,19 @@ tab must check before believing a message about the term: the term, the tab spea
 the tab limit that tab runs. Every other tab checks the lock with `ifAvailable` when it first hears
 of a term and queues for it in `shared` mode, so:
 
-- a claim or a status is believed only while that lock is held - a message cannot invent a term, or
+- a claim or a status is believed only while that lock is held — a message cannot invent a term, or
   a tab limit for it;
 - a term ends exactly when the browser frees the lock, which it does as it tears a crashed tab
-  down - no grace period, no timer;
+  down — no grace period, no timer;
 - a tab letting go cleanly queues a second request of its own on the term's lock before it says
-  goodbye, and the tabs watching the term - which look the moment the lock is free, where a crash
-  leaves nothing queued - see that request and wait for the `owner-released` the term still owes
+  goodbye, and the tabs watching the term — which look the moment the lock is free, where a crash
+  leaves nothing queued — see that request and wait for the `owner-released` the term still owes
   them. A message alone therefore never ends a term.
 
 `OwnerTerms.authorize()` is the one table of who may say what: claims and statuses once their term's
 lock is held, a write's progress and result from the context speaking for its term, device data and
-errors from a context speaking for a term the tab knows of.
+errors from a context speaking for a term whose lock is held — what arrives while that is being
+checked waits for the answer, in order behind the claim.
 
 ## The message bus
 
@@ -145,20 +146,20 @@ The bus is an interface, `Transport`, with two implementations [ADR-0006]:
   if it is addressed to a configuration it participates in, or to its own identifier.
 
 Because routing depends only on the addressed envelope, and ownership only on Web Locks, the two
-behave identically. Messages meant only for a broker, or written by one - `hello`, `welcome`,
-`worker-log` - reach nobody above either transport.
+behave identically. Messages meant only for a broker, or written by one — `hello`, `welcome`,
+`worker-log` — reach nobody above either transport.
 
 Every script of the origin can reach the bus as well, so the worker trusts a port with no more than
 it said about itself (`WorkerPorts`). A port's first message must be `hello`, and names the identity
 the port speaks as from then on; a message before it, or in another sender's name, is dropped. An
-identity may have several ports - a tab that gave up on a worker that did not welcome it in time may
-reach it again on a new one - and each of them receives what is addressed to the identity, until the
+identity may have several ports — a tab that gave up on a worker that did not welcome it in time may
+reach it again on a new one — and each of them receives what is addressed to the identity, until the
 identity's lock is let go. Nothing the worker routes depends on believing an identity. The test
 harness routes through the same class. `SECURITY.md` lists what this does and does not protect.
 
 The worker can reach no logger: it is a context of its own, and the logger an application configured
 belongs to a tab. It therefore sends its `warn` and `error` records to the contexts connected to it,
-as `worker-log` messages, and each tab writes them to its own logger under the worker's own events -
+as `worker-log` messages, and each tab writes them to its own logger under the worker's own events —
 `worker.message-refused`, `worker.limit-exceeded`, `broker.limit-exceeded` and the rest. The worker
 writes each kind of warning once, so what it forwards is bounded without a budget [ADR-0014].
 
@@ -183,8 +184,8 @@ reload helps [ADR-0007].
 
 Every message carries `{ v, from, to, type }` and is validated completely on arrival; anything
 malformed is dropped [ADR-0007]. `decodeMessage` is total: whatever it is handed, it returns a
-message or a reason, and never throws. Every field is also held to a limit - identifiers, names,
-payloads, text, name lists, errors and reports, in `src/protocol/limits.ts` - and an accepted
+message or a reason, and never throws. Every field is also held to a limit — identifiers, names,
+payloads, text, name lists, errors and reports, in `src/protocol/limits.ts` — and an accepted
 message is rebuilt from the fields its type declares, so nothing a sender adds is passed on. A
 message beyond a limit is dropped and logged once per limit, not once per message. The broker bounds
 what it keeps in the same way: participants, ports per participant, and configurations.
@@ -258,8 +259,8 @@ term (`AcceptedWrites`), so a request handed to it twice is answered, not writte
 **The issuing tab decides whether a write begins** [ADR-0011]. Its `writeTimeoutMs` decides when a
 write that has not begun is given up, and no clock of another tab can tell when that is. So when a
 write from another tab is next in its queue, the owner sends `write-ready` to the issuing tab and
-waits. That tab answers `write-approval`: yes while it still waits on the write - and in the same
-turn it counts the write as begun, not repeatable, `started: true` at its deadline - and no once it
+waits. That tab answers `write-approval`: yes while it still waits on the write — and in the same
+turn it counts the write as begun, not repeatable, `started: true` at its deadline — and no once it
 has given the write up. The owner begins only on a yes from that tab, and waits no longer than its
 own `writeTimeoutMs`; an owner's own writes are decided the same way, without a message.
 
@@ -271,7 +272,7 @@ issuing tab ──write-request──▶ every tab; the owner of the addressed t
 ```
 
 A new claim does not decide anything by itself: the former term's result may still be on its way. A
-term ends when the browser frees its lock, or - for a holder that is letting go cleanly - at its
+term ends when the browser frees its lock, or — for a holder that is letting go cleanly — at its
 `owner-released` [ADR-0018]. Only then is a write that term began and did not answer rejected with
 `OWNER_LOST_DURING_WRITE`, and a write addressed to it that it never began handed to the owner now:
 
@@ -352,7 +353,7 @@ device attached over USB/IP, when one is attached [ADR-0021].
 What neither suite can prove is recorded in `docs/manual-test-plan.md`, which is worked through in a
 real browser, with real or emulated hardware, and where every hardware run is recorded.
 
-What the library costs is measured rather than tested: `bench/` runs the same scenarios - chunks
-from the device to ten tabs, writes from a tab, handovers, starts, an hour of traffic - on the
+What the library costs is measured rather than tested: `bench/` runs the same scenarios — chunks
+from the device to ten tabs, writes from a tab, handovers, starts, an hour of traffic — on the
 harness and in a real browser, against expectations written down before anything is measured,
 and the [Performance](performance.md) chapter records the results [ADR-0023].

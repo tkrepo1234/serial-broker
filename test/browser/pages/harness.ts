@@ -76,6 +76,8 @@ export interface PageHarness {
   receivedByteCount(name: string): number;
   /** How many `onReceive` events arrived. */
   receiveEventCount(name: string): number;
+  /** The text of every `onReceive` event marked `afterGap`, in order. */
+  textsAfterGaps(name: string): readonly string[];
   /**
    * The longest unbroken run of the pattern that has arrived, in bytes.
    *
@@ -141,6 +143,7 @@ interface Collected {
   text: string;
   byteCount: number;
   receiveEvents: number;
+  textsAfterGaps: string[];
   patternSeed: number;
   patternRun: number;
   patternLongestRun: number;
@@ -207,6 +210,7 @@ export function installHarness(
         text: '',
         byteCount: 0,
         receiveEvents: 0,
+        textsAfterGaps: [],
         patternSeed: 0,
         patternRun: 0,
         patternLongestRun: 0,
@@ -242,6 +246,9 @@ export function installHarness(
       }
       entry.byteCount += event.data.byteLength;
       entry.receiveEvents += 1;
+      if (event.afterGap) {
+        entry.textsAfterGaps.push(event.text ?? '');
+      }
     });
     api.subscribe(name, 'onSend', (event) => {
       entry.sends.push({ origin: event.origin, byteLength: event.data.byteLength });
@@ -307,6 +314,7 @@ export function installHarness(
     receivedText: (name) => collect(name).text,
     receivedByteCount: (name) => collect(name).byteCount,
     receiveEventCount: (name) => collect(name).receiveEvents,
+    textsAfterGaps: (name) => [...collect(name).textsAfterGaps],
     receivedPatternLength: (name) => collect(name).patternLongestRun,
     sends: (name) => [...collect(name).sends],
     clearReceived: (name) => {

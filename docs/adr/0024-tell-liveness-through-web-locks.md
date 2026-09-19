@@ -20,9 +20,9 @@ unanswered - several times longer in a hidden tab, whose timers the browser thro
 sent meanwhile ends in `WRITE_TIMEOUT`. A timeout short enough to matter would fire for every hidden
 tab.
 
-What the whole library rests on answers it exactly ([ADR-0005](./0005-owner-election-via-web-locks.md)):
-the browser lets go of a context's locks when the context goes, however it goes, and grants the lock
-to whoever waits. `navigator.locks` is exposed to workers in every browser that has Web Serial.
+What the whole library rests on answers it exactly: the browser frees a context's locks however that
+context goes ([ADR-0005](./0005-owner-election-via-web-locks.md)), and `navigator.locks` is exposed
+to workers in every browser that has Web Serial.
 
 ## Decision
 
@@ -52,8 +52,8 @@ to whoever waits. `navigator.locks` is exposed to workers in every browser that 
    `BroadcastChannel` ([ADR-0006](./0006-sharedworker-as-message-broker.md)); after a lost worker, it
    starts another. Only whether the welcome has arrived is checked, so a throttled timer cannot cause
    the verdict.
-6. **`hello` says what a tab takes part in.** It carries every configuration name and is sent again
-   whenever that changes, in place of separate attach and detach messages.
+6. **`hello` says what a tab takes part in** ([ADR-0006](./0006-sharedworker-as-message-broker.md)),
+   which takes the place of separate attach and detach messages.
 7. **The `BroadcastChannel` transport needs none of this.** It keeps no state about other tabs that
    would need forgetting, and has no worker to lose.
 

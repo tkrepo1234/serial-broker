@@ -44,7 +44,7 @@ export class LineChannel {
   constructor(name: string) {
     this.#name = name;
     this.#lockName = `app/line-channel/${name}`;
-    // The splitter drops a half-received line whenever the status leaves `open`.
+    // The splitter drops a half-received line before every delivery marked `afterGap`.
     this.#stopListening = onLines(name, (line) => {
       this.#awaitingAnswer?.(line);
     });

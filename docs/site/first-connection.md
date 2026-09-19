@@ -31,6 +31,12 @@ open, because that may need the user — see step 3.
 Call `setup()` on every page load. Calling it again with the same options does nothing to a working
 configuration, so there is no need to check first.
 
+One thing goes with it, once per application: every tab has to load the broker script from the same
+URL, and a bundler has to be told where it is — `SerialBroker.configure({ workerUrl })`. See
+[The worker script](installing.md#the-worker-script).
+
+<!-- marker -->
+
 ## 2. Watch the status and what the device sends
 
 ```ts
@@ -78,10 +84,11 @@ for a few seconds only; an `await` that outlasts them loses it, and the browser 
 picker (`USER_GESTURE_REQUIRED`). A `setup()` before it is quick enough. `requestAccess()` resolves
 `false` when the user closes the picker without choosing.
 
-Every tab shows `awaiting-permission`, and the button works in each of them: the permission belongs to
-the origin, and the tab holding the port opens the port the user chose. Only a tab `queued` under
-`maxTabs`, or one that withdrew, rejects with `PERMISSION_REQUIRED`, so show the error rather than dropping it. The rules
-are in [Permission, and remembering devices](shared-ports.md#permission-and-remembering-devices).
+Every tab shows `awaiting-permission`, and the button works in each of them: the permission belongs
+to the origin, and the tab holding the port opens the port the user chose. Only a tab `queued` under
+`maxTabs`, or one that withdrew, rejects with `PERMISSION_REQUIRED`, so show the error rather than
+dropping it. The rules are in
+[Permission, and remembering devices](shared-ports.md#permission-and-remembering-devices).
 
 Once the user has chosen the port, the browser remembers the choice for your origin. On every later
 visit, `setup()` finds the port and opens it with no prompt.

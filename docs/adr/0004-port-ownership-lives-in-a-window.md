@@ -14,7 +14,7 @@ the `Serial` interface). Furthermore `Serial.requestPort()` requires
 [transient user activation](https://html.spec.whatwg.org/multipage/interaction.html#transient-activation),
 which by definition only exists in a window that received a user gesture.
 
-So the only context that can hold a `SerialPort` is a window — and windows are exactly the
+So the only context that can hold a `SerialPort` is a window - and windows are exactly the
 things that disappear without warning.
 
 ## Decision
@@ -25,17 +25,16 @@ The physical port is opened and held by **one window at a time**, called the **o
 ([ADR-0005](./0005-owner-election-via-web-locks.md)) and moves automatically when the owning
 window goes away.
 
-Every participant — owner or not — sees the same events and can issue writes. A write from
-another tab crosses the bus to the configuration's participants, and only the tab holding the
-port in the term the write is addressed to performs the actual `writer.write()`
-([ADR-0018](./0018-hold-a-web-lock-for-every-term-of-holding-the-port.md)).
+Every participant - owner or not - sees the same events and can issue writes; the bytes are
+written by whichever window holds the port
+([ADR-0011](./0011-write-ordering-and-delivery-semantics.md)).
 
 ## Alternatives considered
 
 - **Port in the SharedWorker.** Impossible, as above. Recorded because it is the first thing
   every reader proposes.
 - **A Service Worker holding the port.** Same exposure problem, plus service workers are
-  terminated aggressively by the browser — the worst possible host for a long-lived hardware
+  terminated aggressively by the browser - the worst possible host for a long-lived hardware
   handle.
 - **A native helper / WebSocket bridge.** Genuinely solves the problem and is what some
   products do, but it requires installing software on the machine and abandons the premise
@@ -57,7 +56,7 @@ port in the term the write is addressed to performs the actual `writer.write()`
   necessarily closed when the owning window dies (the browser closes it with the context), so
   a transfer always includes a reopen, with a brief gap in which no read is in flight. This
   gap is reported as `reconnecting`, never hidden.
-- Data that arrives during the transfer gap can be lost — the device is talking to nobody.
+- Data that arrives during the transfer gap can be lost - the device is talking to nobody.
   This is a property of the platform, documented, and the reason
   [ADR-0011](./0011-write-ordering-and-delivery-semantics.md) promises _at-most-once_
   delivery rather than exactly-once.

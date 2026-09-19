@@ -1,5 +1,7 @@
 import { defineConfig, type Options } from 'tsup';
 
+import { RELEASE_BANNER } from './release-banner.js';
+
 /** Settings every published file is built with. */
 const common = {
   target: 'es2022',
@@ -9,6 +11,7 @@ const common = {
   // identical to the ones the test suite type-checks against.
   dts: false,
   sourcemap: true,
+  banner: { js: RELEASE_BANNER },
   splitting: false,
   // No `treeshake`: it runs Rollup over esbuild's output, which appends a second
   // `sourceMappingURL` comment to every file and rewrites `import.meta.url` for CommonJS into a

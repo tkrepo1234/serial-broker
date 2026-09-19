@@ -12,8 +12,13 @@
 sap.ui.define([], function () {
   'use strict';
 
-  /** Lines kept in the log. Old ones are dropped: a terminal left open for a week must not grow. */
-  const MAX_LINES = 2000;
+  /**
+   * Blocks kept in the log. Old ones are dropped: a terminal left open for a week must not grow.
+   *
+   * One block is one arrival, which the library delivers as what came in before the line went
+   * quiet - so a block may hold several lines, and this is a bound on arrivals, not on lines.
+   */
+  const MAX_BLOCKS = 2000;
 
   /** The escape sequences a device writes, as one regular expression: CSI ... final byte. */
   const ANSI = /\x1b\[[0-9;]*[A-Za-z]/g;
@@ -133,7 +138,7 @@ sap.ui.define([], function () {
       }
 
       log.append(line);
-      while (log.childElementCount > MAX_LINES) {
+      while (log.childElementCount > MAX_BLOCKS) {
         log.firstElementChild?.remove();
       }
       if (options.autoscroll) {

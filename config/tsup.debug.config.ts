@@ -1,5 +1,7 @@
 import { defineConfig } from 'tsup';
 
+import { RELEASE_BANNER } from './release-banner.js';
+
 /**
  * The debugging surface, bundled into `dist/debug/` so it ships with the package as static
  * content (ADR-0015).
@@ -17,6 +19,7 @@ export default defineConfig({
   platform: 'browser',
   dts: false,
   sourcemap: true,
+  banner: { js: RELEASE_BANNER },
   clean: false,
   splitting: false,
 });

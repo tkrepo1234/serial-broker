@@ -441,7 +441,10 @@ export function normalizeGlobalOptions(options: unknown): SerialBrokerGlobalOpti
   }
   if ('logger' in raw) {
     if (logger !== undefined) {
-      const log = typeof logger === 'object' && logger !== null ? readLog(logger) : undefined;
+      const log =
+        typeof logger === 'object' && logger !== null
+          ? (logger as { log?: unknown }).log
+          : undefined;
       if (typeof log !== 'function') {
         throw invalidArgument(
           'options.logger',
@@ -462,10 +465,6 @@ export function normalizeGlobalOptions(options: unknown): SerialBrokerGlobalOpti
 /** A `URL`, recognised by its tag, so one from another realm counts too. */
 function isUrl(value: unknown): value is URL {
   return Object.prototype.toString.call(value) === '[object URL]';
-}
-
-function readLog(logger: object): unknown {
-  return (logger as { log?: unknown }).log;
 }
 
 /**

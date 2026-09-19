@@ -6,7 +6,8 @@
  * `.requestAccess()`, `.release()`, `.configure()` and the rest read exactly as they do in a
  * module - and it carries everything else the package exports as properties of itself:
  * `SerialBroker.SerialBrokerError`, `.SerialBrokerErrorCode`, `.SerialBrokerStatus`,
- * `.REMEDIATION`, `.isSerialBrokerError()`, `.hasCode()`, `.isSupported()`, `.PROTOCOL_VERSION`.
+ * `.REMEDIATION`, `.isSerialBrokerError()`, `.hasCode()`, `.isSupported()`, `.PROTOCOL_VERSION`,
+ * `.VERSION`.
  * One name is all a page has to know, and nothing else of this library is left on the page's
  * globals. See ADR-0026.
  *
@@ -37,6 +38,7 @@ import {
   SerialBrokerError,
   SerialBrokerErrorCode,
   SerialBrokerStatus,
+  VERSION,
 } from './index.js';
 
 /**
@@ -55,6 +57,7 @@ interface SerialBrokerGlobal extends SerialBrokerApi {
   readonly REMEDIATION: typeof REMEDIATION;
   readonly SerialBrokerStatus: typeof SerialBrokerStatus;
   readonly PROTOCOL_VERSION: typeof PROTOCOL_VERSION;
+  readonly VERSION: typeof VERSION;
 }
 
 /**
@@ -74,6 +77,7 @@ const serialBroker: SerialBrokerGlobal = {
   REMEDIATION,
   SerialBrokerStatus,
   PROTOCOL_VERSION,
+  VERSION,
 };
 
 (globalThis as { SerialBroker?: SerialBrokerGlobal }).SerialBroker = serialBroker;

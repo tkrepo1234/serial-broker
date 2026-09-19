@@ -11,17 +11,8 @@ import { READER, READER_OPTIONS, readerHarness } from '../../harness/devices.js'
  * only gets exercised on a locked-down station in production (ADR-0006).
  */
 describe.each(TRANSPORT_MODES)('sharing one port across tabs (%s)', (transport) => {
-  /** A harness with one granted device, and no tab open yet. */
-  async function withGrantedDevice(): Promise<{
-    harness: BrowserHarness;
-    device: ReturnType<BrowserHarness['serial']['addDevice']>;
-  }> {
-    const { harness, device } = readerHarness({ transport });
-    return { harness, device };
-  }
-
   it('opens the port once, in the first tab, and a tab that joins sees it open and hears the data', async () => {
-    const { harness, device } = await withGrantedDevice();
+    const { harness, device } = readerHarness({ transport });
     const first = harness.openTab();
     await first.setup('CardReader', READER_OPTIONS);
     const openedByTheFirst = first.client.getStatus('CardReader').status;
@@ -43,7 +34,7 @@ describe.each(TRANSPORT_MODES)('sharing one port across tabs (%s)', (transport) 
   });
 
   it('hands every listener bytes of its own, so one that writes into them changes no other', async () => {
-    const { harness, device } = await withGrantedDevice();
+    const { harness, device } = readerHarness({ transport });
     const holder = harness.openTab();
     await holder.setup('CardReader', READER_OPTIONS);
     const other = harness.openTab();
@@ -77,7 +68,7 @@ describe.each(TRANSPORT_MODES)('sharing one port across tabs (%s)', (transport) 
   });
 
   it('writes from a tab that does not own the port exactly once, and tells every tab who issued it', async () => {
-    const { harness, device } = await withGrantedDevice();
+    const { harness, device } = readerHarness({ transport });
     const owner = harness.openTab();
     await owner.setup('CardReader', READER_OPTIONS);
     const other = harness.openTab();

@@ -93,8 +93,8 @@ export class ExampleTab {
     return tab;
   }
 
-  locator(selector: string, options?: Parameters<Page['locator']>[1]): Locator {
-    return this.page.locator(selector, options);
+  locator(selector: string): Locator {
+    return this.page.locator(selector);
   }
 
   async expectStatus(status: string): Promise<void> {

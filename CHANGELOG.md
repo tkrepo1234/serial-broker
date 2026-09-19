@@ -10,6 +10,63 @@ different protocol versions do not coordinate with each other. It is noted whene
 
 ## [Unreleased]
 
+## [0.1.0-beta.2] - 2026-09-19
+
+### Added
+
+- **`ReceiveEvent.afterGap`** says that bytes may be missing before a delivery, in the tab it
+  reaches: its first delivery, the first after the status left `open`, and the first after its
+  message bus replaced a worker that died - the one case the status does not show. An application
+  assembling lines or frames drops the one in progress; the examples do so instead of watching the
+  status.
+- **`VERSION`**, the release of the package, exported beside `PROTOCOL_VERSION` and on the classic
+  script's global. Every published script names the same release in a comment on its first line, so
+  a worker script left on a server from an earlier release can be recognised without loading it,
+  and the debugging surface shows the release it was built from.
+
+### Changed
+
+- **The documentation says what it takes to run each example**, after following every page of it
+  literally in a fresh project: the worker script is part of "running it", the classic-script page
+  asks for a port as it must, the page opened from a file has its own snippet with relative paths,
+  the content security policy allows the icon the pages declare, and the hash of an import map is
+  computed by `scripts/importmap-hash.mjs` rather than by a one-liner that only runs in a POSIX
+  shell.
+
+### Fixed
+
+- **Device data a script of the origin made up is not delivered**, even when it claims a term
+  first and sends the data before the tabs have checked that claim's lock. Data from a sender whose
+  term is being checked waits for the answer, behind the claim, and goes with it when nobody holds
+  the lock. A new holder's bytes no longer reach a tab before the status that says the port moved.
+- **A port another program holds is reported as `OPEN_FAILED`**, not as `DEVICE_DISCONNECTED`.
+  Chromium answers every refusal of `open()` with a `NetworkError`, and the commonest one by far is
+  a terminal program or driver tool holding the port; the operator now reads "Another application
+  may hold the device" instead of "No action required". A device that is really away never reaches
+  `open()` and is unaffected.
+- **`release(name, { forget: true })` forgets.** A tab lets go of its own hold on the remembered
+  entry and asks for it exclusively in the same breath; the browser can still have the withdrawn
+  request in its queue and refuse a lock that nothing holds, and the entry then stayed with nothing
+  said. The refusal is now checked against what the browser reports as held.
+- **An unplugged device is reported as `DEVICE_DISCONNECTED`**, not as `READ_FAILED`. The browser
+  rejects the read of the open port before it says the device is gone, so the tab holding the port
+  learned of the loss from the read and showed the advice for a line that is misbehaving - check
+  the cable, check the line settings - for a device someone had just unplugged.
+- **Writes are taken again after a connection is lost while one was stalled.** A chunk the device
+  never took holds the write queue, as it must while that connection lasts; it no longer holds it
+  across the reconnect, where every later write timed out against a connection that was open and
+  well.
+- **`unsubscribe()` refuses an event name it does not know**, and a listener that is not a
+  function, as `subscribe()` does and as its documentation says: a misspelt name removed nothing
+  and said nothing.
+- **`requestAccess()` answers the same in every tab** while the connection is open: it opens no
+  picker. The tab holding the port used to open one, which told the caller which tab that was.
+- **The OpenUI5 terminal** keeps line settings the library refused out of its summary and out of
+  the next visit, offers its file dialog again after it has been used once, says that hex it cannot
+  read is the line rather than a fault of the page, and leaves no blank line after each received
+  one. **The debugging surface** no longer leaves a configuration behind when the picker is
+  dismissed, and carries the product's icon.
+
 ## [0.1.0-beta.1] - 2026-09-17
 
 The first release, so this section says what the library is: **wire protocol version 1**, **storage
@@ -96,8 +153,8 @@ version 1**. Before 1.0 a minor version may break the API, the protocol and the 
 - **A documentation site** built with Sphinx from the chapters and the source comments (ADR-0016):
   installing, deploying, a first connection, guarantees, how shared ports behave, configuration,
   errors, diagnostics, known limits, tiered examples, a comparison with plain Web Serial, internals,
-  performance measured against expectations written first (ADR-0023), and a generated API
-  reference.
+  performance measured against expectations written first (ADR-0023), and the interface,
+  generated from the source.
 - **`llms.txt`**, in the repository and in the package: what a language model needs to integrate
   the library correctly - entry points, the API with every default, statuses, events, error codes,
   the rules that matter.

@@ -11,6 +11,12 @@ import { READER, readerHarness } from '../harness/devices.js';
  * deliveries.
  */
 
+/**
+ * Two tabs whose chunks are collected as the defaults collect them.
+ *
+ * Not `READER_OPTIONS`, and not the shared `twoTabs()` that runs on it: that one delivers every
+ * chunk as it is read, and how chunks are collected is what this file is about.
+ */
 const OPTIONS: SerialBrokerOptions = {
   device: READER,
   serial: { baudRate: 9600 },

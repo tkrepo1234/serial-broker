@@ -49,6 +49,7 @@ const FACADE_CALLS = [
 
 /** What `serial-broker` exports besides the facade. The global carries each as a property. */
 const CARRIED_EXPORTS = [
+  'hasCode',
   'isSerialBrokerError',
   'isSupported',
   'PROTOCOL_VERSION',
@@ -56,6 +57,7 @@ const CARRIED_EXPORTS = [
   'SerialBrokerError',
   'SerialBrokerErrorCode',
   'SerialBrokerStatus',
+  'VERSION',
 ];
 
 /** The builds that must share one port, one broker and one protocol with the readable ES module. */

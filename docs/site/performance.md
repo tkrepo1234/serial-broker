@@ -8,7 +8,7 @@ expectation was written down before the first measurement.
 On a production line the serial line itself is the limit. At 9600 baud a device produces about a
 kilobyte a second; at 921 600 baud, about 90 KB/s. The library's own cost stays far below that in
 every scenario. One result is over its expectation, by less than ten times: a handover after a
-crash takes about 0.4 s, nearly all of it the browser noticing the crash - see
+crash takes about 0.4 s, nearly all of it the browser noticing the crash — see
 [Over the expectation](#over-the-expectation-by-less-than-ten-times).
 
 ## What is measured, and where
@@ -17,7 +17,7 @@ The same scenarios are measured in two places, and the two tables below are mean
 by side.
 
 - **The simulated browser** (`bench/harness/`): the library's production classes on the test
-  suite's harness - a fake bus carrying the real broker, a fake serial registry, fake locks, and a
+  suite's harness — a fake bus carrying the real broker, a fake serial registry, fake locks, and a
   clock that moves only when the scenario moves it. This isolates the library's own cost:
   structured clones, validation, dispatch, promise chains. It runs in one Node process, in about a
   second, with `npm run bench`, and it is repeatable to the extent that wall-clock time on one
@@ -37,24 +37,24 @@ measured is everything except the wire.
 | `device-to-tabs/1`, `5`, `10`   | The device pushes 255-byte chunks (the default read buffer). Latency from the push to `onReceive` in each tab, one chunk at a time; throughput from a burst of 2000 chunks.                                                                           |
 | `tabs-to-device/<n>-per-second` | A tab that does not hold the port sends a six-byte write every second, ten times a second, a hundred times a second. Latency from `send()` to its promise settling.                                                                                   |
 | `tabs-to-device/1-mb-write`     | One `send()` of 1 MiB from that tab, to its promise settling, with the default 4 KiB write chunk.                                                                                                                                                     |
-| `handover/crash`                | The tab holding the port is killed with no chance to clean up. Time until another tab reports `open` - in the browser, both the first tab (`wall`) and the last (`everyTab`), and the first against the moment the platform freed a lock (`library`). |
-| `handover/release`              | The tab holding the port releases the configuration. Time until another tab reports `open` - in the browser, the first and the last.                                                                                                                  |
+| `handover/crash`                | The tab holding the port is killed with no chance to clean up. Time until another tab reports `open` — in the browser, both the first tab (`wall`) and the last (`everyTab`), and the first against the moment the platform freed a lock (`library`). |
+| `handover/release`              | The tab holding the port releases the configuration. Time until another tab reports `open` — in the browser, the first and the last.                                                                                                                  |
 | `start/first-tab`               | A fresh browser with the device granted: from `setup()` to `open`.                                                                                                                                                                                    |
 | `start/joining-tab`             | A tab joining a configuration another tab already holds open: from `setup()` to `open`.                                                                                                                                                               |
-| `steady-state/one-hour`         | Three tabs, one chunk and one write a second for an hour. Heap growth, and - in the harness - timers still scheduled, compared after a minute of warm-up and at the end.                                                                              |
+| `steady-state/one-hour`         | Three tabs, one chunk and one write a second for an hour. Heap growth, and — in the harness — timers still scheduled, compared after a minute of warm-up and at the end.                                                                              |
 
 Every scenario runs over both transports: the `SharedWorker` broker, and the `BroadcastChannel`
 fallback.
 
 Two numbers in the harness table are not wall-clock time. **Simulated** time is how far the fake
-clock moved: `0 ms` says that a handover or a start waited on no timer at all - the successor
+clock moved: `0 ms` says that a handover or a start waited on no timer at all — the successor
 opens the port as soon as the browser hands it the lock, and nothing in between is a delay the
 library chose. **Timers** are the harness's count of scheduled timers, which the browser cannot
 report; a difference would be a timer the library scheduled and never cleared.
 
-The wall-clock numbers are percentiles over many samples - 500 chunks per tab, 60 to 500 writes,
+The wall-clock numbers are percentiles over many samples — 500 chunks per tab, 60 to 500 writes,
 20 fresh harnesses for a handover or a start in the harness, 5 fresh browser contexts in the
-browser - because they vary with the machine and with what else it is doing. A run says which
+browser — because they vary with the machine and with what else it is doing. A run says which
 machine it was made on. One tab in `device-to-tabs/1` is the tab holding the port, so that row
 measures the holder's own read loop and dispatch, with no bus hop; the hops begin with the second
 tab.
@@ -97,7 +97,7 @@ the bound written for a release, which reasons from the same steps between a fre
 ## A real browser
 
 Recorded once, on the machine named below, with the Web Serial stand-in of the browser test
-suite (`test/browser/stand-in/web-serial-stand-in.ts`) standing in for the device - a loopback
+suite (`test/browser/stand-in/web-serial-stand-in.ts`) standing in for the device — a loopback
 that can also be made to push bytes of its own. The rates are real time here, the simulated hour
 is its volume of traffic as fast as the pages take it, and the heap is read through the DevTools
 protocol after a forced garbage collection; the browser's timers cannot be observed from outside.
@@ -135,37 +135,41 @@ and on a line that never goes quiet for up to `receive.maxWaitMs` (500 ms); see
 240 ms at the median, which is that wait and nothing else.
 
 **The `SharedWorker` can end with the tab that crashes.** In Microsoft Edge 153 the `SharedWorker`
-ends when the renderer of the page that started it crashes - usually the first tab, which is also
+ends when the renderer of the page that started it crashes — usually the first tab, which is also
 the first to hold the port. The worker holds a Web Lock for its lifetime, which every tab waits on
 (ADR-0024), so every tab learns of it at once and no timer is involved: `everyTab` is as close to
 `wall` on the `SharedWorker` transport as on the `BroadcastChannel` transport.
 
 ### Over the expectation, by less than ten times
 
-- **A handover after a crash** (`wall` and `everyTab`): 382.3 ms at the
-  median on the `SharedWorker` transport and 349.7 ms on `BroadcastChannel`, against 250 ms, with a
-  95th percentile of 714.6 ms and 645.7 ms. Almost none of it is the library's: `library` - the same moment against a plain Web Lock the crashed page held, freed by the browser in the same crash - is 8.600 ms and 6.300 ms at the median. The rest is Chromium noticing that the renderer is gone, plus the
-  DevTools round trip that orders the crash. The first crash after the browser starts takes about twice as long as the ones
-  after it. The expectation stays at 250 ms, so that the next run is judged against the same line.
+- **A handover after a crash** (`wall` and `everyTab`): 375.3 ms at the median on the
+  `SharedWorker` transport and 348.5 ms on `BroadcastChannel`, against 250 ms, with a 95th
+  percentile of 678.4 ms and 661.7 ms. Almost none of it is the library's: `library` — the same
+  moment against a plain Web Lock the crashed page held, freed by the browser in the same crash —
+  is 8.300 ms and 6.500 ms at the median. The rest is Chromium noticing that the renderer is gone,
+  plus the DevTools round trip that orders the crash. The first crash after the browser starts
+  takes about twice as long as the ones after it. The expectation stays at 250 ms, so that the
+  next run is judged against the same line.
 
 ### What else the numbers say
 
 - **The browser's sub-millisecond rows are bounds, not exact values.** `performance.now()` in a
   page that is not cross-origin isolated has a resolution of 100 µs, and a latency between pages
   compares two pages' clocks. Checked once with an NTP-style exchange between ten pages over a
-  `BroadcastChannel`, those clocks agreed within 0.05 to 0.3 ms - the size of the latencies
+  `BroadcastChannel`, those clocks agreed within 0.05 to 0.3 ms — the size of the latencies
   themselves. What the `device-to-tabs` rows say with confidence is that a chunk reaches ten tabs
   in under a millisecond; which fraction of a millisecond, they do not.
 - **The harness's heap reading is coarser than its expectation.** With no change to the library,
-  the growth after the hour reads anywhere from -800 KB to +220 KB from run to run: what the garbage collector leaves behind varies by more than the 512 KB expected. The
-  reading can still tell a leak: one chunk kept per tab per second would add about 2.6 MB over the
-  hour. The timer count is exact.
+  the growth after the hour reads anywhere from -800 KB to +220 KB from run to run: what the garbage
+  collector leaves behind varies by more than the 512 KB expected. The reading can still tell a
+  leak: one chunk kept per tab per second would add about 2.6 MB over the hour. The timer count is
+  exact.
 - **The megabyte write is not dominated by the echo**: the write's promise settles in about 20 ms,
   before the stand-in has echoed the megabyte back, so the expectation of two seconds, which
   reasoned from the echo, was wrong in the safe direction. Against a real device the write itself
-  takes as long as the line rate says - about eighteen minutes at 9600 baud - and the library's
+  takes as long as the line rate says — about eighteen minutes at 9600 baud — and the library's
   part of it is the harness number.
-- **The harness results are 6 to 110 times under their expectations**, with the writes from a tab
+- **The harness results are 5 to 100 times under their expectations**, with the writes from a tab
   that does not hold the port on the `SharedWorker` transport closest to the line. The expectations
   reasoned from tens of microseconds a hop where the process spends a few; they stand as written,
   and a result is compared with them, not with the last run.
@@ -176,13 +180,13 @@ A result that crosses the line becomes a fix in the library or a limit stated in
 
 ## What the numbers do not say
 
-- They say nothing about a real serial line. A device at 9600 baud produces 960 bytes a second,
-  and every scenario above is far faster than any line the library will meet; the throughput
-  rows say how much headroom there is, not how fast a device can be read.
+- They say nothing about a real serial line. Every scenario above is far faster than any line the
+  library will meet; the throughput rows say how much headroom there is, not how fast a device can
+  be read.
 - The browser numbers are one machine, one browser version, one day. They are recorded so that a
   change in the library can be compared against them, not as a promise.
 - A hidden tab is throttled by the browser to about one timer a minute, which slows nothing in
-  these scenarios - deliveries, writes and a lost worker are messages and Web Locks, not timers;
+  these scenarios — deliveries, writes and a lost worker are messages and Web Locks, not timers;
   see [Shared ports](shared-ports.md) for what throttling means.
 
 ## Running the benchmarks
@@ -195,7 +199,7 @@ SERIAL_BROKER_BENCH_BROWSER=1 npm run bench:browser   # a real browser, about te
 Both build the package first. The harness benchmark writes `bench/results/harness.json` and the
 fragments under `docs/site/_generated/` that this chapter includes; the browser benchmark writes
 `bench/results/browser.json` and its fragment. All of them are committed, so that this chapter
-builds without a benchmark run and the numbers a reader sees are the numbers that were measured -
+builds without a benchmark run and the numbers a reader sees are the numbers that were measured —
 the header of each fragment names the commit and the machine, and says when the measured code had
 uncommitted changes. The browser benchmark drives the installed Microsoft Edge, as the browser test
 suite does; `SERIAL_BROKER_BROWSER_CHANNEL` picks another Chromium, and

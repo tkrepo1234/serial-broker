@@ -58,12 +58,12 @@ production screen.
 ## No tab can close the port for all the others
 
 `release()`, `releaseAll()` and `dispose()` all act on the tab that calls them. If another tab still
-has the configuration set up, the port stays open and ownership moves there - which is the point of
+has the configuration set up, the port stays open and ownership moves there — which is the point of
 the library, and it means "the operator is finished, close the device" has no single call. A tab
 cannot make the decision for tabs it is not allowed to see (ADR-0009).
 
-**What to do:** have the application say so on its own bus - a `BroadcastChannel` message that every
-tab answers by calling `release()` - or give the operator a screen where the last tab is closed.
+**What to do:** have the application say so on its own bus — a `BroadcastChannel` message that every
+tab answers by calling `release()` — or give the operator a screen where the last tab is closed.
 `release(name, { forgetDevice: true })` does reach the whole origin, but it revokes the browser's
 permission with it: the next `setup()` anywhere needs the picker again.
 
@@ -83,8 +83,8 @@ reports `stalledWriteSince` for such a write.
 ## A worker that hangs after answering is not noticed
 
 The tabs learn that the `SharedWorker` has ended when the browser lets go of its Web Lock
-(ADR-0024), at once and without a timer. A worker that keeps running but stops passing messages on -
-a script stuck in a loop - still holds its lock, so no tab notices. Writes from tabs that do not hold
+(ADR-0024), at once and without a timer. A worker that keeps running but stops passing messages on —
+a script stuck in a loop — still holds its lock, so no tab notices. Writes from tabs that do not hold
 the port then end in `WRITE_TIMEOUT`, and what the device sends reaches only the tab holding the
 port, until the page is reloaded. Only a worker that never answers when a tab connects is caught, by
 the handshake deadline.
@@ -103,8 +103,8 @@ applications from a web server, where each origin is its own.
 
 serial-broker is built for operator stations: desktop Chromium and Microsoft Edge, which is where it
 is tested. Chrome for Android is not tested and not supported. Nothing in the library refuses to run
-there - Android has no `SharedWorker`, and a browser without one gets the `BroadcastChannel` bus like
-any other - but no release is checked on it, and a defect that shows only there is not a defect of a
+there — Android has no `SharedWorker`, and a browser without one gets the `BroadcastChannel` bus like
+any other — but no release is checked on it, and a defect that shows only there is not a defect of a
 release.
 
 **What to do:** use a desktop browser for anything that has to work. `isSupported()` answers for the
@@ -145,5 +145,5 @@ the cause, and reload the tabs on the wrong bus.
 When a tab moves to a new worker, or to a `BroadcastChannel` because the worker script failed, what
 was on its way through the old bus is not repeated: data the device sent and status messages of that
 moment reach no tab. Each tab restates its status on the new bus, and a write that had not started
-is sent again once the port is reported `open` - it never reached the device, so this is not a
+is sent again once the port is reported `open` — it never reached the device, so this is not a
 repeat.

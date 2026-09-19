@@ -1,8 +1,8 @@
 # Serial-Terminal in OpenUI5
 
 A serial terminal as a SAP OpenUI5 application in the `sap_horizon` theme: open a port, watch what
-the device says, type back. The controls and the look of a Fiori application - and a build that **runs from a folder opened as a file**, with no web
-server and no internet.
+the device says, type back. The controls and the look of a Fiori application - and a build that
+**runs from a folder opened as a file**, with no web server and no internet.
 
 Classic UI5 JavaScript: `sap.ui.define`, an XML view, a controller, fragments for the dialogs. No
 transpile step; the files under `webapp/` are the files the browser loads.
@@ -90,8 +90,8 @@ from a file, and the build takes each of them away:
 What the framework loads with a `<script>` or a `<link>` - a calendar, a lazily loaded part of a
 library, the theme - works from a file as it is. Those are six modules and the two themes' style
 sheets and fonts, found by opening every part of the built page with every request recorded; the
-rest of OpenUI5 is never asked for and is not in `dist/`. The smoke test walks the
-same path, so a framework update that needs one more module fails there and not on a station.
+rest of OpenUI5 is never asked for and is not in `dist/`. The smoke test walks the same path, so a
+framework update that needs one more module fails there and not on a station.
 
 One thing to know when several applications are opened from files on one machine: to the browser
 they all belong to the same place, so they share configuration names. This terminal's is
@@ -148,8 +148,8 @@ Control ids are stable because the component and the root view have fixed ids
 `connectConfirm`, `settingsCancel`, `connectMessage`, `display`, `optHex`, `optTimestamps`,
 `optAutoscroll`, `more`, `fileDialog`, `fileClose`, `theme`, `sendMode`, `sendInput` (the element
 that takes text is `sendInput-inner`), `sendEnding`, `sendButton`, `error`, `errorCode`,
-`errorRemediation`, `displaySummary` - and `#received`, the log, which is
-plain DOM with an id of its own.
+`errorRemediation`, `displaySummary` - and `#received`, the log, which is plain DOM with an id of
+its own.
 
 `smoke.spec.ts` connects through the dialog, checks the baud rates and that the last settings come
 back, that _Disconnect_ forgets everything, that the dialog stays when no port is chosen, an

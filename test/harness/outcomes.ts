@@ -11,6 +11,22 @@ export function outcomeOf(promise: Promise<void>): Promise<unknown> {
   );
 }
 
+/**
+ * How a promise has settled *so far*: `'pending'` until it settles, then `'resolved'` or the
+ * reason it rejected with. Attached at once, so a rejection is never unhandled.
+ *
+ * For a test that asserts a call is still waiting at one point and settled at another - a write
+ * the tab holding the port has not been let to begin, say.
+ */
+export function outcomeSoFar(promise: Promise<void>): () => unknown {
+  let outcome: unknown = 'pending';
+  void promise.then(
+    () => (outcome = 'resolved'),
+    (error: unknown) => (outcome = error),
+  );
+  return () => outcome;
+}
+
 /** How many writes wait at the port of the tab holding it, as the diagnostics report says. */
 export function queuedWritesAt(client: SerialBrokerClient): number | undefined {
   return client.diagnostics()?.configurations[0]?.connection?.queuedWrites;

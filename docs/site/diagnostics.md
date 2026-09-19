@@ -80,7 +80,7 @@ application's to log. What is logged is what an application cannot otherwise see
 | `matcher.none`                            | debug | No granted port matches the configured device, or none is chosen yet (`filter: 'auto'`).                                                                                                                                 |
 | `matcher.ambiguous`                       | warn  | Several granted ports match; the first is used.                                                                                                                                                                          |
 | `environment.transport-fallback`          | warn  | `SharedWorker` is unavailable or its script did not load; `BroadcastChannel` is used.                                                                                                                                    |
-| `transport.broker-lost`                   | warn  | The worker ended - its lock was let go - or did not answer in time; a new worker is started.                                                                                                                             |
+| `transport.broker-lost`                   | warn  | The worker ended — its lock was let go — or did not answer in time; a new worker is started.                                                                                                                             |
 | `transport.worker-restarted`              | info  | A new worker was started in place of the lost one.                                                                                                                                                                       |
 | `transport.worker-restart-failed`         | warn  | Starting a new worker failed; the handshake deadline tries again.                                                                                                                                                        |
 | `transport.broker-restored`               | info  | A new worker welcomed the tab.                                                                                                                                                                                           |
@@ -95,6 +95,7 @@ application's to log. What is logged is what an application cannot otherwise see
 | `storage.stale-name`                      | info  | A remembered name had no configuration left under it and was forgotten.                                                                                                                                                  |
 | `storage.lookup-failed`                   | debug | `setup()` could not read the remembered configuration of its name; it starts as if none were remembered.                                                                                                                 |
 | `storage.hold-failed`                     | warn  | The lock that keeps a remembered configuration for other tabs could not be requested.                                                                                                                                    |
+| `storage.hold-kept`                       | debug | `{ forget: true }` left a remembered configuration in place, because another tab may still run it.                                                                                                                       |
 | `slot.acquired`                           | info  | This tab took one of the `maxTabs` places and joins the configuration.                                                                                                                                                   |
 | `slot.released`                           | info  | This tab gave its place up.                                                                                                                                                                                              |
 | `slot.failed`                             | warn  | Requesting a place failed; the tab queues again.                                                                                                                                                                         |
@@ -218,21 +219,13 @@ The page sets nothing up by itself, so opening it to look never makes it take a 
 
 ### Starting from it
 
-It is also the shortest way to your first connection, before you write any code. Serve `dist/`,
-open `/debug/`, and press **Choose a device…**: the dialog asks for a name that is free on this
-origin and the line settings, starting at 9600 baud, and nothing about the device. **Connect** sets
-the configuration up in auto mode and opens the browser's port picker with no filter, in that same
-click; the port you pick becomes the configuration's device — its USB IDs, or the fact that it has
-none — and is remembered, so no later visit asks again. Send a line on the _Traffic_ panel to see
-the device answer, and copy the settings from the _Settings_ panel into your own `setup()` call,
-with or without the device it resolved to:
-
-```ts
-await SerialBroker.setup('Device', {
-  device: { vendorId: 0x1a86, productId: 0x7523 },
-  serial: { baudRate: 9600 },
-});
-```
+It is also the shortest way to a first connection, before any code is written, as
+[First connection](first-connection.md#the-shortcut-the-debugging-surface) describes. **Choose a
+device…** asks for a name that is free on this origin and the line settings, starting at 9600 baud,
+and nothing about the device. **Connect** sets the configuration up in auto mode and opens the
+browser's port picker with no filter, in that same click; the port you pick becomes the
+configuration's device — its USB IDs, or the fact that it has none — and is remembered, so no later
+visit asks again.
 
 Closing the picker without choosing sets nothing up. If several ports the browser allows match the
 device, the configuration opens the first of them: identical devices report identical IDs, and the

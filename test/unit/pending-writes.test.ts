@@ -10,7 +10,7 @@ import { SerialBrokerErrorCode } from '../../src/core/error-codes.js';
 import { SerialBrokerError } from '../../src/core/errors.js';
 import type { RequestId, TermId } from '../../src/protocol/messages.js';
 import { FakeClock, flushMicrotasks } from '../harness/fake-clock.js';
-import { outcomeOf } from '../harness/outcomes.js';
+import { outcomeOf, outcomeSoFar } from '../harness/outcomes.js';
 
 const PAYLOAD = new Uint8Array([1, 2, 3]);
 
@@ -148,20 +148,18 @@ describe('PendingWrites', () => {
 
   it('fails a started write only when its own term ends, not another', async () => {
     const harness = createHarness();
-    let outcome: unknown = 'pending';
-    void outcomeOf(harness.writes.add(id('w1'), PAYLOAD)).then((value) => (outcome = value));
+    const outcome = outcomeSoFar(harness.writes.add(id('w1'), PAYLOAD));
     harness.writes.approve(id('w1'), FIRST);
 
     harness.endTerm(term('t0'));
     await Promise.resolve();
 
-    expect(outcome).toBe('pending');
+    expect(outcome()).toBe('pending');
   });
 
   it('lets only the term it was addressed to begin a write', async () => {
     const harness = createHarness();
-    let outcome: unknown = 'pending';
-    void outcomeOf(harness.writes.add(id('w1'), PAYLOAD)).then((value) => (outcome = value));
+    const outcome = outcomeSoFar(harness.writes.add(id('w1'), PAYLOAD));
 
     // Asked by a tab that was never asked to write it. Approving would tie the write to a term that
     // is not writing it, and lose it when that term ends (ADR-0018).
@@ -169,14 +167,13 @@ describe('PendingWrites', () => {
     harness.endTerm(SECOND);
     await flushMicrotasks();
 
-    expect(outcome).toBe('pending');
+    expect(outcome()).toBe('pending');
     expect(harness.dispatched).toEqual(['w1@t1']);
   });
 
   it('ignores an outcome from a term the write was not addressed to', async () => {
     const harness = createHarness();
-    let outcome: unknown = 'pending';
-    void outcomeOf(harness.writes.add(id('w1'), PAYLOAD)).then((value) => (outcome = value));
+    const outcome = outcomeSoFar(harness.writes.add(id('w1'), PAYLOAD));
 
     // Only the term that was asked to write it can say how it went; anyone else read the request
     // id off the bus (ADR-0018).
@@ -184,7 +181,7 @@ describe('PendingWrites', () => {
     harness.writes.handleResult(id('w1'), undefined, undefined);
     await flushMicrotasks();
 
-    expect(outcome).toBe('pending');
+    expect(outcome()).toBe('pending');
     expect(harness.writes.size).toBe(1);
   });
 

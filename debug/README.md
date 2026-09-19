@@ -41,6 +41,7 @@ _Forget the configuration_ removes what this browser remembers under the name, a
 device_ revokes the browser's permission. With neither ticked the configuration stays in the list,
 with _Connect_ beside it. The **⋯** menu holds _Choose a different device…_, for a configuration
 that took its device from the port chosen.
+
 The detail has three sections:
 
 - **Overview** — every tab that uses it, which one holds the port and which are waiting, when the
@@ -51,11 +52,11 @@ The detail has three sections:
 _Choose a device…_ sets one up for a port you pick in the browser's picker. _New configuration_
 opens the same dialog with the device list: _Automatic (from the chosen device)_ by default, the
 common adapters, _Other USB device_ for IDs you know, _Port without USB identity_ and _Any port_.
-Every other option of `setup()` is under _More options_. Editing opens the same dialog on the settings in use; saving disconnects this
-page and connects again with the new settings, while other tabs keep theirs. A **?** beside a
-setting or a section opens a short explanation of it. Settings of the page itself — worker URL,
-transport, payload logging — and the browser checks, port locks and granted ports are behind the
-_Settings_ button. The log is at the bottom.
+Every other option of `setup()` is under _More options_. Editing opens the same dialog on the
+settings in use; saving disconnects this page and connects again with the new settings, while other
+tabs keep theirs. A **?** beside a setting or a section opens a short explanation of it. Settings of
+the page itself — worker URL, transport, payload logging — and the browser checks, port locks and
+granted ports are behind the _Settings_ button. The log is at the bottom.
 
 The page refreshes on its own and **sets nothing up on its own**: opening it to look never makes
 it a participant, so it never ends up owning a port.

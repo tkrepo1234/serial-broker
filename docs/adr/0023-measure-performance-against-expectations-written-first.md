@@ -9,9 +9,8 @@ what it costs: how long a chunk takes to reach ten tabs, how long a write from a
 hold the port takes, how long a handover takes after a crash, or whether an hour of traffic leaves
 timers or memory behind. Those numbers are wanted in two places - the simulated browser of
 `test/harness/` and a real Chromium - for both transports, with one rule that shapes everything
-else: **the expected value of
-every scenario is written down before it is measured**, and a result more than ten times worse
-than its expectation becomes a fix or a documented limit.
+else: **the expected value of every scenario is written down before it is measured**, and a result
+more than ten times worse than its expectation becomes a fix or a documented limit.
 
 Three things make this harder than a benchmark usually is:
 

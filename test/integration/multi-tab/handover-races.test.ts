@@ -6,6 +6,7 @@ import { brokerChannelName, ownerLockName } from '../../../src/protocol/version.
 import type { BrowserHarness } from '../../harness/browser-harness.js';
 import { TRANSPORT_MODES, type VirtualTab } from '../../harness/browser-harness.js';
 import { READER_OPTIONS, readerHarness } from '../../harness/devices.js';
+import { flushMicrotasks } from '../../harness/fake-clock.js';
 import type { FakeDevice } from '../../harness/fake-serial.js';
 import { outcomeOf, queuedWritesAt } from '../../harness/outcomes.js';
 
@@ -117,7 +118,7 @@ describe.each(TRANSPORT_MODES)('a handover heard out of order (%s)', (transport)
     expect(device.written).toHaveLength(1);
   });
 
-  it('hands on, and writes once, a write whose question arrives only after the browser freed a crashed holder`s lock', async () => {
+  it("hands on, and writes once, a write whose question arrives only after the browser freed a crashed holder's lock", async () => {
     const { harness, device, first, busy } = await threeTabs();
 
     // The first tab asks whether it may begin, and the question is late: it begins nothing.
@@ -137,7 +138,7 @@ describe.each(TRANSPORT_MODES)('a handover heard out of order (%s)', (transport)
     expect(device.written).toHaveLength(1);
   });
 
-  it('hands a write waiting for its issuer`s answer on at once when the holder closes, and writes it once', async () => {
+  it("hands a write waiting for its issuer's answer on at once when the holder closes, and writes it once", async () => {
     const { harness, device, first, second, busy } = await threeTabs();
 
     busy.hold(first.client.clientId);
@@ -159,7 +160,7 @@ describe.each(TRANSPORT_MODES)('a handover heard out of order (%s)', (transport)
     expect(device.written).toHaveLength(1);
   });
 
-  it('keeps the new holder`s status when the former holder`s owner-released arrives late', async () => {
+  it("keeps the new holder's status when the former holder's owner-released arrives late", async () => {
     const { harness, first, busy } = await threeTabs();
 
     busy.hold(first.client.clientId);
@@ -225,6 +226,44 @@ describe.each(TRANSPORT_MODES)('the tab that holds the port (%s)', (transport) =
     await harness.settle();
 
     expect(queuedWritesAt(busy.client)).toBe(2);
+  });
+});
+
+describe.each(TRANSPORT_MODES)('taking the port over from a clean release (%s)', (transport) => {
+  it('has the port open in the tab that takes it, with no time passing', async () => {
+    const { harness, device } = readerHarness({ transport });
+    const [owner, other] = [harness.openTab(), harness.openTab()];
+    for (const tab of [owner, other]) {
+      await tab.setup('Reader', READER_OPTIONS);
+    }
+    // Settled with microtasks alone, as everything in this test is: no timer is involved in
+    // opening a granted port either.
+    const settleUntil = async (done: () => boolean): Promise<void> => {
+      for (let turn = 0; turn < 10_000 && !done(); turn += 1) {
+        await flushMicrotasks(1);
+      }
+    };
+    const isOpen = (tab: VirtualTab): boolean =>
+      tab.client.getStatus('Reader').status === SerialBrokerStatus.Open;
+    await settleUntil(() => isOpen(owner) && isOpen(other));
+    expect(device.openCount).toBe(1);
+
+    let hasThePort = false;
+    other.client.subscribe('Reader', 'onStatusChange', (event) => {
+      hasThePort = event.status === SerialBrokerStatus.Open;
+    });
+
+    // Nothing in a handover between two tabs of one browser waits for a timer, so no time passes
+    // here: the question is what the tab taking over has the moment it says it has the port.
+    await owner.client.release('Reader');
+    await settleUntil(() => hasThePort);
+
+    expect(hasThePort).toBe(true);
+    expect(device.openCount).toBe(2);
+    // A tab that opened the port while the tab letting it go was still closing would lose it in
+    // the same breath, and the application would see the connection come and go for nothing.
+    expect(other.client.getStatus('Reader').status).toBe(SerialBrokerStatus.Open);
+    expect(other.errorCodes('Reader')).toEqual([]);
   });
 });
 

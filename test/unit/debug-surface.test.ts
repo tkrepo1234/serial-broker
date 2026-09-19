@@ -1,3 +1,5 @@
+import { readFile } from 'node:fs/promises';
+
 import { describe, expect, it } from 'vitest';
 
 import { ChooseMessage } from '../../debug/src/choose-message.js';
@@ -56,9 +58,9 @@ import type {
   DiagnosticsSnapshot,
   ParticipantDiagnostics,
 } from '../../src/core/diagnostics.js';
-import { describeSettings } from '../../src/core/diagnostics.js';
 import { SerialBrokerErrorCode } from '../../src/core/error-codes.js';
 import { SerialBrokerError } from '../../src/core/errors.js';
+import { toSetupOptions } from '../../src/core/validation.js';
 import { normalizeConfiguration } from '../../src/core/validation.js';
 import { matchesDevice } from '../../src/owner/port-matcher.js';
 import { ownerLockName, PROTOCOL_VERSION, tabSlotLockName } from '../../src/protocol/version.js';
@@ -76,6 +78,11 @@ function tab(
 
 function snapshotOf(...participants: ParticipantDiagnostics[]): DiagnosticsSnapshot {
   return { collectedAt: 0, observerClientId: 'd-1', participants, locks: undefined };
+}
+
+/** The page's markup, as the tests below read it: the source, not a rendered document. */
+async function debugPage(): Promise<string> {
+  return await readFile('debug/public/index.html', 'utf8');
 }
 
 /**
@@ -312,7 +319,7 @@ describe('debugging surface: new and edited configurations', () => {
   ])('fills the form for %s, so saving changes nothing', (_label, choice, options) => {
     const running = normalizeConfiguration('Scale', options);
 
-    const values = formValuesFor('Scale', describeSettings(running));
+    const values = formValuesFor('Scale', toSetupOptions(running));
 
     expect(deviceChoiceFor(values)).toBe(choice);
     expect(normalizeConfiguration('Scale', buildSetupOptions(values))).toEqual(running);
@@ -327,7 +334,7 @@ describe('debugging surface: new and edited configurations', () => {
         maxTabs,
       });
 
-      const values = formValuesFor('Scale', describeSettings(running));
+      const values = formValuesFor('Scale', toSetupOptions(running));
 
       expect(values.maxTabs).toBe(String(maxTabs));
       expect(buildSetupOptions(values)['maxTabs']).toBe(maxTabs);
@@ -444,7 +451,7 @@ describe('debugging surface: new and edited configurations', () => {
         serial: { baudRate: 9600 },
       });
 
-      const values = formValuesFor('Device', describeSettings(running));
+      const values = formValuesFor('Device', toSetupOptions(running));
 
       expect(deviceChoiceFor(values)).toBe('auto');
       expect(normalizeConfiguration('Device', buildSetupOptions(values))).toEqual(running);
@@ -453,7 +460,7 @@ describe('debugging surface: new and edited configurations', () => {
     expect(
       formValuesFor(
         'Device',
-        describeSettings(
+        toSetupOptions(
           normalizeConfiguration('Device', {
             device: { auto: true, resolved: { vendorId: 0x1a86, productId: 0x7523 } },
             serial: { baudRate: 9600 },
@@ -471,7 +478,7 @@ describe('debugging surface: new and edited configurations', () => {
   it('fills the form for an automatic device that has not resolved', () => {
     const waiting = normalizeConfiguration('Device', { serial: { baudRate: 9600 } });
 
-    const values = formValuesFor('Device', describeSettings(waiting));
+    const values = formValuesFor('Device', toSetupOptions(waiting));
 
     expect(values).toMatchObject({ deviceKind: 'auto', resolved: '', vendorId: '', productId: '' });
     expect(normalizeConfiguration('Device', buildSetupOptions(values))).toEqual(waiting);
@@ -697,9 +704,7 @@ describe('debugging surface: framing', () => {
     // A page that cannot start hides `SETUP_ACTION_IDS` (ADR-0015). A control the list misses -
     // the `?` that explains an action the page has just removed, for instance - stays behind, so
     // the markup is checked against the list rather than trusted to agree with it.
-    const html = await import('node:fs/promises').then(
-      async (fs) => await fs.readFile('debug/public/index.html', 'utf8'),
-    );
+    const html = await debugPage();
 
     const actions = /<div class="header-actions">([\s\S]*?)<\/div>/.exec(html)?.[1] ?? '';
     const ids = [...actions.matchAll(/<button\b([^>]*)>/g)].map(
@@ -749,7 +754,7 @@ describe('debugging surface: formatting', () => {
   });
 
   it('summarizes device and line settings on one line', () => {
-    const settings = describeSettings(
+    const settings = toSetupOptions(
       normalizeConfiguration('Scale', {
         device: { vendorId: 0x0403, productId: 0x6001 },
         serial: { baudRate: 19_200, parity: 'even', stopBits: 2 },
@@ -762,7 +767,7 @@ describe('debugging surface: formatting', () => {
   it('summarizes an automatic device by what it resolved to, or as not chosen yet', () => {
     const summary = (device: unknown): string =>
       summarizeSettings(
-        describeSettings(normalizeConfiguration('Device', { device, serial: { baudRate: 9600 } })),
+        toSetupOptions(normalizeConfiguration('Device', { device, serial: { baudRate: 9600 } })),
       );
 
     expect(summary(undefined)).toBe('not chosen yet · 9600 8N1');
@@ -852,9 +857,7 @@ describe('debugging surface: stopping a configuration', () => {
   it('offers connecting, editing and disconnecting as buttons, not hidden in a menu', async () => {
     // What an operator does to a configuration is visible while it is selected, whether or not
     // this page is connected to it: dropping a remembered entry does not take connecting to it first.
-    const html = await import('node:fs/promises').then(
-      async (fs) => await fs.readFile('debug/public/index.html', 'utf8'),
-    );
+    const html = await debugPage();
 
     const actions = /<div class="detail-actions">([\s\S]*?)<div data-part="menu"/.exec(html)?.[1];
     for (const part of ['connect', 'choose', 'edit', 'disconnect']) {
@@ -868,9 +871,7 @@ describe('debugging surface: stopping a configuration', () => {
   });
 
   it('asks what to forget in a dialog, with nothing ticked to begin with', async () => {
-    const html = await import('node:fs/promises').then(
-      async (fs) => await fs.readFile('debug/public/index.html', 'utf8'),
-    );
+    const html = await debugPage();
 
     const dialog = /<dialog id="forgetDialog">([\s\S]*?)<\/dialog>/.exec(html)?.[1] ?? '';
 
@@ -881,9 +882,7 @@ describe('debugging surface: stopping a configuration', () => {
   });
 
   it('tells the operator that disconnecting forgets nothing on its own', async () => {
-    const html = await import('node:fs/promises').then(
-      async (fs) => await fs.readFile('debug/public/index.html', 'utf8'),
-    );
+    const html = await debugPage();
 
     // Read as the operator reads it: the formatter wraps this markup wherever the line fills up,
     // and a sentence split across two lines is the same sentence on the screen.

@@ -35,7 +35,7 @@ Two mechanisms, kept apart:
 For every configuration, each tab that has set it up requests a [Web Lock][web-locks] named after
 it. The browser grants the lock to one tab. That tab opens the port, reads from it and performs
 every write. Holding the lock _is_ holding the port: there is no separate flag that could disagree
-with it and no election between tabs. The browser releases the lock whenever the tab goes away,
+with it and no vote between tabs. The browser releases the lock whenever the tab goes away,
 however it goes away, and grants it to the tab that has waited longest — which is why failover needs
 no heartbeat and no timeout.
 
@@ -48,7 +48,7 @@ sends, receives and reports the same status. For people operating a deployment,
 
 Every tab that has set up a configuration receives:
 
-- **`onReceive`** for every delivery of data from the device, with the same bytes in every tab -
+- **`onReceive`** for every delivery of data from the device, with the same bytes in every tab —
   from the moment the tab knows which tab holds the port. What arrived before that is not repeated
   for it, so a tab that joins late has a shorter log, not a different one; see
   [Receiving](guarantees.md#receiving).
@@ -68,15 +68,10 @@ Your code cannot tell the difference. What the result means is in
 ## Whose settings apply
 
 Every tab sets up a configuration with its own options, and serial-broker does not compare most of
-them between tabs: the tab holding the port opens the port with its own `device` and `serial`
-settings, reconnects with its own `connection` settings, and collects and decodes received data with
-its own `receive` and `encoding` settings. When the port moves to another tab, that tab's settings
-apply. [Whose settings apply](configuration.md#whose-settings-apply) lists every option.
-
-**Pass the same options for a name in every tab.** An application that lets the user change them has
-to tell its other tabs, as the [full-featured example](examples/full-featured.md) does. The
-[debugging surface](diagnostics.md#the-debugging-surface) marks a configuration whose tabs run
-different settings.
+them between tabs: the tab holding the port opens, reads and reconnects with its own settings, and
+when the port moves to another tab, that tab's settings apply. So **pass the same options for a name
+in every tab**. [Whose settings apply](configuration.md#whose-settings-apply) says which option is
+taken from which tab.
 
 ## Permission, and remembering devices
 
@@ -94,14 +89,9 @@ so `restore()`, or the next `setup()`, connects again without a prompt. A discon
 deletion — a screen on a production line that disconnects in the evening finds its device again in
 the morning.
 
-Forgetting is asked for, one store at a time:
-
-| Call                                                  | What is gone afterwards                         |
-| ----------------------------------------------------- | ----------------------------------------------- |
-| `release(name)`                                       | nothing; this tab stops using the configuration |
-| `release(name, { forget: true })`                     | the remembered configuration                    |
-| `release(name, { forgetDevice: true })`               | the browser's permission for the device         |
-| `release(name, { forget: true, forgetDevice: true })` | both: every trace in this browser               |
+Forgetting is asked for, one store at a time: `{ forget: true }` drops the remembered configuration,
+`{ forgetDevice: true }` revokes the browser's permission, and both together leave no trace of the
+configuration in this browser; see [`release()`](configuration.md#release).
 
 What is remembered belongs to the origin, not to one tab: `{ forget: true }` removes the entry only
 when no other tab still runs the configuration with `remember: true`, and a tab that is closed,
@@ -109,7 +99,7 @@ reloaded or crashes forgets nothing. Details are in [`remember`](configuration.m
 
 Any tab taking part in a configuration can ask the user for permission: the permission belongs to the
 origin. A tab that does not hold the port shows the picker, and the tab holding the port then looks for
-the granted port again and opens it - in auto mode with the device the user chose, which it adopts.
+the granted port again and opens it — in auto mode with the device the user chose, which it adopts.
 In a tab that does not hold the port, `requestAccess()` resolves `true` without asking when the status
 is already `open`; the tab holding the port shows the picker whatever its status. Called with
 `{ chooseAgain: true }`, it always shows the picker, to choose a different device in auto mode; see
@@ -184,11 +174,10 @@ later task.
 it has been written, for `onSend`. A 16 MiB payload is therefore copied into every tab, several times
 over while it is in flight. The tab holding the port hands it to the device in chunks of
 `connection.maxWriteChunkBytes`, one at a time, and each chunk has `connection.writeTimeoutMs` to be
-taken. The whole `send()` has `connection.writeTimeoutMs` as well, and each tab's writes are timed by
-its own setting, which tabs may set differently: the tab holding the port asks the issuing tab before
-it begins a write, and begins none that tab has given up. For a large payload to a slow device, raise
-it to cover the whole write — up to ten minutes — or send the data as several calls, between which
-writes from other tabs may come.
+taken. The whole `send()` has `connection.writeTimeoutMs` as well, timed by the issuing tab's own
+setting; see [Write outcomes](guarantees.md#write-outcomes). For a large payload to a slow device,
+raise it to cover the whole write — up to ten minutes — or send the data as several calls, between
+which writes from other tabs may come.
 
 ## Tabs that run for a long time
 
@@ -265,11 +254,10 @@ same moment differently.
 - Pass the same options for a configuration name in every tab, including the same `maxTabs`.
 - Serve the worker script from one URL, and set `workerUrl` before the first `setup()`.
 - Call `requestAccess()` directly inside a click handler, in response to `awaiting-permission`.
-- Treat an `onReceive` delivery as an arbitrary piece of the byte stream, never as a message.
-- Keep `onReceive` listeners short, above all for a device that sends quickly.
+- Treat an `onReceive` delivery as an arbitrary piece of the byte stream, never as a message; drop
+  a message in progress on a delivery marked `afterGap`; and keep listeners short — above all for a
+  device that sends quickly.
 - Decide, per command, whether it may be repeated after `OWNER_LOST_DURING_WRITE`.
-- Do not assume an order between writes from different tabs, or that data sent during a handover
-  arrives; see [Guarantees](guarantees.md).
 - Show `queued` to the user as waiting, not as an error, and handle status values you do not
   recognise: the list may grow.
 

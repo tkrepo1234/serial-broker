@@ -3,43 +3,34 @@ import { describe, expect, it, vi } from 'vitest';
 import { SerialBrokerClient } from '../../src/client/serial-broker-client.js';
 import { DEFAULT_CONNECTION_SETTINGS } from '../../src/core/defaults.js';
 import { SerialBrokerErrorCode } from '../../src/core/error-codes.js';
-import { BrowserHarness } from '../harness/browser-harness.js';
-import { READER, READER_OPTIONS, readerHarness } from '../harness/devices.js';
+import { BrowserHarness, type VirtualTab } from '../harness/browser-harness.js';
+import { connectedTab, READER, READER_OPTIONS } from '../harness/devices.js';
 import { fieldsOfEvent, recordingLogger } from '../harness/recording-logger.js';
 
 describe('unusable environments', () => {
-  it('refuses to set up a configuration without Web Serial', async () => {
+  // Without an exclusive lock there is no way to guarantee one owner, and guessing would be
+  // worse than refusing; without Web Serial there is no device at all.
+  it.each([
+    ['Web Serial', { serial: {} as never }, SerialBrokerErrorCode.WEB_SERIAL_UNAVAILABLE],
+    ['Web Locks', { locks: {} as never }, SerialBrokerErrorCode.WEB_LOCKS_UNAVAILABLE],
+  ] as const)('refuses to set up a configuration without %s', async (_label, missing, code) => {
     const harness = new BrowserHarness();
-    const client = new SerialBrokerClient({
-      ...harness.createEnvironment('probe'),
-      serial: {} as never,
-    });
+    const client = new SerialBrokerClient({ ...harness.createEnvironment('probe'), ...missing });
 
-    await expect(client.setup('Reader', READER_OPTIONS)).rejects.toMatchObject({
-      code: SerialBrokerErrorCode.WEB_SERIAL_UNAVAILABLE,
-    });
-  });
-
-  it('refuses to set up a configuration without Web Locks', async () => {
-    const harness = new BrowserHarness();
-    const client = new SerialBrokerClient({
-      ...harness.createEnvironment('probe'),
-      locks: {} as never,
-    });
-
-    // Without an exclusive lock there is no way to guarantee one owner, and guessing would be
-    // worse than refusing.
-    await expect(client.setup('Reader', READER_OPTIONS)).rejects.toMatchObject({
-      code: SerialBrokerErrorCode.WEB_LOCKS_UNAVAILABLE,
-    });
+    await expect(client.setup('Reader', READER_OPTIONS)).rejects.toMatchObject({ code });
   });
 });
 
 describe('a disposed client', () => {
-  it('refuses further setup', async () => {
-    const harness = new BrowserHarness();
-    const tab = harness.openTab();
+  /** A tab whose client has been disposed, as a page that has torn the library down leaves it. */
+  async function disposedTab(): Promise<VirtualTab> {
+    const tab = new BrowserHarness().openTab();
     await tab.client.dispose();
+    return tab;
+  }
+
+  it('refuses further setup', async () => {
+    const tab = await disposedTab();
 
     await expect(tab.client.setup('Reader', READER_OPTIONS)).rejects.toMatchObject({
       code: SerialBrokerErrorCode.CONFIGURATION_RELEASED,
@@ -47,9 +38,7 @@ describe('a disposed client', () => {
   });
 
   it('refuses to restore', async () => {
-    const harness = new BrowserHarness();
-    const tab = harness.openTab();
-    await tab.client.dispose();
+    const tab = await disposedTab();
 
     await expect(tab.client.restore()).rejects.toMatchObject({
       code: SerialBrokerErrorCode.CONFIGURATION_RELEASED,
@@ -57,19 +46,15 @@ describe('a disposed client', () => {
   });
 
   it('can be disposed twice', async () => {
-    const harness = new BrowserHarness();
-    const tab = harness.openTab();
+    const tab = await disposedTab();
 
-    await tab.client.dispose();
     await expect(tab.client.dispose()).resolves.toBeUndefined();
   });
 });
 
 describe('a device that cannot be forgotten', () => {
   it('still releases the configuration', async () => {
-    const { harness } = readerHarness();
-    const tab = harness.openTab();
-    await tab.setup('Reader', READER_OPTIONS);
+    const { harness, tab } = await connectedTab();
 
     const forget = vi.fn(() => Promise.reject(new Error('forget() is not implemented here')));
     const ports = await harness.serial.forContext(tab.id).getPorts();
@@ -86,9 +71,7 @@ describe('a device that cannot be forgotten', () => {
 
   it('still releases it where the browser has no forget() at all', async () => {
     const { logger, records } = recordingLogger();
-    const { harness } = readerHarness({ logger });
-    const tab = harness.openTab();
-    await tab.setup('Reader', READER_OPTIONS);
+    const { harness, tab } = await connectedTab({ logger });
     for (const port of await harness.serial.forContext(tab.id).getPorts()) {
       Object.assign(port, { forget: undefined });
     }
@@ -102,9 +85,7 @@ describe('a device that cannot be forgotten', () => {
 
   it('still releases it where forget() never answers', async () => {
     const { logger, records } = recordingLogger();
-    const { harness } = readerHarness({ logger });
-    const tab = harness.openTab();
-    await tab.setup('Reader', READER_OPTIONS);
+    const { harness, tab } = await connectedTab({ logger });
     for (const port of await harness.serial.forContext(tab.id).getPorts()) {
       Object.assign(port, { forget: () => new Promise<never>(() => undefined) });
     }
@@ -129,9 +110,7 @@ describe('a device that cannot be forgotten', () => {
 
 describe('a released configuration', () => {
   it('refuses a send after release', async () => {
-    const { harness } = readerHarness();
-    const tab = harness.openTab();
-    await tab.setup('Reader', READER_OPTIONS);
+    const { tab } = await connectedTab();
 
     await tab.client.release('Reader');
 

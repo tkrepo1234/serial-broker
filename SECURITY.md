@@ -7,8 +7,8 @@ vulnerability reporting: on the repository's **Security** tab, choose **Report a
 the maintainers see the report, and a fix can be prepared with you before anything is published.
 Include what an attacker can do, not only what is wrong.
 
-GitHub offers private reporting for public repositories only. While the repository is private,
-everyone who can read it can reach the maintainers directly; report to them instead.
+Where that choice is not offered, everyone who can read the repository can reach the maintainers
+directly; report to them instead.
 
 ## What this library assumes
 
@@ -62,13 +62,13 @@ sends, and in its diagnostics report.
 ### What such a script cannot do
 
 - **Break a tab or the worker with what it posts.** Every decoder is total: it never throws,
-  whatever it is handed, and accepts nothing that is not a complete, well-typed message - a
+  whatever it is handed, and accepts nothing that is not a complete, well-typed message — a
   diagnostics report is typed only as far as filing it needs, and read defensively below that
   (ADR-0014). A seeded fuzz test holds the message, report, announcement and handshake decoders to
   that.
 - **Make a tab or the worker hold, or pass on, anything of any size.** Every field is bounded (see
   [Limits](#limits)). An accepted message is rebuilt from the fields its type declares, so nothing a
-  sender adds travels further - not to the application, and not into the copy the broker makes for
+  sender adds travels further — not to the application, and not into the copy the broker makes for
   each tab. A payload view is copied if it does not span exactly its own buffer, so a small view
   cannot keep a large buffer alive. What exceeds a limit is dropped, and logged once per context at
   `warn`, not once per message.
@@ -119,12 +119,12 @@ sends, and in its diagnostics report.
 These follow from the missing sender identity, and no validation can prevent them:
 
 - **Read** all traffic, statuses, errors and write requests of a configuration, by attaching to it
-  on the worker or by listening on the channel - and what is addressed to one tab alone, by saying
+  on the worker or by listening on the channel — and what is addressed to one tab alone, by saying
   `hello` on the worker under that tab's identity, which is no secret (ADR-0006).
 - **Write to the device**, with a `write-request` addressed to the current term, which every status
-  names - or by calling serial-broker itself.
+  names — or by calling serial-broker itself.
 - **Say anything a tab can say**, on either transport, under the identity of any tab, the tab
-  holding the port included, and in the name of the term that tab really holds - both are on the bus
+  holding the port included, and in the name of the term that tab really holds — both are on the bus
   for anyone to read. On the worker it first says `hello` under that identity on a port of its own.
   The consequences include:
   - device data and sent data that never happened, delivered to `onReceive` and `onSend`;
@@ -132,21 +132,21 @@ These follow from the missing sender identity, and no validation can prevent the
   - a `write-result` for a write addressed to that term, whose request id it knows: every write
     request reaches every participant, request id included;
   - a `write-approval` under the identity of the tab that issued a write, which lets the tab holding
-    the port begin that write after its issuer gave it up - no more than a `write-request` of the
+    the port begin that write after its issuer gave it up — no more than a `write-request` of the
     script's own puts on the device;
   - errors that did not happen, delivered to `onError`.
-- **Hold the Web Locks** - the ownership lock, the places of a tab limit, or a lock named for a term
-  it invents - and so keep every tab away from the device, have an invented term believed while it
+- **Hold the Web Locks** — the ownership lock, the places of a tab limit, or a lock named for a term
+  it invents — and so keep every tab away from the device, have an invented term believed while it
   holds its lock, or, by queueing on the lock of a real term, make the other tabs wait for a goodbye
   that never comes. A script that takes locks is beyond what validation or attribution can reach;
   the first assumption of this document is why.
 - **Cost work up to the rates.** Every well-formed message is decoded, and a flood can crowd
-  legitimate answers, reports and log records out of the rates above - the tabs go on sharing the
+  legitimate answers, reports and log records out of the rates above — the tabs go on sharing the
   port either way. Every tab also reports each distinct protocol version announced once. A flood of
   claims naming invented terms costs each tab one lock check per term, up to the few terms it keeps;
   the newest claim is always one of them, so the term that really holds the port is checked.
-  What a tab misses while it is learning which term that is - the chunks of a device streaming into
-  a tab that has just joined - it misses; the drop is recorded once per configuration.
+  What a tab misses while it is learning which term that is — the chunks of a device streaming into
+  a tab that has just joined — it misses; the drop is recorded once per configuration.
 - **Occupy the broker.** A script that keeps as many participants alive as the broker keeps leaves
   no room for tabs opened afterwards, which then fall back to `BroadcastChannel` or, with
   `transport: 'sharedworker'`, keep trying.

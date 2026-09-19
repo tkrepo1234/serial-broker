@@ -1,20 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { SerialBrokerErrorCode } from '../../src/core/error-codes.js';
-import type { BrowserHarness } from '../harness/browser-harness.js';
-import { READER_OPTIONS, readerHarness } from '../harness/devices.js';
-
-/** A connected tab, since every test here needs one. */
-async function connectedTab(options: Record<string, unknown> = {}): Promise<{
-  harness: BrowserHarness;
-  device: ReturnType<BrowserHarness['serial']['addDevice']>;
-  tab: ReturnType<BrowserHarness['openTab']>;
-}> {
-  const { harness, device } = readerHarness();
-  const tab = harness.openTab();
-  await tab.setup('Reader', { ...READER_OPTIONS, ...options });
-  return { harness, device, tab };
-}
+import { connectedTab, READER_OPTIONS, readerHarness } from '../harness/devices.js';
 
 describe('sending', () => {
   it('encodes a string as UTF-8 and appends nothing', async () => {
@@ -44,9 +31,10 @@ describe('sending', () => {
   });
 
   it('chunks a large payload, in order and complete', async () => {
-    const { harness, device, tab } = await connectedTab({
-      connection: { maxWriteChunkBytes: 16 },
-    });
+    const { harness, device, tab } = await connectedTab(
+      {},
+      { connection: { maxWriteChunkBytes: 16 } },
+    );
     const payload = new Uint8Array(100).map((_, index) => index % 251);
 
     await tab.client.send('Reader', payload);
@@ -59,7 +47,10 @@ describe('sending', () => {
   });
 
   it('refuses a string when a non-UTF-8 encoding is configured', async () => {
-    const { harness, device, tab } = await connectedTab({ encoding: { encoding: 'windows-1252' } });
+    const { harness, device, tab } = await connectedTab(
+      {},
+      { encoding: { encoding: 'windows-1252' } },
+    );
 
     // TextEncoder only produces UTF-8. Silently sending the wrong bytes would present as a
     // device that misbehaves on umlauts, which is a miserable thing to debug.
@@ -113,7 +104,7 @@ describe('receiving', () => {
     [false, undefined],
     [true, 'hello'],
   ])('decodes text only when decodeText is %s', async (decodeText, expected) => {
-    const { harness, device, tab } = await connectedTab({ encoding: { decodeText } });
+    const { harness, device, tab } = await connectedTab({}, { encoding: { decodeText } });
 
     device.emit('hello');
     await harness.settle();
@@ -122,7 +113,7 @@ describe('receiving', () => {
   });
 
   it('decodes a multi-byte character split across two chunks', async () => {
-    const { harness, device, tab } = await connectedTab({ encoding: { decodeText: true } });
+    const { harness, device, tab } = await connectedTab({}, { encoding: { decodeText: true } });
     const euro = new TextEncoder().encode('€');
 
     device.emit(euro.subarray(0, 1));
@@ -141,7 +132,7 @@ describe('receiving', () => {
   });
 
   it('delivers decoded text to peer tabs as well', async () => {
-    const { harness, device, tab } = await connectedTab({ encoding: { decodeText: true } });
+    const { harness, device, tab } = await connectedTab({}, { encoding: { decodeText: true } });
     const peer = harness.openTab();
     await peer.setup('Reader', { ...READER_OPTIONS, encoding: { decodeText: true } });
 
@@ -153,7 +144,7 @@ describe('receiving', () => {
   });
 
   it('does not carry a partial character across a reconnect', async () => {
-    const { harness, device, tab } = await connectedTab({ encoding: { decodeText: true } });
+    const { harness, device, tab } = await connectedTab({}, { encoding: { decodeText: true } });
     const euro = new TextEncoder().encode('€');
 
     device.emit(euro.subarray(0, 1));
