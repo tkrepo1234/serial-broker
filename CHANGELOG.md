@@ -10,6 +10,8 @@ different protocol versions do not coordinate with each other. It is noted whene
 
 ## [Unreleased]
 
+## [0.1.0-beta.2] - 2026-09-19
+
 ### Added
 
 - **`ReceiveEvent.afterGap`** says that bytes may be missing before a delivery, in the tab it

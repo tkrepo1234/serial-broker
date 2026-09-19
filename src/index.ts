@@ -92,7 +92,7 @@ export { isSupported } from './facade.js';
 export { PROTOCOL_VERSION } from './protocol/version.js';
 
 /**
- * The release of this package, such as `'0.1.0-beta.1'`.
+ * The release of this package, such as `'0.2.0'`.
  *
  * For an application's build information and for support. Every published script names the same
  * release in a comment on its first line.

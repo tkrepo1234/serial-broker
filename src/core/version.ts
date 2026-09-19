@@ -6,4 +6,4 @@
  * earlier release - the usual cause of `PROTOCOL_VERSION_MISMATCH` - is found that way. A unit
  * test holds this constant to `package.json`.
  */
-export const VERSION = '0.1.0-beta.1';
+export const VERSION = '0.1.0-beta.2';
