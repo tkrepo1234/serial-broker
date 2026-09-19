@@ -23,7 +23,7 @@ test.describe('a port another program holds', () => {
     await installStandIn(context, GRANTED_DEVICE);
     const first = await Tab.open(context);
     const second = await Tab.open(context);
-    await first.setDeviceFaults({ openFailsWith: 'NetworkError' });
+    await first.setDeviceFaults({ openFailsWith: 'NetworkError' }, [first, second]);
 
     await first.setup('Echo', echoConfiguration());
     await second.setup('Echo', echoConfiguration());
@@ -31,7 +31,7 @@ test.describe('a port another program holds', () => {
     await second.waitForErrorCode('OPEN_FAILED');
     expect(await first.statuses('Echo')).not.toContain('open');
 
-    await first.setDeviceFaults({});
+    await first.setDeviceFaults({}, [first, second]);
     await first.waitForStatus('Echo', 'open');
     await second.waitForStatus('Echo', 'open');
     await second.send('Echo', 'AFTER-RELEASE');
@@ -47,11 +47,11 @@ test.describe('a write the device refuses', () => {
     const tabs = await openConnectedTabs(context, 2, 'Echo', echoConfiguration());
     const sender = tabs[1 - (await waitForPortHolder(tabs))]!;
 
-    await sender.setDeviceFaults({ writesFailWith: 'UnknownError' });
+    await sender.setDeviceFaults({ writesFailWith: 'UnknownError' }, tabs);
     const refused = await sender.startSend('Echo', 'REFUSED');
     expect(await sender.waitForSendOutcome(refused)).toBe('error:WRITE_FAILED');
 
-    await sender.setDeviceFaults({});
+    await sender.setDeviceFaults({}, tabs);
     await sender.waitForStatus('Echo', 'open');
     await sender.send('Echo', 'AFTER-FAILURE');
     await sender.waitForReceivedText('Echo', 'AFTER-FAILURE');
@@ -69,13 +69,14 @@ test.describe('a device that takes no data', () => {
     const tabs = await openConnectedTabs(context, 2, 'Echo', options);
     const sender = tabs[1 - (await waitForPortHolder(tabs))]!;
 
-    await sender.setDeviceFaults({ writesHang: true });
+    await sender.setDeviceFaults({ writesHang: true }, tabs);
     const held = await sender.startSend('Echo', 'HELD');
     expect(await sender.waitForSendOutcome(held)).toBe('error:WRITE_TIMEOUT');
     // The browser cannot take a write back from a device holding it, so the port stays open.
     expect(await sender.statuses('Echo')).not.toContain('reconnecting');
 
-    await sender.setDeviceFaults({});
+    await sender.setDeviceFaults({}, tabs);
+    await sender.waitForReceivedText('Echo', 'HELD');
     await sender.send('Echo', 'NEXT');
     await sender.waitForReceivedText('Echo', 'HELDNEXT');
   });

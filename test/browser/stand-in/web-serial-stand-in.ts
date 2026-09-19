@@ -117,8 +117,14 @@ export interface WebSerialStandInControl {
   plug(deviceId?: string): void;
   /** Whether the origin has permission for the device. */
   isGranted(deviceId?: string): boolean;
-  /** Makes the device misbehave from now on, in every page; `{}` lifts every fault. */
+  /**
+   * Makes the device misbehave from now on, in every page; `{}` lifts every fault. The other pages
+   * learn of it by a message of their own, in no set order with the library's messages, so a test
+   * waits until {@link faults} says so in each before it relies on it.
+   */
   setFaults(faults: StandInFaults, deviceId?: string): void;
+  /** The faults as this page knows them. */
+  faults(deviceId?: string): StandInFaults;
 }
 
 /**
@@ -189,6 +195,18 @@ export function installWebSerialStandIn(options: WebSerialStandInOptions): void 
       // disagrees with its neighbours about which device is open.
       return {};
     }
+  }
+
+  /**
+   * The faults as this page last learned them: from its own `setFaults()`, from the message another
+   * page sends with them, or - for a page opened afterwards - from storage. Not read from storage
+   * each time: a write to `localStorage` reaches another page later than a `BroadcastChannel`
+   * message sent after it, so a page told that writes no longer hang could still read that they do.
+   */
+  const knownFaults = new Map<string, StandInFaults>();
+
+  function faultsOf(deviceId: string): StandInFaults {
+    return knownFaults.get(deviceId) ?? stateOf(deviceId).faults ?? {};
   }
 
   function writeState(state: Record<string, DeviceState>): void {
@@ -343,7 +361,7 @@ export function installWebSerialStandIn(options: WebSerialStandInOptions): void 
           if (!stateOf(device.id).attached) {
             throw new DOMException('Failed to open serial port.', 'NetworkError');
           }
-          const openFault = stateOf(device.id).faults?.openFailsWith;
+          const openFault = faultsOf(device.id).openFailsWith;
           if (openFault !== undefined) {
             throw new DOMException('Failed to open serial port.', openFault);
           }
@@ -369,11 +387,11 @@ export function installWebSerialStandIn(options: WebSerialStandInOptions): void 
           });
           writable = new WritableStream<Uint8Array>({
             write: async (chunk) => {
-              const faults = stateOf(device.id).faults;
-              if (faults?.writesFailWith !== undefined) {
+              const faults = faultsOf(device.id);
+              if (faults.writesFailWith !== undefined) {
                 throw new DOMException('Failed to write to serial port.', faults.writesFailWith);
               }
-              if (faults?.writesHang === true) {
+              if (faults.writesHang === true) {
                 await new Promise<void>((resume) => {
                   heldWrites.push(resume);
                 });
@@ -425,7 +443,7 @@ export function installWebSerialStandIn(options: WebSerialStandInOptions): void 
 
       faultsChanged: {
         value: (): void => {
-          if (stateOf(device.id).faults?.writesHang === true) {
+          if (faultsOf(device.id).writesHang === true) {
             return;
           }
           const resumed = heldWrites;
@@ -582,7 +600,7 @@ export function installWebSerialStandIn(options: WebSerialStandInOptions): void 
   // permission given back.
   const channel = new BroadcastChannel(CHANNEL_NAME);
   channel.addEventListener('message', (event: MessageEvent<unknown>) => {
-    const message = event.data as { type?: unknown; deviceId?: unknown };
+    const message = event.data as { type?: unknown; deviceId?: unknown; faults?: StandInFaults };
     if (typeof message.deviceId !== 'string') {
       return;
     }
@@ -591,6 +609,7 @@ export function installWebSerialStandIn(options: WebSerialStandInOptions): void 
     } else if (message.type === 'plug') {
       applyPlug(message.deviceId);
     } else if (message.type === 'faults') {
+      knownFaults.set(message.deviceId, message.faults ?? {});
       portFor(deviceOf(message.deviceId)).faultsChanged();
     } else if (message.type === 'forget') {
       // Measured in Edge 153 against a real port: the page that has it open sees its read fail
@@ -615,10 +634,12 @@ export function installWebSerialStandIn(options: WebSerialStandInOptions): void 
       channel.postMessage({ type: 'plug', deviceId: device.id });
       applyPlug(device.id);
     },
+    faults: (deviceId) => faultsOf(deviceOf(deviceId).id),
     setFaults: (faults, deviceId) => {
       const device = deviceOf(deviceId);
+      knownFaults.set(device.id, faults);
       updateState(device.id, { faults });
-      channel.postMessage({ type: 'faults', deviceId: device.id });
+      channel.postMessage({ type: 'faults', deviceId: device.id, faults });
       portFor(device).faultsChanged();
     },
   };

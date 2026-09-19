@@ -189,7 +189,7 @@ The checklist exercises on real hardware what the scenario matrix in
 
 ## The last run
 
-**0.1.0-beta.2, Edge 153.0.4234.46, Windows 11 Home 26200:**
+**0.1.0-beta.3 (the library of 0.1.0-beta.2), Edge 153.0.4234.46, Windows 11 Home 26200:**
 
 | Suite                                                       | Result                       |
 | ----------------------------------------------------------- | ---------------------------- |

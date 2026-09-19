@@ -10,6 +10,15 @@ different protocol versions do not coordinate with each other. It is noted whene
 
 ## [Unreleased]
 
+## [0.1.0-beta.3] - 2026-09-19
+
+The library of 0.1.0-beta.2, released under the next number: 0.1.0-beta.2 was tagged, but its
+release stopped at a browser test that failed on the CI runner. The fault was in the test's Web
+Serial stand-in, which read what a test had told another page from `localStorage` - where Chromium
+makes a write visible later than a `BroadcastChannel` message sent after it. Nothing of the
+published package changed but the version. What it brings is listed under 0.1.0-beta.2 in
+`CHANGELOG.md`: `VERSION`, `ReceiveEvent.afterGap`, and the fixes since 0.1.0-beta.1.
+
 ## [0.1.0-beta.2] - 2026-09-19
 
 ### Added
