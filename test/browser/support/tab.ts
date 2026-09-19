@@ -385,11 +385,24 @@ export class Tab {
     });
   }
 
-  /** Makes the device misbehave for every page of the origin; `{}` lifts every fault. */
-  async setDeviceFaults(faults: StandInFaults): Promise<void> {
+  /**
+   * Makes the device misbehave for every page of the origin; `{}` lifts every fault. Returns once
+   * every one of `tabs` knows: the pages learn of it on a channel of the stand-in's own, in no set
+   * order with the library's messages.
+   */
+  async setDeviceFaults(faults: StandInFaults, tabs: readonly Tab[] = [this]): Promise<void> {
     await this.page.evaluate((deviceFaults) => {
       (window as unknown as HarnessWindow).webSerialStandIn?.setFaults(deviceFaults);
     }, faults);
+    const expected = JSON.stringify(faults);
+    for (const tab of tabs) {
+      await tab.page.waitForFunction(
+        (wanted) =>
+          JSON.stringify((window as unknown as HarnessWindow).webSerialStandIn?.faults()) ===
+          wanted,
+        expected,
+      );
+    }
   }
 
   /**
